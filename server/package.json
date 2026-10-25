@@ -1,0 +1,20 @@
+{
+  "name": "so-ban-hang-gom-server",
+  "version": "2.0.0",
+  "description": "API sổ bán hàng gốm: Node + SQLite",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node test/run-all.js",
+    "seed:demo": "node scripts/seed-demo.js",
+    "reset-password": "node scripts/reset-password.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.4.1"
+  }
+}
