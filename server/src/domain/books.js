@@ -135,6 +135,8 @@ export function export_book(p) {
   requirePerm(b, 'owner');
   const r = {};
   for (const t of EXPORT_TABLES) r[t] = outRows(all(`select * from ${t} where ${t === 'books' ? 'id' : 'book_id'} = ?`, b));
+  // Tiền về chưa xác định sổ (2 sổ dùng chung tài khoản) cũng thuộc về sổ này
+  r.bank_txns.push(...outRows(all(`select * from bank_txns where book_id is null and exists (select 1 from json_each(candidate_books) where value = ?)`, b)));
   r.kit_items = all(`select k.* from kit_items k join products pr on pr.id = k.kit_id where pr.book_id = ?`, b);
   r.exported_at = nowIso();
   r.format = 'gomsu-backup-v1';

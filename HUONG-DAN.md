@@ -8,7 +8,7 @@ Phần mềm quản lý bán hàng cho **Gốm sứ Thanh Hải** và **Gốm V�
 |---|---|
 | `server/` | Máy chủ API (Node.js + SQLite): toàn bộ quy tắc tính toán, phân quyền, báo cáo, đăng nhập, nhận tiền về SePay, nhận trạng thái vận đơn, thông báo điện thoại, lịch tự động, sao lưu hằng đêm. |
 | `server/src/db/` | Cấu trúc cơ sở dữ liệu (`schema.sql`) và các bảng tổng hợp (`views.sql`). Máy chủ tự tạo khi khởi động lần đầu. |
-| `server/test/` | Bộ kiểm thử: nghiệp vụ bán hàng (146 phép), vận chuyển · tiền về · thông báo (126), chi phí (34), chứng từ (19), dữ liệu mẫu (12), HTTP · đăng nhập · webhook (24). |
+| `server/test/` | Bộ kiểm thử: nghiệp vụ bán hàng (146 phép), vận chuyển · tiền về · thông báo (126), chi phí (34), chứng từ (19), dữ liệu mẫu (12), nhập bản sao lưu (14), HTTP · đăng nhập · webhook (24). |
 | `web/` | Giao diện (React + Vite). Khi build Docker, giao diện được dựng sẵn và máy chủ API trả luôn (không cần nginx). |
 | `Dockerfile`, `docker-compose.yml` | Đóng gói cả giao diện và API vào **một** container, chạy bằng Docker (Coolify). |
 | `.env.example` | Danh sách biến cấu hình (khóa SePay, khóa thông báo…). |
@@ -92,13 +92,24 @@ Thuế GTGT 1% và thuế TNCN 17% trong phần mềm là **số ước tính đ
 - **Tự tải:** **Cài đặt → Nhập / sao lưu dữ liệu → Tải bản sao lưu** (Excel để xem, JSON để lưu trữ). Nên tải mỗi tháng, mỗi sổ một bản, cất trên Google Drive hoặc USB.
 - **Khôi phục về một ngày cũ:** dừng dịch vụ app, chép tệp `backups/gomsu-<ngày>.db` đè lên `/data/gomsu.db` (xóa kèm `gomsu.db-wal`, `gomsu.db-shm` nếu có), rồi bật lại. Việc này ghi đè toàn bộ dữ liệu hiện tại, nên giữ lại một bản tệp hiện tại trước khi làm.
 
+### Chuyển dữ liệu từ bản cũ (Supabase) sang máy chủ mới
+1. Trên **bản cũ**, đăng nhập tài khoản chủ, chọn sổ **Thanh Hải** → **Cài đặt → Nhập / sao lưu dữ liệu → Tải bản sao lưu JSON**. Làm tương tự với sổ **Vũ Gia**. Được 2 tệp `sao-luu_TH_….json` và `sao-luu_VG_….json`.
+2. Trên **máy chủ mới**, tạo tài khoản chủ (mục 2, Bước 2). Hai sổ trống được tạo sẵn.
+3. Chọn sổ **Gốm sứ Thanh Hải** → **Cài đặt → Nhập / sao lưu dữ liệu → Nhập bản sao lưu JSON** → chọn tệp của Thanh Hải → xem tóm tắt → bấm **Nhập** (bấm 2 lần để xác nhận). Chuyển sang sổ **Gốm Vũ Gia** và nhập tệp của Vũ Gia.
+4. Kiểm tra bảng kết quả: số dòng từng loại dữ liệu và dòng "Tồn kho từng mã khớp sổ kho". Đối chiếu Tổng quan với bản cũ.
+5. Thêm lại nhân viên trong **Người dùng & quyền** (tài khoản đăng nhập không chuyển theo tệp, nhân viên đăng ký lại bằng email của họ). Thông báo điện thoại cũng phải bật lại trên từng máy.
+
+- Chỉ nhập được vào sổ **chưa có chứng từ**. Danh mục mặc định của sổ trống (2 quỹ, khách lẻ) được thay bằng dữ liệu trong tệp. Mã chứng từ tiếp tục đánh số nối tiếp bản cũ.
+- Máy chủ tự sao lưu cơ sở dữ liệu ngay trước mỗi lần nhập (`/data/backups/gomsu-<ngày>-truoc-nhap-….db`).
+- Chức năng này cũng dùng để khôi phục một sổ sang máy chủ khác bằng tệp JSON tải từ máy chủ mới.
+
 ## 6. Kiểm thử nghiệp vụ
 
 Trong thư mục `server/`: `npm install` rồi `npm test`. Bộ kiểm thử dựng một cơ sở dữ liệu trống trong bộ nhớ và chạy đủ 9 tình huống yêu cầu:
 - bán thu đủ, bán nợ, đặt cọc, giao từng phần, nhận từng phần, trả hàng, hủy đơn, hàng vỡ, nhập cùng SKU giá mới;
 - thêm: bán theo bộ, chống ghi trùng, phân quyền, sổ Vũ Gia với TikTok và phí sàn, đối chiếu các số tổng, vận chuyển, tiền về, thông báo, chi phí, chứng từ, đăng nhập và webhook qua HTTP.
 
-Kết quả gần nhất: 361 đạt / 0 lỗi.
+Kết quả gần nhất: 375 đạt / 0 lỗi.
 
 Hai người bấm lưu đúng cùng lúc trên cùng một mặt hàng không thể làm lệch số: máy chủ xử lý từng thao tác ghi một, trọn vẹn trong một giao dịch.
 

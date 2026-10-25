@@ -12,6 +12,7 @@ import { callRpc } from './domain/rpc.js';
 import { signUp, signIn, changePassword, issueToken, verifyToken, me, publicUser } from './lib/auth.js';
 import { sepayWebhook, trackingWebhook } from './services/webhooks.js';
 import { flushPushSoon } from './services/push.js';
+import { backupNow } from './services/scheduler.js';
 
 const MAX_BODY = 20 * 1024 * 1024;
 const READ_ONLY = new Set(['q', 'my_books', 'rpt_overview', 'rpt_drill', 'rpt_monthly', 'rpt_products', 'rpt_groups', 'rpt_stock', 'rpt_expenses',
@@ -70,7 +71,9 @@ async function route(req, res) {
   if (method === 'POST' && p.startsWith('/api/rpc/')) {
     const fn = decodeURIComponent(p.slice('/api/rpc/'.length));
     const uid = authUser(req);
-    const result = callRpc(uid, fn, parseJson(await readBody(req)));
+    const body = parseJson(await readBody(req));
+    if (fn === 'import_book' && config.dbPath !== ':memory:') await backupNow('truoc-nhap');   // luôn có bản để quay lại
+    const result = callRpc(uid, fn, body);
     if (!READ_ONLY.has(fn)) flushPushSoon();
     return send(res, 200, result);
   }

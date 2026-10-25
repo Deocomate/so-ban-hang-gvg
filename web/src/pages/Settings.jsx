@@ -244,6 +244,49 @@ function ResetMemberPassword({ userId }) {
   );
 }
 
+// Nhập bản sao lưu JSON (từ bản Supabase cũ hoặc máy chủ khác) vào sổ đang mở — chỉ cho sổ chưa có chứng từ
+function RestoreBackup() {
+  const { rpc, book, toast, loadBooks, refresh } = useApp();
+  const [file, setFile] = useState(null); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false); const [res, setRes] = useState(null);
+  const pick = async (e) => {
+    setErr(''); setRes(null); setFile(null);
+    const f = e.target.files?.[0]; e.target.value = '';
+    if (!f) return;
+    try {
+      const data = JSON.parse(await f.text());
+      if (data.format !== 'gomsu-backup-v1' || !Array.isArray(data.books)) throw new Error('Tệp không phải bản sao lưu JSON của Sổ bán hàng gốm');
+      setFile({ name: f.name, data });
+    } catch (e2) { setErr(e2.message.startsWith('Tệp') ? e2.message : 'Không đọc được tệp JSON: ' + e2.message); }
+  };
+  const doImport = async () => {
+    setBusy(true); setErr('');
+    try {
+      const r = await rpc('import_book', { data: file.data });
+      setRes(r); setFile(null); await loadBooks(); refresh(); toast('Đã nhập dữ liệu vào sổ');
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+  const n = (t) => (file?.data?.[t] || []).length;
+  return (
+    <Section title="Nhập bản sao lưu JSON (chuyển dữ liệu từ bản cũ)">
+      <div className="muted small">Dùng tệp <b>“Tải bản sao lưu JSON”</b> của bản cũ (Supabase) hoặc của máy chủ khác. Dữ liệu được nhập vào sổ đang mở “{book.name}”, sổ này phải <b>chưa có chứng từ</b> (đơn, phiếu thu chi, phiếu kho…). Mỗi sổ nhập một tệp riêng: chọn sổ Thanh Hải → nhập tệp của Thanh Hải, rồi chuyển sang Vũ Gia → nhập tệp của Vũ Gia. Máy chủ tự sao lưu trước khi nhập.</div>
+      <div className="row gap"><label className="btn btn-ghost"><Icon name="up" /><span>Chọn tệp .json</span><input type="file" accept=".json,application/json" onChange={pick} hidden /></label></div>
+      <ErrorBox error={err} />
+      {file && <Note>
+        Tệp <b>{file.name}</b>: sổ “{file.data.books[0]?.name}” · {n('products')} sản phẩm · {n('customers')} khách · {n('suppliers')} NCC · {n('sales_orders')} đơn bán · {n('purchase_orders')} đơn nhập · {n('payments')} phiếu thu chi · {n('stock_moves')} dòng sổ kho.
+        <div className="row gap" style={{ marginTop: 8 }}>
+          <ConfirmBtn kind="primary" busy={busy} onConfirm={doImport}>Nhập vào sổ “{book.name}”</ConfirmBtn>
+          <Btn onClick={() => setFile(null)}>Thôi</Btn>
+        </div>
+      </Note>}
+      {res && <Note tone={res.stock_mismatch.length ? 'warn' : 'good'}>
+        Đã nhập sổ “{res.book_name}”: {Object.entries(res.counts).filter(([, v]) => v).map(([k, v]) => `${k} ${v}`).join(' · ')}.
+        {res.stock_mismatch.length ? <div>Tồn kho chưa khớp sổ kho ở các mã: {res.stock_mismatch.join(', ')}.</div> : <div>Tồn kho từng mã khớp sổ kho.</div>}
+        {res.staff_to_readd.length > 0 && <div>Tài khoản nhân viên không chuyển theo tệp — hãy thêm lại trong <b>Người dùng &amp; quyền</b>: {res.staff_to_readd.join(', ')}.</div>}
+      </Note>}
+    </Section>
+  );
+}
+
 function DataTools() {
   const { open, rpc, book, toast } = useApp();
   const [busy, setBusy] = useState('');
@@ -280,6 +323,7 @@ function DataTools() {
           <Btn icon="dl" busy={busy === 'json'} onClick={() => backup('json')}>Tải bản sao lưu JSON (khôi phục được)</Btn>
         </div>
       </Section>
+      <RestoreBackup />
       {book.is_demo && <Note tone="warn">Đây là sổ DỮ LIỆU MẪU. Dữ liệu mẫu nằm ở cơ sở dữ liệu riêng, không lẫn với sổ thật. Sổ thật được tạo trống khi máy chủ chạy ở chế độ thường.</Note>}
     </div>
   );

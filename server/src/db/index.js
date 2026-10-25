@@ -34,7 +34,11 @@ function registerFunctions(db) {
   db.function('vi_lower', { deterministic: true }, (s) => (s == null ? null : String(s).toLowerCase()));
 }
 
-function auditTriggers(db) {
+export function dropAuditTriggers(db) {
+  for (const t of Object.keys(AUDIT_TABLES)) db.exec(`drop trigger if exists audit_${t}_ins; drop trigger if exists audit_${t}_upd; drop trigger if exists audit_${t}_del;`);
+}
+
+export function auditTriggers(db) {
   for (const [t, ignore] of Object.entries(AUDIT_TABLES)) {
     const cols = db.prepare(`select name from pragma_table_info(?)`).all(t).map((r) => r.name);
     const has = (c) => cols.includes(c);

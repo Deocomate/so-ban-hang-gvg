@@ -12,9 +12,10 @@ const vnHour = () => new Date(Date.now() + 7 * 3600e3).getUTCHours();
 const done = new Map();   // việc → ngày đã chạy
 
 // Sao lưu nóng (không dừng máy chủ) ra thư mục backups, giữ N bản mới nhất
-export async function backupNow() {
+// label: bản sao lưu trước một thao tác lớn (vd. nhập dữ liệu) — không bị xóa theo hạn giữ
+export async function backupNow(label = '') {
   fs.mkdirSync(config.backupDir, { recursive: true });
-  const file = path.join(config.backupDir, `gomsu-${today()}.db`);
+  const file = path.join(config.backupDir, label ? `gomsu-${today()}-${label}-${Date.now()}.db` : `gomsu-${today()}.db`);
   await ctx.db.backup(file);
   const old = fs.readdirSync(config.backupDir).filter((f) => /^gomsu-\d{4}-\d{2}-\d{2}\.db$/.test(f)).sort().reverse().slice(config.backupKeep);
   for (const f of old) fs.rmSync(path.join(config.backupDir, f), { force: true });

@@ -15,6 +15,7 @@ import * as shipping from './shipping.js';
 import * as bank from './bank.js';
 import * as documents from './documents.js';
 import { set_member_password } from '../lib/auth.js';
+import { import_book } from './import-backup.js';
 
 const pick = (mod, names) => Object.fromEntries(names.map((n) => {
   if (typeof mod[n] !== 'function') throw new Error(`Thiếu hàm ${n}`);
@@ -35,6 +36,7 @@ export const RPC = {
   ...pick(bank, ['assign_bank_txn', 'ignore_bank_txn', 'demo_simulate']),
   ...pick(documents, ['get_doc_info', 'save_doc_info']),
   set_member_password,
+  import_book,
 };
 
 export function callRpc(uid, fn, p) {
