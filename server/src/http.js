@@ -1,8 +1,11 @@
-// Máy chủ HTTP (node:http, không cần framework). Mọi đường dẫn nằm dưới /api; giao diện do dịch vụ web (nginx) phục vụ.
+// Máy chủ HTTP (node:http, không cần framework): API dưới /api, các đường dẫn còn lại trả giao diện đã build (web/dist).
 //   POST /api/auth/signup | /api/auth/login | /api/auth/password    GET /api/auth/me
 //   POST /api/rpc/:fn   (Authorization: Bearer <token>, thân = tham số p)
 //   POST /api/hooks/sepay | /api/hooks/tracking                     GET /api/config | /api/health
 import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import zlib from 'node:zlib';
 import { config } from './config.js';
 import { ctx, AppError } from './lib/context.js';
 import { callRpc } from './domain/rpc.js';
@@ -98,7 +101,43 @@ async function route(req, res) {
   if (method === 'POST' && p === '/api/hooks/sepay') { const [s, body] = sepayWebhook(req.headers, await readBody(req)); return send(res, s, body); }
   if (method === 'POST' && p === '/api/hooks/tracking') { const [s, body] = trackingWebhook(req.headers, url, await readBody(req)); return send(res, s, body); }
 
+  if (p.startsWith('/api/') || p === '/api') return send(res, 404, { error: 'Không tìm thấy' });
+  if (method === 'GET' || method === 'HEAD') return serveStatic(req, res, p);
   return send(res, 404, { error: 'Không tìm thấy' });
+}
+
+// ---------- Giao diện (thư mục web/dist đã build) ----------
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon', '.ttf': 'font/ttf', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8' };
+
+function serveStatic(req, res, p) {
+  const root = config.webDir;
+  let file = path.join(root, path.normalize(decodeURIComponent(p)).replace(/^(\.\.[/\\])+/, ''));
+  if (!file.startsWith(root)) return send(res, 404, { error: 'Không tìm thấy' });
+  if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+    if (path.extname(p)) return send(res, 404, { error: 'Không tìm thấy' });   // tệp tĩnh không có
+    file = path.join(root, 'index.html');                                      // đường dẫn của ứng dụng → trang chính
+    if (!fs.existsSync(file)) return send(res, 404, { error: 'Chưa có giao diện (thiếu web/dist)' });
+  }
+  const ext = path.extname(file).toLowerCase();
+  const immutable = p.startsWith('/assets/');
+  const headers = {
+    'Content-Type': TYPES[ext] || 'application/octet-stream',
+    'Cache-Control': immutable ? 'public, max-age=31536000, immutable' : 'no-cache',
+    'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'X-Frame-Options': 'SAMEORIGIN',
+  };
+  const compressible = /^(text\/|application\/(json|manifest)|image\/svg|font\/ttf)/.test(headers['Content-Type']);
+  if (compressible && /\bgzip\b/.test(req.headers['accept-encoding'] || '')) {
+    headers['Content-Encoding'] = 'gzip'; headers.Vary = 'Accept-Encoding';
+    res.writeHead(200, headers);
+    if (req.method === 'HEAD') return res.end();
+    return fs.createReadStream(file).pipe(zlib.createGzip()).pipe(res);
+  }
+  headers['Content-Length'] = fs.statSync(file).size;
+  res.writeHead(200, headers);
+  if (req.method === 'HEAD') return res.end();
+  fs.createReadStream(file).pipe(res);
 }
 
 export function createServer() {

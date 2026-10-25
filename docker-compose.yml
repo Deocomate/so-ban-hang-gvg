@@ -1,10 +1,11 @@
 # Sổ bán hàng gốm — triển khai bằng Docker Compose (Coolify)
-# - Chỉ dùng "expose" (không "ports") nên không chiếm cổng của máy chủ; Coolify (Traefik) định tuyến tên miền vào dịch vụ "web" cổng 80.
-# - Dữ liệu SQLite + bản sao lưu hằng đêm nằm trong volume "gomsu-data" (/data trong dịch vụ api).
+# - 1 dịch vụ "app": Node vừa chạy API (/api) vừa trả giao diện. Trên Coolify gán domain cho "app" cổng 3000.
+# - Chỉ dùng "expose" (không "ports") nên không chiếm cổng của máy chủ.
+# - Dữ liệu SQLite + bản sao lưu hằng đêm nằm trong volume "gomsu-data" (/data).
 # - Biến môi trường: xem .env.example (trên Coolify nhập ở mục Environment Variables).
 services:
-  api:
-    build: ./server
+  app:
+    build: .
     restart: unless-stopped
     expose:
       - "3000"
@@ -23,15 +24,6 @@ services:
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@example.com}
     volumes:
       - gomsu-data:/data
-
-  web:
-    build: ./web
-    restart: unless-stopped
-    expose:
-      - "80"
-    depends_on:
-      api:
-        condition: service_healthy
 
 volumes:
   gomsu-data:

@@ -9,8 +9,8 @@ Phần mềm quản lý bán hàng cho **Gốm sứ Thanh Hải** và **Gốm V�
 | `server/` | Máy chủ API (Node.js + SQLite): toàn bộ quy tắc tính toán, phân quyền, báo cáo, đăng nhập, nhận tiền về SePay, nhận trạng thái vận đơn, thông báo điện thoại, lịch tự động, sao lưu hằng đêm. |
 | `server/src/db/` | Cấu trúc cơ sở dữ liệu (`schema.sql`) và các bảng tổng hợp (`views.sql`). Máy chủ tự tạo khi khởi động lần đầu. |
 | `server/test/` | Bộ kiểm thử: nghiệp vụ bán hàng (146 phép), vận chuyển · tiền về · thông báo (126), chi phí (34), chứng từ (19), dữ liệu mẫu (12), HTTP · đăng nhập · webhook (24). |
-| `web/` | Giao diện (React + Vite), phục vụ bằng nginx; nginx chuyển các yêu cầu `/api` sang máy chủ API. |
-| `docker-compose.yml` | Chạy cả hai phần trên một máy chủ bằng Docker (Coolify). |
+| `web/` | Giao diện (React + Vite). Khi build Docker, giao diện được dựng sẵn và máy chủ API trả luôn (không cần nginx). |
+| `Dockerfile`, `docker-compose.yml` | Đóng gói cả giao diện và API vào **một** container, chạy bằng Docker (Coolify). |
 | `.env.example` | Danh sách biến cấu hình (khóa SePay, khóa thông báo…). |
 | `mau-excel/` | File mẫu để nhập hàng hóa, khách hàng, nhà cung cấp lần đầu. |
 
@@ -21,15 +21,15 @@ Cơ sở dữ liệu là **một tệp SQLite** (`/data/gomsu.db` trong Docker v
 ### Bước 1 — Tạo ứng dụng trên Coolify
 1. Đưa thư mục này lên một kho Git (GitHub/GitLab, để chế độ riêng tư).
 2. Coolify → **Project → New Resource → Docker Compose**, chọn kho Git vừa tạo. Coolify tự đọc `docker-compose.yml`.
-3. Ở dịch vụ **web**, đặt **Domain** (ví dụ `https://so.gomsu.vn`), cổng **80**. Dịch vụ **api** không cần tên miền: nó chỉ mở cổng 3000 trong mạng nội bộ Docker (dùng `expose`, không chiếm cổng của máy chủ nên không trùng với ứng dụng khác).
+3. Ở dịch vụ **app** (dịch vụ duy nhất), đặt **Domain** kèm cổng 3000, ví dụ `https://so.gomsu.vn:3000` (`:3000` là cổng bên trong container; người dùng vẫn vào bằng https bình thường). Compose dùng `expose`, không chiếm cổng của máy chủ nên không trùng với ứng dụng khác.
 4. Mục **Environment Variables**: chép các biến trong `.env.example` và điền giá trị (xem mục 7). Có thể để trống hết lúc đầu; `JWT_SECRET` để trống thì máy chủ tự tạo và lưu trong volume.
-5. Bấm **Deploy**. Khi cả hai dịch vụ "healthy", mở tên miền đã đặt.
+5. Bấm **Deploy**. Khi dịch vụ báo "healthy", mở tên miền đã đặt.
 
-> Không dùng Coolify: `cp .env.example .env`, sửa `.env`, rồi `docker compose up -d --build`, và cho reverse proxy (nginx, Caddy, Traefik…) trỏ vào dịch vụ `web` cổng 80.
+> Không dùng Coolify: `cp .env.example .env`, sửa `.env`, rồi `docker compose up -d --build`, và cho reverse proxy (nginx, Caddy, Traefik…) trỏ vào dịch vụ `app` cổng 3000.
 >
 > Chạy trên máy tính (cần Node.js 20+): `cd server && npm install && npm start` (cổng 3000), cửa sổ khác `cd web && npm install && npm run dev`, mở http://localhost:5173.
 >
-> **Bản chạy thử có dữ liệu mẫu**: triển khai một bản riêng với `DEMO_MODE=true`, rồi chạy một lần `docker compose exec api npm run seed:demo` (chỉ chạy trên cơ sở dữ liệu trống). Đăng nhập `chu.cuahang@demo.vn` / `demo1234`.
+> **Bản chạy thử có dữ liệu mẫu**: triển khai một bản riêng với `DEMO_MODE=true`, rồi chạy một lần `docker compose exec app npm run seed:demo` (chỉ chạy trên cơ sở dữ liệu trống). Đăng nhập `chu.cuahang@demo.vn` / `demo1234`.
 
 ### Bước 2 — Tạo tài khoản chủ (làm NGAY sau khi đưa lên)
 1. Mở địa chỉ web → **Tạo tài khoản mới** bằng email của anh.
@@ -43,7 +43,7 @@ Cơ sở dữ liệu là **một tệp SQLite** (`/data/gomsu.db` trong Docker v
 
 ### Quên mật khẩu
 - **Nhân viên:** chủ mở **Cài đặt → Người dùng & quyền → (tên nhân viên) → Đặt mật khẩu mới**, rồi báo lại cho nhân viên.
-- **Chủ cửa hàng:** người quản trị máy chủ chạy lệnh (Coolify → dịch vụ api → Terminal, hoặc `docker compose exec api …`):
+- **Chủ cửa hàng:** người quản trị máy chủ chạy lệnh (Coolify → dịch vụ app → Terminal, hoặc `docker compose exec app …`):
   ```
   npm run reset-password -- email-cua-anh@gmail.com MatKhauMoi123
   ```
@@ -90,7 +90,7 @@ Thuế GTGT 1% và thuế TNCN 17% trong phần mềm là **số ước tính đ
 
 - **Tự động:** mỗi đêm lúc 03:00 máy chủ sao lưu nguyên cơ sở dữ liệu vào `/data/backups/gomsu-YYYY-MM-DD.db` (trong volume `gomsu-data`), giữ 14 bản gần nhất (đổi bằng `BACKUP_KEEP_DAYS`). Bản sao lưu nằm cùng máy chủ, nên bật thêm sao lưu volume của Coolify hoặc định kỳ chép thư mục `backups` ra nơi khác.
 - **Tự tải:** **Cài đặt → Nhập / sao lưu dữ liệu → Tải bản sao lưu** (Excel để xem, JSON để lưu trữ). Nên tải mỗi tháng, mỗi sổ một bản, cất trên Google Drive hoặc USB.
-- **Khôi phục về một ngày cũ:** dừng dịch vụ api, chép tệp `backups/gomsu-<ngày>.db` đè lên `/data/gomsu.db` (xóa kèm `gomsu.db-wal`, `gomsu.db-shm` nếu có), rồi bật lại. Việc này ghi đè toàn bộ dữ liệu hiện tại, nên giữ lại một bản tệp hiện tại trước khi làm.
+- **Khôi phục về một ngày cũ:** dừng dịch vụ app, chép tệp `backups/gomsu-<ngày>.db` đè lên `/data/gomsu.db` (xóa kèm `gomsu.db-wal`, `gomsu.db-shm` nếu có), rồi bật lại. Việc này ghi đè toàn bộ dữ liệu hiện tại, nên giữ lại một bản tệp hiện tại trước khi làm.
 
 ## 6. Kiểm thử nghiệp vụ
 

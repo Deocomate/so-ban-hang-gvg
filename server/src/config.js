@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 const env = process.env;
 const flag = (v, d = false) => (v == null || v === '' ? d : ['1', 'true', 'yes', 'on'].includes(String(v).toLowerCase()));
@@ -23,6 +24,7 @@ export const config = {
   port: Number(env.PORT || 3000),
   dataDir,
   dbPath: env.DB_PATH || path.join(dataDir, 'gomsu.db'),
+  webDir: path.resolve(env.WEB_DIR || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'web', 'dist')),
   backupDir: env.BACKUP_DIR || path.join(dataDir, 'backups'),
   backupKeep: Number(env.BACKUP_KEEP_DAYS || 14),
   allowSignup: flag(env.ALLOW_SIGNUP, true),

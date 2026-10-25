@@ -1,0 +1,10 @@
+**/node_modules
+web/dist
+server/data
+server/test
+plans
+mau-excel
+*.db
+*.db-*
+.env
+.git
