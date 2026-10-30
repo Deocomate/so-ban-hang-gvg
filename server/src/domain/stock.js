@@ -79,7 +79,7 @@ export function adjust_stock(p) {
 }
 
 // ---------- IMPORT HÀNG HÓA (1 lần, kèm tồn đầu kỳ) ----------
-// Dòng có SKU đã tồn tại: chỉ cập nhật thông tin & giá, KHÔNG đổi tồn kho.
+// Dòng có SKU đã tồn tại: chỉ cập nhật thông tin & giá, KHÔNG đổi tồn kho; ô trống giữ nguyên giá trị cũ.
 // Dòng mới: tạo sản phẩm; nếu có số lượng > 0 thì ghi 1 phiếu "Tồn đầu kỳ" theo giá vốn.
 export function import_products(p) {
   const b = p.book_id;
@@ -90,7 +90,6 @@ export function import_products(p) {
     const ol = []; const seen = new Set(); const warn = [];
     for (const row of p.rows || []) {
       i++;
-      if (!trimNz(row.name)) fail(`Dòng ${i}: thiếu tên hàng hóa`);
       const q = num(row.qty) ?? 0;
       const cst = num(row.cost);
       if ((num(row.pack_weight) ?? 0) < 0 || (num(row.unit_weight) ?? 0) < 0) fail(`Dòng ${i}: trọng lượng không được âm`);
@@ -102,8 +101,9 @@ export function import_products(p) {
         seen.add(s.toLowerCase());
         ex = one(`select * from products where book_id = ? and lower(sku) = lower(?)`, b, s);
       }
+      if (!ex && !trimNz(row.name)) fail(`Dòng ${i}: thiếu tên hàng hóa`);
       if (ex) {
-        run(`update products set name = ?, category = coalesce(?, category), pattern = coalesce(?, pattern), size = coalesce(?, size),
+        run(`update products set name = coalesce(?, name), category = coalesce(?, category), pattern = coalesce(?, pattern), size = coalesce(?, size),
             color = coalesce(?, color), unit = coalesce(?, unit), units_per_pack = coalesce(?, units_per_pack), pack_unit = coalesce(?, pack_unit),
             pack_weight = coalesce(?, pack_weight), unit_weight = coalesce(?, unit_weight),
             price1 = coalesce(?, price1), price2 = coalesce(?, price2), price3 = coalesce(?, price3), low_stock = coalesce(?, low_stock),

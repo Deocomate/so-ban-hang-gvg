@@ -27,8 +27,9 @@ export function PartiesPage({ type }) {
       search={<Search value={search} onChange={setSearch} placeholder="Tìm tên, mã, số điện thoại…" />}
       actions={<>
         <Btn icon="dl" onClick={() => exportXlsx(isKh ? 'cong-no-khach-hang.xlsx' : 'cong-no-ncc.xlsx', [{ name: isKh ? 'Khách hàng' : 'Nhà cung cấp', rows, columns: [
-          { key: 'code', label: 'Mã' }, { key: 'name', label: 'Tên' }, { key: 'phone', label: 'Điện thoại' }, { key: 'address', label: 'Địa chỉ' },
-          ...(isKh ? [{ key: 'price_tier', label: 'Mức giá', get: (c) => pn[c.price_tier - 1] }] : []), { key: 'credit_days', label: 'Số ngày được nợ' },
+          { key: 'code', label: 'Mã' }, { key: 'name', label: 'Tên' }, { key: 'phone', label: 'Điện thoại' }, { key: 'address', label: 'Địa chỉ' }, { key: 'contact', label: 'Người liên hệ' },
+          ...(isKh ? [{ key: 'kind', label: 'Loại khách' }, { key: 'price_tier', label: 'Mức giá', get: (c) => pn[c.price_tier - 1] }] : []), { key: 'credit_days', label: 'Số ngày được nợ' },
+          ...(isKh ? [{ key: 'credit_limit', label: 'Hạn mức nợ' }] : []), { key: 'note', label: 'Ghi chú' },
           { key: 'opening', label: 'Nợ đầu kỳ' }, { key: debtKey, label: isKh ? 'Còn phải thu' : 'Còn phải trả' }, { key: 'prepaid', label: 'Trả trước' }, { key: 'overdue', label: 'Quá hạn' }, { key: 'max_overdue_days', label: 'Số ngày quá hạn' }] }])}>Xuất Excel</Btn>
         {can('owner') && <Btn icon="up" onClick={() => open('import', { kind: type })}>Nhập từ Excel</Btn>}
         {can('danh_muc') && <Btn kind="primary" icon="plus" onClick={() => open('party', { type })}>{isKh ? 'Thêm khách hàng' : 'Thêm nhà cung cấp'}</Btn>}

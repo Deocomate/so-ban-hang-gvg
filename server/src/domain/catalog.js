@@ -113,7 +113,7 @@ export function delete_opening_debt(p) {
   return { ok: true };
 }
 
-// Nhập khách hàng / nhà cung cấp kèm nợ đầu kỳ
+// Nhập khách hàng / nhà cung cấp kèm nợ đầu kỳ. Mã đã có: ô trống giữ nguyên giá trị cũ, không ghi đè.
 export function import_parties(p) {
   const b = p.book_id; const k = p.type;
   requirePerm(b, 'owner');
@@ -121,10 +121,11 @@ export function import_parties(p) {
     let i = 0, created = 0, updated = 0, debts = 0, total = 0; const warn = [];
     for (const row of p.rows || []) {
       i++;
-      if (!trimNz(row.name)) fail(`Dòng ${i}: thiếu tên`);
       const c = trimNz(row.code);
-      const ex = c ? one(`select id from ${k === 'kh' ? 'customers' : 'suppliers'} where book_id = ? and lower(code) = lower(?)`, b, c) : null;
-      const res = save_party({ ...row, book_id: b, type: k, id: ex?.id ?? null });
+      const ex = c ? one(`select * from ${k === 'kh' ? 'customers' : 'suppliers'} where book_id = ? and lower(code) = lower(?)`, b, c) : null;
+      if (!ex && !trimNz(row.name)) fail(`Dòng ${i}: thiếu tên`);
+      const given = Object.fromEntries(Object.entries(row).filter(([, v]) => trimNz(v) !== null));
+      const res = save_party({ ...ex, ...given, book_id: b, type: k, id: ex?.id ?? null });
       if (ex) updated++; else created++;
       const amt = num(row.opening_debt) ?? 0;
       if (amt !== 0) {

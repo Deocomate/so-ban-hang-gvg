@@ -65,16 +65,37 @@ Làm lần lượt trong **từng sổ** (chọn sổ ở thanh trên cùng trư
 
 1. **Cài đặt → Thông tin sổ**: kiểm tra tên sổ, thuế, tên 3 mức giá, địa chỉ và điện thoại in trên phiếu.
 2. **Cài đặt → Quỹ tiền**: nhập số dư đầu kỳ của Tiền mặt và Tài khoản ngân hàng (thêm quỹ nếu cần, ví dụ "Ví TikTok").
-3. **Sản phẩm → Nhập từ Excel**: dùng `mau-excel/mau-hang-hoa_ThanhHai.xlsx` (hoặc `_VuGia`). Các cột gồm: tên hàng hóa, chủng loại, mẫu, kích thước, màu sắc, ĐVT, giá vốn, 3 giá bán, số lượng tồn.
+3. **Sản phẩm → Nhập từ Excel**: dùng file có sẵn của cửa hàng, hoặc `mau-excel/mau-hang-hoa_ThanhHai.xlsx` (hoặc `_VuGia`). Các cột gồm: tên hàng hóa, chủng loại, mẫu, kích thước, màu sắc, ĐVT, giá vốn, 3 giá bán, số lượng tồn.
    - Mỗi dòng là một biến thể và có một mã SKU riêng. Để trống SKU thì hệ thống tự cấp mã.
    - Số lượng × giá vốn được ghi thành **phiếu Tồn đầu kỳ**. Phiếu này không tính vào doanh thu hay công nợ.
-   - Trước khi ghi có **bước xem trước**: dòng lỗi (thiếu tên, giá không phải số, SKU trùng) bị đánh dấu đỏ và bỏ qua.
    - Sau khi ghi có **bảng đối chiếu** giữa "Theo file" và "Đã ghi vào sổ" (số mã, tổng số lượng, tổng giá trị), mỗi dòng ghi Khớp hoặc Lệch.
-   - Nhập lại cùng file thì không nhân đôi: SKU đã có chỉ được cập nhật thông tin và giá, không cộng thêm tồn.
-   - File gốc của anh không bị sửa.
+   - File gốc không bị sửa.
 4. **Khách hàng → Nhập từ Excel** (`mau-khach-hang.xlsx`): gồm mức giá áp dụng, số ngày được nợ, **nợ đầu kỳ** và hạn trả.
 5. **Nhà cung cấp → Nhập từ Excel** (`mau-nha-cung-cap.xlsx`): gồm nợ đầu kỳ với xưởng.
 6. Xem lại **Tổng quan**: giá trị tồn kho, khách còn nợ, nợ nhà cung cấp và tồn quỹ phải khớp với sổ cũ.
+
+### Quy trình nhập từ file Excel
+
+Hàng hóa, khách hàng và nhà cung cấp đều nhập theo 3 bước. Đọc được `.xlsx`, `.xls`, `.csv`.
+
+1. **Chọn file.** File nhiều sheet thì phần mềm tự chọn sheet khớp nhiều cột nhất, và tự tìm dòng tiêu đề. Có thể đổi lại cả hai.
+2. **Chọn cột.** Mặc định chọn tất cả các cột nhận ra được.
+   - Bỏ tick cột nào thì cột đó không được nhập, dữ liệu trong sổ giữ nguyên.
+   - Cột chưa nhận ra thì chọn ở ô **Nhập vào**. Mỗi trường chỉ nhận từ một cột.
+   - Cảnh báo ở đầu bước: cột trống, cột có ô sai định dạng, cột có dữ liệu nhưng không có chỗ nhập, cột đang ẩn trong Excel, thiếu cột mã.
+   - Bị chặn không cho đi tiếp nếu không nhận ra cột nào, hoặc không có cả cột Tên lẫn cột Mã.
+3. **Kiểm tra & nhập.** Mỗi dòng có một trạng thái: Mới, Cập nhật (nêu rõ từng giá trị đổi), Không đổi, Nghi trùng, Lỗi. Dòng lỗi bị bỏ qua, các dòng khác vẫn nhập được.
+
+Quy tắc khi nhập:
+
+- **Không dùng cột nào** (ví dụ Mẫu, Màu sắc / men): để trống cả cột, xóa cột, hoặc bỏ tick đều được.
+- **Ô trống:** hàng mới để trống, hàng đã có giữ nguyên giá trị cũ. Ô trống không bao giờ xóa dữ liệu trong sổ.
+- **Cập nhật một phần:** file chỉ cần cột mã và cột muốn đổi, ví dụ SKU + Giá lẻ để sửa giá hàng loạt.
+- **Mã đã có:** chỉ cập nhật thông tin và giá. Tồn kho, giá vốn và nợ đầu kỳ không đổi theo file.
+- **Không có mã:** dòng giống hệt dữ liệu trong sổ được đánh dấu Nghi trùng và mặc định bỏ qua. Hàng so theo tên, mẫu, cỡ, màu, ĐVT; khách và nhà cung cấp so theo tên, điện thoại.
+- **Nhập lại cùng file** không nhân đôi: mọi dòng báo Không đổi.
+
+File tải về từ nút **Xuất Excel** ở trang Hàng hóa, Khách hàng, Nhà cung cấp nhập lại được ngay: sửa giá hoặc thông tin trong Excel rồi nhập lại. Các cột chỉ để xem như Còn phải thu, Quá hạn sẽ được báo là không nhập.
 
 ## 4. Quy tắc tính (đã kiểm thử)
 
@@ -284,7 +305,7 @@ Bấm **Tạo đơn bán** thì màn hình tạo đơn mở toàn màn hình. Kh
 - **Khi tạo đơn**, gõ số lượng là ngay dưới tên sản phẩm tự hiện cách chia thùng và trọng lượng của dòng đó. Cột bên phải hiện **Tổng trọng lượng** và tổng số thùng của cả đơn (thùng lẻ tính 1 thùng).
 - Sản phẩm chưa khai quy cách có nút "+ Khai số viên/thùng" ngay trên dòng hàng. Nếu có mặt hàng chưa khai trọng lượng, phần mềm ghi rõ "thiếu N mặt hàng chưa khai" để không hiểu nhầm là tổng đã đủ.
 - Tổng trọng lượng cũng hiện trong chi tiết đơn, trên **biên bản bàn giao** và **phiếu xuất kho**, tiện báo xe và đối chiếu khi bốc hàng.
-- **File Excel nhập hàng** có thêm 2 cột "Trọng lượng/thùng (kg)" và "Trọng lượng/viên (kg)". Ghi kiểu "140 viên/ thùng", "28kg/ thùng", "0,20" cũng đọc được; cột "Quy cách" ghi "140 viên/ thùng" thì phần mềm hiểu là 140 viên mỗi thùng.
+- **File Excel nhập hàng** có thêm 2 cột "Trọng lượng/thùng (kg)" và "Trọng lượng/viên (kg)" (tiêu đề "Trọng lượng/hộp" cũng được nhận). Ghi kiểu "140 viên/ thùng", "28kg/ thùng", "0,20" cũng đọc được; cột "Quy cách" ghi "140 viên/ thùng" thì phần mềm hiểu là 140 viên mỗi thùng.
 - **Máy chủ đang chạy bản cũ:** chỉ cần cập nhật và khởi động lại. Máy chủ tự thêm 2 cột trọng lượng vào cơ sở dữ liệu; dữ liệu cũ giữ nguyên, ô trọng lượng để trống.
 
 ## 12. Bố cục màn hình
