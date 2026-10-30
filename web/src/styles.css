@@ -181,6 +181,57 @@ textarea.inp { resize: vertical; }
 .picker-create { flex-direction: row; align-items: center; gap: 6px; color: var(--accent); font-weight: 600; border-top: 1px solid var(--line); border-radius: 0; margin-top: 4px; }
 .picker-empty { padding: 10px; color: var(--muted); }
 
+/* ---------- Ô ngày, ô chọn, ô số (components/Pickers.jsx, NumInput) ---------- */
+.pop { z-index: 300; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow-pop); display: flex; flex-direction: column; overflow: hidden; }
+.dinp, .sel { position: relative; min-width: 0; }
+.dinp > .inp { padding-right: 36px; font-variant-numeric: tabular-nums; }
+.dinp-btn { position: absolute; right: 3px; top: 50%; transform: translateY(-50%); width: 32px; height: 30px; border: 0; background: none; border-radius: 6px; color: var(--muted); cursor: pointer; display: grid; place-items: center; }
+.dinp-btn:hover:not(:disabled) { color: var(--accent); background: var(--accent-2); }
+.dinp.off .inp { background: var(--surface-2); }
+.sel-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; cursor: pointer; width: 100%; color: var(--ink); }
+.sel-btn svg { color: var(--muted); flex: none; }
+.sel-btn[aria-expanded="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-2); }
+.sel-btn:disabled { background: var(--surface-2); cursor: not-allowed; opacity: .7; }
+.sel-val { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sel-search { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); color: var(--muted); flex: none; }
+.sel-search input { border: 0; outline: 0; background: none; flex: 1; min-width: 0; color: var(--ink); font: inherit; }
+.sel-list { overflow-y: auto; padding: 4px; min-height: 0; flex: 1; }
+.sel-opt { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: 6px; cursor: pointer; color: var(--ink); min-height: 36px; }
+.sel-opt.hi { background: var(--surface-2); }
+.sel-opt.on { color: var(--accent); font-weight: 600; }
+.sel-opt.ph { color: var(--muted); }
+.sel-opt:disabled { opacity: .45; cursor: not-allowed; }
+.pop-cal { padding: 10px; overflow-y: auto; }
+.cal { display: flex; flex-direction: column; gap: 6px; user-select: none; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.cal-nav { width: 34px; height: 34px; border: 0; background: none; border-radius: 6px; cursor: pointer; color: var(--ink); display: grid; place-items: center; }
+.cal-nav:hover, .cal-title:hover { background: var(--surface-2); }
+.cal-title { border: 0; background: none; font-weight: 700; cursor: pointer; padding: 6px 10px; border-radius: 6px; color: var(--ink); font-size: 14.5px; }
+span.cal-title { cursor: default; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.cal-wd { text-align: center; font-size: 11.5px; color: var(--muted); font-weight: 600; padding: 4px 0; }
+.cal-day { height: 34px; border: 0; background: none; border-radius: 6px; cursor: pointer; color: var(--ink); font-variant-numeric: tabular-nums; }
+.cal-day:hover:not(:disabled) { background: var(--accent-2); }
+.cal-day.other { color: var(--muted); }
+.cal-day.today { box-shadow: inset 0 0 0 1px var(--accent); color: var(--accent); font-weight: 700; }
+.cal-day.on { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.cal-day:disabled { opacity: .3; cursor: not-allowed; }
+.cal-months { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.cal-month { height: 38px; border: 1px solid var(--line); background: var(--surface); border-radius: 6px; cursor: pointer; color: var(--ink); }
+.cal-month:hover:not(:disabled) { border-color: var(--accent); }
+.cal-month.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.cal-month:disabled { opacity: .35; cursor: not-allowed; }
+.cal-foot { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--line); padding-top: 8px; margin-top: 2px; }
+.ninp { display: flex; align-items: stretch; gap: 4px; min-width: 0; }
+.ninp-field { position: relative; flex: 1; min-width: 0; display: flex; }
+.ninp-field > .inp { width: 100%; }
+.ninp-unit { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 13px; pointer-events: none; }
+.ninp-step { width: 34px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); border-radius: 7px; font-size: 17px; line-height: 1; cursor: pointer; flex: none; }
+.ninp-step:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.ninp-step:disabled { opacity: .4; cursor: not-allowed; }
+.ninp.has-step .inp { text-align: center; }
+@media (pointer: coarse) { .ninp-step { width: 42px; } .dinp-btn { width: 40px; } }
+
 /* ---------- Thẻ, mục ---------- */
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; min-width: 0; }
 .section { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
@@ -243,6 +294,8 @@ textarea.inp { resize: vertical; }
 .formula { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; font-size: 13.5px; }
 .period { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .period .inp { width: auto; min-height: 34px; padding: 4px 8px; }
+.period .dinp { width: 136px; }
+.period .dinp > .inp { width: 100%; padding-right: 34px; }
 .chip { border: 1px solid var(--line); background: var(--surface); border-radius: 99px; padding: 5px 12px; cursor: pointer; font-size: 13px; }
 .chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
 .pl { display: grid; grid-template-columns: 1fr auto; gap: 0; font-variant-numeric: tabular-nums; }

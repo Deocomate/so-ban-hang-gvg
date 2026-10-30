@@ -75,7 +75,7 @@ export function PartyForm({ type, id, name, onClose, onSaved }) {
         <Field label="Địa chỉ" wide><Input value={f.address} onChange={(v) => set('address', v)} /></Field>
         {isKh && <Field label="Mức giá áp dụng"><Select value={String(f.price_tier)} onChange={(v) => set('price_tier', Number(v))} options={pn.map((n, i) => ({ value: String(i + 1), label: n }))} /></Field>}
         {isKh && <Field label="Loại khách"><Input value={f.kind} onChange={(v) => set('kind', v)} placeholder="Đại lý, khách lẻ, công trình, CTV…" /></Field>}
-        <Field label="Số ngày được nợ" hint="Hạn trả = ngày giao/nhận + số ngày này"><NumInput money={false} value={f.credit_days} onChange={(v) => set('credit_days', v || 0)} /></Field>
+        <Field label="Số ngày được nợ" hint="Hạn trả = ngày giao/nhận + số ngày này"><NumInput money={false} min={0} suffix="ngày" value={f.credit_days} onChange={(v) => set('credit_days', v || 0)} /></Field>
         {isKh && <Field label="Hạn mức nợ" hint="0 = không giới hạn"><NumInput value={f.credit_limit} onChange={(v) => set('credit_limit', v || 0)} /></Field>}
         <Field label="Ghi chú" wide><TextArea value={f.note} onChange={(v) => set('note', v)} /></Field>
       </div>

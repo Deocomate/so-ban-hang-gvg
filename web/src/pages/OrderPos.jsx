@@ -229,12 +229,12 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, onClose }) {
                   </div>
                   <div className="pos-qty">
                     <button onClick={() => setLine(l.key, { qty: Math.max(0, (Number(l.qty) || 0) - 1) })} aria-label="Bớt 1">−</button>
-                    <NumInput money={false} value={l.qty} onChange={(v) => setLine(l.key, { qty: v })} aria-label="Số lượng" />
+                    <NumInput money={false} min={0} value={l.qty} onChange={(v) => setLine(l.key, { qty: v })} aria-label="Số lượng" />
                     <button onClick={() => setLine(l.key, { qty: (Number(l.qty) || 0) + 1 })} aria-label="Thêm 1">+</button>
                     <span className="pos-unit">{p.unit}</span>
                   </div>
-                  <label className="pos-price"><span className="muted small">Đơn giá</span><NumInput value={l.unit_price} onChange={(v) => setLine(l.key, { unit_price: v, manual: true })} aria-label="Đơn giá" /></label>
-                  <label className="pos-ck"><span className="muted small">CK %</span><NumInput money={false} value={l.discount_pct} onChange={(v) => setLine(l.key, { discount_pct: v })} aria-label="Chiết khấu %" /></label>
+                  <label className="pos-price"><span className="muted small">Đơn giá</span><NumInput suffix={false} value={l.unit_price} onChange={(v) => setLine(l.key, { unit_price: v, manual: true })} aria-label="Đơn giá" /></label>
+                  <label className="pos-ck"><span className="muted small">CK %</span><NumInput money={false} min={0} max={100} value={l.discount_pct} onChange={(v) => setLine(l.key, { discount_pct: v })} aria-label="Chiết khấu %" /></label>
                   <div className="pos-line-total">{money(lineTotal(l))}</div>
                 </div>
               );
@@ -269,8 +269,8 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, onClose }) {
             {(weightSum > 0 || boxSum > 0) && <><span>Tổng trọng lượng{boxSum > 0 ? <span className="pos-count">{fq(boxSum)} {boxLabel}</span> : null}</span>
               <b className="r">{fmtKg(weightSum)}{noWeight > 0 && <div className="small muted" style={{ fontWeight: 400 }}>thiếu {noWeight} mặt hàng chưa khai</div>}</b></>}
             <span>Tổng tiền hàng <span className="pos-count">{fq(qtySum)}</span></span><b className="r">{money(gross)}</b>
-            <span>Giảm giá</span><NumInput value={f.discount} onChange={(v) => set('discount', v)} className="pos-uline" />
-            <span>Phí vận chuyển</span><NumInput value={f.shipping_fee} onChange={(v) => set('shipping_fee', v)} className="pos-uline" />
+            <span>Giảm giá</span><NumInput suffix={false} min={0} value={f.discount} onChange={(v) => set('discount', v)} className="pos-uline" aria-label="Giảm giá" />
+            <span>Phí vận chuyển</span><NumInput suffix={false} min={0} value={f.shipping_fee} onChange={(v) => set('shipping_fee', v)} className="pos-uline" aria-label="Phí vận chuyển" />
             <b>Khách cần trả</b><b className="r pos-due-amt">{money(total)}</b>
           </div>
 
@@ -279,7 +279,7 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, onClose }) {
               <div className="pos-sum">
                 <span>{isDat ? 'Khách đặt cọc' : 'Khách thanh toán'}</span>
                 <div className="pos-payin">
-                  <NumInput value={f.pay.amount} onChange={(v) => setPay('amount', v)} placeholder="0" className="pos-uline" />
+                  <NumInput suffix={false} min={0} value={f.pay.amount} onChange={(v) => setPay('amount', v)} placeholder="0" className="pos-uline" aria-label="Khách thanh toán" />
                   <button className="pos-chip" onClick={() => setPay('amount', total)}>Đủ</button>
                 </div>
                 {payAmt > total && !isDat ? <><span>Tiền thừa trả khách</span><b className="r">{money(payAmt - total)}</b></>
@@ -289,7 +289,7 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, onClose }) {
                 <div className="pos-methods">{METHODS.map((m) => <button key={m} className={`pos-chip${f.pay.method === m ? ' on' : ''}`} onClick={() => setPay('method', m)}>{m}</button>)}</div>
                 <div className="pos-grid2">
                   <Select value={f.pay.fund_id} onChange={(v) => setPay('fund_id', v)} options={(funds.data || []).map((x) => ({ value: x.id, label: 'Vào quỹ: ' + x.name }))} aria-label="Vào quỹ" />
-                  {isOnline && <label className="pos-due"><span className="muted small">Phí sàn bị trừ</span><NumInput value={f.pay.fee} onChange={(v) => setPay('fee', v)} placeholder="0" /></label>}
+                  {isOnline && <label className="pos-due"><span className="muted small">Phí sàn bị trừ</span><NumInput suffix={false} min={0} value={f.pay.fee} onChange={(v) => setPay('fee', v)} placeholder="0" /></label>}
                 </div>
               </>}
             </div>

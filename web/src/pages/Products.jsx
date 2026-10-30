@@ -105,12 +105,12 @@ export function ProductForm({ id, onClose, onSaved }) {
           <Field label="Kích thước"><Input value={f.size} onChange={(v) => set('size', v)} /></Field>
           <Field label="Màu sắc / men"><Input value={f.color} onChange={(v) => set('color', v)} /></Field>
           <Field label="Đơn vị tính"><Input value={f.unit} onChange={(v) => set('unit', v)} list="units" /><datalist id="units">{(settings.units || []).map((c) => <option key={c} value={c} />)}</datalist></Field>
-          <Field label={`Quy cách: số ${String(f.unit || 'cái').toLowerCase()} / ${f.pack_unit || 'hộp'}`} hint="Để in “4 hộp x 140 viên + 40 viên” trên hóa đơn, biên bản"><NumInput money={false} value={f.units_per_pack} onChange={(v) => set('units_per_pack', v)} placeholder="vd. 140" /></Field>
+          <Field label={`Quy cách: số ${String(f.unit || 'cái').toLowerCase()} / ${f.pack_unit || 'hộp'}`} hint="Để in “4 hộp x 140 viên + 40 viên” trên hóa đơn, biên bản"><NumInput money={false} min={1} value={f.units_per_pack} onChange={(v) => set('units_per_pack', v)} placeholder="vd. 140" /></Field>
           <Field label="Đơn vị đóng gói"><Input value={f.pack_unit} onChange={(v) => set('pack_unit', v)} list="packs" /><datalist id="packs">{['hộp', 'thùng', 'kiện', 'bao', 'pallet'].map((c) => <option key={c} value={c} />)}</datalist></Field>
           <Field label={`Trọng lượng 1 ${f.pack_unit || 'hộp'} (kg)`} hint={f.pack_weight && f.units_per_pack && !f.unit_weight ? `≈ ${(f.pack_weight / f.units_per_pack).toFixed(3).replace(/\.?0+$/, '')} kg / ${String(f.unit || 'cái').toLowerCase()}` : 'vd. 28'}>
-            <NumInput money={false} value={f.pack_weight} onChange={(v) => set('pack_weight', v)} placeholder="vd. 28" /></Field>
-          <Field label={`Trọng lượng 1 ${String(f.unit || 'cái').toLowerCase()} (kg)`} hint="Nếu điền ô này thì dùng ô này để tính tổng trọng lượng"><NumInput money={false} value={f.unit_weight} onChange={(v) => set('unit_weight', v)} placeholder="vd. 0,2" /></Field>
-          <Field label="Cảnh báo khi còn ≤"><NumInput money={false} value={f.low_stock} onChange={(v) => set('low_stock', v)} /></Field>
+            <NumInput money={false} min={0} step={0.5} suffix="kg" value={f.pack_weight} onChange={(v) => set('pack_weight', v)} placeholder="vd. 28" /></Field>
+          <Field label={`Trọng lượng 1 ${String(f.unit || 'cái').toLowerCase()} (kg)`} hint="Nếu điền ô này thì dùng ô này để tính tổng trọng lượng"><NumInput money={false} min={0} step={0.05} suffix="kg" value={f.unit_weight} onChange={(v) => set('unit_weight', v)} placeholder="vd. 0,2" /></Field>
+          <Field label="Cảnh báo khi còn ≤"><NumInput money={false} min={0} value={f.low_stock} onChange={(v) => set('low_stock', v)} /></Field>
         </div>
       </div>
       <div className="grid">
@@ -123,7 +123,7 @@ export function ProductForm({ id, onClose, onSaved }) {
             <div className="row gap" key={i}>
               <div className="grow" style={{ minWidth: 220 }}><Picker items={(all.data || []).filter((p) => !p.is_kit && p.id !== id)} value={c.product_id} getLabel={productLabel} getSub={productSub}
                 onChange={(v) => setF((s) => ({ ...s, components: s.components.map((x, j) => (j === i ? { ...x, product_id: v } : x)) }))} /></div>
-              <NumInput money={false} value={c.qty} onChange={(v) => setF((s) => ({ ...s, components: s.components.map((x, j) => (j === i ? { ...x, qty: v } : x)) }))} style={{ maxWidth: 100 }} />
+              <NumInput money={false} stepper min={1} value={c.qty} onChange={(v) => setF((s) => ({ ...s, components: s.components.map((x, j) => (j === i ? { ...x, qty: v } : x)) }))} style={{ maxWidth: 150 }} aria-label="Số lượng trong bộ" />
               <button className="icon-btn" onClick={() => setF((s) => ({ ...s, components: s.components.filter((_, j) => j !== i) }))}><Icon name="x" /></button>
             </div>
           ))}

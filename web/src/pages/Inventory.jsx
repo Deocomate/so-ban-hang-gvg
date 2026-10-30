@@ -182,8 +182,8 @@ export function AdjustForm({ product_id, onClose }) {
               <div className="grow" style={{ minWidth: 220 }}><Field label="Sản phẩm"><Picker items={(products.data || []).filter((x) => !x.is_kit)} value={l.product_id} onChange={(v) => setL(l.key, { product_id: v })}
                 getLabel={productLabel} getSub={(x) => `${productSub(x)} · tồn ${fq(x.on_hand)}`} /></Field></div>
               {reason === 'kiem_ke'
-                ? <Field label={`Số đếm thực tế${p ? ` (sổ: ${fq(p.on_hand)})` : ''}`}><NumInput money={false} value={l.count} onChange={(v) => setL(l.key, { count: v })} style={{ maxWidth: 140 }} /></Field>
-                : <Field label={reason === 'khac' ? 'Số lượng ± (âm = giảm)' : 'Số lượng mất / hỏng'}><NumInput money={false} value={l.qty} onChange={(v) => setL(l.key, { qty: v })} style={{ maxWidth: 140 }} /></Field>}
+                ? <Field label={`Số đếm thực tế${p ? ` (sổ: ${fq(p.on_hand)})` : ''}`}><NumInput money={false} stepper min={0} value={l.count} onChange={(v) => setL(l.key, { count: v })} style={{ maxWidth: 170 }} /></Field>
+                : <Field label={reason === 'khac' ? 'Số lượng ± (âm = giảm)' : 'Số lượng mất / hỏng'}><NumInput money={false} stepper value={l.qty} onChange={(v) => setL(l.key, { qty: v })} style={{ maxWidth: 170 }} /></Field>}
               {p && <span className="muted small" style={{ paddingBottom: 10 }}>chênh {delta(l) > 0 ? '+' : ''}{fq(delta(l))} → còn {fq(p.on_hand + delta(l))}</span>}
               {delta(l) > 0 && can('xem_gia_von') && <Field label="Giá vốn (để trống = bình quân)"><NumInput value={l.unit_cost} onChange={(v) => setL(l.key, { unit_cost: v })} style={{ maxWidth: 140 }} /></Field>}
             </div>

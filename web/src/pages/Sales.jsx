@@ -328,7 +328,7 @@ export function DeliverDialog({ order, onClose }) {
         <Table dense rows={lines.data.filter((l) => l.remaining_qty > 0)} columns={[
           { key: 'p', label: 'Sản phẩm', render: (l) => <><div className="cell-main">{l.sku} · {l.product_name}</div><div className="cell-sub">Tồn {fq(pmap[l.product_id]?.on_hand)} · còn bán {fq(pmap[l.product_id]?.available)} (đã tính hàng giữ cho đơn này)</div></> },
           { key: 'r', label: 'Còn phải giao', align: 'right', render: (l) => fq(l.remaining_qty) },
-          { key: 'q', label: 'Giao lần này', align: 'right', render: (l) => <NumInput money={false} value={qtys[l.id]} onChange={(v) => setQtys((s) => ({ ...s, [l.id]: v }))} style={{ maxWidth: 110 }} /> },
+          { key: 'q', label: 'Giao lần này', align: 'right', render: (l) => <NumInput money={false} stepper min={0} value={qtys[l.id]} onChange={(v) => setQtys((s) => ({ ...s, [l.id]: v }))} style={{ maxWidth: 150, marginLeft: 'auto' }} aria-label="Giao lần này" /> },
         ]} />
       )}
       <div className="grid">
@@ -373,7 +373,7 @@ export function ReturnDialog({ order, onClose }) {
         <Table dense rows={dl.data.filter((l) => l.returnable_qty > 0)} empty="Không còn hàng nào có thể trả" columns={[
           { key: 'p', label: 'Hàng đã giao', render: (l) => <><div className="cell-main">{l.sku} · {l.product_name}</div><div className="cell-sub">{l.delivery_code} · {dmy(l.delivery_date)} · giá {money(l.unit_price_net)}</div></> },
           { key: 'r', label: 'Có thể trả', align: 'right', render: (l) => fq(l.returnable_qty) },
-          { key: 'q', label: 'Số trả', align: 'right', render: (l) => <NumInput money={false} value={q[l.id]} onChange={(v) => setQ((s) => ({ ...s, [l.id]: v }))} style={{ maxWidth: 100 }} /> },
+          { key: 'q', label: 'Số trả', align: 'right', render: (l) => <NumInput money={false} stepper min={0} max={l.returnable_qty} value={q[l.id]} onChange={(v) => setQ((s) => ({ ...s, [l.id]: v }))} style={{ maxWidth: 150, marginLeft: 'auto' }} aria-label="Số trả" /> },
           { key: 's', label: 'Nhập lại kho?', render: (l) => <Check checked={rs[l.id] !== false} onChange={(v) => setRs((s) => ({ ...s, [l.id]: v }))}>{rs[l.id] === false ? 'Hàng lỗi – ghi hao hụt' : 'Nhập lại để bán'}</Check> },
         ]} />
       )}

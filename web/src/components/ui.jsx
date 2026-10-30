@@ -30,6 +30,7 @@ const P = {
   copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
   link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',
   phone: 'M7 2h10v20H7zM11 18h2',
+  calendar: 'M4 5h16v16H4zM4 10h16M8 3v4M16 3v4',
 };
 export function Icon({ name, size = 18, stroke = 1.8, className }) {
   return (
@@ -79,20 +80,12 @@ export function Input({ value, onChange, ...rest }) {
 export function TextArea({ value, onChange, rows = 2, ...rest }) {
   return <textarea className="inp" rows={rows} value={value ?? ''} onChange={(e) => onChange(e.target.value)} {...rest} />;
 }
-export function Select({ value, onChange, options, placeholder, ...rest }) {
-  return (
-    <select className="inp" value={value ?? ''} onChange={(e) => onChange(e.target.value)} {...rest}>
-      {placeholder !== undefined && <option value="">{placeholder}</option>}
-      {options.map((o) => (typeof o === 'string' ? <option key={o} value={o}>{o}</option> : <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>))}
-    </select>
-  );
-}
-export function DateInput({ value, onChange, ...rest }) {
-  return <input type="date" className="inp" value={value ?? ''} onChange={(e) => onChange(e.target.value)} {...rest} />;
-}
-// Ô số tiền / số lượng: hiển thị 1,500,000 ngay khi gõ; vẫn hiểu "1,5tr", "200k", "1.500.000"
+export { Select, DateInput, MonthInput } from './Pickers.jsx';
+// Ô số tiền / số lượng: hiển thị 1,500,000 ngay khi gõ; vẫn hiểu "1,5tr", "200k", "1.500.000".
+// Phím ↑/↓ tăng giảm theo step (giữ Shift: gấp 10). suffix: đơn vị hiện cuối ô (tiền mặc định "đ", truyền false để ẩn).
+// stepper: hiện nút −/+ hai bên (dùng cho ô số lượng).
 const groupDigits = (d) => d.replace(/^0+(?=\d)/, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-export function NumInput({ value, onChange, money: isMoney = true, placeholder, className = '', ...rest }) {
+export function NumInput({ value, onChange, money: isMoney = true, placeholder, className = '', suffix, step, min, max, stepper, style, ...rest }) {
   const show = (v) => (v === null || v === undefined || v === '' ? '' : isMoney ? money(v) : fq(v));
   const [txt, setTxt] = useState(show(value));
   const [focus, setFocus] = useState(false);
@@ -120,12 +113,32 @@ export function NumInput({ value, onChange, money: isMoney = true, placeholder, 
     setTxt(raw); const n = parseNum(raw);
     if (n !== null && !Number.isNaN(n)) onChange(n); else if (raw === '') onChange(null);
   };
-  return (
+  const inc = step ?? (isMoney ? 1000 : 1);
+  const bump = (dir, big) => {
+    const cur = parseNum(txt); let n = (cur === null || Number.isNaN(cur) ? 0 : cur) + dir * inc * (big ? 10 : 1);
+    n = Math.round(n * 1e6) / 1e6;
+    if (min !== undefined && n < min) n = min;
+    if (max !== undefined && n > max) n = max;
+    setTxt(show(n)); onChange(n);
+  };
+  const unit = suffix === undefined ? (isMoney ? 'đ' : null) : suffix || null;
+  const input = (
     <input ref={ref} className={`inp num ${className}`} inputMode={isMoney ? 'numeric' : 'decimal'} value={txt} placeholder={placeholder}
       onFocus={(e) => { setFocus(true); setTimeout(() => e.target.select(), 0); }}
       onBlur={() => { setFocus(false); const n = parseNum(txt); onChange(n === null || Number.isNaN(n) ? null : n); setTxt(show(n === null || Number.isNaN(n) ? null : n)); }}
+      onKeyDown={(e) => { if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !rest.disabled && !rest.readOnly) { e.preventDefault(); bump(e.key === 'ArrowUp' ? 1 : -1, e.shiftKey); } }}
       onChange={handle}
+      style={unit ? { paddingRight: 16 + String(unit).length * 7.5 } : stepper ? undefined : style}
       {...rest} />
+  );
+  if (!unit && !stepper) return input;
+  const atMin = min !== undefined && Number(value) <= min; const atMax = max !== undefined && Number(value) >= max;
+  return (
+    <div className={`ninp${stepper ? ' has-step' : ''}${unit ? ' has-unit' : ''}`} style={style}>
+      {stepper && <button type="button" className="ninp-step" tabIndex={-1} disabled={rest.disabled || atMin} onClick={() => bump(-1)} aria-label="Giảm">−</button>}
+      <span className="ninp-field">{input}{unit && <span className="ninp-unit" aria-hidden="true">{unit}</span>}</span>
+      {stepper && <button type="button" className="ninp-step" tabIndex={-1} disabled={rest.disabled || atMax} onClick={() => bump(1)} aria-label="Tăng">+</button>}
+    </div>
   );
 }
 

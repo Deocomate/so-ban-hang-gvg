@@ -64,8 +64,8 @@ function BookSettings() {
       <Section title="Sổ và thuế">
         <div className="grid">
           <Field label="Tên sổ (thương hiệu)" wide><Input value={f.name} onChange={(v) => set('name', v)} /></Field>
-          <Field label="Thuế GTGT (% trên doanh thu)" hint="Hộ kinh doanh bán hàng hóa: 1%"><NumInput money={false} value={f.vat} onChange={(v) => set('vat', v)} /></Field>
-          <Field label="Thuế TNCN (% trên lợi nhuận)" hint="Hộ doanh thu trên 3 tỷ: 17%"><NumInput money={false} value={f.pit} onChange={(v) => set('pit', v)} /></Field>
+          <Field label="Thuế GTGT (% trên doanh thu)" hint="Hộ kinh doanh bán hàng hóa: 1%"><NumInput money={false} min={0} step={0.5} suffix="%" value={f.vat} onChange={(v) => set('vat', v)} /></Field>
+          <Field label="Thuế TNCN (% trên lợi nhuận)" hint="Hộ doanh thu trên 3 tỷ: 17%"><NumInput money={false} min={0} step={0.5} suffix="%" value={f.pit} onChange={(v) => set('pit', v)} /></Field>
         </div>
         <Note>Thuế ở đây chỉ để ước tính lãi lỗ hằng tháng, không thay tờ khai. Quy định thuế hộ kinh doanh có thể thay đổi — nên đối chiếu với cán bộ thuế hoặc kế toán.</Note>
       </Section>
@@ -84,7 +84,7 @@ function BookSettings() {
         <Check checked={f.allow_oversell} onChange={(v) => set('allow_oversell', v)}>Cho phép giao vượt số tồn kho (mặc định: chặn)</Check>
         <div className="grid">
           <Field label="Khóa sổ đến hết ngày" hint="Không ai sửa / thêm chứng từ có ngày ≤ ngày này (dùng sau khi chốt sổ tháng)"><DateInput value={f.lock_date} onChange={(v) => set('lock_date', v)} max={todayVN()} /></Field>
-          <Field label="Nhắc trước hạn (ngày)"><NumInput money={false} value={f.due_warn_days} onChange={(v) => set('due_warn_days', v)} /></Field>
+          <Field label="Nhắc trước hạn (ngày)"><NumInput money={false} min={0} suffix="ngày" value={f.due_warn_days} onChange={(v) => set('due_warn_days', v)} /></Field>
           <Field label="Nhóm chi phí cho phí sàn"><Input value={f.fee_category} onChange={(v) => set('fee_category', v)} /></Field>
         </div>
       </Section>

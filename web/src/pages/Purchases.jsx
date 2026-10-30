@@ -138,7 +138,7 @@ export function PoForm({ id, kind: kind0, sales_order_id, supplier_id: sup0, lin
                 renderItem={(p) => <><span><b>{p.sku}</b> · {p.name}</span><span className="muted small">{productSub(p)} · tồn {fq(p.on_hand)}{p.avg_cost ? ` · giá vốn ${money(p.avg_cost)}` : ''}</span></>} />
               {l.sales_order_line_id && <span className="stockhint">Gắn với dòng đơn bán</span>}
             </div>
-            <NumInput money={false} value={l.qty} onChange={(v) => setLine(l.key, { qty: v })} />
+            <NumInput money={false} min={0} value={l.qty} onChange={(v) => setLine(l.key, { qty: v })} aria-label="Số lượng" />
             <NumInput value={l.unit_cost} onChange={(v) => setLine(l.key, { unit_cost: v })} />
             <span className="total">{money((Number(l.qty) || 0) * (Number(l.unit_cost) || 0))}</span>
             <button className="icon-btn" onClick={() => setF((s) => ({ ...s, lines: s.lines.length > 1 ? s.lines.filter((x) => x.key !== l.key) : [nl()] }))} aria-label="Xóa dòng"><Icon name="x" /></button>
@@ -275,7 +275,7 @@ export function ReceiveDialog({ po, onClose }) {
       {!lines.data ? <Loading /> : <Table dense rows={lines.data.filter((l) => l.remaining_qty > 0)} columns={[
         { key: 'p', label: 'Sản phẩm', render: (l) => <div className="cell-main">{l.sku} · {l.product_name}</div> },
         { key: 'r', label: 'Còn chờ', align: 'right', render: (l) => fq(l.remaining_qty) },
-        { key: 'q', label: 'Thực nhận', align: 'right', render: (l) => <NumInput money={false} value={q[l.id]} onChange={(v) => setQ((s) => ({ ...s, [l.id]: v }))} style={{ maxWidth: 100 }} /> },
+        { key: 'q', label: 'Thực nhận', align: 'right', render: (l) => <NumInput money={false} stepper min={0} value={q[l.id]} onChange={(v) => setQ((s) => ({ ...s, [l.id]: v }))} style={{ maxWidth: 150, marginLeft: 'auto' }} aria-label="Thực nhận" /> },
         { key: 'c', label: 'Giá nhập', align: 'right', render: (l) => <NumInput value={c[l.id]} onChange={(v) => setC((s) => ({ ...s, [l.id]: v }))} style={{ maxWidth: 130 }} /> },
       ]} />}
       <div className="grid">
@@ -308,7 +308,7 @@ export function SupplierReturnDialog({ po, onClose }) {
       <Table dense rows={recs.data ? rl.filter((l) => l.qty - l.returned_qty > 0) : null} empty="Không còn hàng nào có thể trả" columns={[
         { key: 'p', label: 'Hàng đã nhận', render: (l) => <><div className="cell-main">{l.sku} · {l.name}</div><div className="cell-sub">{l.code} · {dmy(l.date)} · giá {money(l.unit_cost)}</div></> },
         { key: 'r', label: 'Có thể trả', align: 'right', render: (l) => fq(l.qty - l.returned_qty) },
-        { key: 'q', label: 'Số trả', align: 'right', render: (l) => <NumInput money={false} value={q[l.id]} onChange={(v) => setQ((s) => ({ ...s, [l.id]: v }))} style={{ maxWidth: 100 }} /> },
+        { key: 'q', label: 'Số trả', align: 'right', render: (l) => <NumInput money={false} stepper min={0} max={l.returnable_qty ?? undefined} value={q[l.id]} onChange={(v) => setQ((s) => ({ ...s, [l.id]: v }))} style={{ maxWidth: 150, marginLeft: 'auto' }} aria-label="Số trả" /> },
       ]} />
       <div className="grid">
         <Field label="Ngày trả"><DateInput value={date} onChange={setDate} max={todayVN()} /></Field>

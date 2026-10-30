@@ -3,7 +3,7 @@ import { useApp, useRpcData, useQ } from '../lib/store.jsx';
 import { money, qty as fq, pct, monthLabel, todayVN, monthStart, addMonths, monthEnd, dmy } from '../lib/format.js';
 import { exportXlsx } from '../lib/excel.js';
 import { cats as expCats } from '../lib/expenseCats.js';
-import { Btn, Tabs, ErrorBox, Note, Table, Pill } from '../components/ui.jsx';
+import { Btn, Tabs, ErrorBox, Note, Table, Pill, MonthInput } from '../components/ui.jsx';
 import { PeriodPicker, usePeriod } from '../components/Period.jsx';
 import { StockReport } from './Inventory.jsx';
 
@@ -54,8 +54,8 @@ function MonthlyPL() {
   return (
     <div className="stack">
       <div className="row gap">
-        <label className="row gap-s small">Từ tháng <input className="inp" type="month" value={range.from.slice(0, 7)} onChange={(e) => e.target.value && setRange((x) => ({ ...x, from: e.target.value + '-01' }))} /></label>
-        <label className="row gap-s small">đến <input className="inp" type="month" value={range.to.slice(0, 7)} onChange={(e) => e.target.value && setRange((x) => ({ ...x, to: monthEnd(e.target.value + '-01') }))} /></label>
+        <label className="row gap-s small">Từ tháng <MonthInput value={range.from.slice(0, 7)} max={range.to.slice(0, 7)} onChange={(v) => setRange((x) => ({ ...x, from: v + '-01' }))} aria-label="Từ tháng" /></label>
+        <label className="row gap-s small">đến <MonthInput value={range.to.slice(0, 7)} min={range.from.slice(0, 7)} onChange={(v) => setRange((x) => ({ ...x, to: monthEnd(v + '-01') }))} aria-label="Đến tháng" /></label>
         <span className="grow" />
         <Btn icon="dl" onClick={() => exportXlsx(`lai-lo_${range.from}_${range.to}.xlsx`, [{ name: 'Lãi lỗ', rows: lines.map(([k, label]) => ({ label, ...Object.fromEntries(rows.map((m) => [m.month, m[k]])), total: total(k) })),
           columns: [{ key: 'label', label: 'Chỉ tiêu' }, ...rows.map((m) => ({ key: m.month, label: monthLabel(m.month) })), { key: 'total', label: 'Cộng' }] }])}>Xuất Excel</Btn>
@@ -201,8 +201,8 @@ function ExpenseReport() {
       <div className="row gap">
         <div className="seg"><button className={view === 'item' ? 'on' : ''} onClick={() => setView('item')}>Theo nhóm & khoản mục</button><button className={view === 'month' ? 'on' : ''} onClick={() => setView('month')}>So sánh theo tháng</button></div>
         {view === 'item' ? <PeriodPicker value={period} onChange={setPeriod} /> : <>
-          <label className="row gap-s small">Từ tháng <input className="inp" type="month" value={range.from.slice(0, 7)} onChange={(e) => e.target.value && setRange((x) => ({ ...x, from: e.target.value + '-01' }))} /></label>
-          <label className="row gap-s small">đến <input className="inp" type="month" value={range.to.slice(0, 7)} onChange={(e) => e.target.value && setRange((x) => ({ ...x, to: monthEnd(e.target.value + '-01') }))} /></label></>}
+          <label className="row gap-s small">Từ tháng <MonthInput value={range.from.slice(0, 7)} max={range.to.slice(0, 7)} onChange={(v) => setRange((x) => ({ ...x, from: v + '-01' }))} aria-label="Từ tháng" /></label>
+          <label className="row gap-s small">đến <MonthInput value={range.to.slice(0, 7)} min={range.from.slice(0, 7)} onChange={(v) => setRange((x) => ({ ...x, to: monthEnd(v + '-01') }))} aria-label="Đến tháng" /></label></>}
         <span className="grow" />
         <Btn icon="dl" onClick={() => (view === 'item'
           ? exportXlsx(`chi-phi_${period.from}_${period.to}.xlsx`, [{ name: 'Chi phí', rows, columns: [{ key: 'grp', label: 'Nhóm' }, { key: 'name', label: 'Khoản mục' }, { key: 'count', label: 'Số khoản' }, { key: 'amount', label: 'Tính vào lãi lỗ kỳ này' }] }])
