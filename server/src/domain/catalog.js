@@ -6,6 +6,7 @@ export function save_product(p) {
   const b = p.book_id;
   requirePerm(b, 'danh_muc');
   if ((num(p.units_per_pack) ?? 1) <= 0) fail('Số lượng mỗi hộp phải lớn hơn 0');
+  if ((num(p.pack_weight) ?? 0) < 0 || (num(p.unit_weight) ?? 0) < 0) fail('Trọng lượng không được âm');
   if (!trimNz(p.name)) fail('Thiếu tên sản phẩm');
   if ((num(p.price1) ?? 0) < 0 || (num(p.price2) ?? 0) < 0 || (num(p.price3) ?? 0) < 0) fail('Giá bán không được âm');
   let pid = nz(p.id); let s = trimNz(p.sku); const kit = bool(p.is_kit) ?? false;
@@ -13,7 +14,8 @@ export function save_product(p) {
     name: trimNz(p.name), category: p.category ?? null, pattern: p.pattern ?? null, size: p.size ?? null, color: p.color ?? null,
     unit: nz(p.unit) || 'Cái', image_url: p.image_url ?? null, price1: num(p.price1) ?? 0, price2: num(p.price2) ?? 0, price3: num(p.price3) ?? 0,
     low_stock: num(p.low_stock) ?? 0, is_kit: kit ? 1 : 0, active: (bool(p.active) ?? true) ? 1 : 0, note: p.note ?? null,
-    pack_unit: trimNz(p.pack_unit) || 'hộp', units_per_pack: num(p.units_per_pack), updated_at: nowIso(),
+    pack_unit: trimNz(p.pack_unit) || 'hộp', units_per_pack: num(p.units_per_pack),
+    pack_weight: num(p.pack_weight), unit_weight: num(p.unit_weight), updated_at: nowIso(),
   };
   if (!pid) {
     if (!s) s = newMasterCode(b, 'SP', 'products');

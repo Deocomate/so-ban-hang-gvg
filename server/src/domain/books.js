@@ -53,11 +53,15 @@ export function bootstrap() {
     if (one(`select 1 from books where is_demo = 0`)) {
       fail('Tài khoản này chưa được cấp quyền vào sổ nào. Hãy nhờ chủ cửa hàng thêm email của bạn trong Cài đặt → Người dùng.', 403);
     }
-    createBook('Gốm sứ Thanh Hải', 'TH', ctx.uid);
-    createBook('Gốm Vũ Gia', 'VG', ctx.uid);
+    createDefaultBooks(ctx.uid);
     loadMembers();
   }
   return my_books();
+}
+
+export function createDefaultBooks(owner) {
+  createBook('Gốm sứ Thanh Hải', 'TH', owner);
+  createBook('Gốm Vũ Gia', 'VG', owner);
 }
 
 export function my_books() {

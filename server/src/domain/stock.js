@@ -93,6 +93,7 @@ export function import_products(p) {
       if (!trimNz(row.name)) fail(`Dòng ${i}: thiếu tên hàng hóa`);
       const q = num(row.qty) ?? 0;
       const cst = num(row.cost);
+      if ((num(row.pack_weight) ?? 0) < 0 || (num(row.unit_weight) ?? 0) < 0) fail(`Dòng ${i}: trọng lượng không được âm`);
       if (q < 0) fail(`Dòng ${i}: số lượng không được âm`);
       if ((cst ?? 0) < 0 || (num(row.price1) ?? 0) < 0 || (num(row.price2) ?? 0) < 0 || (num(row.price3) ?? 0) < 0) fail(`Dòng ${i}: giá không được âm`);
       let s = trimNz(row.sku); let ex = null;
@@ -104,10 +105,11 @@ export function import_products(p) {
       if (ex) {
         run(`update products set name = ?, category = coalesce(?, category), pattern = coalesce(?, pattern), size = coalesce(?, size),
             color = coalesce(?, color), unit = coalesce(?, unit), units_per_pack = coalesce(?, units_per_pack), pack_unit = coalesce(?, pack_unit),
+            pack_weight = coalesce(?, pack_weight), unit_weight = coalesce(?, unit_weight),
             price1 = coalesce(?, price1), price2 = coalesce(?, price2), price3 = coalesce(?, price3), low_stock = coalesce(?, low_stock),
             note = coalesce(?, note), updated_at = ? where id = ?`,
           trimNz(row.name), nz(row.category), nz(row.pattern), nz(row.size), nz(row.color), nz(row.unit), num(row.units_per_pack), trimNz(row.pack_unit),
-          num(row.price1), num(row.price2), num(row.price3), num(row.low_stock), nz(row.note), nowIso(), ex.id);
+          num(row.pack_weight), num(row.unit_weight), num(row.price1), num(row.price2), num(row.price3), num(row.low_stock), nz(row.note), nowIso(), ex.id);
         updated++;
         if (q > 0) { skipped++; warn.push(`Dòng ${i}: SKU ${ex.sku} đã có — bỏ qua số lượng ${q} (tồn chỉ đổi qua phiếu điều chỉnh)`); }
       } else {
@@ -116,7 +118,7 @@ export function import_products(p) {
         insert('products', { id, book_id: b, sku: s, name: trimNz(row.name), category: nz(row.category), pattern: nz(row.pattern), size: nz(row.size),
           color: nz(row.color), unit: nz(row.unit) || 'Cái', price1: num(row.price1) ?? 0, price2: num(row.price2) ?? 0, price3: num(row.price3) ?? 0,
           low_stock: num(row.low_stock) ?? 0, note: nz(row.note), last_cost: cst ?? 0, units_per_pack: num(row.units_per_pack),
-          pack_unit: trimNz(row.pack_unit) || 'hộp', created_at: nowIso(), updated_at: nowIso() });
+          pack_unit: trimNz(row.pack_unit) || 'hộp', pack_weight: num(row.pack_weight), unit_weight: num(row.unit_weight), created_at: nowIso(), updated_at: nowIso() });
         created++;
         if (q > 0) {
           if (cst == null) warn.push(`Dòng ${i}: ${s} có số lượng nhưng chưa có giá vốn — ghi giá vốn 0`);

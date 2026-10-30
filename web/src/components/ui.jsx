@@ -259,6 +259,40 @@ export function KV({ items }) {
   return <dl className="kv">{items.filter(Boolean).map(([k, v, cls]) => <React.Fragment key={k}><dt>{k}</dt><dd className={cls || ''}>{v}</dd></React.Fragment>)}</dl>;
 }
 
+// Trang danh sách: cột lọc bên trái (tiêu đề + các ô lọc), bên phải là thanh tìm kiếm / nút thao tác và bảng.
+// Điện thoại: cột lọc nằm trên, các lựa chọn trượt ngang.
+export function ListPage({ title, sub, filters, search, actions, children }) {
+  const [more, setMore] = useState(false);
+  return (
+    <div className="lp">
+      <aside className="lp-side">
+        <div className="lp-head"><h1 className="page-title">{title}</h1>{sub && <div className="page-sub">{sub}</div>}</div>
+        <div className={`lp-filters${more ? ' more' : ''}`}>{filters}</div>
+        <button type="button" className="link-btn small lp-more" onClick={() => setMore((v) => !v)}>{more ? 'Thu gọn bộ lọc' : 'Bộ lọc khác'}</button>
+      </aside>
+      <div className="lp-main">
+        {(search || actions) && <div className="lp-bar">{search}<div className="lp-actions">{actions}</div></div>}
+        {children}
+      </div>
+    </div>
+  );
+}
+export function FilterBox({ title, children }) {
+  return <div className="fbox"><div className="fbox-title">{title}</div><div className="fbox-body">{children}</div></div>;
+}
+// Danh sách chọn một (thay cho thẻ tab): {value, label, count}
+export function RadioList({ value, onChange, options }) {
+  return (
+    <div className="rlist" role="radiogroup">
+      {options.map((o) => (
+        <button type="button" key={o.value} role="radio" aria-checked={value === o.value} className={`rl-item${value === o.value ? ' on' : ''}`} onClick={() => onChange(o.value)}>
+          <span className="rl-dot" /><span className="rl-label">{o.label}</span>{o.count !== undefined && o.count !== null && <span className="rl-count">{o.count}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function Section({ title, actions, children, className = '' }) {
   return (
     <section className={`section ${className}`}>

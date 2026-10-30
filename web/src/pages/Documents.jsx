@@ -5,6 +5,27 @@ import { saveFile } from '../lib/excel.js';
 import { Btn, Loading, ErrorBox, Note, Modal, Field, Input, TextArea, Select, DateInput, NumInput, Check, Section, Tabs, ConfirmBtn } from '../components/ui.jsx';
 import { DOC_TYPES, DEFAULT_TEXTS, docSettings, loadDocData, buildDoc, defaults, currentInfo, editableFields, infoRef, profileFromBook } from '../lib/docs/model.js';
 
+// Nạp phông nhúng trong PDF cho bản xem trước, để xem trước và tệp PDF giống hệt nhau
+import ArimoR from '../assets/fonts/Arimo-Regular.ttf?url';
+import ArimoB from '../assets/fonts/Arimo-Bold.ttf?url';
+import ArimoI from '../assets/fonts/Arimo-Italic.ttf?url';
+import ArimoBI from '../assets/fonts/Arimo-BoldItalic.ttf?url';
+import TinosR from '../assets/fonts/Tinos-Regular.ttf?url';
+import TinosB from '../assets/fonts/Tinos-Bold.ttf?url';
+import TinosI from '../assets/fonts/Tinos-Italic.ttf?url';
+import TinosBI from '../assets/fonts/Tinos-BoldItalic.ttf?url';
+let fontsInjected = false;
+function useDocFonts() {
+  useEffect(() => {
+    if (fontsInjected) return; fontsInjected = true;
+    const face = (fam, url, w, st) => `@font-face{font-family:"${fam}";src:url("${url}") format("truetype");font-weight:${w};font-style:${st};font-display:swap}`;
+    const el = document.createElement('style');
+    el.textContent = [face('Arimo', ArimoR, 400, 'normal'), face('Arimo', ArimoB, 700, 'normal'), face('Arimo', ArimoI, 400, 'italic'), face('Arimo', ArimoBI, 700, 'italic'),
+      face('Tinos', TinosR, 400, 'normal'), face('Tinos', TinosB, 700, 'normal'), face('Tinos', TinosI, 400, 'italic'), face('Tinos', TinosBI, 700, 'italic')].join('\n');
+    document.head.appendChild(el);
+  }, []);
+}
+
 const TYPES_FOR = { order: ['hoa_don', 'don_dat_hang', 'bien_ban', 'phieu_xuat_kho'], delivery: ['bien_ban', 'phieu_xuat_kho', 'hoa_don', 'don_dat_hang'], payment: ['phieu_thu'] };
 const FONT_CSS = { Arimo: 'Arimo, Arial, "Helvetica Neue", sans-serif', Tinos: 'Tinos, "Times New Roman", Times, serif' };
 
@@ -19,6 +40,7 @@ function cellEl(c, i, size, tall) {
   );
 }
 export function DocPreview({ doc }) {
+  useDocFonts();
   // Thu nhỏ trang A4 cho vừa màn hình điện thoại
   const ref = React.useRef(null); const [zoom, setZoom] = useState(1);
   useEffect(() => {
@@ -159,6 +181,8 @@ export function DocDialog({ kind, id, type: type0, onClose }) {
   );
 }
 
+function FontLoader() { useDocFonts(); return null; }
+
 // ---------- Cài đặt → Mẫu chứng từ ----------
 const PROFILE_FIELDS = [
   ['name', 'Tên in đầu trang (IN HOA)', true], ['legal_name', 'Tên dùng trong nội dung', true], ['address', 'Địa chỉ', true], ['phone', 'Điện thoại'], ['email', 'Email'],
@@ -191,7 +215,7 @@ export function DocTemplateSettings() {
     const ds = docSettings(book, settings);
     const types = {};
     for (const k of Object.keys(DOC_TYPES)) types[k] = { ...ds.types[k], text: { ...(ds.types[k].text || {}) } };
-    setF({ profiles: ds.profiles.map((p) => ({ ...p })), types });
+    setF({ profiles: ds.profiles.map((p) => ({ ...p })), types, font: ds.font });
   }, [book.id]);
   if (!f) return <Loading />;
   const setP = (i, k, v) => setF((s) => ({ ...s, profiles: s.profiles.map((p, j) => (j === i ? { ...p, [k]: v } : p)) }));
@@ -201,7 +225,7 @@ export function DocTemplateSettings() {
   const delProfile = (i) => setF((s) => {
     const gone = s.profiles[i].id; const profiles = s.profiles.filter((_, j) => j !== i);
     const types = Object.fromEntries(Object.entries(s.types).map(([k, t]) => [k, t.profile === gone ? { ...t, profile: profiles[0].id } : t]));
-    return { profiles, types };
+    return { ...s, profiles, types };
   });
   const save = async () => {
     setBusy(true); setErr(null);
@@ -210,7 +234,7 @@ export function DocTemplateSettings() {
       if (size > 900000) throw new Error('Logo quá lớn — chọn ảnh nhỏ hơn');
       const types = Object.fromEntries(Object.entries(f.types).map(([k, t]) => [k, { profile: t.profile, sep: t.sep, show_price: t.show_price, show_form: t.show_form,
         text: Object.fromEntries(Object.entries(t.text || {}).filter(([, v]) => v !== undefined && v !== null)) }]));
-      await rpc('update_book_settings', { settings: { docs: { profiles: f.profiles, types } } });
+      await rpc('update_book_settings', { settings: { docs: { profiles: f.profiles, types, font: f.font } } });
       await loadBooks(); refresh(); toast('Đã lưu mẫu chứng từ');
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
@@ -239,6 +263,18 @@ export function DocTemplateSettings() {
               </div>
             </div>
           ))}
+        </div>
+      </Section>
+      <FontLoader />
+      <Section title="Phông chữ">
+        <div className="grid">
+          <Field label="Phông chữ cho tất cả chứng từ" hint="Hóa đơn, đơn đặt hàng, biên bản, phiếu xuất kho và phiếu thu/chi dùng chung phông này. Phông được nhúng sẵn trong PDF nên máy nào mở cũng giống nhau.">
+            <Select value={f.font} onChange={(v) => setF((s) => ({ ...s, font: v }))} options={[{ value: 'Arimo', label: 'Arial (Arimo) — chữ không chân' }, { value: 'Tinos', label: 'Times New Roman (Tinos) — chữ có chân' }]} />
+          </Field>
+          <div className="row gap" style={{ alignItems: 'center' }}>
+            <span style={{ fontFamily: 'Arimo, Arial, sans-serif', fontSize: 16, opacity: f.font === 'Arimo' ? 1 : .45 }}>Hóa đơn bán hàng</span>
+            <span style={{ fontFamily: 'Tinos, "Times New Roman", serif', fontSize: 16, opacity: f.font === 'Tinos' ? 1 : .45 }}>Hóa đơn bán hàng</span>
+          </div>
         </div>
       </Section>
       <Section title="Từng loại chứng từ">

@@ -2,39 +2,45 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useApp, useQ, useAction } from '../lib/store.jsx';
 import { money, dmy, todayVN, match, short } from '../lib/format.js';
 import { exportXlsx } from '../lib/excel.js';
-import { Btn, Icon, Pill, StatusPill, DELIVERY, PAYMENT, RECEIVE, Field, Input, TextArea, Select, DateInput, NumInput, Check, Search, Tabs, Loading, ErrorBox, Note, Table, Modal, KV, Section } from '../components/ui.jsx';
+import { Btn, Icon, Pill, StatusPill, DELIVERY, PAYMENT, RECEIVE, Field, Input, TextArea, Select, DateInput, NumInput, Check, Search, Tabs, Loading, ErrorBox, Note, Table, Modal, KV, Section, ListPage, FilterBox, RadioList } from '../components/ui.jsx';
 
 export function PartiesPage({ type }) {
   const { open, can, settings } = useApp();
   const isKh = type === 'kh';
-  const [search, setSearch] = useState(''); const [only, setOnly] = useState('');
+  const [search, setSearch] = useState(''); const [only, setOnly] = useState(''); const [tier, setTier] = useState('');
   const q = useQ(isKh ? 'customers' : 'suppliers', [], 'name', 5000);
   const pn = settings.price_names || [];
-  const rows = useMemo(() => (q.data || []).filter((c) => match(`${c.code} ${c.name} ${c.phone || ''} ${c.address || ''}`, search)
-    && (!only || (only === 'debt' && (isKh ? c.receivable : c.payable) > 0) || (only === 'over' && c.overdue > 0) || (only === 'pre' && c.prepaid > 0))), [q.data, search, only]);
-  const tot = (k) => rows.reduce((s, c) => s + (c[k] || 0), 0);
+  const all = q.data || [];
   const debtKey = isKh ? 'receivable' : 'payable';
+  const rows = useMemo(() => all.filter((c) => match(`${c.code} ${c.name} ${c.phone || ''} ${c.address || ''}`, search) && (!tier || String(c.price_tier) === tier)
+    && (!only || (only === 'debt' && c[debtKey] > 0) || (only === 'over' && c.overdue > 0) || (only === 'pre' && c.prepaid > 0))), [all, search, only, tier]);
+  const tot = (k) => rows.reduce((s, c) => s + (c[k] || 0), 0);
   return (
-    <>
-      <div className="page-head">
-        <div className="grow"><h1 className="page-title">{isKh ? 'Khách hàng' : 'Nhà cung cấp / xưởng'}</h1>
-          <div className="page-sub">{isKh ? 'Công nợ = nợ đầu kỳ + hàng đã giao − hàng trả lại − tiền khách đã trả. Tiền cọc hiện ở cột “trả trước”.' : 'Công nợ = nợ đầu kỳ + hàng đã nhận + chi phí ghi nợ − hàng trả lại − tiền đã trả.'}</div></div>
+    <ListPage title={isKh ? 'Khách hàng' : 'Nhà cung cấp / xưởng'}
+      sub={isKh ? 'Công nợ = nợ đầu kỳ + hàng đã giao − hàng trả lại − tiền khách đã trả. Tiền cọc hiện ở cột “trả trước”.' : 'Công nợ = nợ đầu kỳ + hàng đã nhận + chi phí ghi nợ − hàng trả lại − tiền đã trả.'}
+      filters={<>
+        <FilterBox title="Công nợ"><RadioList value={only} onChange={setOnly} options={[{ value: '', label: 'Tất cả', count: all.length },
+          { value: 'debt', label: 'Còn nợ', count: all.filter((c) => c[debtKey] > 0).length }, { value: 'over', label: 'Quá hạn', count: all.filter((c) => c.overdue > 0).length },
+          { value: 'pre', label: 'Có trả trước', count: all.filter((c) => c.prepaid > 0).length }]} /></FilterBox>
+        {isKh && pn.length > 0 && <FilterBox title="Mức giá"><RadioList value={tier} onChange={setTier} options={[{ value: '', label: 'Tất cả' }, ...pn.map((n, i) => ({ value: String(i + 1), label: n }))]} /></FilterBox>}
+      </>}
+      search={<Search value={search} onChange={setSearch} placeholder="Tìm tên, mã, số điện thoại…" />}
+      actions={<>
         <Btn icon="dl" onClick={() => exportXlsx(isKh ? 'cong-no-khach-hang.xlsx' : 'cong-no-ncc.xlsx', [{ name: isKh ? 'Khách hàng' : 'Nhà cung cấp', rows, columns: [
           { key: 'code', label: 'Mã' }, { key: 'name', label: 'Tên' }, { key: 'phone', label: 'Điện thoại' }, { key: 'address', label: 'Địa chỉ' },
           ...(isKh ? [{ key: 'price_tier', label: 'Mức giá', get: (c) => pn[c.price_tier - 1] }] : []), { key: 'credit_days', label: 'Số ngày được nợ' },
           { key: 'opening', label: 'Nợ đầu kỳ' }, { key: debtKey, label: isKh ? 'Còn phải thu' : 'Còn phải trả' }, { key: 'prepaid', label: 'Trả trước' }, { key: 'overdue', label: 'Quá hạn' }, { key: 'max_overdue_days', label: 'Số ngày quá hạn' }] }])}>Xuất Excel</Btn>
         {can('owner') && <Btn icon="up" onClick={() => open('import', { kind: type })}>Nhập từ Excel</Btn>}
-        {can('danh_muc') && <Btn kind="primary" icon="plus" onClick={() => open('party', { type })}>{isKh ? 'Thêm khách' : 'Thêm nhà cung cấp'}</Btn>}
-      </div>
-      <div className="kpis">
+        {can('danh_muc') && <Btn kind="primary" icon="plus" onClick={() => open('party', { type })}>{isKh ? 'Thêm khách hàng' : 'Thêm nhà cung cấp'}</Btn>}
+      </>}>
+      <div className="kpis kpis-3">
         <div className="kpi"><span className="kpi-label">{isKh ? 'Tổng khách còn nợ' : 'Tổng mình còn nợ'}</span><span className="kpi-value">{short(tot(debtKey))}</span></div>
         <div className={`kpi ${tot('overdue') > 0 ? 'alertk' : ''}`}><span className="kpi-label">Quá hạn</span><span className="kpi-value">{short(tot('overdue'))}</span></div>
         <div className="kpi"><span className="kpi-label">{isKh ? 'Khách đã trả trước / cọc' : 'Mình đã trả trước'}</span><span className="kpi-value">{short(tot('prepaid'))}</span></div>
       </div>
-      <div className="row gap"><Search value={search} onChange={setSearch} placeholder="Tìm tên, mã, số điện thoại…" />
-        <Select value={only} onChange={setOnly} placeholder="Tất cả" options={[{ value: 'debt', label: 'Còn nợ' }, { value: 'over', label: 'Quá hạn' }, { value: 'pre', label: 'Có trả trước' }]} style={{ maxWidth: 180 }} /></div>
       <ErrorBox error={q.error} />
-      <Table rows={q.data ? rows : null} onRow={(c) => open('party-detail', { type, id: c.id })} rowClass={(c) => (c.overdue > 0 ? 'row-late' : '')} columns={[
+      <Table rows={q.data ? rows : null} onRow={(c) => open('party-detail', { type, id: c.id })} rowClass={(c) => (c.overdue > 0 ? 'row-late' : '')}
+        foot={rows.length ? { n: `${rows.length} ${isKh ? 'khách' : 'nhà cung cấp'}`, d: money(tot(debtKey)), o: money(tot('overdue')), p: money(tot('prepaid')) } : null} columns={[
         { key: 'n', label: 'Tên', render: (c) => <><div className="cell-main">{c.name}</div><div className="cell-sub">{c.code}{c.phone ? ' · ' + c.phone : ''}</div></> },
         ...(isKh ? [{ key: 't', label: 'Mức giá', render: (c) => <Pill tone="neutral">{pn[c.price_tier - 1]}</Pill> }] : []),
         { key: 'cd', label: 'Được nợ', align: 'right', render: (c) => (c.credit_days ? c.credit_days + ' ngày' : '—') },
@@ -43,7 +49,7 @@ export function PartiesPage({ type }) {
         { key: 'p', label: 'Trả trước', align: 'right', render: (c) => (c.prepaid > 0 ? <span className="good">{money(c.prepaid)}</span> : '—') },
         { key: 'x', label: isKh ? 'Đơn chờ giao' : 'Đơn chờ hàng', align: 'right', render: (c) => (isKh ? c.open_orders : c.open_pos) || '—' },
       ]} />
-    </>
+    </ListPage>
   );
 }
 

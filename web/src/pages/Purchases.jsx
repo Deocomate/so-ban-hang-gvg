@@ -5,7 +5,7 @@ import { useProducts, useSuppliers, useFunds, productLabel, productSub, KIND_LAB
 import { exportXlsx } from '../lib/excel.js';
 import {
   Btn, Icon, Pill, StatusPill, RECEIVE, Field, Input, TextArea, Select, DateInput, NumInput, Check, Tabs, Search, Loading,
-  ErrorBox, Note, Table, Modal, ConfirmBtn, Picker, KV, Section,
+  ErrorBox, Note, Table, Modal, ConfirmBtn, Picker, KV, Section, ListPage, FilterBox, RadioList,
 } from '../components/ui.jsx';
 
 export function PurchasesPage() {
@@ -26,26 +26,27 @@ export function PurchasesPage() {
     }
   }), [data, tab, search]);
   const count = (f) => (data || []).filter(f).length;
+  const sum = (k) => rows.reduce((s, o) => s + (o[k] || 0), 0);
   return (
-    <>
-      <div className="page-head">
-        <div className="grow"><h1 className="page-title">Nhập hàng / đặt xưởng</h1><div className="page-sub">Đơn đặt chưa làm tăng tồn kho. Tồn chỉ tăng khi lập phiếu nhận hàng thực tế.</div></div>
-        <Btn icon="dl" onClick={() => exportXlsx('don-nhap.xlsx', [{ name: 'Đơn nhập', rows, columns: [
-          { key: 'code', label: 'Mã' }, { key: 'order_date', label: 'Ngày', type: 'date' }, { key: 'supplier_name', label: 'NCC / xưởng' }, { key: 'kind', label: 'Loại', get: (r) => KIND_LABEL[r.kind] },
-          { key: 'progress', label: 'Tiến độ' }, { key: 'expected_date', label: 'Hẹn nhận', type: 'date' }, { key: 'order_total', label: 'Tổng đơn' }, { key: 'received_value', label: 'Đã nhận (giá trị)' },
-          { key: 'paid_net', label: 'Đã trả' }, { key: 'payable', label: 'Còn nợ' }] }])}>Xuất Excel</Btn>
-        <Btn kind="primary" icon="plus" onClick={() => open('po-form', {})}>Tạo đơn nhập</Btn>
-      </div>
-      <Tabs value={tab} onChange={setTab} tabs={[
+    <ListPage title="Nhập hàng / đặt xưởng" sub="Đơn đặt chưa làm tăng tồn kho. Tồn chỉ tăng khi lập phiếu nhận hàng thực tế."
+      filters={<FilterBox title="Trạng thái"><RadioList value={tab} onChange={setTab} options={[
         { value: 'open', label: 'Chờ hàng về', count: count((o) => o.status === 'xac_nhan' && o.remaining_qty > 0) },
         { value: 'sx', label: 'Đang đặt xưởng', count: count((o) => o.kind === 'dat_sx' && o.status === 'xac_nhan' && o.remaining_qty > 0) },
         { value: 'draft', label: 'Nháp', count: count((o) => o.status === 'nhap') },
         { value: 'debt', label: 'Còn nợ NCC', count: count((o) => o.payable > 0) },
         { value: 'done', label: 'Đã nhận đủ' }, { value: 'cancel', label: 'Đã hủy' }, { value: 'all', label: 'Tất cả' },
-      ]} />
-      <Search value={search} onChange={setSearch} placeholder="Tìm mã đơn, xưởng, đơn bán liên quan…" />
+      ]} /></FilterBox>}
+      search={<Search value={search} onChange={setSearch} placeholder="Tìm mã đơn, xưởng, đơn bán liên quan…" />}
+      actions={<>
+        <Btn icon="dl" onClick={() => exportXlsx('don-nhap.xlsx', [{ name: 'Đơn nhập', rows, columns: [
+          { key: 'code', label: 'Mã' }, { key: 'order_date', label: 'Ngày', type: 'date' }, { key: 'supplier_name', label: 'NCC / xưởng' }, { key: 'kind', label: 'Loại', get: (r) => KIND_LABEL[r.kind] },
+          { key: 'progress', label: 'Tiến độ' }, { key: 'expected_date', label: 'Hẹn nhận', type: 'date' }, { key: 'order_total', label: 'Tổng đơn' }, { key: 'received_value', label: 'Đã nhận (giá trị)' },
+          { key: 'paid_net', label: 'Đã trả' }, { key: 'payable', label: 'Còn nợ' }] }])}>Xuất Excel</Btn>
+        <Btn kind="primary" icon="plus" onClick={() => open('po-form', {})}>Tạo đơn nhập</Btn>
+      </>}>
       <ErrorBox error={error} />
-      <Table rows={data ? rows : null} onRow={(o) => open('po', { id: o.id })} rowClass={(o) => (o.is_late ? 'row-late' : '')} columns={[
+      <Table rows={data ? rows : null} onRow={(o) => open('po', { id: o.id })} rowClass={(o) => (o.is_late ? 'row-late' : '')}
+        foot={rows.length ? { c: `${rows.length} đơn`, t: money(sum('order_total')), d: money(sum('payable')) } : null} columns={[
         { key: 'c', label: 'Đơn nhập', render: (o) => <><div className="cell-main">{o.code}</div><div className="cell-sub">{dmy(o.order_date)} · {KIND_LABEL[o.kind]}</div></> },
         { key: 's', label: 'Xưởng / NCC', render: (o) => <><div>{o.supplier_name}</div>{o.sales_order_code && <div className="cell-sub">cho đơn {o.sales_order_code} · {o.sales_customer_name}</div>}</> },
         { key: 'p', label: 'Tiến độ', render: (o) => <div className="row gap-s"><Pill tone={o.receive_status === 'da_nhan_du' ? 'good' : o.status === 'huy' ? 'mute' : o.receive_status === 'nhan_mot_phan' ? 'info' : 'warn'}>{o.progress}</Pill>{o.is_late && <Pill tone="bad">trễ hẹn</Pill>}</div> },
@@ -53,7 +54,7 @@ export function PurchasesPage() {
         { key: 't', label: 'Tổng đơn', align: 'right', render: (o) => money(o.order_total) },
         { key: 'd', label: 'Còn nợ', align: 'right', render: (o) => (o.payable > 0 ? <b className={o.overdue_days > 0 ? 'bad' : ''}>{money(o.payable)}</b> : o.prepaid > 0 ? <span className="muted small">đã cọc {money(o.prepaid)}</span> : '—') },
       ]} />
-    </>
+    </ListPage>
   );
 }
 

@@ -56,7 +56,8 @@ export function docSettings(book, settings) {
     types[k] = { profile: profiles.some((p) => p.id === u.profile) ? u.profile : profiles[0].id, sep: u.sep || t.sep, show_price: u.show_price !== false,
       show_form: u.show_form !== false, text: u.text ?? null };
   }
-  return { profiles, types };
+  // Một phông chữ cho mọi chứng từ (mặc định Arial / Arimo như mẫu hóa đơn của cửa hàng)
+  return { profiles, types, font: d.font === 'Tinos' ? 'Tinos' : 'Arimo' };
 }
 export function profileFor(ds, type) { return ds.profiles.find((p) => p.id === ds.types[type].profile) || ds.profiles[0]; }
 
@@ -109,6 +110,16 @@ export function packing(qty, perPack, packUnit = 'hộp', unit = '') {
   if (rest > 0) text += (text ? ' + ' : '') + `${fmtNum(rest, '.')} ${u}`.trim();
   return { text, boxes: full + (rest > 0 ? 1 : 0), full, rest };
 }
+
+// Trọng lượng: ưu tiên kg / đơn vị (viên…); nếu chỉ có kg / thùng thì chia theo số viên mỗi thùng
+export function weightPerUnit(p) {
+  if (!p) return 0;
+  const u = Number(p.unit_weight) || 0; if (u > 0) return u;
+  const pw = Number(p.pack_weight) || 0; const per = Number(p.units_per_pack) || 0;
+  return pw > 0 && per > 0 ? pw / per : 0;
+}
+export function weightOf(qty, p) { const w = weightPerUnit(p); return w ? Math.round((Number(qty) || 0) * w * 100) / 100 : null; }
+export const fmtKg = (v, sep = ',') => `${fmtNum(Math.round((Number(v) || 0) * 10) / 10, sep)} kg`;
 
 // Đánh dấu **đậm** trong văn bản ghi chú → [{text, b}]
 export function runsOf(line) {
@@ -210,7 +221,11 @@ export function goodsLines(type, data) {
   const src = useDel ? data.dlines.map((l) => ({ product_id: l.product_id, sku: l.sku, name: l.product_name, unit: l.unit, qty: Number(l.qty), price: Number(l.unit_price_net), total: Number(l.revenue), note: noteOf[l.order_line_id] || '' }))
     : data.lines.filter((l) => Number(l.eff_qty) > 0).map((l) => ({ product_id: l.product_id, sku: l.sku, name: l.product_name, unit: l.unit, qty: Number(l.eff_qty),
       price: Number(l.unit_price) * (1 - Number(l.discount_pct || 0) / 100), total: Number(l.line_total), note: l.note || '' }));
-  return src.map((l) => { const p = data.prods[l.product_id] || {}; const pk = packing(l.qty, p.units_per_pack, p.pack_unit, l.unit); return { ...l, pack: pk.text, boxes: pk.boxes, sub: [pk.text, l.note].filter(Boolean).join('\n') }; });
+  return src.map((l) => { const p = data.prods[l.product_id] || {}; const pk = packing(l.qty, p.units_per_pack, p.pack_unit, l.unit); return { ...l, pack: pk.text, boxes: pk.boxes, packUnit: p.units_per_pack ? (p.pack_unit || 'hộp') : null, kg: weightOf(l.qty, p), sub: [pk.text, l.note].filter(Boolean).join('\n') }; });
+}
+// "hộp" / "thùng" theo quy cách các dòng hàng; trộn nhiều loại thì gọi chung "kiện"
+export function packLabel(g) { const u = [...new Set(g.map((l) => l.packUnit).filter(Boolean))]; return u.length === 1 ? u[0] : u.length ? 'kiện' : 'hộp'; }
+export function totalKg(g) { const w = g.reduce((s, l) => s + (l.kg || 0), 0); return { kg: w, missing: g.filter((l) => l.kg === null).length };
 }
 
 // ---------- Dựng khối ----------
@@ -236,7 +251,7 @@ function headerLines(prof, opt = {}) {
 export function buildDoc(type, data, ds, info) {
   const prof = profileFor(ds, type); const cfg = ds.types[type]; const sep = cfg.sep;
   const N = (v) => fmtNum(v, sep);
-  const font = DOC_TYPES[type].font;
+  const font = ds.font || 'Arimo';
   const text = (k) => (cfg.text && cfg.text[k] !== undefined && cfg.text[k] !== null ? cfg.text[k] : DEFAULT_TEXTS[k]);
   const blocks = [];
 
@@ -277,7 +292,7 @@ export function buildDoc(type, data, ds, info) {
     const rows = [...body];
     let due;
     if (isInv) {
-      rows.push([{ text: `Tổng cộng: ${info.box_total || 0} hộp`, colSpan: 6, b: true }, {}, {}, {}, {}, {}]);
+      rows.push([{ text: `Tổng cộng: ${info.box_total || 0} ${packLabel(g)}`, colSpan: 6, b: true }, {}, {}, {}, {}, {}]);
       const old = Number(info.old_debt || 0);
       const total = goods - disc + old + ship - ret;
       due = total - paid;
@@ -333,7 +348,7 @@ export function buildDoc(type, data, ds, info) {
     blocks.push(P(`Địa chỉ: ${data.cust?.address || o.customer_address || ''}`, { size: 11, mt: 3 }));
     blocks.push(P('Bên giao bàn giao cho bên nhận lô hàng chi tiết như sau:', { size: 11, mt: 3, mb: 6 }));
     const rows = g.map((l, i) => [{ text: String(i + 1), align: 'center' }, l.note ? { text: l.name, sub: l.note } : { text: l.name }, { text: N(l.qty), align: 'center' }, { text: String(l.unit || '').toLowerCase(), align: 'center' }, { text: l.pack, align: 'center' }]);
-    rows.push([{ text: `Tổng cộng: ${info.box_total || 0} hộp`, colSpan: 5, align: 'right', b: true }, {}, {}, {}, {}]);
+    { const tk = totalKg(g); rows.push([{ text: `Tổng cộng: ${info.box_total || 0} ${packLabel(g)}${tk.kg > 0 ? ` · Tổng trọng lượng: ${fmtKg(tk.kg, sep)}${tk.missing ? ' (chưa gồm ' + tk.missing + ' mặt hàng chưa khai)' : ''}` : ''}`, colSpan: 5, align: 'right', b: true }, {}, {}, {}, {}]); }
     blocks.push({ t: 'table', widths: [30, '*', 58, 50, 150], head: ['STT', 'Tên hàng hoá', 'Số lượng', 'ĐVT', 'Quy cách đóng gói'].map((h) => ({ text: h, b: true, align: 'center' })), body: rows, size: 10.5, pad: 4 });
     blocks.push(P([{ text: `Địa chỉ giao hàng: ${info.recv_address || o.customer_address || ''}`, b: true }], { size: 11, mt: 6 }));
     blocks.push(P([{ text: `SĐT nhận hàng: ${[info.recv_phone && phoneFmt(info.recv_phone), info.recv_name].filter(Boolean).join(' - ')}`, b: true }], { size: 11, mt: 4 }));
@@ -363,6 +378,7 @@ export function buildDoc(type, data, ds, info) {
     rows.push([{ text: '' }, { text: 'Cộng', b: true, align: 'center' }, { text: '' }, { text: '' }, { text: N(tq), align: 'right', b: true }, ...(showPrice ? [{ text: '' }, { text: N(tt), align: 'right', b: true }] : [])]);
     blocks.push({ t: 'table', widths, head: head.map((h) => ({ text: h, b: true, align: 'center' })), body: rows, size: 10, pad: 3 });
     if (showPrice) blocks.push(P(`- Tổng số tiền (viết bằng chữ): ${moneyWords(tt)}`, { size: 11, mt: 8 }));
+    { const tk = totalKg(g); if (tk.kg > 0) blocks.push(P(`- Tổng trọng lượng: ${fmtKg(tk.kg, sep)}${tk.missing ? ` (chưa gồm ${tk.missing} mặt hàng chưa khai trọng lượng)` : ''}`, { size: 11, mt: showPrice ? 3 : 8 })); }
     blocks.push(P(`- Số chứng từ gốc kèm theo: ${info.attach || ''}`, { size: 11, mt: 3 }));
     blocks.push(P([{ text: dateLine(info.date_phieu_xuat_kho), i: true }], { align: 'right', size: 11, mt: 10 }));
     blocks.push({ t: 'sign', cols: [{ title: 'NGƯỜI LẬP BIỂU', note: '(Ký, họ tên)' }, { title: 'NGƯỜI NHẬN HÀNG', note: '(Ký, họ tên)' }, { title: 'THỦ KHO', note: '(Ký, họ tên)' },

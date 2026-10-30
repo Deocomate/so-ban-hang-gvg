@@ -6,7 +6,7 @@ import { exportXlsx } from '../lib/excel.js';
 import { PeriodPicker, usePeriod } from '../components/Period.jsx';
 import { cats, groupOf, GROUP_HINT, GROUP_COLORS } from '../lib/expenseCats.js';
 import {
-  Btn, Icon, Pill, Field, Input, TextArea, Select, DateInput, NumInput, Check, Tabs, Search, Loading, ErrorBox, Note, Table, Modal, ConfirmBtn, Picker, KV, Section,
+  Btn, Icon, Pill, Field, Input, TextArea, Select, DateInput, NumInput, Check, Tabs, Search, Loading, ErrorBox, Note, Table, Modal, ConfirmBtn, Picker, KV, Section, ListPage, FilterBox, RadioList,
 } from '../components/ui.jsx';
 
 export const PAY_KINDS = [
@@ -149,22 +149,25 @@ export function CashPage() {
   }), [pays.data, tab, search, fundF]);
   const sum = (d) => rows.filter((p) => p.direction === d && !p.voided).reduce((s, p) => s + p.cash_amount, 0);
   return (
-    <>
-      <div className="page-head">
-        <div className="grow"><h1 className="page-title">Thu chi</h1><div className="page-sub">Tiền thực vào – ra từng quỹ. Mỗi phiếu gắn đúng khách / NCC và chứng từ.</div></div>
+    <ListPage title="Sổ quỹ – thu chi" sub="Tiền thực vào – ra từng quỹ. Mỗi phiếu gắn đúng khách / NCC và chứng từ."
+      filters={<>
+        <FilterBox title="Thời gian"><PeriodPicker value={period} onChange={setPeriod} /></FilterBox>
+        <FilterBox title="Loại phiếu"><RadioList value={tab} onChange={setTab} options={[{ value: 'all', label: 'Tất cả' }, { value: 'thu', label: 'Phiếu thu' }, { value: 'chi', label: 'Phiếu chi' }, { value: 'void', label: 'Đã hủy' }]} /></FilterBox>
+        {(funds.data || []).length > 1 && <FilterBox title="Quỹ tiền"><RadioList value={fundF} onChange={setFundF} options={[{ value: '', label: 'Tất cả quỹ' }, ...(funds.data || []).map((f) => ({ value: f.id, label: f.name }))]} /></FilterBox>}
+      </>}
+      search={<Search value={search} onChange={setSearch} placeholder="Tìm số phiếu, khách, nội dung…" />}
+      actions={<>
         <Btn icon="dl" onClick={() => exportXlsx('thu-chi.xlsx', [{ name: 'Thu chi', rows, columns: [
           { key: 'code', label: 'Số phiếu' }, { key: 'pay_date', label: 'Ngày', type: 'date' }, { key: 'kind_label', label: 'Loại' }, { key: 'party_name', label: 'Đối tượng' },
           { key: 'fund_name', label: 'Quỹ' }, { key: 'amount', label: 'Số tiền' }, { key: 'fee', label: 'Phí sàn' }, { key: 'cash_amount', label: 'Tiền thực' }, { key: 'note', label: 'Nội dung' },
           { key: 'voided', label: 'Đã hủy', get: (p) => (p.voided ? 'Có' : '') }] }])}>Xuất Excel</Btn>
-        <Btn kind="soft" icon="in" onClick={() => open('payment', { kind: 'thu_khach' })}>Thu tiền</Btn>
-        <Btn kind="soft" icon="out" onClick={() => open('payment', { kind: 'tra_ncc' })}>Chi tiền</Btn>
-      </div>
+        <Btn kind="primary" icon="in" onClick={() => open('payment', { kind: 'thu_khach' })}>Lập phiếu thu</Btn>
+        <Btn kind="primary" icon="out" onClick={() => open('payment', { kind: 'tra_ncc' })}>Lập phiếu chi</Btn>
+      </>}>
       <div className="kpis">
         {(funds.data || []).map((f) => <button key={f.id} className={`kpi${fundF === f.id ? ' key' : ''}`} onClick={() => setFundF(fundF === f.id ? '' : f.id)}><span className="kpi-label">{f.name}</span><span className="kpi-value">{money(f.balance)}</span><span className="kpi-sub">Số dư hiện tại · đầu sổ {short(f.opening_balance)}</span></button>)}
       </div>
-      <div className="row gap"><PeriodPicker value={period} onChange={setPeriod} /></div>
-      <Tabs value={tab} onChange={setTab} tabs={[{ value: 'all', label: 'Tất cả' }, { value: 'thu', label: 'Thu' }, { value: 'chi', label: 'Chi' }, { value: 'void', label: 'Đã hủy' }]} />
-      <div className="row gap"><Search value={search} onChange={setSearch} placeholder="Tìm số phiếu, khách, nội dung…" /><span className="muted">Thu <b className="good">{money(sum('thu'))}</b> · Chi <b className="bad">{money(sum('chi'))}</b> · Chênh lệch <b>{money(sum('thu') - sum('chi'))}</b></span></div>
+      <div className="lp-sum"><span>Tổng thu <b className="good">{money(sum('thu'))}</b></span><span>Tổng chi <b className="bad">{money(sum('chi'))}</b></span><span>Chênh lệch <b>{money(sum('thu') - sum('chi'))}</b></span></div>
       <ErrorBox error={pays.error} />
       <Table rows={pays.data ? rows : null} onRow={(p) => open('pay-detail', { id: p.id })} rowClass={(p) => (p.voided ? 'row-void' : '')} columns={[
         { key: 'c', label: 'Phiếu', render: (p) => <><div className="cell-main">{p.code}</div><div className="cell-sub">{dmy(p.pay_date)}</div></> },
@@ -173,7 +176,7 @@ export function CashPage() {
         { key: 'al', label: 'Gắn chứng từ', render: (p) => <span className="small">{(p.allocations || []).map((a) => a.doc_code).join(', ') || (p.party_type ? <span className="muted">trả trước chung</span> : '')}</span> },
         { key: 'a', label: 'Số tiền', align: 'right', render: (p) => <span className={p.direction === 'thu' ? 'good strong' : p.direction === 'chi' ? 'bad strong' : ''}>{p.direction === 'chi' ? '−' : p.direction === 'thu' ? '+' : ''}{money(p.cash_amount)}{p.fee > 0 && <div className="cell-sub">phí sàn {money(p.fee)}</div>}</span> },
       ]} />
-    </>
+    </ListPage>
   );
 }
 
@@ -245,15 +248,15 @@ export function ExpensesPage() {
   const total = rows.filter((e) => !e.voided).reduce((s, e) => s + e.amount, 0);
   const all = live.reduce((s, e) => s + e.amount, 0);
   return (
-    <>
-      <div className="page-head">
-        <div className="grow"><h1 className="page-title">Chi phí vận hành</h1><div className="page-sub">Chia theo nhóm: mặt bằng, điện nước, công cụ dụng cụ, marketing, chi phí bán hàng, nhân sự, quản lý. Đã trả hay chưa đều tính vào lợi nhuận đúng kỳ; khoản phân bổ chia đều theo tháng.</div></div>
+    <ListPage title="Chi phí vận hành" sub="Chia theo nhóm: mặt bằng, điện nước, công cụ dụng cụ, marketing, chi phí bán hàng, nhân sự, quản lý. Đã trả hay chưa đều tính vào lợi nhuận đúng kỳ; khoản phân bổ chia đều theo tháng."
+      filters={<FilterBox title="Thời gian"><PeriodPicker value={period} onChange={setPeriod} /></FilterBox>}
+      search={<Search value={search} onChange={setSearch} placeholder="Tìm khoản mục, diễn giải…" />}
+      actions={<>
         <Btn icon="dl" onClick={() => exportXlsx('chi-phi.xlsx', [{ name: 'Chi phí', rows, columns: [{ key: 'code', label: 'Mã' }, { key: 'exp_date', label: 'Ngày', type: 'date' }, { key: 'expense_group', label: 'Nhóm' },
           { key: 'category', label: 'Khoản mục' }, { key: 'description', label: 'Diễn giải' }, { key: 'amount', label: 'Số tiền' }, { key: 'alloc_months', label: 'Phân bổ (tháng)' },
           { key: 'paid', label: 'Đã trả' }, { key: 'unpaid', label: 'Chưa trả' }, { key: 'supplier_name', label: 'Nợ NCC' }] }])}>Xuất Excel</Btn>
         {can('chi_phi') && <Btn kind="primary" icon="plus" onClick={() => open('expense', {})}>Ghi chi phí</Btn>}
-      </div>
-      <PeriodPicker value={period} onChange={setPeriod} />
+      </>}>
       <div className="exp-groups">
         <button className={`exp-card${!grp ? ' on' : ''}`} onClick={() => setGrp('')}><span>Tất cả</span><b>{short(all)}</b><i style={{ width: '100%' }} /></button>
         {order.map((g, idx) => (
@@ -263,7 +266,6 @@ export function ExpensesPage() {
           </button>))}
       </div>
       <div className="muted small">Số trên thẻ là tiền các khoản ghi trong kỳ (theo ngày phát sinh). Số tính vào lãi lỗ từng tháng (đã chia phân bổ) xem ở Báo cáo → Chi phí.</div>
-      <div className="row gap"><Search value={search} onChange={setSearch} placeholder="Tìm khoản mục, diễn giải…" /></div>
       <ErrorBox error={q.error} />
       <Table rows={q.data ? rows : null} rowClass={(e) => (e.voided ? 'row-void' : '')} foot={{ a: money(total) }} empty="Chưa có chi phí trong kỳ" columns={[
         { key: 'c', label: 'Mã', render: (e) => <><div className="cell-main">{e.code}</div><div className="cell-sub">{dmy(e.exp_date)}</div></> },
@@ -280,6 +282,6 @@ export function ExpensesPage() {
             : <Btn small onClick={() => { setVoidId(e.id); setReason(''); }}>Hủy</Btn>)}
         </div> },
       ]} />
-    </>
+    </ListPage>
   );
 }

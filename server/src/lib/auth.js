@@ -3,6 +3,7 @@
 import crypto from 'node:crypto';
 import { fail, one, run, insert, uuid, nowIso, trimNz } from './context.js';
 import { requirePerm } from '../domain/access.js';
+import { createDefaultBooks } from '../domain/books.js';
 
 const TOKEN_DAYS = 30;
 const b64u = (buf) => Buffer.from(buf).toString('base64url');
@@ -74,6 +75,27 @@ export function setPasswordByEmail(email, password) {
   checkPassword(password);
   const r = run(`update users set password_hash = ?, token_version = token_version + 1 where email = ?`, hashPassword(password), String(email).trim().toLowerCase());
   if (!r.changes) fail(`Không có tài khoản ${email}`);
+}
+
+// Tài khoản quản trị khai trong biến môi trường ADMIN_EMAIL / ADMIN_PASSWORD, chạy mỗi lần máy chủ khởi động:
+// chưa có thì tạo; mật khẩu khác .env thì đặt lại theo .env (mật khẩu trùng thì giữ nguyên, không đăng xuất các máy);
+// luôn là chủ của mọi sổ thật; hệ thống chưa có sổ thật nào thì tạo luôn 2 sổ cho tài khoản này.
+export function ensureAdmin(email, password) {
+  const e = normEmail(email); checkPassword(password);
+  let u = one(`select * from users where email = ?`, e);
+  let action = 'giữ nguyên';
+  if (!u) {
+    u = { id: uuid(), email: e, name: 'Quản trị', password_hash: hashPassword(password), token_version: 0, created_at: nowIso() };
+    insert('users', u);
+    action = 'đã tạo';
+  } else if (!verifyPassword(password, u.password_hash)) {
+    run(`update users set password_hash = ?, token_version = token_version + 1 where id = ?`, hashPassword(password), u.id);
+    action = 'đã đặt lại mật khẩu';
+  }
+  if (!one(`select 1 from books where is_demo = 0`)) createDefaultBooks(u.id);
+  run(`insert into book_members (book_id, user_id, role, display_name, created_at) select id, ?, 'owner', 'Chủ cửa hàng', ? from books where is_demo = 0
+    on conflict (book_id, user_id) do update set role = 'owner'`, u.id, nowIso());
+  return { email: e, action };
 }
 
 // RPC: chủ sổ đặt lại mật khẩu cho nhân viên quên mật khẩu (không áp dụng cho tài khoản là chủ của bất kỳ sổ nào)

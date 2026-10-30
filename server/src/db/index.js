@@ -58,6 +58,17 @@ export function auditTriggers(db) {
   }
 }
 
+// CSDL tạo từ bản cũ: thêm các cột mới (dữ liệu cũ giữ nguyên, cột mới để trống)
+const ADDED_COLUMNS = [
+  ['products', 'pack_weight', 'real check (pack_weight is null or pack_weight >= 0)'],
+  ['products', 'unit_weight', 'real check (unit_weight is null or unit_weight >= 0)'],
+];
+function migrate(db) {
+  for (const [t, c, def] of ADDED_COLUMNS) {
+    if (!db.prepare(`select 1 from pragma_table_info(?) where name = ?`).get(t, c)) db.exec(`alter table ${t} add column ${c} ${def}`);
+  }
+}
+
 export function openDb(file = ':memory:') {
   if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new Database(file);
@@ -67,6 +78,7 @@ export function openDb(file = ':memory:') {
   db.pragma('synchronous = NORMAL');
   registerFunctions(db);
   db.exec(fs.readFileSync(path.join(here, 'schema.sql'), 'utf8'));
+  migrate(db);
   db.exec(fs.readFileSync(path.join(here, 'views.sql'), 'utf8'));
   auditTriggers(db);
   db.pragma(`user_version = ${SCHEMA_VERSION}`);

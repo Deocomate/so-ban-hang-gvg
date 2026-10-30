@@ -69,5 +69,27 @@ C('Đổi mật khẩu trả token mới', [r.status, !!r.body.token], [200, tru
 C('Token cũ hết hiệu lực', (await rpc(t1, 'my_books')).status, 401);
 C('Token mới dùng được', (await rpc(r.body.token, 'my_books')).status, 200);
 
+G('6. Tài khoản quản trị từ .env (ADMIN_EMAIL / ADMIN_PASSWORD)');
+const { ensureAdmin } = await import('../src/lib/auth.js');
+C('Chưa có thì tạo', ensureAdmin('Admin@GomSu.vn', 'quantri1'), { email: 'admin@gomsu.vn', action: 'đã tạo' });
+r = await post('/api/auth/login', { email: 'admin@gomsu.vn', password: 'quantri1' });
+const ta = r.body.token;
+C('Đăng nhập được bằng mật khẩu trong .env', r.status, 200);
+C('Là chủ của cả 2 sổ đã có', (await rpc(ta, 'my_books')).body.map((b) => b.role), ['owner', 'owner']);
+C('Khởi động lại, mật khẩu không đổi → giữ nguyên', ensureAdmin('admin@gomsu.vn', 'quantri1').action, 'giữ nguyên');
+C('… và không bị đăng xuất', (await rpc(ta, 'my_books')).status, 200);
+C('Đổi mật khẩu trong .env → đặt lại', ensureAdmin('admin@gomsu.vn', 'quantri2').action, 'đã đặt lại mật khẩu');
+C('… phiên cũ hết hiệu lực', (await rpc(ta, 'my_books')).status, 401);
+C('… đăng nhập bằng mật khẩu mới', (await post('/api/auth/login', { email: 'admin@gomsu.vn', password: 'quantri2' })).status, 200);
+let adminErr = '';
+try { ensureAdmin('admin@gomsu.vn', '123'); } catch (e) { adminErr = e.message; }
+C('Mật khẩu quá ngắn bị từ chối', /ít nhất 6/.test(adminErr), true);
+
 server.close();
+openDb(':memory:');
+ensureAdmin('admin@gomsu.vn', 'quantri1');
+C('CSDL trống: tạo sẵn 2 sổ cho quản trị (người đăng ký sau không chiếm quyền chủ)',
+  (await import('../src/lib/context.js')).all(`select b.short_name, m.role from books b join book_members m on m.book_id = b.id order by b.short_name`),
+  [{ short_name: 'TH', role: 'owner' }, { short_name: 'VG', role: 'owner' }]);
+
 finish('HTTP · đăng nhập · webhook');

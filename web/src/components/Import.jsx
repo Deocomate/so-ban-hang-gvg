@@ -55,7 +55,7 @@ export function ImportDialog({ kind = 'products', onClose }) {
     { key: 'n', label: 'Dòng', render: (x) => x.__row },
     { key: 'st', label: '', render: (x) => (x.errors.length ? <Pill tone="bad">Lỗi</Pill> : x.existing ? <Pill tone="info">Cập nhật</Pill> : <Pill tone="good">Mới</Pill>) },
     { key: 'sku', label: 'SKU', render: (x) => x.sku || <span className="muted">tự cấp</span> },
-    { key: 'name', label: 'Tên hàng hóa', render: (x) => <><div>{x.name}</div><div className="cell-sub">{[x.category, x.pattern, x.size, x.color, x.unit, x.units_per_pack ? `${x.units_per_pack}/${x.pack_unit || 'hộp'}` : ''].filter(Boolean).join(' · ')}</div></> },
+    { key: 'name', label: 'Tên hàng hóa', render: (x) => <><div>{x.name}</div><div className="cell-sub">{[x.category, x.pattern, x.size, x.color, x.unit, x.units_per_pack ? `${x.units_per_pack}/${x.pack_unit || 'hộp'}` : '', x.pack_weight ? `${x.pack_weight} kg/${x.pack_unit || 'hộp'}` : '', x.unit_weight ? `${x.unit_weight} kg/${String(x.unit || 'đv').toLowerCase()}` : ''].filter(Boolean).join(' · ')}</div></> },
     { key: 'cost', label: 'Giá vốn', align: 'right', render: (x) => money(x.cost) },
     { key: 'p1', label: pn[0], align: 'right', render: (x) => money(x.price1) },
     { key: 'p2', label: pn[1], align: 'right', render: (x) => money(x.price2) },

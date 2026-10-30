@@ -7,9 +7,10 @@ import { useApp, useQ, useAction } from '../lib/store.jsx';
 import { money, moneyD, qty as fq, dmy, todayVN, match, pct } from '../lib/format.js';
 import { useProducts, useCustomers, useFunds, tierPrice, productLabel, productSub, KIND_LABEL } from '../lib/lookups.js';
 import { exportXlsx } from '../lib/excel.js';
+import { packing, weightOf, fmtKg } from '../lib/docs/model.js';
 import {
   Btn, Icon, Pill, StatusPill, DELIVERY, PAYMENT, Field, Input, TextArea, Select, DateInput, NumInput, Check, Tabs, Search, Loading,
-  ErrorBox, Note, Table, Modal, ConfirmBtn, Picker, KV, Section, Empty,
+  ErrorBox, Note, Table, Modal, ConfirmBtn, Picker, KV, Section, Empty, ListPage, FilterBox, RadioList,
 } from '../components/ui.jsx';
 
 // ===================== DANH SÁCH ĐƠN BÁN =====================
@@ -42,31 +43,34 @@ export function SalesPage() {
     { key: 'ds', label: 'Giao hàng', render: (o) => <div className="row gap-s"><StatusPill map={DELIVERY} value={o.delivery_status} />{o.is_late && <Pill tone="bad">trễ hẹn</Pill>}</div> },
     { key: 'ps', label: 'Thanh toán', render: (o) => <StatusPill map={PAYMENT} value={o.payment_status} /> },
   ];
+  const sum = (k) => rows.reduce((s, o) => s + (o[k] || 0), 0);
   return (
-    <>
-      <div className="page-head">
-        <div className="grow"><h1 className="page-title">Bán hàng</h1><div className="page-sub">Đơn nháp không ảnh hưởng tồn kho hay doanh thu. Doanh thu ghi nhận khi giao hàng.</div></div>
+    <ListPage title="Đơn bán hàng" sub="Đơn nháp không ảnh hưởng tồn kho hay doanh thu. Doanh thu ghi nhận khi giao hàng."
+      filters={<>
+        <FilterBox title="Trạng thái">
+          <RadioList value={tab} onChange={setTab} options={[
+            { value: 'open', label: 'Chờ giao', count: count((o) => o.status === 'xac_nhan' && o.remaining_qty > 0) },
+            { value: 'draft', label: 'Nháp', count: count((o) => o.status === 'nhap') },
+            { value: 'debt', label: 'Khách còn nợ', count: count((o) => o.receivable > 0) },
+            { value: 'refund', label: 'Cần hoàn tiền', count: count((o) => o.payment_status === 'thua_tien' && (o.status === 'huy' || o.remaining_qty === 0)) },
+            { value: 'done', label: 'Đã giao đủ' }, { value: 'cancel', label: 'Đã hủy' }, { value: 'all', label: 'Tất cả' },
+          ]} />
+        </FilterBox>
+        {(settings.channels || []).length > 0 && <FilterBox title="Kênh bán"><Select value={channel} onChange={setChannel} options={settings.channels || []} placeholder="Mọi kênh bán" aria-label="Kênh bán" /></FilterBox>}
+      </>}
+      search={<Search value={search} onChange={setSearch} placeholder="Tìm mã đơn, khách, SĐT…" />}
+      actions={<>
         <Btn icon="dl" onClick={() => exportXlsx('don-ban.xlsx', [{ name: 'Đơn bán', rows, columns: [
           { key: 'code', label: 'Mã đơn' }, { key: 'order_date', label: 'Ngày', type: 'date' }, { key: 'customer_name', label: 'Khách hàng' }, { key: 'channel', label: 'Kênh' },
           { key: 'order_total', label: 'Tổng đơn' }, { key: 'delivered_value', label: 'Đã giao (doanh thu)' }, { key: 'paid_net', label: 'Đã thu' }, { key: 'receivable', label: 'Còn nợ' },
           { key: 'prepaid', label: 'Trả trước' }, { key: 'delivery_status', label: 'Giao hàng', get: (o) => DELIVERY[o.delivery_status]?.[0] }, { key: 'payment_status', label: 'Thanh toán', get: (o) => PAYMENT[o.payment_status]?.[0] }] }])}>Xuất Excel</Btn>
         {can('ban_hang') && <Btn kind="primary" icon="plus" onClick={() => open('order-form', {})}>Tạo đơn bán</Btn>}
-      </div>
-      <Tabs value={tab} onChange={setTab} tabs={[
-        { value: 'open', label: 'Chờ giao', count: count((o) => o.status === 'xac_nhan' && o.remaining_qty > 0) },
-        { value: 'draft', label: 'Nháp', count: count((o) => o.status === 'nhap') },
-        { value: 'debt', label: 'Khách còn nợ', count: count((o) => o.receivable > 0) },
-        { value: 'refund', label: 'Cần hoàn tiền', count: count((o) => o.payment_status === 'thua_tien' && (o.status === 'huy' || o.remaining_qty === 0)) },
-        { value: 'done', label: 'Đã giao đủ' }, { value: 'cancel', label: 'Đã hủy' }, { value: 'all', label: 'Tất cả' },
-      ]} />
-      <div className="row gap">
-        <Search value={search} onChange={setSearch} placeholder="Tìm mã đơn, khách, SĐT…" />
-        <Select value={channel} onChange={setChannel} options={settings.channels || []} placeholder="Mọi kênh bán" style={{ maxWidth: 200 }} />
-      </div>
+      </>}>
       <ErrorBox error={error} />
       <Table columns={cols} rows={data ? rows : null} onRow={(o) => open('order', { id: o.id })} rowClass={(o) => (o.is_late || o.overdue_days > 0 ? 'row-late' : '')}
+        foot={rows.length ? { code: `${rows.length} đơn`, total: money(sum('order_total')), paid: money(sum('paid_net')), due: money(sum('receivable')) } : null}
         empty={tab === 'open' ? 'Không có đơn nào đang chờ giao' : 'Không có đơn phù hợp'} />
-    </>
+    </ListPage>
   );
 }
 
@@ -120,6 +124,21 @@ export function SpecialPage() {
 }
 
 // ===================== FORM TẠO / SỬA ĐƠN BÁN =====================
+// Tổng số thùng / trọng lượng của các dòng hàng (theo quy cách khai trong sản phẩm)
+function OrderWeight({ lines }) {
+  const products = useProducts();
+  if (!lines?.length || !products.data) return null;
+  const pm = Object.fromEntries(products.data.map((p) => [p.id, p]));
+  let kg = 0; let miss = 0; let boxes = 0; const units = new Set();
+  for (const l of lines) {
+    const p = pm[l.product_id]; const q = Number(l.eff_qty) || 0; if (!q) continue;
+    const w = weightOf(q, p); if (w === null) miss++; else kg += w;
+    if (p?.units_per_pack) { boxes += packing(q, p.units_per_pack, p.pack_unit, p.unit).boxes; units.add(p.pack_unit || 'hộp'); }
+  }
+  if (!kg && !boxes) return null;
+  return <div className="small" style={{ marginTop: 6 }}>{boxes > 0 && <><b>{fq(boxes)} {units.size === 1 ? [...units][0] : 'kiện'}</b> · </>}{kg > 0 && <>Tổng trọng lượng <b>{fmtKg(kg)}</b></>}{miss > 0 && <span className="muted"> (chưa gồm {miss} mặt hàng chưa khai trọng lượng)</span>}</div>;
+}
+
 // ===================== CHI TIẾT ĐƠN BÁN =====================
 export function OrderDetail({ id, onClose }) {
   const { open, can, settings, book } = useApp();
@@ -184,6 +203,7 @@ export function OrderDetail({ id, onClose }) {
           { key: 'dq', label: 'Đã giao', align: 'right', render: (l) => <>{fq(l.delivered_qty)}{l.returned_qty > 0 && <div className="cell-sub">trả {fq(l.returned_qty)}</div>}</> },
           { key: 'rq', label: 'Còn phải giao', align: 'right', render: (l) => l.remaining_qty > 0 ? <b>{fq(l.remaining_qty)}</b> : '—' },
         ]} />
+        <OrderWeight lines={lines.data} />
         {d.discount > 0 && <div className="muted small">Giảm giá cả đơn {money(d.discount)} đ được chia vào giá từng dòng theo tỷ lệ tiền hàng khi giao.</div>}
       </Section>
       {d.kind === 'dat_hang' && can('nhap_hang') && d.status !== 'huy' && (

@@ -4,7 +4,7 @@ import { money, qty as fq, dmy, todayVN, match } from '../lib/format.js';
 import { useProducts, productLabel, productSub } from '../lib/lookups.js';
 import { exportXlsx } from '../lib/excel.js';
 import { PeriodPicker, usePeriod } from '../components/Period.jsx';
-import { Btn, Icon, Pill, Field, Input, Select, DateInput, NumInput, Tabs, Search, Loading, ErrorBox, Note, Table, Modal, Picker, KV, Section } from '../components/ui.jsx';
+import { Btn, Icon, Pill, Field, Input, Select, DateInput, NumInput, Tabs, Search, Loading, ErrorBox, Note, Table, Modal, Picker, KV, Section, ListPage, FilterBox, RadioList } from '../components/ui.jsx';
 
 const REASONS = [
   { value: 'vo', label: 'Hàng vỡ' }, { value: 'loi', label: 'Hàng lỗi' }, { value: 'that_thoat', label: 'Thất thoát / mất' },
@@ -17,29 +17,34 @@ export function InventoryPage() {
   const [search, setSearch] = useState(''); const [cat, setCat] = useState(''); const [only, setOnly] = useState('');
   const prods = useQ('products', [['is_kit', 'eq', 'false']], 'sku', 5000);
   const cost = can('xem_gia_von');
-  const rows = useMemo(() => (prods.data || []).filter((p) => (!cat || p.category === cat) && match(`${p.sku} ${p.name} ${p.size || ''} ${p.color || ''}`, search)
-    && (only === '' || (only === 'low' && p.is_low) || (only === 'reserved' && p.reserved > 0) || (only === 'incoming' && p.incoming > 0) || (only === 'zero' && p.on_hand <= 0))), [prods.data, cat, search, only]);
+  const all = prods.data || [];
+  const rows = useMemo(() => all.filter((p) => (!cat || p.category === cat) && match(`${p.sku} ${p.name} ${p.size || ''} ${p.color || ''}`, search)
+    && (only === '' || (only === 'low' && p.is_low) || (only === 'reserved' && p.reserved > 0) || (only === 'incoming' && p.incoming > 0) || (only === 'zero' && p.on_hand <= 0))), [all, cat, search, only]);
   const tot = rows.reduce((s, p) => s + (p.stock_value || 0), 0);
+  const cats = [...new Set([...(settings.categories || []), ...all.map((p) => p.category).filter(Boolean)])];
   return (
-    <>
-      <div className="page-head">
-        <div className="grow"><h1 className="page-title">Kho</h1><div className="page-sub">Tồn thực tế = tồn trong kho. Có thể bán = tồn thực tế − hàng đang giữ cho đơn đã xác nhận chưa giao.</div></div>
-        {can('kho') && <Btn kind="soft" icon="edit" onClick={() => open('adjust', {})}>Điều chỉnh kho</Btn>}
-      </div>
-      <Tabs value={tab} onChange={setTab} tabs={[{ value: 'stock', label: 'Tồn kho' }, { value: 'nxt', label: 'Nhập – xuất – tồn theo kỳ' }, { value: 'adj', label: 'Phiếu điều chỉnh' }]} />
+    <ListPage title="Kho hàng" sub="Tồn thực tế = tồn trong kho. Có thể bán = tồn thực tế − hàng đang giữ cho đơn đã xác nhận chưa giao."
+      filters={<>
+        <FilterBox title="Xem"><RadioList value={tab} onChange={setTab} options={[{ value: 'stock', label: 'Tồn kho' }, { value: 'nxt', label: 'Nhập – xuất – tồn theo kỳ' }, { value: 'adj', label: 'Phiếu điều chỉnh / kiểm kho' }]} /></FilterBox>
+        {tab === 'stock' && <>
+          <FilterBox title="Tình trạng"><RadioList value={only} onChange={setOnly} options={[{ value: '', label: 'Tất cả' },
+            { value: 'low', label: 'Sắp hết / dưới tối thiểu', count: all.filter((p) => p.is_low).length }, { value: 'reserved', label: 'Đang giữ cho đơn', count: all.filter((p) => p.reserved > 0).length },
+            { value: 'incoming', label: 'Đang về', count: all.filter((p) => p.incoming > 0).length }, { value: 'zero', label: 'Hết hàng', count: all.filter((p) => p.on_hand <= 0).length }]} /></FilterBox>
+          {cats.length > 0 && <FilterBox title="Nhóm hàng"><Select value={cat} onChange={setCat} options={cats} placeholder="Mọi nhóm hàng" aria-label="Nhóm hàng" /></FilterBox>}
+        </>}
+      </>}
+      search={tab === 'stock' ? <Search value={search} onChange={setSearch} placeholder="Tìm SKU, tên, màu, cỡ…" /> : null}
+      actions={<>
+        {tab === 'stock' && <Btn icon="dl" onClick={() => exportXlsx('ton-kho.xlsx', [{ name: 'Tồn kho', rows, columns: [
+          { key: 'sku', label: 'SKU' }, { key: 'name', label: 'Tên' }, { key: 'category', label: 'Chủng loại' }, { key: 'size', label: 'Kích thước' }, { key: 'color', label: 'Màu' }, { key: 'unit', label: 'ĐVT' },
+          { key: 'on_hand', label: 'Tồn thực tế' }, { key: 'reserved', label: 'Đang giữ' }, { key: 'available', label: 'Có thể bán' }, { key: 'incoming', label: 'Đang về' },
+          ...(cost ? [{ key: 'avg_cost', label: 'Giá vốn BQ' }, { key: 'stock_value', label: 'Giá trị tồn' }] : []), { key: 'low_stock', label: 'Tồn tối thiểu' }] }])}>Xuất Excel</Btn>}
+        {can('kho') && <Btn kind="primary" icon="edit" onClick={() => open('adjust', {})}>Điều chỉnh / kiểm kho</Btn>}
+      </>}>
       {tab === 'stock' && <>
-        <div className="row gap">
-          <Search value={search} onChange={setSearch} placeholder="Tìm SKU, tên, màu, cỡ…" />
-          <Select value={cat} onChange={setCat} options={settings.categories || []} placeholder="Mọi chủng loại" style={{ maxWidth: 220 }} />
-          <Select value={only} onChange={setOnly} placeholder="Tất cả" options={[{ value: 'low', label: 'Sắp hết / dưới tối thiểu' }, { value: 'reserved', label: 'Đang giữ cho đơn' }, { value: 'incoming', label: 'Đang về' }, { value: 'zero', label: 'Hết hàng' }]} style={{ maxWidth: 220 }} />
-          <Btn icon="dl" onClick={() => exportXlsx('ton-kho.xlsx', [{ name: 'Tồn kho', rows, columns: [
-            { key: 'sku', label: 'SKU' }, { key: 'name', label: 'Tên' }, { key: 'category', label: 'Chủng loại' }, { key: 'size', label: 'Kích thước' }, { key: 'color', label: 'Màu' }, { key: 'unit', label: 'ĐVT' },
-            { key: 'on_hand', label: 'Tồn thực tế' }, { key: 'reserved', label: 'Đang giữ' }, { key: 'available', label: 'Có thể bán' }, { key: 'incoming', label: 'Đang về' },
-            ...(cost ? [{ key: 'avg_cost', label: 'Giá vốn BQ' }, { key: 'stock_value', label: 'Giá trị tồn' }] : []), { key: 'low_stock', label: 'Tồn tối thiểu' }] }])}>Xuất Excel</Btn>
-        </div>
         <ErrorBox error={prods.error} />
         <Table rows={prods.data ? rows : null} onRow={(p) => open('stockcard', { product_id: p.id })} rowClass={(p) => (p.on_hand < 0 ? 'row-late' : p.is_low ? 'row-warn' : '')}
-          foot={cost ? { v: money(tot), p: `${rows.length} mã` } : null} columns={[
+          foot={rows.length ? { p: `${rows.length} mã`, ...(cost ? { v: money(tot) } : {}) } : null} columns={[
             { key: 'p', label: 'Sản phẩm', render: (p) => <><div className="cell-main">{p.sku} · {p.name}</div><div className="cell-sub">{productSub(p)}</div></> },
             { key: 'oh', label: 'Tồn thực tế', align: 'right', render: (p) => <b>{fq(p.on_hand)}</b> },
             { key: 'rs', label: 'Đang giữ', align: 'right', render: (p) => (p.reserved ? fq(p.reserved) : '—') },
@@ -51,7 +56,7 @@ export function InventoryPage() {
       </>}
       {tab === 'nxt' && <StockReport />}
       {tab === 'adj' && <AdjList />}
-    </>
+    </ListPage>
   );
 }
 

@@ -30,6 +30,18 @@ const im = await api.q('products', TH, [['sku', 'in', ['NGD-80', 'DA-80']]], 'sk
 C('Nhập Excel kèm quy cách', im.map((x) => [x.sku, x.units_per_pack, x.pack_unit]), [['DA-80', 100, 'thùng'], ['NGD-80', 170, 'hộp']]);
 await api.call('import_products', { book_id: TH, request_id: rid(), rows: [{ sku: 'NGD-80', name: 'Ngói dương 80 đỏ cờ', price1: 11000 }] });
 C('Nhập lại không có cột quy cách: giữ quy cách cũ', (await api.one('products', TH, [['sku', 'eq', 'NGD-80']])).units_per_pack, 170);
+const w1 = await api.call('save_product', { book_id: TH, name: 'Ngói âm 80 gốm', unit: 'Viên', price1: 10000, units_per_pack: 140, pack_unit: 'thùng', pack_weight: 28 });
+let wp = await api.one('products', TH, [['id', 'eq', w1.id]]);
+C('Nhập 28 kg / thùng 140 viên → 0,2 kg / viên', [wp.pack_weight, wp.unit_weight, wp.weight_per_unit], [28, null, 0.2]);
+await api.call('save_product', { book_id: TH, id: w1.id, name: 'Ngói âm 80 gốm', unit: 'Viên', price1: 10000, units_per_pack: 140, pack_unit: 'thùng', pack_weight: 28, unit_weight: 0.21 });
+wp = await api.one('products', TH, [['id', 'eq', w1.id]]);
+C('Có kg / viên thì ưu tiên kg / viên', wp.weight_per_unit, 0.21);
+await E('Trọng lượng âm bị chặn', () => api.call('save_product', { book_id: TH, name: 'X', pack_weight: -1 }), 'không được âm');
+await api.call('import_products', { book_id: TH, request_id: rid(), rows: [{ sku: 'DD-80G', name: 'Diềm dương 80 gốm', unit: 'Viên', price1: 20000, units_per_pack: 144, pack_unit: 'thùng', pack_weight: 29, unit_weight: 0.2 }] });
+wp = await api.one('products', TH, [['sku', 'eq', 'DD-80G']]);
+C('Nhập Excel kèm trọng lượng', [wp.pack_weight, wp.unit_weight, wp.weight_per_unit], [29, 0.2, 0.2]);
+await api.call('import_products', { book_id: TH, request_id: rid(), rows: [{ sku: 'DD-80G', name: 'Diềm dương 80 gốm' }] });
+C('Nhập lại không có cột trọng lượng: giữ trọng lượng cũ', (await api.one('products', TH, [['sku', 'eq', 'DD-80G']])).pack_weight, 29);
 
 G('2. Thông tin riêng của chứng từ');
 const kh = (await api.call('save_party', { book_id: TH, type: 'kh', name: 'Chú Dũng', phone: '0976389811', address: 'Cầu Trà Lý - Tiền Hải - Thái Bình' })).id;
@@ -67,5 +79,22 @@ C('Lưu mẫu chứng từ vào cài đặt sổ', (await api.call('my_books')).
 api.as(staff);
 await E('Nhân viên không sửa được mẫu chứng từ', () => api.call('update_book_settings', { book_id: TH, settings: { docs: {} } }), 'chủ');
 api.as(owner);
+
+G('4. CSDL tạo từ bản cũ (chưa có cột trọng lượng)');
+{
+  const { openDb } = await import('../src/db/index.js');
+  const fs = await import('node:fs'); const os = await import('node:os'); const path = await import('node:path');
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'gomsu-')), 'old.db');
+  let db = openDb(file);
+  db.prepare(`insert into books (id, name, short_name, settings, created_at) values ('b1', 'Sổ cũ', 'C', '{}', '2026-01-01')`).run();
+  db.prepare(`insert into products (id, book_id, sku, name, created_at, updated_at) values ('p1', 'b1', 'OLD', 'Sản phẩm cũ', '2026-01-01', '2026-01-01')`).run();
+  for (const r of db.prepare(`select type, name from sqlite_master where type in ('view', 'trigger')`).all()) db.exec(`drop ${r.type} if exists ${r.name}`);
+  db.exec('alter table products drop column pack_weight; alter table products drop column unit_weight');
+  db.close();
+  db = openDb(file); openDb(file).close();
+  const r = db.prepare(`select name, pack_unit, units_per_pack, pack_weight, weight_per_unit from v_products`).all();
+  C('Sản phẩm cũ còn nguyên, có thêm cột trọng lượng (mở 2 lần không lỗi)', [r.length, r[0].name, r[0].pack_unit, r[0].pack_weight, r[0].weight_per_unit], [1, 'Sản phẩm cũ', 'hộp', null, null]);
+  db.close();
+}
 
 finish('Chứng từ in');

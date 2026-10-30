@@ -2,11 +2,18 @@
 import { config } from './config.js';
 import { openDb } from './db/index.js';
 import { demoFlag } from './domain/books.js';
+import { ensureAdmin } from './lib/auth.js';
 import { createServer } from './http.js';
 import { startScheduler } from './services/scheduler.js';
 
 const db = openDb(config.dbPath);
 demoFlag.on = config.demoMode;
+if (config.admin.email || config.admin.password) {
+  try {
+    const r = db.transaction(() => ensureAdmin(config.admin.email, config.admin.password))();
+    console.log(`Tài khoản quản trị ${r.email}: ${r.action}`);
+  } catch (e) { console.error(`Không cài được tài khoản quản trị từ ADMIN_EMAIL / ADMIN_PASSWORD: ${e.message}`); }
+}
 const server = createServer();
 server.listen(config.port, () => {
   console.log(`API sổ bán hàng gốm chạy ở cổng ${config.port} · CSDL ${config.dbPath}${config.demoMode ? ' · CHẾ ĐỘ CHẠY THỬ' : ''}`);

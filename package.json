@@ -1,0 +1,11 @@
+{
+  "name": "so-ban-hang-gom",
+  "private": true,
+  "type": "module",
+  "description": "Chạy máy chủ API và giao diện cùng lúc khi phát triển trên máy",
+  "scripts": {
+    "setup": "npm --prefix server install && npm --prefix web install",
+    "dev": "node scripts/dev.js",
+    "test": "npm --prefix server test"
+  }
+}

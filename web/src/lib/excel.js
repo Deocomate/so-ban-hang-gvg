@@ -108,6 +108,8 @@ export function productRules(priceNames = []) {
     ['pattern', (k, raw) => raw.startsWith('mẫu') || k === 'mau ma' || k === 'kieu dang' || k === 'kieu'],
     ['units_per_pack', (k) => /^so (vien|cai|tam|chiec|luong) ?(\/|tren|moi|1) ?(hop|thung|kien|bao)/.test(k) || k.startsWith('so luong moi hop') || k === 'quy cach dong goi' || k.startsWith('dong goi')],
     ['pack_unit', (k) => k.startsWith('don vi dong goi') || k === 'dvt dong goi'],
+    ['unit_weight', (k) => /^(trong luong|khoi luong|kg)\b.*(\/|tren|moi|1) ?(vien|cai|tam|chiec|sp|san pham|don vi)/.test(k) || /^kg ?\/ ?(vien|cai|tam|chiec)/.test(k)],
+    ['pack_weight', (k) => /^(trong luong|khoi luong|kg)/.test(k)],
     ['size', (k) => k.startsWith('kich thuoc') || k.startsWith('kich co') || k === 'co' || k === 'size' || k.startsWith('quy cach')],
     ['unit', (k) => k === 'dvt' || k.startsWith('don vi')],
     ['cost', (k) => k.startsWith('gia von') || k.startsWith('gia nhap') || k === 'don gia von' || k.startsWith('don gia von')],
@@ -166,6 +168,9 @@ export function extractParties(book, type) {
   return { rows: [], sheet: null, columns: [] };
 }
 
+// Lấy số đầu tiên trong ô kiểu "140 viên/ thùng", "28kg/ thùng", "0,20"
+const leadNum = (v) => { if (typeof v === 'number') return v; const m = String(v ?? '').match(/\d+(?:[.,]\d+)?/); return m ? Number(m[0].replace(',', '.')) : NaN; };
+const packWord = (v) => { const m = norm(String(v ?? '')).match(/\/\s*(thung|hop|kien|bao|pallet)\b/); return m ? { thung: 'thùng', hop: 'hộp', kien: 'kiện', bao: 'bao', pallet: 'pallet' }[m[1]] : ''; };
 const numField = (v) => (v === '' || v === null || v === undefined ? null : parseNum(v));
 
 // Kiểm tra trước khi nhập; trả về dòng đã chuẩn hóa + lỗi/cảnh báo
@@ -179,11 +184,16 @@ export function validateProducts(rows, existing) {
       unit: String(r.unit ?? '').trim(), note: String(r.note ?? '').trim(),
       cost: numField(r.cost), price1: numField(r.price1), price2: numField(r.price2), price3: numField(r.price3),
       qty: numField(r.qty), low_stock: numField(r.low_stock), errors: [], warnings: [],
-      ...(r.units_per_pack !== undefined && r.units_per_pack !== '' ? { units_per_pack: numField(r.units_per_pack) } : {}),
-      ...(String(r.pack_unit ?? '').trim() ? { pack_unit: String(r.pack_unit).trim() } : {}),
+      ...(r.units_per_pack !== undefined && r.units_per_pack !== '' ? { units_per_pack: leadNum(r.units_per_pack) } : {}),
+      ...(String(r.pack_unit ?? '').trim() ? { pack_unit: String(r.pack_unit).trim() } : packWord(r.units_per_pack) || packWord(r.pack_weight) ? { pack_unit: packWord(r.units_per_pack) || packWord(r.pack_weight) } : {}),
+      ...(r.pack_weight !== undefined && r.pack_weight !== '' ? { pack_weight: leadNum(r.pack_weight) } : {}),
+      ...(r.unit_weight !== undefined && r.unit_weight !== '' ? { unit_weight: leadNum(r.unit_weight) } : {}),
     };
     if (!o.name) o.errors.push('Thiếu tên hàng');
+    // Cột "Quy cách" ghi kiểu "140 viên/ thùng" → hiểu là số viên mỗi thùng
+    if (o.units_per_pack === undefined && packWord(o.size) && !Number.isNaN(leadNum(o.size))) { o.units_per_pack = leadNum(o.size); if (!o.pack_unit) o.pack_unit = packWord(o.size); o.size = ''; }
     if (o.units_per_pack !== undefined && (Number.isNaN(o.units_per_pack) || !(o.units_per_pack > 0))) o.errors.push('Số viên/hộp phải là số lớn hơn 0');
+    for (const [k, lb] of [['pack_weight', 'Trọng lượng/thùng'], ['unit_weight', 'Trọng lượng/viên']]) if (o[k] !== undefined && (Number.isNaN(o[k]) || o[k] < 0)) o.errors.push(`${lb} không phải số hợp lệ`);
     for (const f of ['cost', 'price1', 'price2', 'price3', 'qty', 'low_stock']) {
       if (Number.isNaN(o[f])) o.errors.push(`Cột ${f === 'qty' ? 'số lượng' : f === 'cost' ? 'giá vốn' : f === 'low_stock' ? 'tồn tối thiểu' : 'giá bán'} không phải số`);
       else if (o[f] !== null && o[f] < 0) o.errors.push('Số âm không hợp lệ');
@@ -234,11 +244,11 @@ export function validateParties(rows, existing, priceNames) {
 
 export function productTemplate(priceNames) {
   const cols = ['Mã SKU (để trống = tự cấp)', 'Tên hàng hóa *', 'Chủng loại', 'Mẫu', 'Kích thước', 'Màu sắc / men', 'ĐVT', 'Giá vốn',
-    priceNames[0], priceNames[1], priceNames[2], 'Số lượng tồn', 'Tồn tối thiểu', 'Số viên/hộp', 'Đơn vị đóng gói', 'Ghi chú'];
+    priceNames[0], priceNames[1], priceNames[2], 'Số lượng tồn', 'Tồn tối thiểu', 'Số viên/hộp', 'Đơn vị đóng gói', 'Trọng lượng/thùng (kg)', 'Trọng lượng/viên (kg)', 'Ghi chú'];
   const ex = [
-    ['NAD-L-DO', 'Ngói âm dương cỡ L', 'Ngói', 'Âm dương', 'L', 'Đỏ gốm', 'Viên', 10000, 18000, 16000, 15000, 5000, 1000, 140, 'hộp', ''],
-    ['', 'Bình hút lộc men lam 30cm', 'Bình hút lộc', 'Hũ tròn', '30cm', 'Men lam', 'Cái', 320000, 650000, 590000, 550000, 12, 3, '', '', 'Ví dụ SKU để trống'],
-    ['NGHE-40-VHG', 'Nghê phong thủy 40cm', 'Linh vật - phong thủy', 'Nghê', '40cm', 'Vàng hoàng gia', 'Đôi', 2000000, 3500000, 3000000, 2800000, 4, 2, '', '', ''],
+    ['NAD-L-DO', 'Ngói âm dương cỡ L', 'Ngói', 'Âm dương', 'L', 'Đỏ gốm', 'Viên', 10000, 18000, 16000, 15000, 5000, 1000, 140, 'thùng', 28, 0.2, ''],
+    ['', 'Bình hút lộc men lam 30cm', 'Bình hút lộc', 'Hũ tròn', '30cm', 'Men lam', 'Cái', 320000, 650000, 590000, 550000, 12, 3, '', '', 4.5, '', 'Ví dụ SKU để trống'],
+    ['NGHE-40-VHG', 'Nghê phong thủy 40cm', 'Linh vật - phong thủy', 'Nghê', '40cm', 'Vàng hoàng gia', 'Đôi', 2000000, 3500000, 3000000, 2800000, 4, 2, '', '', '', '', ''],
   ];
   const guide = [
     ['HƯỚNG DẪN NHẬP HÀNG HÓA'],
@@ -248,6 +258,7 @@ export function productTemplate(priceNames) {
     ['• Nếu SKU đã có trong phần mềm: chỉ cập nhật tên, loại, giá… KHÔNG đổi tồn kho (tồn chỉ đổi qua phiếu nhập/xuất/điều chỉnh).'],
     ['• Số tiền ghi số thường (vd 1500000), không cần ký hiệu đ. Xóa 3 dòng ví dụ trước khi nhập.'],
     ['• "Số viên/hộp" + "Đơn vị đóng gói" (hộp, thùng, kiện…): dùng để in quy cách “4 hộp x 140 viên + 40 viên” trên hóa đơn và biên bản bàn giao. Để trống nếu không đóng hộp.'],
+    ['• "Trọng lượng/thùng (kg)" và/hoặc "Trọng lượng/viên (kg)": dùng để tính tổng trọng lượng đơn hàng (báo xe, ship). Chỉ cần điền 1 trong 2 cột; có cả 2 thì ưu tiên kg/viên. Ghi kiểu "28kg/ thùng", "140 viên/ thùng", "0,20" cũng được.'],
     [`• 3 cột giá: ${priceNames.join(' / ')} — tương ứng mức giá gán cho từng khách hàng.`],
   ];
   const wb = XLSX.utils.book_new();

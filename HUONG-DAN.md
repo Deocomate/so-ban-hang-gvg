@@ -8,7 +8,7 @@ Phần mềm quản lý bán hàng cho **Gốm sứ Thanh Hải** và **Gốm V�
 |---|---|
 | `server/` | Máy chủ API (Node.js + SQLite): toàn bộ quy tắc tính toán, phân quyền, báo cáo, đăng nhập, nhận tiền về SePay, nhận trạng thái vận đơn, thông báo điện thoại, lịch tự động, sao lưu hằng đêm. |
 | `server/src/db/` | Cấu trúc cơ sở dữ liệu (`schema.sql`) và các bảng tổng hợp (`views.sql`). Máy chủ tự tạo khi khởi động lần đầu. |
-| `server/test/` | Bộ kiểm thử: nghiệp vụ bán hàng (146 phép), vận chuyển · tiền về · thông báo (126), chi phí (34), chứng từ (19), dữ liệu mẫu (12), nhập bản sao lưu (14), HTTP · đăng nhập · webhook (24). |
+| `server/test/` | Bộ kiểm thử: nghiệp vụ bán hàng (146 phép), vận chuyển · tiền về · thông báo (126), chi phí (34), chứng từ và trọng lượng (25), dữ liệu mẫu (12), nhập bản sao lưu (14), HTTP · đăng nhập · webhook (34). |
 | `web/` | Giao diện (React + Vite). Khi build Docker, giao diện được dựng sẵn và máy chủ API trả luôn (không cần nginx). |
 | `Dockerfile`, `docker-compose.yml` | Đóng gói cả giao diện và API vào **một** container, chạy bằng Docker (Coolify). |
 | `.env.example` | Danh sách biến cấu hình (khóa SePay, khóa thông báo…). |
@@ -27,7 +27,7 @@ Cơ sở dữ liệu là **một tệp SQLite** (`/data/gomsu.db` trong Docker v
 
 > Không dùng Coolify: `cp .env.example .env`, sửa `.env`, rồi `docker compose up -d --build`, và cho reverse proxy (nginx, Caddy, Traefik…) trỏ vào dịch vụ `app` cổng 3000.
 >
-> Chạy trên máy tính (cần Node.js 20+): `cd server && npm install && npm start` (cổng 3000), cửa sổ khác `cd web && npm install && npm run dev`, mở http://localhost:5173.
+> Chạy trên máy tính (cần Node.js 20+): ở thư mục gốc chạy `npm run setup` (một lần, cài thư viện cho `server/` và `web/`), sau đó mỗi lần chỉ cần `npm run dev`, nó chạy cùng lúc API (cổng 3000) và giao diện, rồi mở http://localhost:5173. Bấm Ctrl+C để dừng cả hai. Dữ liệu trên máy nằm ở `server/data/gomsu.db`.
 >
 > **Bản chạy thử có dữ liệu mẫu**: triển khai một bản riêng với `DEMO_MODE=true`, rồi chạy một lần `docker compose exec app npm run seed:demo` (chỉ chạy trên cơ sở dữ liệu trống). Đăng nhập `chu.cuahang@demo.vn` / `demo1234`.
 
@@ -40,6 +40,16 @@ Cơ sở dữ liệu là **một tệp SQLite** (`/data/gomsu.db` trong Docker v
 1. Nhân viên tự đăng ký bằng email của họ.
 2. Chủ vào **Cài đặt → Người dùng & quyền → Thêm người dùng**, nhập email, chọn quyền. Quyền đặt **riêng cho từng sổ**.
 3. Bỏ tick **"Xem giá vốn và lợi nhuận"** thì nhân viên không thấy giá vốn, lợi nhuận, giá trị tồn kho ở bất kỳ màn hình nào. Phần ẩn này do máy chủ chặn, không chỉ ẩn trên giao diện.
+
+### Tài khoản quản trị đặt trong `.env` (khuyên dùng, đỡ quên)
+- Điền `ADMIN_EMAIL` và `ADMIN_PASSWORD` (ít nhất 6 ký tự) trong tệp `.env` khi chạy trên máy, hoặc trong Environment Variables trên Coolify, rồi khởi động lại.
+- Mỗi lần khởi động, máy chủ sẽ:
+  - tạo tài khoản này nếu chưa có;
+  - cho tài khoản này làm **chủ của mọi sổ**;
+  - tạo luôn 2 sổ nếu hệ thống chưa có sổ nào, nên người khác đăng ký trước cũng không chiếm được quyền chủ.
+- Muốn đổi mật khẩu thì sửa `ADMIN_PASSWORD` rồi khởi động lại. Các máy đang đăng nhập tài khoản này sẽ phải đăng nhập lại.
+- Nếu anh đổi mật khẩu trong **Cài đặt → Tài khoản của tôi**, lần khởi động sau mật khẩu sẽ quay về giá trị trong `.env`. Vì vậy hãy luôn đổi ở `.env`.
+- Dòng log khi khởi động cho biết tài khoản đã được tạo, đã đặt lại mật khẩu, hay giữ nguyên.
 
 ### Quên mật khẩu
 - **Nhân viên:** chủ mở **Cài đặt → Người dùng & quyền → (tên nhân viên) → Đặt mật khẩu mới**, rồi báo lại cho nhân viên.
@@ -241,8 +251,7 @@ Có 5 loại chứng từ, xuất ra PDF khổ A4, dựng theo đúng mẫu cử
 - **Biên bản và phiếu xuất kho** lập theo từng lần giao. Nếu chưa giao, chọn "Cả đơn" để in trước, giao cho lái xe mang theo.
 - **Phiếu thu, phiếu chi và phiếu xuất kho** có dòng "Mẫu số … Thông tư 88/2021/TT-BTC" ở góc phải. Dòng này tắt được trong cài đặt. Nếu đơn vị phát hành là công ty, nên sửa dòng này theo chế độ kế toán công ty đang áp dụng (hỏi kế toán).
 - **Phông chữ:**
-  - Hóa đơn và đơn đặt hàng dùng Arimo, tương đương Arial.
-  - Biên bản và các phiếu dùng Tinos, tương đương Times New Roman.
+  - Tất cả chứng từ dùng chung một phông, mặc định Arial (Arimo). Muốn đổi sang Times New Roman (Tinos) thì vào **Cài đặt → Mẫu chứng từ → Phông chữ**. Bản xem trước dùng đúng phông sẽ in.
   - Phông được nhúng sẵn trong PDF, nên mở trên điện thoại, máy tính hay gửi Zalo đều đúng dấu tiếng Việt, và chữ chọn hoặc sao chép được.
   - Hai phông này dùng giấy phép Apache 2.0, miễn phí.
 - **Đây không phải hóa đơn điện tử.** "Hóa đơn bán hàng" ở đây là chứng từ nội bộ để giao cho khách, không thay hóa đơn điện tử có mã của cơ quan thuế. Hộ kinh doanh có doanh thu trên 1 tỷ đồng/năm thuộc diện phải dùng hóa đơn điện tử theo quy định hiện hành, nên hỏi lại cán bộ thuế hoặc kế toán để áp dụng cho đúng.
@@ -252,7 +261,7 @@ Có 5 loại chứng từ, xuất ra PDF khổ A4, dựng theo đúng mẫu cử
 Bấm **Tạo đơn bán** thì màn hình tạo đơn mở toàn màn hình. Không cần bấm "Thêm dòng":
 
 - **Thêm hàng:** gõ tên hoặc mã vào ô tìm kiếm trên cùng (phím **F3**), rồi bấm vào sản phẩm hoặc nhấn Enter. Hàng vào đơn ngay. Chọn lại cùng sản phẩm thì số lượng cộng thêm 1. Máy quét mã vạch dùng được nếu mã vạch trùng mã SKU.
-- **Mỗi dòng hàng** có nút −/+ và ô số lượng, đơn giá (tự lấy theo mức giá của khách), chiết khấu %. Nếu sản phẩm có quy cách thì hiện luôn số hộp, ví dụ "4 hộp x 140 viên + 40 viên".
+- **Mỗi dòng hàng** có nút −/+ và ô số lượng, đơn giá (tự lấy theo mức giá của khách), chiết khấu %. Nếu sản phẩm có quy cách thì hiện luôn số hộp và trọng lượng, ví dụ "4 thùng x 140 viên + 40 viên · 120 kg" (xem mục 11).
 - **Ghi chú cho từng dòng:** ô ngay dưới tên sản phẩm, để ghi đặc điểm hàng (màu men, chọn viên đều màu, yêu cầu đóng gói…). Ghi chú được lưu theo đơn và in nghiêng dưới tên hàng trên hóa đơn, đơn đặt hàng, biên bản bàn giao và phiếu xuất kho.
 - **Cột bên phải:**
   - người bán (phần mềm nhớ cho lần sau) và ngày;
@@ -266,3 +275,21 @@ Bấm **Tạo đơn bán** thì màn hình tạo đơn mở toàn màn hình. Kh
   - Với đơn **Đặt riêng** (nút gạt trên cùng), nút chính là **XÁC NHẬN ĐƠN** và nút IN mở đơn đặt hàng PDF.
   - "Lưu nháp" và "Chỉ xác nhận, giao sau" nằm ngay phía trên hai nút.
 - **Đóng màn hình** bằng nút ✕ góc phải. Nếu đơn đang có hàng, phải bấm hai lần để tránh mất đơn do bấm nhầm.
+
+## 11. Tự chia thùng và tính tổng trọng lượng
+
+- **Khai trong sản phẩm** (Hàng hóa → mở sản phẩm → Sửa):
+  - "Quy cách: số viên / thùng" và đơn vị đóng gói (hộp, thùng, kiện…);
+  - "Trọng lượng 1 thùng (kg)" (ví dụ 28) và/hoặc "Trọng lượng 1 viên (kg)" (ví dụ 0,2). Chỉ cần một trong hai ô; có cả hai thì phần mềm dùng kg/viên.
+- **Khi tạo đơn**, gõ số lượng là ngay dưới tên sản phẩm tự hiện cách chia thùng và trọng lượng của dòng đó. Cột bên phải hiện **Tổng trọng lượng** và tổng số thùng của cả đơn (thùng lẻ tính 1 thùng).
+- Sản phẩm chưa khai quy cách có nút "+ Khai số viên/thùng" ngay trên dòng hàng. Nếu có mặt hàng chưa khai trọng lượng, phần mềm ghi rõ "thiếu N mặt hàng chưa khai" để không hiểu nhầm là tổng đã đủ.
+- Tổng trọng lượng cũng hiện trong chi tiết đơn, trên **biên bản bàn giao** và **phiếu xuất kho**, tiện báo xe và đối chiếu khi bốc hàng.
+- **File Excel nhập hàng** có thêm 2 cột "Trọng lượng/thùng (kg)" và "Trọng lượng/viên (kg)". Ghi kiểu "140 viên/ thùng", "28kg/ thùng", "0,20" cũng đọc được; cột "Quy cách" ghi "140 viên/ thùng" thì phần mềm hiểu là 140 viên mỗi thùng.
+- **Máy chủ đang chạy bản cũ:** chỉ cần cập nhật và khởi động lại. Máy chủ tự thêm 2 cột trọng lượng vào cơ sở dữ liệu; dữ liệu cũ giữ nguyên, ô trọng lượng để trống.
+
+## 12. Bố cục màn hình
+
+- **Thanh trên cùng:** tên sổ, nút chuyển sổ Thanh Hải / Vũ Gia, chuông thông báo, nút Cài đặt và menu tài khoản (đăng xuất).
+- **Thanh menu xanh:** Tổng quan · Hàng hóa (danh sách hàng, tồn kho & kiểm kho) · Đơn hàng (đơn bán, đơn đặt riêng, vận chuyển) · Nhập hàng · Đối tác (khách hàng, nhà cung cấp) · Sổ quỹ (phiếu thu chi, tiền về tài khoản, chi phí) · Báo cáo. Bên phải có **Tạo nhanh** (nhập hàng, thu tiền, chi tiền) và nút xanh lá **Bán hàng** mở màn hình tạo đơn (mục 10).
+- **Các trang danh sách** chia hai phần: cột lọc bên trái (trạng thái, nhóm hàng, kênh bán, thời gian…, có số đếm từng mục) và bên phải là ô tìm kiếm, nút Xuất Excel / Thêm mới và bảng. Dòng cuối bảng cộng tổng các cột tiền. Bấm vào một dòng để mở chi tiết.
+- **Trên điện thoại:** menu nằm ở thanh dưới cùng (Tổng quan, Đơn hàng, Tạo, Thu chi, Thêm). Bộ lọc thành các nút trượt ngang; bấm "Bộ lọc khác" để hiện thêm bộ lọc.

@@ -4,7 +4,7 @@ import { money, dmyhm, match, short } from '../lib/format.js';
 import { useCustomers } from '../lib/lookups.js';
 import { exportXlsx } from '../lib/excel.js';
 import { orderTransferContent } from '../lib/vietqr.js';
-import { Btn, Icon, Pill, Field, Input, NumInput, Tabs, Search, ErrorBox, Note, Table, Modal, KV, Picker, Section } from '../components/ui.jsx';
+import { Btn, Icon, Pill, Field, Input, NumInput, Tabs, Search, ErrorBox, Note, Table, Modal, KV, Picker, Section, ListPage, FilterBox, RadioList } from '../components/ui.jsx';
 
 const ST = { cho_xu_ly: ['Chờ xử lý', 'warn'], da_ghi: ['Đã ghi vào sổ', 'good'], bo_qua: ['Bỏ qua', 'mute'] };
 const StP = ({ s }) => { const [t, tone] = ST[s] || [s, 'neutral']; return <Pill tone={tone}>{t}</Pill>; };
@@ -18,24 +18,23 @@ export function BankPage() {
   const pending = rows.filter((t) => t.status === 'cho_xu_ly');
   const bank = settings.bank;
   return (
-    <>
-      <div className="page-head">
-        <div className="grow"><h1 className="page-title">Tiền về tài khoản</h1>
-          <div className="page-sub">{bank ? `${bank.bank_name || 'Ngân hàng'} · ${bank.account_no} · ${bank.account_name}. ` : ''}Khách chuyển khoản ghi nội dung <b>{orderTransferContent(book, 'DH00012')}</b> (mã sổ + mã đơn) thì phần mềm tự gạch nợ đúng đơn. Các khoản không có mã đơn nằm ở “Chờ xử lý”.</div></div>
+    <ListPage title="Tiền về tài khoản"
+      filters={<FilterBox title="Trạng thái"><RadioList value={tab} onChange={setTab} options={[{ value: 'cho_xu_ly', label: 'Chờ xử lý', count: pending.length }, { value: 'da_ghi', label: 'Đã ghi' }, { value: 'bo_qua', label: 'Bỏ qua' }, { value: 'all', label: 'Tất cả (cả tiền ra)' }]} /></FilterBox>}
+      search={<Search value={search} onChange={setSearch} placeholder="Tìm nội dung, người chuyển, mã đơn, số tiền…" />}
+      sub={<>{bank ? `${bank.bank_name || 'Ngân hàng'} · ${bank.account_no} · ${bank.account_name}. ` : ''}Khách chuyển khoản ghi nội dung <b>{orderTransferContent(book, 'DH00012')}</b> (mã sổ + mã đơn) thì phần mềm tự gạch nợ đúng đơn. Các khoản không có mã đơn nằm ở “Chờ xử lý”.</>}
+      actions={<>
         <Btn icon="dl" onClick={() => exportXlsx('tien-ve-tai-khoan.xlsx', [{ name: 'Tiền về', rows: list, columns: [
           { key: 'txn_at', label: 'Thời gian', get: (t) => dmyhm(t.txn_at) }, { key: 'amount', label: 'Số tiền' }, { key: 'direction', label: 'Chiều', get: (t) => (t.direction === 'in' ? 'Vào' : 'Ra') },
           { key: 'content', label: 'Nội dung' }, { key: 'counter_name', label: 'Người chuyển' }, { key: 'status', label: 'Trạng thái', get: (t) => ST[t.status]?.[0] },
           { key: 'order_code', label: 'Đơn' }, { key: 'payment_codes', label: 'Phiếu thu', get: (t) => (t.payment_codes || []).join(', ') }, { key: 'match_note', label: 'Ghi chú' }] }])}>Xuất Excel</Btn>
         {book.is_demo && <Btn icon="plus" onClick={() => open('bank-sim', {})}>Giả lập tiền về</Btn>}
-      </div>
+      </>}>
       {!bank && <Note tone="warn">Sổ này chưa khai báo tài khoản nhận tiền. Vào <b>Cài đặt → Tài khoản nhận tiền</b> để in mã QR theo đơn và nhận giao dịch tự động.</Note>}
       <div className="kpis kpis-3">
         <button className={`kpi ${pending.length ? 'alertk' : ''}`} onClick={() => setTab('cho_xu_ly')}><span className="kpi-label">Chờ xử lý</span><span className="kpi-value">{pending.length}</span><span className="kpi-sub">{money(pending.reduce((s, t) => s + Number(t.amount), 0))} đ</span></button>
         <button className="kpi" onClick={() => setTab('da_ghi')}><span className="kpi-label">Đã ghi vào sổ (30 gần nhất)</span><span className="kpi-value">{rows.filter((t) => t.status === 'da_ghi').slice(0, 30).length}</span></button>
         <button className="kpi" onClick={() => setTab('all')}><span className="kpi-label">Tổng tiền vào đã nhận</span><span className="kpi-value">{short(rows.filter((t) => t.direction === 'in' && t.status === 'da_ghi').reduce((s, t) => s + Number(t.amount), 0))}</span></button>
       </div>
-      <Tabs value={tab} onChange={setTab} tabs={[{ value: 'cho_xu_ly', label: 'Chờ xử lý', count: pending.length }, { value: 'da_ghi', label: 'Đã ghi' }, { value: 'bo_qua', label: 'Bỏ qua' }, { value: 'all', label: 'Tất cả (cả tiền ra)' }]} />
-      <div className="row gap"><Search value={search} onChange={setSearch} placeholder="Tìm nội dung, người chuyển, mã đơn, số tiền…" /></div>
       <ErrorBox error={q.error} />
       <Table rows={q.data ? list : null} onRow={(t) => open('bank-txn', { txn: t })} empty={tab === 'cho_xu_ly' ? 'Không có khoản nào cần xử lý' : 'Chưa có giao dịch'} columns={[
         { key: 'a', label: 'Số tiền', align: 'right', render: (t) => <b className={t.direction === 'out' ? 'bad' : 'good'}>{t.direction === 'out' ? '−' : '+'}{money(t.amount)}</b> },
@@ -43,7 +42,7 @@ export function BankPage() {
         { key: 'c', label: 'Nội dung chuyển khoản', render: (t) => <><div className="small">{t.content}</div>{t.counter_name && <div className="cell-sub">{t.counter_name}</div>}</> },
         { key: 's', label: 'Xử lý', render: (t) => <><StP s={t.status} />{t.order_code && <div className="cell-sub">đơn {t.order_code}</div>}{t.status !== 'da_ghi' && t.match_note && <div className="cell-sub">{t.match_note}</div>}</> },
       ]} />
-    </>
+    </ListPage>
   );
 }
 

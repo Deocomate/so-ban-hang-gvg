@@ -73,6 +73,8 @@ create table if not exists products (
   last_cost real not null default 0,     -- giá vốn bình quân gần nhất
   pack_unit text not null default 'hộp',
   units_per_pack real check (units_per_pack is null or units_per_pack > 0),
+  pack_weight real check (pack_weight is null or pack_weight >= 0),   -- kg mỗi thùng/hộp
+  unit_weight real check (unit_weight is null or unit_weight >= 0),   -- kg mỗi đơn vị (viên, cái…)
   created_at text not null,
   updated_at text not null
 );

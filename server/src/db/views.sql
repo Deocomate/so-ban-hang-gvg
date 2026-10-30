@@ -110,7 +110,8 @@ select b.id, b.book_id, b.sku, b.name, b.category, b.pattern, b.size, b.color, b
   case when can_cost(b.book_id) then case when b.is_kit then 0 else b.stock_value end end as stock_value,
   coalesce(kit.components, '[]') as components,
   (not b.is_kit and b.active and b.on_hand - b.reserved <= b.low_stock) as is_low,
-  b.pack_unit, b.units_per_pack
+  b.pack_unit, b.units_per_pack, b.pack_weight, b.unit_weight,
+  coalesce(b.unit_weight, round(b.pack_weight / nullif(b.units_per_pack, 0), 4)) as weight_per_unit
 from base b left join kit on kit.kit_id = b.id;
 
 -- ---------- GIÁ TRỊ TỪNG ĐƠN BÁN ----------

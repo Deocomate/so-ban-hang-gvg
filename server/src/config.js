@@ -4,6 +4,10 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
+// Chạy trên máy (npm run dev): đọc thêm tệp .env ở thư mục gốc; biến đã đặt sẵn (Docker, Coolify) không bị ghi đè
+const rootEnv = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '.env');
+if (fs.existsSync(rootEnv)) process.loadEnvFile?.(rootEnv);
+
 const env = process.env;
 const flag = (v, d = false) => (v == null || v === '' ? d : ['1', 'true', 'yes', 'on'].includes(String(v).toLowerCase()));
 
@@ -30,6 +34,7 @@ export const config = {
   allowSignup: flag(env.ALLOW_SIGNUP, true),
   demoMode: flag(env.DEMO_MODE, false),
   trustProxy: flag(env.TRUST_PROXY, true),
+  admin: { email: env.ADMIN_EMAIL || '', password: env.ADMIN_PASSWORD || '' },
   sepayApiKey: env.SEPAY_API_KEY || '',
   trackingSecret: env.TRACKING_WEBHOOK_SECRET || '',
   vapid: { publicKey: env.VAPID_PUBLIC_KEY || '', privateKey: env.VAPID_PRIVATE_KEY || '', subject: env.VAPID_SUBJECT || 'mailto:admin@example.com' },

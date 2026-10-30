@@ -4,7 +4,7 @@ import { money, dmy, dmyhm, todayVN, match, norm, short } from '../lib/format.js
 import { useFunds } from '../lib/lookups.js';
 import { exportXlsx, readWorkbook } from '../lib/excel.js';
 import { CARRIERS, carrier, lastCarrier, rememberCarrier } from '../lib/carriers.js';
-import { Btn, Icon, Pill, Field, Input, Select, DateInput, NumInput, Check, Tabs, Search, Loading, ErrorBox, Note, Table, Modal, KV, Section } from '../components/ui.jsx';
+import { Btn, Icon, Pill, Field, Input, Select, DateInput, NumInput, Check, Tabs, Search, Loading, ErrorBox, Note, Table, Modal, KV, Section, ListPage, FilterBox, RadioList } from '../components/ui.jsx';
 
 // Trạng thái vận đơn (giống app Shopee Express / BEST)
 export const SHIP_STATUS = {
@@ -60,26 +60,26 @@ export function ShippingPage() {
   const codHeld = rows.filter((s) => s.cod_status === 'spx_dang_giu');
   const sum = (a, k) => a.reduce((x, s) => x + Number(s[k] || 0), 0);
   return (
-    <>
-      <div className="page-head">
-        <div className="grow"><h1 className="page-title">Vận chuyển</h1>
-          <div className="page-sub">Theo dõi vận đơn Shopee Express và BEST Express theo đúng các trạng thái trên app của hãng. Tiền thu hộ (COD) hãng giữ đến khi đối soát về tài khoản.</div></div>
+    <ListPage title="Vận chuyển" sub="Theo dõi vận đơn Shopee Express và BEST Express theo đúng các trạng thái trên app của hãng. Tiền thu hộ (COD) hãng giữ đến khi đối soát về tài khoản."
+      filters={<>
+        <FilterBox title="Trạng thái"><RadioList value={tab} onChange={setTab} options={TABS.map((x) => ({ value: x.value, label: x.label, count: rows.filter(x.f).length }))} /></FilterBox>
+        <FilterBox title="Đơn vị vận chuyển"><RadioList value={cr} onChange={setCr} options={[{ value: '', label: 'Tất cả hãng' }, ...CARRIERS.map((c) => ({ value: c.code, label: c.name }))]} /></FilterBox>
+      </>}
+      search={<Search value={search} onChange={setSearch} placeholder="Tìm mã vận đơn, mã đơn, khách, SĐT…" />}
+      actions={<>
         <Btn icon="dl" onClick={() => exportXlsx('van-don.xlsx', [{ name: 'Vận đơn', rows: list, columns: [
           { key: 'carrier_name', label: 'Đơn vị vận chuyển' }, { key: 'tracking_no', label: 'Mã vận đơn' }, { key: 'order_code', label: 'Đơn' }, { key: 'customer_name', label: 'Khách' }, { key: 'receiver_phone', label: 'SĐT nhận' },
           { key: 'status_label', label: 'Trạng thái' }, { key: 'status_at', label: 'Cập nhật', get: (s) => dmyhm(s.status_at) }, { key: 'cod_amount', label: 'COD' },
           { key: 'cod_status_label', label: 'Tiền COD' }, { key: 'ship_fee', label: 'Cước' }] }])}>Xuất Excel</Btn>
         {can('ban_hang') && <Btn icon="up" onClick={() => open('ship-import', {})}>Cập nhật từ file Excel</Btn>}
         {can('thu_chi') && <Btn kind="primary" icon="cash" onClick={() => open('cod-settle', {})}>Đối soát COD</Btn>}
-      </div>
+      </>}>
       <div className="kpis kpis-4">
         <button className="kpi" onClick={() => setTab('running')}><span className="kpi-label">Đang chạy</span><span className="kpi-value">{rows.filter(TABS[0].f).length}</span></button>
         <button className={`kpi ${rows.filter(TABS[3].f).length ? 'alertk' : ''}`} onClick={() => setTab('problem')}><span className="kpi-label">Có vấn đề</span><span className="kpi-value">{rows.filter(TABS[3].f).length}</span><span className="kpi-sub">giao thất bại, đang hoàn, sự cố</span></button>
         <button className="kpi key" onClick={() => setTab('cod')}><span className="kpi-label">COD {cr ? carrier(cr).short : 'hãng'} đang giữ</span><span className="kpi-value">{short(sum(codHeld, 'cod_amount'))}</span><span className="kpi-sub">{codHeld.length} vận đơn chờ đối soát</span></button>
         <button className="kpi" onClick={() => setTab('giao_thanh_cong')}><span className="kpi-label">Giao thành công</span><span className="kpi-value">{rows.filter((s) => s.status === 'giao_thanh_cong').length}</span></button>
       </div>
-      <Tabs value={tab} onChange={setTab} tabs={TABS.map((x) => ({ value: x.value, label: x.label, count: rows.filter(x.f).length }))} />
-      <div className="row gap"><Search value={search} onChange={setSearch} placeholder="Tìm mã vận đơn, mã đơn, khách, SĐT…" />
-        <div className="seg"><button className={!cr ? 'on' : ''} onClick={() => setCr('')}>Tất cả hãng</button>{CARRIERS.map((c) => <button key={c.code} className={cr === c.code ? 'on' : ''} onClick={() => setCr(c.code)}>{c.name}</button>)}</div></div>
       <ErrorBox error={q.error} />
       <Table rows={q.data ? list : null} onRow={(s) => open('ship', { id: s.id })} rowClass={(s) => (['giao_that_bai', 'dang_hoan', 'su_co'].includes(s.status) ? 'row-late' : '')}
         empty={<span>Chưa có vận đơn. Mở một đơn bán → <b>Tạo vận đơn</b>, hoặc nhập mã vận đơn khi giao hàng.</span>} columns={[
@@ -89,7 +89,7 @@ export function ShippingPage() {
           { key: 'd', label: 'Chi tiết mới nhất', render: (s) => <span className="small">{s.status_detail || '—'}</span> },
           { key: 'cod', label: 'COD', align: 'right', render: (s) => (s.cod_amount > 0 ? <>{money(s.cod_amount)}<div><CP s={s.cod_status} /></div></> : '—') },
         ]} />
-    </>
+    </ListPage>
   );
 }
 

@@ -14,6 +14,8 @@ services:
       DATA_DIR: /data
       TZ: Asia/Ho_Chi_Minh
       JWT_SECRET: ${JWT_SECRET:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       ALLOW_SIGNUP: ${ALLOW_SIGNUP:-true}
       DEMO_MODE: ${DEMO_MODE:-false}
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}

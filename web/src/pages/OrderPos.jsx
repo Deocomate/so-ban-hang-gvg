@@ -5,7 +5,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useAction } from '../lib/store.jsx';
 import { money, qty as fq, todayVN, match } from '../lib/format.js';
 import { useProducts, useCustomers, useFunds, tierPrice, productSub } from '../lib/lookups.js';
-import { packing } from '../lib/docs/model.js';
+import { packing, weightOf, fmtKg } from '../lib/docs/model.js';
 import { Btn, Icon, Input, Select, DateInput, NumInput, Loading, Picker } from '../components/ui.jsx';
 
 let seq = 0;
@@ -127,6 +127,12 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, onClose }) {
   const lineTotal = (l) => Math.round((Number(l.qty) || 0) * (Number(l.unit_price) || 0) * (1 - (Number(l.discount_pct) || 0) / 100));
   const gross = f.lines.reduce((s, l) => s + lineTotal(l), 0);
   const qtySum = f.lines.reduce((s, l) => s + (Number(l.qty) || 0), 0);
+  const wLines = f.lines.map((l) => weightOf(l.qty, pmap[l.product_id]));
+  const weightSum = wLines.reduce((s, w) => s + (w || 0), 0);
+  const noWeight = f.lines.filter((l, i) => wLines[i] === null && Number(l.qty) > 0).length;
+  const boxSum = f.lines.reduce((s, l) => { const p = pmap[l.product_id]; return s + (p ? packing(l.qty, p.units_per_pack, p.pack_unit, p.unit).boxes : 0); }, 0);
+  const packUnits = [...new Set(f.lines.map((l) => pmap[l.product_id]).filter((p) => p && p.units_per_pack).map((p) => p.pack_unit || 'hộp'))];
+  const boxLabel = packUnits.length === 1 ? packUnits[0] : 'kiện';
   const goods = Math.max(0, Math.round(gross - (Number(f.discount) || 0)));
   const total = goods + (Number(f.shipping_fee) || 0);
   const payAmt = Number(f.pay.amount) || 0;
@@ -203,6 +209,7 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, onClose }) {
               const p = pmap[l.product_id] || {};
               const short = !isDat && Number(l.qty) > (p.available ?? 0);
               const pk = packing(l.qty, p.units_per_pack, p.pack_unit, p.unit);
+              const kg = wLines[i];
               return (
                 <div className="pos-line" key={l.key} data-line={l.key}>
                   <div className="pos-line-no">{i + 1}</div>
@@ -211,7 +218,11 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, onClose }) {
                     <div className="pos-line-name"><span className="muted">{p.sku}</span> <b>{p.name || '…'}</b>{p.is_kit ? ' (bộ)' : ''}</div>
                     <div className={`small ${short ? 'bad' : 'muted'}`}>
                       {productSub(p) ? productSub(p) + ' · ' : ''}Có thể bán {fq(p.available)} {p.unit}{p.incoming ? ` · đang về ${fq(p.incoming)}` : ''}{short ? ' — không đủ để giao ngay' : ''}
-                      {pk.text && <> · <span className="pos-pack">{pk.text}</span></>}
+                    </div>
+                    <div className="pos-split">
+                      {pk.text ? <span className="pos-pack"><Icon name="box" size={14} /> {pk.text}</span>
+                        : p.id && !p.is_kit ? <button className="link-btn small" onClick={() => open('product', { id: p.id })}>+ Khai số {String(p.unit || 'cái').toLowerCase()}/thùng để tự chia thùng</button> : null}
+                      {kg !== null && <span className="pos-kg">{fmtKg(kg)}</span>}
                     </div>
                     <input className="pos-note" value={l.note || ''} maxLength={300} onChange={(e) => setLine(l.key, { note: e.target.value })}
                       placeholder="Ghi chú cho hàng này (đặc điểm, men, kích thước, yêu cầu đóng gói…)" />
@@ -255,6 +266,8 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, onClose }) {
           </div>
 
           <div className="pos-sum">
+            {(weightSum > 0 || boxSum > 0) && <><span>Tổng trọng lượng{boxSum > 0 ? <span className="pos-count">{fq(boxSum)} {boxLabel}</span> : null}</span>
+              <b className="r">{fmtKg(weightSum)}{noWeight > 0 && <div className="small muted" style={{ fontWeight: 400 }}>thiếu {noWeight} mặt hàng chưa khai</div>}</b></>}
             <span>Tổng tiền hàng <span className="pos-count">{fq(qtySum)}</span></span><b className="r">{money(gross)}</b>
             <span>Giảm giá</span><NumInput value={f.discount} onChange={(v) => set('discount', v)} className="pos-uline" />
             <span>Phí vận chuyển</span><NumInput value={f.shipping_fee} onChange={(v) => set('shipping_fee', v)} className="pos-uline" />
