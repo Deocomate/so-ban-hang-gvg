@@ -8,3 +8,4 @@ mau-excel
 *.db-*
 .env
 .git
+server/data-rieng

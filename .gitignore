@@ -9,3 +9,6 @@ server/data/
 .env.*
 !.env.example
 tasks/
+server/data-rieng/
+.bang-dieu-khien.json
+.bang-dieu-khien.log

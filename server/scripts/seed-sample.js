@@ -4,16 +4,20 @@ import { openDb } from '../src/db/index.js';
 import { config } from '../src/config.js';
 import { ctx, today } from '../src/lib/context.js';
 import { callRpc, callService } from '../src/domain/rpc.js';
+import { demoFlag } from '../src/domain/books.js';
 import { ingestBankTxn } from '../src/domain/bank.js';
 import { signUp } from '../src/lib/auth.js';
 import { seedSample } from './sample-seed-data.js';
+import { sampleAccount } from '../../scripts/app-control.js';
 
-const PASSWORD = process.env.DEMO_PASSWORD || 'demo1234';
+// Tài khoản chủ theo ADMIN_EMAIL / ADMIN_PASSWORD trong .env; nhân viên mẫu dùng chung mật khẩu
+const account = sampleAccount();
 
 openDb(config.dbPath);
-// CSDL mới tinh chưa có sổ: tài khoản chủ mẫu thành chủ của cả 3 sổ
+demoFlag.on = config.demoMode;
+// CSDL mới tinh chưa có sổ: tài khoản này thành chủ của cả 3 sổ
 const owner = ctx.db.prepare(`select m.user_id from books b join book_members m on m.book_id = b.id and m.role = 'owner' where b.short_name = 'TH' order by b.created_at limit 1`).get()?.user_id
-  ?? ctx.db.transaction(() => signUp({ email: 'chu.cuahang@demo.vn', password: PASSWORD, name: 'Chủ cửa hàng (mẫu)' }))().id;
+  ?? ctx.db.transaction(() => signUp({ email: account.email, password: account.password, name: 'Quản trị' }))().id;
 if (ctx.db.prepare('select count(*) n from products').get().n > 0) {
   console.error('Các sổ đã có hàng hóa — dữ liệu mẫu chỉ nạp khi chưa có. Dừng.');
   process.exit(1);
@@ -28,11 +32,11 @@ const r = await seedSample({
   svc: async (fn, p) => callService({ ingest_bank_txn: ingestBankTxn }[fn], p),
   ensureUser: async (email, name) => {
     const ex = ctx.db.prepare('select id from users where email = ?').get(email);
-    return ex ? ex.id : ctx.db.transaction(() => signUp({ email, password: PASSWORD, name }))().id;
+    return ex ? ex.id : ctx.db.transaction(() => signUp({ email, password: account.password, name }))().id;
   },
   setUser: (u) => { uid = u; },
   owner,
   today: today(),
   onProgress: (m) => console.log(m),
 });
-console.log(`Xong. Hợp đồng ${r.contract.code}. Đăng nhập thử: chu.cuahang@demo.vn hoặc lan.nhanvien@demo.vn · mật khẩu: ${PASSWORD}`);
+console.log(`Xong. Hợp đồng ${r.contract.code}. Đăng nhập: ${account.email} (mật khẩu ${account.fromEnv ? 'trong .env' : 'mặc định, xem Bảng điều khiển'})`);

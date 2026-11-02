@@ -1,6 +1,8 @@
 // Dữ liệu mẫu theo giấy tờ thật: chạy toàn bộ rồi đối chiếu các số in trên hợp đồng, biên bản, hóa đơn, bảng đặt xưởng, báo giá — chạy: node test/sample.test.js
 import { freshDb, makeApi, suite, finish, TODAY } from './harness.js';
 import { seedSample } from '../scripts/sample-seed-data.js';
+import { demoFlag } from '../src/domain/books.js';
+import { ensureAdmin, hashPassword, signIn, SAMPLE_STAFF_EMAIL } from '../src/lib/auth.js';
 
 freshDb();
 const api = makeApi();
@@ -47,5 +49,16 @@ for (const [b, name] of [[TH, 'Thanh Hải'], [VG, 'Vũ Gia'], [AN, 'Anamtile']]
 }
 C('Thanh Hải: đủ hàng bảng giá và biến thể', (await api.q('products', TH)).length, 198);
 C('Vũ Gia: có tiền về đã ghi và chờ xử lý', (await api.q('bank_txns', VG)).map((t) => t.status).sort(), ['cho_xu_ly', 'da_ghi']);
+
+G('Tài khoản quản trị trong chế độ dữ liệu mẫu');
+demoFlag.on = true;
+await api.sql('update books set is_demo = 1');
+const staff = await api.sql(`select id from users where email = ?`, [SAMPLE_STAFF_EMAIL]);
+await api.sql(`update users set password_hash = ? where id = ?`, [hashPassword('cu123456'), staff[0].id]);
+ensureAdmin('quantri@gomsu.vn', 'matkhau1');
+ensureAdmin('quantri@gomsu.vn', 'matkhau1');
+C('Khởi động nhiều lần không tạo thêm sổ', (await api.sql('select count(*) n from books'))[0].n, 3);
+C('Quản trị là chủ cả 3 sổ mẫu', (await api.sql(`select count(*) n from book_members m join users u on u.id = m.user_id where u.email = 'quantri@gomsu.vn' and m.role = 'owner'`))[0].n, 3);
+C('Nhân viên mẫu đăng nhập bằng mật khẩu quản trị', signIn({ email: SAMPLE_STAFF_EMAIL, password: 'matkhau1' }).id, staff[0].id);
 
 finish('Dữ liệu mẫu theo giấy tờ thật');
