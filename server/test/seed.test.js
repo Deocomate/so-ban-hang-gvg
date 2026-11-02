@@ -30,4 +30,11 @@ C('Vũ Gia: có vận đơn SPX và BEST', [ships.some((s) => s.carrier === 'SPX
 const txns = await api.q('bank_txns', r.VG);
 C('Vũ Gia: có tiền về đã ghi và chờ xử lý', [txns.some((t) => t.status === 'da_ghi'), txns.some((t) => t.status === 'cho_xu_ly')], [true, true]);
 
+G('Người đăng ký sau không tạo thêm sổ mẫu trùng');
+const nBooks = (await api.sql('select count(*) n from books'))[0].n;
+api.as(await api.user('nguoi.moi@demo.vn'));
+const err = await api.call('bootstrap').then(() => '', (e) => e.message);
+C('Báo chưa được cấp quyền', /chưa được cấp quyền/.test(err), true);
+C('Số sổ không đổi', (await api.sql('select count(*) n from books'))[0].n, nBooks);
+
 finish('Dữ liệu mẫu');

@@ -68,10 +68,11 @@ export function createBook(name, short, owner) {
 }
 
 // Lần đầu đăng nhập: nếu hệ thống chưa có sổ nào, người đầu tiên thành chủ cửa hàng của cả 3 sổ.
+// Chế độ chạy thử: sổ mẫu cũng tính là đã có sổ, để người đăng ký sau không tạo thêm bộ sổ trùng tên.
 export function bootstrap() {
   if (!ctx.uid) fail('Bạn chưa đăng nhập', 401);
   if (!one(`select 1 from book_members where user_id = ?`, ctx.uid)) {
-    if (one(`select 1 from books where is_demo = 0`)) {
+    if (one(`select 1 from books ${demoFlag.on ? '' : 'where is_demo = 0'}`)) {
       fail('Tài khoản này chưa được cấp quyền vào sổ nào. Hãy nhờ chủ cửa hàng thêm email của bạn trong Cài đặt → Người dùng.', 403);
     }
     createDefaultBooks(ctx.uid);
