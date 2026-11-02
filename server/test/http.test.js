@@ -37,7 +37,7 @@ G('2. Gọi RPC');
 C('Không có token → 401', (await post('/api/rpc/bootstrap', {})).status, 401);
 C('Token giả → 401', (await rpc('abc.def', 'bootstrap')).status, 401);
 r = await rpc(t1, 'bootstrap');
-C('Người đầu tiên thành chủ 2 sổ', [r.status, r.body.length], [200, 2]);
+C('Người đầu tiên thành chủ 3 sổ', [r.status, r.body.length], [200, 3]);
 const VG = r.body.find((b) => b.short_name === 'VG').id;
 C('Hàm không có trong danh sách → 404', (await rpc(t1, 'ingest_bank_txn', {})).status, 404);
 r = await rpc(t1, 'save_party', { book_id: VG, type: 'kh', name: '' });
@@ -75,7 +75,7 @@ C('Chưa có thì tạo', ensureAdmin('Admin@GomSu.vn', 'quantri1'), { email: 'a
 r = await post('/api/auth/login', { email: 'admin@gomsu.vn', password: 'quantri1' });
 const ta = r.body.token;
 C('Đăng nhập được bằng mật khẩu trong .env', r.status, 200);
-C('Là chủ của cả 2 sổ đã có', (await rpc(ta, 'my_books')).body.map((b) => b.role), ['owner', 'owner']);
+C('Là chủ của cả 3 sổ đã có', (await rpc(ta, 'my_books')).body.map((b) => b.role), ['owner', 'owner', 'owner']);
 C('Khởi động lại, mật khẩu không đổi → giữ nguyên', ensureAdmin('admin@gomsu.vn', 'quantri1').action, 'giữ nguyên');
 C('… và không bị đăng xuất', (await rpc(ta, 'my_books')).status, 200);
 C('Đổi mật khẩu trong .env → đặt lại', ensureAdmin('admin@gomsu.vn', 'quantri2').action, 'đã đặt lại mật khẩu');
@@ -88,8 +88,8 @@ C('Mật khẩu quá ngắn bị từ chối', /ít nhất 6/.test(adminErr), tr
 server.close();
 openDb(':memory:');
 ensureAdmin('admin@gomsu.vn', 'quantri1');
-C('CSDL trống: tạo sẵn 2 sổ cho quản trị (người đăng ký sau không chiếm quyền chủ)',
+C('CSDL trống: tạo sẵn 3 sổ cho quản trị (người đăng ký sau không chiếm quyền chủ)',
   (await import('../src/lib/context.js')).all(`select b.short_name, m.role from books b join book_members m on m.book_id = b.id order by b.short_name`),
-  [{ short_name: 'TH', role: 'owner' }, { short_name: 'VG', role: 'owner' }]);
+  [{ short_name: 'AN', role: 'owner' }, { short_name: 'TH', role: 'owner' }, { short_name: 'VG', role: 'owner' }]);
 
 finish('HTTP · đăng nhập · webhook');

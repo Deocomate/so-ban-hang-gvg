@@ -12,6 +12,7 @@
     "dev": "node --watch src/index.js",
     "test": "node test/run-all.js",
     "seed:demo": "node scripts/seed-demo.js",
+    "seed:sample": "node scripts/seed-sample.js",
     "reset-password": "node scripts/reset-password.js"
   },
   "dependencies": {

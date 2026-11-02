@@ -2,10 +2,11 @@
 import { ctx, fail, one, run, json, nowIso } from '../lib/context.js';
 import { requirePerm } from './access.js';
 
-const REF_TABLES = { order: 'sales_orders', delivery: 'deliveries', payment: 'payments' };
+const REF_TABLES = { order: 'sales_orders', delivery: 'deliveries', payment: 'payments', contract: 'contracts', quote: 'quotes' };
 const FIELDS = ['recv_name', 'recv_phone', 'recv_address', 'driver_name', 'driver_phone', 'handover_rep', 'goods_condition', 'box_total', 'old_debt',
   'doc_date', 'note', 'place', 'reason', 'payer_name', 'payer_address', 'attach', 'recv_party', 'date_hoa_don', 'date_don_dat_hang', 'date_bien_ban',
-  'date_phieu_xuat_kho'];
+  'date_phieu_xuat_kho', 'profile_hoa_don', 'profile_don_dat_hang', 'profile_bien_ban', 'profile_phieu_xuat_kho', 'profile_phieu_thu', 'profile_hd_van_chuyen', 'profile_de_nghi_tam_ung', 'profile_doi_chieu_sl', 'profile_doi_chieu_tt', 'profile_de_nghi_tt',
+  'date_hd_van_chuyen', 'date_de_nghi_tam_ung', 'date_doi_chieu_sl', 'date_doi_chieu_tt', 'date_de_nghi_tt', 'vehicle', 'id_no', 'transit_days', 'freight_note', 'pay_at', 'carrier_party', 'carrier_address'];
 
 function checkRef(book, type, id) {
   const t = REF_TABLES[type];

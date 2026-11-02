@@ -58,12 +58,13 @@ create table if not exists products (
   book_id text not null references books(id) on delete cascade,
   sku text not null,
   name text not null,
-  category text, pattern text, size text, color text,
+  category text, brand text, pattern text, size text, color text,
   unit text not null default 'Cái',
   image_url text,
   price1 real not null default 0,
   price2 real not null default 0,
   price3 real not null default 0,
+  price4 real not null default 0,
   low_stock real not null default 0,
   is_kit integer not null default 0,
   active integer not null default 1,
@@ -75,6 +76,9 @@ create table if not exists products (
   units_per_pack real check (units_per_pack is null or units_per_pack > 0),
   pack_weight real check (pack_weight is null or pack_weight >= 0),   -- kg mỗi thùng/hộp
   unit_weight real check (unit_weight is null or unit_weight >= 0),   -- kg mỗi đơn vị (viên, cái…)
+  material text,
+  norm_m2 real check (norm_m2 is null or norm_m2 >= 0),               -- định mức theo m²
+  norm_m real check (norm_m is null or norm_m >= 0),                  -- định mức theo mét dài
   created_at text not null,
   updated_at text not null
 );
@@ -93,12 +97,14 @@ create table if not exists customers (
   code text not null,
   name text not null,
   phone text, address text, contact text, kind text,
-  price_tier integer not null default 1 check (price_tier between 1 and 3),
+  price_tier integer not null default 1 check (price_tier between 1 and 4),
   credit_days integer not null default 0,
   credit_limit real not null default 0,
   note text,
   active integer not null default 1,
-  created_at text not null
+  created_at text not null,
+  extra text not null default '{}',      -- email, facebook, thông tin xuất hóa đơn, địa chỉ giao hàng…
+  stage text not null default 'moi'      -- moi / tu_van (nhân viên cập nhật cho phễu bán hàng)
 );
 create unique index if not exists customers_code_uq on customers (book_id, lower(code));
 
@@ -154,7 +160,8 @@ create table if not exists sales_orders (
   note text,
   cancel_reason text,
   created_by text, created_at text not null,
-  confirmed_at text, cancelled_at text
+  confirmed_at text, cancelled_at text,
+  vat_rate real not null default 0 check (vat_rate >= 0 and vat_rate <= 100)
 );
 create unique index if not exists sales_orders_code_uq on sales_orders (book_id, code);
 
@@ -183,7 +190,8 @@ create table if not exists deliveries (
   delivery_date text not null,
   shipping_fee real not null default 0,
   note text,
-  created_by text, created_at text not null
+  created_by text, created_at text not null,
+  deposit_used real not null default 0 check (deposit_used >= 0)   -- tiền cọc khấu trừ vào hóa đơn của đợt này
 );
 create index if not exists deliveries_order_idx on deliveries (order_id);
 
@@ -515,12 +523,115 @@ create index if not exists carrier_webhook_log_idx on carrier_webhook_log (recei
 -- ---------- THÔNG TIN RIÊNG CỦA CHỨNG TỪ IN ----------
 create table if not exists doc_info (
   book_id text not null references books(id) on delete cascade,
-  ref_type text not null check (ref_type in ('order','delivery','payment')),
+  ref_type text not null check (ref_type in ('order','delivery','payment','contract','quote')),
   ref_id text not null,
   data text not null default '{}',
   updated_by text, updated_at text not null,
   primary key (ref_type, ref_id)
 );
+
+-- ---------- LÁI XE & CÔNG NỢ LÁI XE ----------
+create table if not exists drivers (
+  id text primary key,
+  book_id text not null references books(id) on delete cascade,
+  code text not null,
+  name text not null,
+  phone text, plate text, id_no text, note text,
+  active integer not null default 1,
+  created_at text not null
+);
+create unique index if not exists drivers_code_uq on drivers (book_id, lower(code));
+
+-- Một chuyến vận chuyển. Khoản phải trả lái xe là 1 chi phí (expense_id), tiền trả đi qua phiếu chi như mọi chi phí khác.
+create table if not exists driver_trips (
+  id text primary key,
+  book_id text not null references books(id) on delete cascade,
+  code text not null,
+  order_id text references sales_orders(id),
+  delivery_id text references deliveries(id),
+  driver_id text not null references drivers(id),
+  trip_date text not null,
+  amount real not null check (amount >= 0),
+  payer text not null default 'khach' check (payer in ('khach','cua_hang')),
+  collect text not null default 'hoa_don' check (collect in ('hoa_don','truc_tiep')),
+  expense_id text references expenses(id),
+  note text,
+  created_by text, created_at text not null
+);
+create index if not exists driver_trips_order_idx on driver_trips (order_id);
+
+-- ---------- BÁO GIÁ (độc lập, không ảnh hưởng tồn kho hay công nợ) ----------
+create table if not exists quotes (
+  id text primary key,
+  book_id text not null references books(id) on delete cascade,
+  code text not null,
+  quote_date text not null,
+  status text not null default 'nhap' check (status in ('nhap','da_gui','chot','huy')),
+  template text not null default 'ngoi' check (template in ('ngoi','mosaic')),
+  customer_id text references customers(id),
+  customer_name text not null,
+  address text, site text,
+  profile_id text,
+  body text not null default '{}',       -- nhóm hàng, dòng hàng, lưu ý, VAT, vận chuyển
+  total real not null default 0,
+  order_id text references sales_orders(id),
+  created_by text, created_at text not null, updated_at text
+);
+create unique index if not exists quotes_code_uq on quotes (book_id, code);
+
+-- ---------- HỢP ĐỒNG: lớp giấy tờ gắn 1-1 với đơn đặt hàng, dùng chung đợt giao, cọc, tồn kho của đơn ----------
+create table if not exists contracts (
+  id text primary key,
+  book_id text not null references books(id) on delete cascade,
+  code text not null,
+  order_id text not null unique references sales_orders(id),
+  sign_date text not null,
+  profile_id text,
+  rep_name text, rep_title text, tax_code text,
+  transport_included integer not null default 0,
+  ship_unit text, ship_fee_note text, ship_payer text, ship_plan text,
+  advance_amount real not null default 0 check (advance_amount >= 0),
+  advance_note text,
+  advance_date text,
+  reconciled_at text,
+  terms text, note text,
+  created_by text, created_at text not null, updated_at text
+);
+create unique index if not exists contracts_code_uq on contracts (book_id, code);
+
+-- Tệp đính kèm (bản scan hợp đồng, hóa đơn đầu vào…): lưu trong CSDL nên đi cùng bản sao lưu hằng đêm
+create table if not exists attachments (
+  id text primary key,
+  book_id text not null references books(id) on delete cascade,
+  ref_type text not null check (ref_type in ('contract','order','quote','tax_invoice')),
+  ref_id text not null,
+  name text not null,
+  mime text,
+  size integer not null,
+  data blob not null,
+  created_by text, created_at text not null
+);
+create index if not exists attachments_ref_idx on attachments (ref_type, ref_id);
+
+-- ---------- HÓA ĐƠN ĐẦU VÀO / ĐẦU RA (kho chứng từ dùng chung Mua hàng và Thuế) ----------
+create table if not exists tax_invoices (
+  id text primary key,
+  book_id text not null references books(id) on delete cascade,
+  direction text not null check (direction in ('vao','ra')),
+  inv_no text not null,
+  inv_date text not null,
+  party_name text, party_tax text,
+  profile_id text,
+  amount real not null check (amount >= 0),          -- tiền trước thuế
+  vat_rate real not null default 0,
+  vat_amount real not null default 0,
+  supplier_id text references suppliers(id),
+  order_id text references sales_orders(id),
+  category text, note text,
+  voided integer not null default 0,
+  created_by text, created_at text not null
+);
+create index if not exists tax_invoices_book_idx on tax_invoices (book_id, direction, inv_date);
 
 -- ---------- NHẬT KÝ CHỈNH SỬA ----------
 create table if not exists audit_log (

@@ -185,7 +185,7 @@ export function PoDetail({ id, onClose }) {
         {d.status === 'nhap' && <Btn kind="soft" busy={busy} onClick={() => run('confirm_purchase_order', { id }, 'Đã xác nhận đơn nhập')}>Xác nhận</Btn>}
         {can('thu_chi') && d.status !== 'nhap' && (d.remaining_to_pay > 0 || payKind === 'ncc_hoan') && <Btn kind="soft" icon="out" onClick={() => open('payment', { kind: payKind, party_id: d.supplier_id,
           alloc: { doc_type: 'don_mua', doc_id: d.id, code: d.code, amount: payKind === 'tra_ncc' ? d.remaining_to_pay : d.paid_net - d.received_value } })}>{payKind === 'tra_ncc' ? (d.received_value === 0 ? 'Đặt cọc / trả tiền' : 'Trả tiền NCC') : 'NCC hoàn tiền'}</Btn>}
-        {d.received_value > 0 && <Btn icon="back" onClick={() => open('po-return', { po: d })}>Trả hàng NCC</Btn>}
+        {d.received_value > 0 && <Btn icon="return" onClick={() => open('po-return', { po: d })}>Trả hàng NCC</Btn>}
         {d.status === 'xac_nhan' && d.remaining_qty > 0 && <Btn kind="primary" icon="in" onClick={() => open('receive', { po: d })}>Nhận hàng</Btn>}
       </>}>
       {d.kind === 'dat_sx' && d.status === 'xac_nhan' && d.remaining_qty > 0 && (

@@ -10,13 +10,13 @@ import { auditTriggers, dropAuditTriggers } from '../db/index.js';
 const TABLES = ['funds', 'products', 'kit_items', 'customers', 'suppliers', 'opening_debts', 'sales_orders', 'sales_order_lines', 'deliveries',
   'delivery_lines', 'sales_returns', 'sales_return_lines', 'purchase_orders', 'purchase_order_lines', 'goods_receipts', 'goods_receipt_lines',
   'supplier_returns', 'supplier_return_lines', 'stock_adjustments', 'stock_adjustment_lines', 'stock_moves', 'payments', 'payment_allocations',
-  'expenses', 'shipments', 'shipment_events', 'bank_txns', 'notifications', 'doc_info', 'doc_counters'];
+  'expenses', 'shipments', 'shipment_events', 'bank_txns', 'notifications', 'doc_info', 'doc_counters', 'drivers', 'driver_trips', 'quotes', 'contracts', 'tax_invoices'];
 // Bảng có khóa số tự tăng: bỏ khóa cũ (tránh trùng với sổ khác), giữ thứ tự ghi
 const AUTO_ID = new Set(['stock_moves', 'shipment_events', 'notifications']);
 // Bảng đã có chứng từ thì không cho nhập đè
 const TXN_TABLES = ['sales_orders', 'purchase_orders', 'payments', 'stock_moves', 'expenses', 'opening_debts', 'stock_adjustments', 'shipments'];
 // Danh mục mặc định của sổ trống, xóa trước khi nhập
-const CLEAR = ['doc_info', 'notifications', 'bank_txns', 'kit_items', 'products', 'customers', 'suppliers', 'funds', 'doc_counters'];
+const CLEAR = ['tax_invoices', 'contracts', 'quotes', 'driver_trips', 'drivers', 'doc_info', 'notifications', 'bank_txns', 'kit_items', 'products', 'customers', 'suppliers', 'funds', 'doc_counters'];
 
 // Thời điểm Postgres ("2026-10-12 08:00:00.123456+00", "…T…+07:00") → ISO UTC giống dữ liệu do máy chủ này ghi
 const TS_RE = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}(:?\d{2})?)$/;

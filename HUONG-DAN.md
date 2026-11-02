@@ -1,6 +1,6 @@
 # Sổ Bán Hàng Gốm — hướng dẫn triển khai và sử dụng
 
-Phần mềm quản lý bán hàng cho **Gốm sứ Thanh Hải** và **Gốm Vũ Gia**. Mỗi thương hiệu là **một sổ riêng**: hàng hóa, khách hàng, quỹ tiền và báo cáo không lẫn vào nhau. Một tài khoản chủ có thể chuyển qua lại giữa hai sổ.
+Phần mềm quản lý bán hàng cho **Gốm sứ Thanh Hải**, **Gốm Vũ Gia** và **Anamtile**. Mỗi thương hiệu là **một sổ riêng**: hàng hóa, khách hàng, quỹ tiền và báo cáo không lẫn vào nhau. Một tài khoản chủ có thể chuyển qua lại giữa các sổ.
 
 ## 1. Trong gói này có gì
 
@@ -8,7 +8,7 @@ Phần mềm quản lý bán hàng cho **Gốm sứ Thanh Hải** và **Gốm V�
 |---|---|
 | `server/` | Máy chủ API (Node.js + SQLite): toàn bộ quy tắc tính toán, phân quyền, báo cáo, đăng nhập, nhận tiền về SePay, nhận trạng thái vận đơn, thông báo điện thoại, lịch tự động, sao lưu hằng đêm. |
 | `server/src/db/` | Cấu trúc cơ sở dữ liệu (`schema.sql`) và các bảng tổng hợp (`views.sql`). Máy chủ tự tạo khi khởi động lần đầu. |
-| `server/test/` | Bộ kiểm thử: nghiệp vụ bán hàng (146 phép), vận chuyển · tiền về · thông báo (126), chi phí (34), chứng từ và trọng lượng (25), dữ liệu mẫu (12), nhập bản sao lưu (14), HTTP · đăng nhập · webhook (34). |
+| `server/test/` | Bộ kiểm thử: nghiệp vụ bán hàng (146 phép), vận chuyển · tiền về · thông báo (126), chi phí (34), chứng từ và trọng lượng (25), dữ liệu mẫu (12), nhập bản sao lưu (14), quy trình báo giá · hợp đồng · hóa đơn (40), HTTP · đăng nhập · webhook (34). |
 | `web/` | Giao diện (React + Vite). Khi build Docker, giao diện được dựng sẵn và máy chủ API trả luôn (không cần nginx). |
 | `Dockerfile`, `docker-compose.yml` | Đóng gói cả giao diện và API vào **một** container, chạy bằng Docker (Coolify). |
 | `.env.example` | Danh sách biến cấu hình (khóa SePay, khóa thông báo…). |
@@ -29,11 +29,13 @@ Cơ sở dữ liệu là **một tệp SQLite** (`/data/gomsu.db` trong Docker v
 >
 > Chạy trên máy tính (cần Node.js 20+): ở thư mục gốc chạy `npm run setup` (một lần, cài thư viện cho `server/` và `web/`), sau đó mỗi lần chỉ cần `npm run dev`, nó chạy cùng lúc API (cổng 3000) và giao diện, rồi mở http://localhost:5173. Bấm Ctrl+C để dừng cả hai. Dữ liệu trên máy nằm ở `server/data/gomsu.db`.
 >
+> **Dữ liệu mẫu theo giấy tờ thật (chỉ trên máy)**: khi các sổ chưa có hàng hóa, chạy `npm run seed:sample` ở thư mục gốc. Lệnh tự sao lưu `server/data/gomsu.db` rồi nạp bảng giá, khách hàng, nhà cung cấp, hợp đồng 1009, hóa đơn, bảng đặt xưởng, báo giá vào cả 3 sổ. Đăng nhập `chu.cuahang@demo.vn` (chủ) hoặc `lan.nhanvien@demo.vn` (nhân viên), mật khẩu `demo1234`. Giá vốn, tồn đầu kỳ, số dư quỹ, chi phí, số hóa đơn và cước xe là số giả định vì giấy tờ không có.
+>
 > **Bản chạy thử có dữ liệu mẫu**: triển khai một bản riêng với `DEMO_MODE=true`, rồi chạy một lần `docker compose exec app npm run seed:demo` (chỉ chạy trên cơ sở dữ liệu trống). Đăng nhập `chu.cuahang@demo.vn` / `demo1234`.
 
 ### Bước 2 — Tạo tài khoản chủ (làm NGAY sau khi đưa lên)
 1. Mở địa chỉ web → **Tạo tài khoản mới** bằng email của anh.
-2. **Người đăng ký đầu tiên tự động thành chủ** của cả 2 sổ (Thanh Hải và Vũ Gia, đã cài sẵn thuế 1% GTGT + 17% TNCN, 3 mức giá, kênh bán, các bước sản xuất).
+2. **Người đăng ký đầu tiên tự động thành chủ** của cả 3 sổ (Thanh Hải, Vũ Gia và Anamtile, đã cài sẵn thuế 1% GTGT + 17% TNCN, các mức giá, kênh bán, các bước sản xuất).
 3. Từ người thứ hai trở đi, đăng ký xong sẽ **không thấy sổ nào** cho tới khi chủ thêm email đó trong **Cài đặt → Người dùng & quyền**. Vì vậy người lạ có đăng ký cũng không xem được gì. Khi đã đủ tài khoản, có thể đặt `ALLOW_SIGNUP=false` để tắt hẳn việc đăng ký.
 
 ### Bước 3 — Thêm nhân viên
@@ -46,7 +48,7 @@ Cơ sở dữ liệu là **một tệp SQLite** (`/data/gomsu.db` trong Docker v
 - Mỗi lần khởi động, máy chủ sẽ:
   - tạo tài khoản này nếu chưa có;
   - cho tài khoản này làm **chủ của mọi sổ**;
-  - tạo luôn 2 sổ nếu hệ thống chưa có sổ nào, nên người khác đăng ký trước cũng không chiếm được quyền chủ.
+  - tạo luôn 3 sổ nếu hệ thống chưa có sổ nào, nên người khác đăng ký trước cũng không chiếm được quyền chủ.
 - Muốn đổi mật khẩu thì sửa `ADMIN_PASSWORD` rồi khởi động lại. Các máy đang đăng nhập tài khoản này sẽ phải đăng nhập lại.
 - Nếu anh đổi mật khẩu trong **Cài đặt → Tài khoản của tôi**, lần khởi động sau mật khẩu sẽ quay về giá trị trong `.env`. Vì vậy hãy luôn đổi ở `.env`.
 - Dòng log khi khởi động cho biết tài khoản đã được tạo, đã đặt lại mật khẩu, hay giữ nguyên.
@@ -63,9 +65,9 @@ Cơ sở dữ liệu là **một tệp SQLite** (`/data/gomsu.db` trong Docker v
 
 Làm lần lượt trong **từng sổ** (chọn sổ ở thanh trên cùng trước):
 
-1. **Cài đặt → Thông tin sổ**: kiểm tra tên sổ, thuế, tên 3 mức giá, địa chỉ và điện thoại in trên phiếu.
+1. **Cài đặt → Thông tin sổ**: kiểm tra tên sổ, thuế, tên các mức giá (3 mức bắt buộc, mức 4 có thể để trống), địa chỉ và điện thoại in trên phiếu.
 2. **Cài đặt → Quỹ tiền**: nhập số dư đầu kỳ của Tiền mặt và Tài khoản ngân hàng (thêm quỹ nếu cần, ví dụ "Ví TikTok").
-3. **Sản phẩm → Nhập từ Excel**: dùng file có sẵn của cửa hàng, hoặc `mau-excel/mau-hang-hoa_ThanhHai.xlsx` (hoặc `_VuGia`). Các cột gồm: tên hàng hóa, chủng loại, mẫu, kích thước, màu sắc, ĐVT, giá vốn, 3 giá bán, số lượng tồn.
+3. **Sản phẩm → Nhập từ Excel**: dùng file có sẵn của cửa hàng, hoặc `mau-excel/mau-hang-hoa_ThanhHai.xlsx` (hoặc `_VuGia`). Các cột gồm: tên hàng hóa, chủng loại, thương hiệu, mẫu, kích thước, màu sắc, ĐVT, giá vốn, các mức giá bán, số lượng tồn.
    - Mỗi dòng là một biến thể và có một mã SKU riêng. Để trống SKU thì hệ thống tự cấp mã.
    - Số lượng × giá vốn được ghi thành **phiếu Tồn đầu kỳ**. Phiếu này không tính vào doanh thu hay công nợ.
    - Sau khi ghi có **bảng đối chiếu** giữa "Theo file" và "Đã ghi vào sổ" (số mã, tổng số lượng, tổng giá trị), mỗi dòng ghi Khớp hoặc Lệch.
@@ -96,6 +98,16 @@ Quy tắc khi nhập:
 - **Nhập lại cùng file** không nhân đôi: mọi dòng báo Không đổi.
 
 File tải về từ nút **Xuất Excel** ở trang Hàng hóa, Khách hàng, Nhà cung cấp nhập lại được ngay: sửa giá hoặc thông tin trong Excel rồi nhập lại. Các cột chỉ để xem như Còn phải thu, Quá hạn sẽ được báo là không nhập.
+
+### Mức giá 4 và bán khi chưa có tồn
+
+- **Mức giá 4:** bật bằng cách đặt tên ở **Cài đặt → Mức giá bán**. Sổ Thanh Hải có sẵn mức "Giá đại lý II". Khi đó sản phẩm, khách hàng, đơn hàng và file Excel đều có thêm mức này. Muốn bỏ thì xóa tên mức 4, sau khi đã đổi mức giá của các khách đang dùng nó.
+- **Bán khi chưa có tồn:** mặc định bị chặn. Tick **Cho phép giao vượt số tồn kho** trong Cài đặt của từng sổ. Sau đó tài khoản chủ cửa hàng giao ngay được ở màn tạo đơn; ở màn giao hàng thì tick thêm ô cho phép. Tài khoản nhân viên vẫn bị chặn.
+- **Khi bán vượt tồn:** tồn kho bị âm và hiện "âm kho" cho đến khi nhập hàng về. Phần chênh lệch được tính vào giá vốn lúc nhập, nên lãi của các đơn đó có thể chưa chính xác.
+
+### Khi cập nhật phần mềm
+
+Nếu bản mới đổi cấu trúc dữ liệu, máy chủ tự sao lưu rồi nâng cấp khi khởi động. Bản sao nằm cạnh file dữ liệu, tên kết thúc bằng `.truoc-nang-cap-v1.bak`.
 
 ## 4. Quy tắc tính (đã kiểm thử)
 
@@ -261,7 +273,7 @@ Có 5 loại chứng từ, xuất ra PDF khổ A4, dựng theo đúng mẫu cử
   - Khai báo đơn vị phát hành: tên, địa chỉ, điện thoại, email, website, dòng số tài khoản, người đại diện, logo. Có thể khai nhiều đơn vị (ví dụ Hộ kinh doanh gốm sứ Mai Hiếu và Công ty TNHH SX&TM Thanh Hải).
   - Với từng loại chứng từ, chọn đơn vị phát hành và dấu phân cách hàng nghìn (24,000,000 hay 24.000.000).
   - Sửa được nội dung ghi chú / chính sách đổi trả ở cuối hóa đơn, dòng cuối đơn đặt hàng và đoạn cam kết cuối biên bản. Bọc chữ trong `**hai dấu sao**` để in đậm.
-  - Mỗi sổ (Thanh Hải, Vũ Gia) có mẫu riêng.
+  - Mỗi sổ (Thanh Hải, Vũ Gia, Anamtile) có mẫu riêng. Sổ mới có sẵn 2 đơn vị đứng tên là Công ty Thanh Hải và HKD Mai Hiếu; khi xuất chứng từ, đổi đơn vị ở mục **Đơn vị đứng tên**.
 - **Quy cách đóng gói:** trong sản phẩm, điền "Số viên / hộp" (ví dụ 140) và đơn vị đóng gói (hộp, thùng, kiện…). Khi đó chứng từ tự in dòng "4 hộp x 140 viên + 40 viên" và tự tính tổng số hộp (hộp lẻ tính 1 hộp). File Excel nhập hàng có thêm 2 cột "Số viên/hộp" và "Đơn vị đóng gói".
 - **Sửa trước khi tải:** bên trái bản xem trước có các ô sửa được, như ngày trên chứng từ, SĐT và địa chỉ nhận hàng, tổng số hộp, nợ cũ, lái xe, người nhận và tình trạng hàng. Bấm **Tải PDF** thì phần mềm tự lưu các ô này để lần sau mở lại vẫn còn.
 - **Số tiền trên hóa đơn:**
@@ -310,7 +322,27 @@ Bấm **Tạo đơn bán** thì màn hình tạo đơn mở toàn màn hình. Kh
 
 ## 12. Bố cục màn hình
 
-- **Thanh trên cùng:** tên sổ, nút chuyển sổ Thanh Hải / Vũ Gia, chuông thông báo, nút Cài đặt và menu tài khoản (đăng xuất).
-- **Thanh menu xanh:** Tổng quan · Hàng hóa (danh sách hàng, tồn kho & kiểm kho) · Đơn hàng (đơn bán, đơn đặt riêng, vận chuyển) · Nhập hàng · Đối tác (khách hàng, nhà cung cấp) · Sổ quỹ (phiếu thu chi, tiền về tài khoản, chi phí) · Báo cáo. Bên phải có **Tạo nhanh** (nhập hàng, thu tiền, chi tiền) và nút xanh lá **Bán hàng** mở màn hình tạo đơn (mục 10).
+- **Thanh trên cùng:** tên sổ, nút chuyển sổ Thanh Hải / Vũ Gia / Anamtile, chuông thông báo, nút Cài đặt và menu tài khoản (đăng xuất).
+- **Thanh menu (màu theo logo từng sổ):** Tổng quan · Hàng hóa (danh sách, bảng giá, tồn kho & kiểm kho) · Mua hàng (nhà cung cấp, nhập hàng / đặt xưởng, hóa đơn đầu vào, trả hàng nhập) · Báo giá · Hợp đồng · Đơn hàng (đặt hàng, hóa đơn, trả hàng, vận chuyển, lái xe & công nợ) · Khách hàng · Sổ quỹ · Báo cáo · Thuế HKD. Bên phải có **Tạo nhanh** và nút **Bán hàng**.
 - **Các trang danh sách** chia hai phần: cột lọc bên trái (trạng thái, nhóm hàng, kênh bán, thời gian…, có số đếm từng mục) và bên phải là ô tìm kiếm, nút Xuất Excel / Thêm mới và bảng. Dòng cuối bảng cộng tổng các cột tiền. Bấm vào một dòng để mở chi tiết.
 - **Trên điện thoại:** menu nằm ở thanh dưới cùng (Tổng quan, Đơn hàng, Tạo, Thu chi, Thêm). Bộ lọc thành các nút trượt ngang; bấm "Bộ lọc khác" để hiện thêm bộ lọc.
+
+## 13. Quy trình báo giá, hợp đồng, hóa đơn
+
+Ba phân hệ hoạt động độc lập; chứng từ con chỉ sinh trong từng phân hệ. Riêng báo giá có nút **Chuyển sang đơn** do nhân viên tự bấm để sao chép khách và dòng hàng, sau đó hai bên không còn phụ thuộc nhau.
+
+**Báo giá.** Chọn mẫu ngói / gốm xây dựng hoặc mẫu tranh mosaic. Mẫu ngói có nhóm hàng I, II, III; số lượng tự tính bằng khối lượng × định mức − số viên diềm (định mức khai ở từng hàng hóa); cột định mức có thể ẩn khi xuất. Lưu ý cuối báo giá sửa được từng lần; nội dung mặc định sửa ở **Cài đặt → Mẫu chứng từ**. Báo giá không giữ hàng, không ghi công nợ. Dòng tự nhập không gắn hàng hóa sẽ bị bỏ qua khi chuyển sang đơn.
+
+**Hợp đồng.** Mỗi hợp đồng gắn với một đơn đặt hàng và dùng chung đợt giao, tiền cọc, tồn kho của đơn. Tạo ở mục **Hợp đồng** hoặc nút **Lập hợp đồng** trong đơn đặt hàng. Thứ tự giấy tờ: đề nghị tạm ứng → các đợt giao (mỗi đợt có hóa đơn, biên bản giao hàng, hợp đồng vận chuyển) → đối chiếu số lượng → đối chiếu kèm thanh toán → bấm **Hoàn tất đối chiếu** → đề nghị thanh toán. Số thanh toán tính theo số lượng thực giao. Bản scan hợp đồng tải lên trong trang hợp đồng, tối đa 15 MB mỗi tệp, được lưu cùng cơ sở dữ liệu nên có trong bản sao lưu hằng đêm. Riêng tệp đính kèm không nằm trong tệp sao lưu JSON tải về.
+
+**Hóa đơn.** Nút **Thu khác** trên màn bán hàng thêm VAT và tiền vận chuyển. Thuế suất VAT đặt theo từng đơn, mặc định ở **Cài đặt**. Doanh thu báo cáo không gồm VAT của đơn; công nợ khách có gồm VAT. Khi tạo đợt giao có thể nhập số **cọc khấu trừ** cho hóa đơn đợt đó.
+
+**Lái xe.** Khách trả cùng hóa đơn hoặc cửa hàng chịu phí thì phát sinh một khoản chi phí chưa trả cho lái xe. Khách trả trực tiếp cho lái xe thì không phát sinh công nợ. Trả tiền ở **Đơn hàng → Lái xe & công nợ**, phiếu chi được ghi vào sổ quỹ như mọi chi phí khác.
+
+**Pháp nhân.** Mỗi sổ khai 2 đơn vị đứng tên (Công ty Thanh Hải, HKD Mai Hiếu) ở **Cài đặt → Mẫu chứng từ**. Khi xuất chứng từ, đổi ở mục **Đơn vị đứng tên**.
+
+**Thuế HKD.** Hóa đơn đầu vào và đầu ra nằm chung một kho chứng từ. Trang này đối soát doanh thu trên sổ với hóa đơn đầu ra theo tháng và xuất sổ ra Excel. Số thuế là ước tính để theo dõi, không thay tờ khai.
+
+**Nạp hàng hóa.** Tệp `mau-excel/hang-hoa-thanh-hai-2026.xlsx` được dựng sẵn từ các bảng giá 2026 của Thanh Hải. Xem trang **Ghi chú** trong tệp trước khi nhập.
+
+**Mục tiêu và phễu bán hàng.** Mục tiêu doanh thu tháng đặt ở **Cài đặt**. Phễu lấy khách mới, đã tư vấn (nhân viên chọn trong hồ sơ khách), đã báo giá, đã cọc, đã chốt từ chứng từ trong kỳ.

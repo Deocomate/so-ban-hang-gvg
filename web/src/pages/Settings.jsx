@@ -1,4 +1,5 @@
 import { DocTemplateSettings } from './Documents.jsx';
+import { BusinessTargets } from './CustomerFields.jsx';
 import React, { useEffect, useState } from 'react';
 import { useApp, useQ, useAction } from '../lib/store.jsx';
 import { money, dmy, dmyhm, todayVN, pct } from '../lib/format.js';
@@ -55,12 +56,13 @@ function BookSettings() {
   const { book, settings } = useApp();
   const { save, busy } = useSaveSettings();
   const [f, setF] = useState(null);
-  useEffect(() => { setF({ name: book.name, vat: (settings.vat_rate || 0) * 100, pit: (settings.pit_rate || 0) * 100, price_names: [...(settings.price_names || ['', '', ''])],
+  useEffect(() => { setF({ name: book.name, vat: (settings.vat_rate || 0) * 100, pit: (settings.pit_rate || 0) * 100, price_names: [...(settings.price_names || []), '', '', '', ''].slice(0, 4),
     allow_oversell: !!settings.allow_oversell, lock_date: settings.lock_date || '', due_warn_days: settings.due_warn_days ?? 3, fee_category: settings.fee_category || 'Phí sàn TMĐT', shop_phone: settings.shop_phone || '', shop_address: settings.shop_address || '', slip_note: settings.slip_note || '' }); }, [book.id]);
   if (!f) return <Loading />;
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
   return (
     <div className="stack-l" style={{ maxWidth: 820 }}>
+      <BusinessTargets />
       <Section title="Sổ và thuế">
         <div className="grid">
           <Field label="Tên sổ (thương hiệu)" wide><Input value={f.name} onChange={(v) => set('name', v)} /></Field>
@@ -76,8 +78,8 @@ function BookSettings() {
           <Field label="Lời nhắn cuối phiếu" wide><Input value={f.slip_note} onChange={(v) => set('slip_note', v)} placeholder="vd. Số TK: … · Cảm ơn quý khách" /></Field>
         </div>
       </Section>
-      <Section title="3 mức giá bán">
-        <div className="grid">{[0, 1, 2].map((i) => <Field key={i} label={`Mức giá ${i + 1}`}><Input value={f.price_names[i]} onChange={(v) => set('price_names', f.price_names.map((x, j) => (j === i ? v : x)))} /></Field>)}</div>
+      <Section title="Mức giá bán">
+        <div className="grid">{[0, 1, 2, 3].map((i) => <Field key={i} label={`Mức giá ${i + 1}${i === 3 ? ' (không bắt buộc)' : ''}`}><Input value={f.price_names[i]} onChange={(v) => set('price_names', f.price_names.map((x, j) => (j === i ? v : x)))} /></Field>)}</div>
         <div className="muted small">Mỗi khách hàng gắn với 1 mức giá; khi tạo đơn, giá tự điền theo mức của khách (vẫn sửa được từng dòng).</div>
       </Section>
       <Section title="Quy tắc">
@@ -88,7 +90,7 @@ function BookSettings() {
           <Field label="Nhóm chi phí cho phí sàn"><Input value={f.fee_category} onChange={(v) => set('fee_category', v)} /></Field>
         </div>
       </Section>
-      <div><Btn kind="primary" busy={busy} onClick={() => save({ vat_rate: Number(f.vat || 0) / 100, pit_rate: Number(f.pit || 0) / 100, price_names: f.price_names.map((x) => x.trim()),
+      <div><Btn kind="primary" busy={busy} onClick={() => save({ vat_rate: Number(f.vat || 0) / 100, pit_rate: Number(f.pit || 0) / 100, price_names: f.price_names.map((x) => x.trim()).filter((x, i) => i < 3 || x),
         allow_oversell: f.allow_oversell, lock_date: f.lock_date || null, due_warn_days: Number(f.due_warn_days || 0), fee_category: f.fee_category, shop_phone: f.shop_phone, shop_address: f.shop_address, slip_note: f.slip_note }, f.name)}>Lưu cài đặt</Btn></div>
     </div>
   );

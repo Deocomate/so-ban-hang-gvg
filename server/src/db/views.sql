@@ -6,6 +6,12 @@
 --  Tệp này được chạy lại mỗi lần khởi động (drop + create), không đụng dữ liệu.
 -- =====================================================================
 
+drop view if exists v_tax_invoices;
+drop view if exists v_attachments;
+drop view if exists v_contracts;
+drop view if exists v_quotes;
+drop view if exists v_drivers;
+drop view if exists v_driver_trips;
 drop view if exists v_audit;
 drop view if exists v_members;
 drop view if exists v_bank_txns;
@@ -100,7 +106,7 @@ with base as (
   from kit_items k join base c on c.id = k.component_id group by k.kit_id
 )
 select b.id, b.book_id, b.sku, b.name, b.category, b.pattern, b.size, b.color, b.unit, b.image_url,
-  b.price1, b.price2, b.price3, b.low_stock, b.is_kit, b.active, b.note, b.created_at, b.updated_at,
+  b.price1, b.price2, b.price3, b.price4, b.brand, b.low_stock, b.is_kit, b.active, b.note, b.created_at, b.updated_at,
   case when b.is_kit then coalesce(kit.on_hand, 0) else b.on_hand end as on_hand,
   case when b.is_kit then 0 else b.reserved end as reserved,
   case when b.is_kit then coalesce(kit.available, 0) else b.on_hand - b.reserved end as available,
@@ -110,7 +116,7 @@ select b.id, b.book_id, b.sku, b.name, b.category, b.pattern, b.size, b.color, b
   case when can_cost(b.book_id) then case when b.is_kit then 0 else b.stock_value end end as stock_value,
   coalesce(kit.components, '[]') as components,
   (not b.is_kit and b.active and b.on_hand - b.reserved <= b.low_stock) as is_low,
-  b.pack_unit, b.units_per_pack, b.pack_weight, b.unit_weight,
+  b.pack_unit, b.units_per_pack, b.pack_weight, b.unit_weight, b.material, b.norm_m2, b.norm_m,
   coalesce(b.unit_weight, round(b.pack_weight / nullif(b.units_per_pack, 0), 4)) as weight_per_unit
 from base b left join kit on kit.kit_id = b.id;
 
@@ -124,7 +130,7 @@ with l as (
     count(*) as line_count
   from sales_order_lines group by order_id
 ), d as (
-  select order_id, sum(shipping_fee) as ship_billed, max(delivery_date) as last_delivery_date, count(*) as delivery_count
+  select order_id, sum(shipping_fee) as ship_billed, max(delivery_date) as last_delivery_date, count(*) as delivery_count, sum(deposit_used) as deposit_used
   from deliveries group by order_id
 ), dl as (
   select d.order_id, sum(x.revenue) as goods_delivered, sum(x.cogs) as cogs_delivered
@@ -136,17 +142,21 @@ with l as (
 select o.id as order_id,
   coalesce(l.goods_gross, 0) as goods_gross,
   case when o.status = 'huy' then 0 else max(round(coalesce(l.goods_gross, 0) - o.discount), 0) end as goods_total,
+  case when o.status = 'huy' then 0 else round(max(round(coalesce(l.goods_gross, 0) - o.discount), 0) * o.vat_rate / 100.0) end as vat_total,
   case when o.status = 'huy' then 0 else max(round(coalesce(l.goods_gross, 0) - o.discount), 0)
+       + round(max(round(coalesce(l.goods_gross, 0) - o.discount), 0) * o.vat_rate / 100.0)
        + max(o.shipping_fee, coalesce(d.ship_billed, 0)) end as order_total,
   coalesce(l.eff_qty, 0) as eff_qty, coalesce(l.delivered_qty, 0) as delivered_qty,
   coalesce(l.returned_qty, 0) as returned_qty, coalesce(l.remaining_qty, 0) as remaining_qty,
   coalesce(l.line_count, 0) as line_count,
   coalesce(dl.goods_delivered, 0) as goods_delivered, coalesce(d.ship_billed, 0) as ship_billed,
-  coalesce(rt.returned_value, 0) as returned_value,
-  coalesce(dl.goods_delivered, 0) + coalesce(d.ship_billed, 0) - coalesce(rt.returned_value, 0) as delivered_value,
+  coalesce(rt.returned_value, 0) + round(coalesce(rt.returned_value, 0) * o.vat_rate / 100.0) as returned_value,
+  round(coalesce(dl.goods_delivered, 0) * o.vat_rate / 100.0) - round(coalesce(rt.returned_value, 0) * o.vat_rate / 100.0) as vat_net,
+  coalesce(dl.goods_delivered, 0) + round(coalesce(dl.goods_delivered, 0) * o.vat_rate / 100.0) + coalesce(d.ship_billed, 0)
+    - coalesce(rt.returned_value, 0) - round(coalesce(rt.returned_value, 0) * o.vat_rate / 100.0) as delivered_value,
   coalesce(dl.cogs_delivered, 0) - coalesce(rt.returned_cogs, 0) as cogs_net,
   coalesce(pd.paid_net, 0) as paid_net, pd.last_pay_date,
-  d.last_delivery_date, coalesce(d.delivery_count, 0) as delivery_count
+  d.last_delivery_date, coalesce(d.delivery_count, 0) as delivery_count, coalesce(d.deposit_used, 0) as deposit_used
 from sales_orders o
 left join l on l.order_id = o.id
 left join d on d.order_id = o.id
@@ -172,7 +182,7 @@ create view v_sales_orders as
 select o.id, o.book_id, o.code, o.kind, o.status, o.customer_id, c.code as customer_code, c.name as customer_name,
   c.phone as customer_phone, c.address as customer_address, c.price_tier,
   o.channel, o.order_date, o.due_date, o.staff, o.discount, o.shipping_fee, o.note, o.cancel_reason,
-  o.created_at, o.confirmed_at, o.cancelled_at,
+  o.created_at, o.confirmed_at, o.cancelled_at, o.vat_rate, v.vat_total, v.vat_net, v.deposit_used,
   v.goods_gross, v.goods_total, v.order_total, v.eff_qty, v.delivered_qty, v.returned_qty, v.remaining_qty, v.line_count,
   v.delivered_value, v.returned_value, v.ship_billed, v.paid_net, v.last_pay_date, v.last_delivery_date, v.delivery_count,
   v.order_total - v.returned_value as net_total,
@@ -180,7 +190,7 @@ select o.id, o.book_id, o.code, o.kind, o.status, o.customer_id, c.code as custo
   max(v.paid_net - v.delivered_value, 0) as prepaid,
   v.order_total - v.returned_value - v.paid_net as remaining_to_pay,
   case when can_cost(o.book_id) then v.cogs_net end as cogs,
-  case when can_cost(o.book_id) then round(v.delivered_value * (1 - coalesce(json_extract(b.settings, '$.vat_rate'), 0))) - v.cogs_net end as gross_profit,
+  case when can_cost(o.book_id) then round((v.delivered_value - v.vat_net) * (case when o.vat_rate > 0 then 1 else 1 - coalesce(json_extract(b.settings, '$.vat_rate'), 0) end)) - v.cogs_net end as gross_profit,
   case
     when o.status = 'nhap' then 'nhap'
     when o.status = 'huy' then 'da_huy'
@@ -233,8 +243,9 @@ left join purchase_orders po on po.id = pl.po_id;
 
 create view v_deliveries as
 select d.id, d.book_id, d.code, d.order_id, o.code as order_code, o.customer_id, c.name as customer_name, c.phone as customer_phone,
-  c.address as customer_address, d.delivery_date, d.shipping_fee, d.note, d.created_at,
-  coalesce(x.revenue, 0) as goods_revenue, coalesce(x.revenue, 0) + d.shipping_fee as total,
+  c.address as customer_address, d.delivery_date, d.shipping_fee, d.note, d.created_at, d.deposit_used, o.vat_rate,
+  coalesce(x.revenue, 0) as goods_revenue, round(coalesce(x.revenue, 0) * o.vat_rate / 100.0) as vat,
+  coalesce(x.revenue, 0) + round(coalesce(x.revenue, 0) * o.vat_rate / 100.0) + d.shipping_fee as total,
   case when can_cost(d.book_id) then x.cogs end as cogs
 from deliveries d join sales_orders o on o.id = d.order_id
 left join customers c on c.id = o.customer_id
@@ -404,7 +415,7 @@ with od as (
     coalesce(so.total_bought, 0) as total_bought, so.last_order_date
   from customers c left join od on od.party_id = c.id left join so on so.customer_id = c.id left join pay on pay.party_id = c.id
 )
-select id, book_id, code, name, phone, address, contact, kind, price_tier, credit_days, credit_limit, note, active, created_at,
+select id, book_id, code, name, phone, address, contact, kind, price_tier, credit_days, credit_limit, note, active, created_at, extra, stage,
   opening, delivered, paid, balance, max(balance, 0) as receivable, max(-balance, 0) as prepaid,
   min(overdue_raw, max(balance, 0)) as overdue, max_overdue_days, open_orders, open_value, total_bought, last_order_date
 from t;
@@ -559,3 +570,46 @@ from bank_txns t
 join books b on b.id = t.book_id or (t.book_id is null and b.id in (select value from json_each(t.candidate_books)))
 left join sales_orders o on o.id = t.order_id left join customers c on c.id = o.customer_id
 left join users u on u.id = t.handled_by left join book_members m on m.user_id = t.handled_by and m.book_id = b.id;
+
+-- ---------- LÁI XE ----------
+create view v_driver_trips as
+select t.id, t.book_id, t.code, t.order_id, o.code as order_code, c.name as customer_name, t.delivery_id, d.code as delivery_code,
+  t.driver_id, r.name as driver_name, r.phone as driver_phone, r.plate, t.trip_date, t.amount, t.payer, t.collect, t.note, t.expense_id, t.created_at,
+  coalesce(e.amount, 0) as payable_total, coalesce(e.paid, 0) as paid, coalesce(e.unpaid, 0) as unpaid
+from driver_trips t join drivers r on r.id = t.driver_id
+left join sales_orders o on o.id = t.order_id left join customers c on c.id = o.customer_id
+left join deliveries d on d.id = t.delivery_id left join v_expenses e on e.id = t.expense_id;
+
+create view v_drivers as
+select r.id, r.book_id, r.code, r.name, r.phone, r.plate, r.id_no, r.note, r.active, r.created_at,
+  coalesce(x.trips, 0) as trips, coalesce(x.total, 0) as total, coalesce(x.paid, 0) as paid, coalesce(x.unpaid, 0) as unpaid
+from drivers r left join (select driver_id, count(*) as trips, sum(payable_total) as total, sum(paid) as paid, sum(unpaid) as unpaid
+  from v_driver_trips group by driver_id) x on x.driver_id = r.id;
+
+-- ---------- BÁO GIÁ · HỢP ĐỒNG · TỆP ĐÍNH KÈM · HÓA ĐƠN THUẾ ----------
+create view v_quotes as
+select q.id, q.book_id, q.code, q.quote_date, q.status, q.template, q.customer_id, q.customer_name, q.address, q.site, q.profile_id, q.body, q.total,
+  q.order_id, o.code as order_code, q.created_at, q.updated_at, days(today(), q.quote_date) as age_days
+from quotes q left join sales_orders o on o.id = q.order_id;
+
+create view v_contracts as
+select k.id, k.book_id, k.code, k.order_id, k.sign_date, k.profile_id, k.rep_name, k.rep_title, k.tax_code, k.transport_included,
+  k.ship_unit, k.ship_fee_note, k.ship_payer, k.ship_plan, k.advance_amount, k.advance_note, k.advance_date, k.reconciled_at, k.terms, k.note, k.created_at,
+  o.code as order_code, o.status as order_status, o.customer_id, o.customer_name, o.customer_phone, o.customer_address, o.order_total, o.net_total, o.vat_rate, o.vat_total,
+  o.goods_total, o.delivered_value, o.paid_net, o.remaining_to_pay, o.eff_qty, o.delivered_qty, o.remaining_qty, o.delivery_count, o.progress, o.delivery_status, o.payment_status,
+  case when o.status = 'huy' then 'huy'
+       when o.remaining_qty = 0 and o.paid_net >= o.net_total then 'hoan_tat'
+       when k.reconciled_at is not null then 'cho_thanh_toan'
+       when o.delivered_qty > 0 then 'dang_giao'
+       else 'moi_ky' end as contract_status,
+  max(k.advance_amount - o.paid_net, 0) as advance_short,
+  (select count(*) from attachments a where a.ref_type = 'contract' and a.ref_id = k.id) as file_count
+from contracts k join v_sales_orders o on o.id = k.order_id;
+
+create view v_attachments as
+select id, book_id, ref_type, ref_id, name, mime, size, created_at from attachments;
+
+create view v_tax_invoices as
+select t.id, t.book_id, t.direction, t.inv_no, t.inv_date, t.party_name, t.party_tax, t.profile_id, t.amount, t.vat_rate, t.vat_amount,
+  t.amount + t.vat_amount as total, t.supplier_id, t.order_id, o.code as order_code, t.category, t.note, t.voided, t.created_at
+from tax_invoices t left join sales_orders o on o.id = t.order_id;

@@ -1,9 +1,0 @@
-node_modules/
-web/node_modules/
-web/dist/
-web/dist-demo/
-web/.env
-web/.env.local
-tests/last-results*.json
-.DS_Store
-supabase/.temp/

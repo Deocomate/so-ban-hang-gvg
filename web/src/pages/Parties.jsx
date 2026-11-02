@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useApp, useQ, useAction } from '../lib/store.jsx';
 import { money, dmy, todayVN, match, short } from '../lib/format.js';
 import { exportXlsx } from '../lib/excel.js';
+import { CustomerFields } from './CustomerFields.jsx';
 import { Btn, Icon, Pill, StatusPill, DELIVERY, PAYMENT, RECEIVE, Field, Input, TextArea, Select, DateInput, NumInput, Check, Search, Tabs, Loading, ErrorBox, Note, Table, Modal, KV, Section, ListPage, FilterBox, RadioList } from '../components/ui.jsx';
 
 export function PartiesPage({ type }) {
@@ -58,28 +59,24 @@ export function PartyForm({ type, id, name, onClose, onSaved }) {
   const { settings, rpc } = useApp();
   const { run, busy } = useAction();
   const isKh = type === 'kh';
-  const [f, setF] = useState({ code: '', name: name || '', phone: '', address: '', contact: '', kind: '', price_tier: 1, credit_days: 0, credit_limit: 0, note: '', active: true });
+  const [f, setF] = useState({ code: '', name: name || '', phone: '', address: '', contact: '', kind: '', price_tier: 1, credit_days: 0, credit_limit: 0, note: '', active: true, stage: 'moi', extra: {} });
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
   useEffect(() => { if (id) rpc('q', { view: isKh ? 'customers' : 'suppliers', filters: [['id', 'eq', id]] }).then(([c]) => setF((s) => ({ ...s, ...c }))); }, [id]);
-  const pn = settings.price_names || [];
   return (
-    <Modal title={id ? `Sửa ${f.name}` : isKh ? 'Thêm khách hàng' : 'Thêm nhà cung cấp'} onClose={onClose} size="md"
+    <Modal title={id ? `Sửa ${f.name}` : isKh ? 'Thêm khách hàng' : 'Thêm nhà cung cấp'} onClose={onClose} size={isKh ? 'xl' : 'md'}
       footer={<><Btn onClick={onClose}>Thôi</Btn><Btn kind="primary" busy={busy} onClick={async () => {
         const r = await run('save_party', { ...f, type, id: id || null, price_tier: Number(f.price_tier) }, (x) => 'Đã lưu ' + (x.code || f.name));
         if (r) { onSaved?.(r); onClose(); }
       }}>Lưu</Btn></>}>
-      <div className="grid">
+      {isKh ? <CustomerFields f={f} set={set} id={id} /> : <div className="grid">
         <Field label="Tên" required wide><Input value={f.name} onChange={(v) => set('name', v)} autoFocus /></Field>
         <Field label="Mã" hint={id ? '' : 'Để trống: tự cấp'}><Input value={f.code} onChange={(v) => set('code', v)} /></Field>
         <Field label="Điện thoại"><Input value={f.phone} onChange={(v) => set('phone', v)} inputMode="tel" /></Field>
         <Field label="Người liên hệ"><Input value={f.contact} onChange={(v) => set('contact', v)} /></Field>
         <Field label="Địa chỉ" wide><Input value={f.address} onChange={(v) => set('address', v)} /></Field>
-        {isKh && <Field label="Mức giá áp dụng"><Select value={String(f.price_tier)} onChange={(v) => set('price_tier', Number(v))} options={pn.map((n, i) => ({ value: String(i + 1), label: n }))} /></Field>}
-        {isKh && <Field label="Loại khách"><Input value={f.kind} onChange={(v) => set('kind', v)} placeholder="Đại lý, khách lẻ, công trình, CTV…" /></Field>}
         <Field label="Số ngày được nợ" hint="Hạn trả = ngày giao/nhận + số ngày này"><NumInput money={false} min={0} suffix="ngày" value={f.credit_days} onChange={(v) => set('credit_days', v || 0)} /></Field>
-        {isKh && <Field label="Hạn mức nợ" hint="0 = không giới hạn"><NumInput value={f.credit_limit} onChange={(v) => set('credit_limit', v || 0)} /></Field>}
         <Field label="Ghi chú" wide><TextArea value={f.note} onChange={(v) => set('note', v)} /></Field>
-      </div>
+      </div>}
       {id && <Check checked={f.active} onChange={(v) => set('active', v)}>Đang giao dịch</Check>}
     </Modal>
   );

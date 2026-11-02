@@ -3,7 +3,7 @@ import { useApp } from '../lib/store.jsx';
 import { dmy } from '../lib/format.js';
 import { saveFile } from '../lib/excel.js';
 import { Btn, Loading, ErrorBox, Note, Modal, Field, Input, TextArea, Select, DateInput, NumInput, Check, Section, Tabs, ConfirmBtn } from '../components/ui.jsx';
-import { DOC_TYPES, DEFAULT_TEXTS, docSettings, loadDocData, buildDoc, defaults, currentInfo, editableFields, infoRef, profileFromBook } from '../lib/docs/model.js';
+import { DOC_TYPES, DEFAULT_TEXTS, docSettings, loadDocData, buildDoc, defaults, currentInfo, editableFields, infoRef, profileFor, profileFromBook, PER_DELIVERY } from '../lib/docs/model.js';
 
 // Nạp phông nhúng trong PDF cho bản xem trước, để xem trước và tệp PDF giống hệt nhau
 import ArimoR from '../assets/fonts/Arimo-Regular.ttf?url';
@@ -26,12 +26,13 @@ function useDocFonts() {
   }, []);
 }
 
-const TYPES_FOR = { order: ['hoa_don', 'don_dat_hang', 'bien_ban', 'phieu_xuat_kho'], delivery: ['bien_ban', 'phieu_xuat_kho', 'hoa_don', 'don_dat_hang'], payment: ['phieu_thu'] };
+const TYPES_FOR = { quote: ['bao_gia'], contract: ['de_nghi_tam_ung', 'doi_chieu_sl', 'doi_chieu_tt', 'de_nghi_tt'], order: ['hoa_don', 'don_dat_hang', 'bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen'], delivery: ['bien_ban', 'hoa_don', 'hd_van_chuyen', 'phieu_xuat_kho', 'don_dat_hang'], payment: ['phieu_thu'] };
 const FONT_CSS = { Arimo: 'Arimo, Arial, "Helvetica Neue", sans-serif', Tinos: 'Tinos, "Times New Roman", Times, serif' };
 
 // ---------- Bản xem trước (vẽ cùng danh sách khối với tệp PDF) ----------
 const runEl = (r, i) => <span key={i} style={{ fontWeight: r.b ? 700 : undefined, fontStyle: r.i ? 'italic' : undefined, color: r.color }}>{r.text}</span>;
 function cellEl(c, i, size, tall) {
+  if (c?.image) return <td key={i} style={{ textAlign: 'center' }}><img src={c.image} alt="" style={{ maxWidth: 38, maxHeight: 38 }} /></td>;
   if (!c || (c.text === undefined && !c.runs && !c.colSpan)) return null;
   return (
     <td key={i} colSpan={c.colSpan || undefined} style={{ textAlign: c.align || 'left', fontWeight: c.b ? 700 : undefined, fontStyle: c.i ? 'italic' : undefined, verticalAlign: tall ? 'middle' : 'top' }}>
@@ -99,20 +100,23 @@ export function DocDialog({ kind, id, type: type0, onClose }) {
     return () => { alive = false; };
   }, [src.kind, src.id, reload]);
   // Biên bản / phiếu xuất kho theo từng lần giao; hóa đơn / đơn đặt hàng theo cả đơn
-  const perDelivery = type === 'bien_ban' || type === 'phieu_xuat_kho';
+  const perDelivery = PER_DELIVERY.includes(type);
   useEffect(() => {
-    if (!data || data.kind === 'payment') return;
+    if (!data || ['payment', 'contract', 'quote'].includes(data.kind)) return;
     if (!perDelivery && src.kind === 'delivery') setSrc({ kind: 'order', id: data.o.id });
   }, [type, data]);
   useEffect(() => { setEdit({}); }, [type, src.kind, src.id]);
 
-  const ready = data && (data.kind === 'payment' || !(perDelivery ? false : src.kind === 'delivery'));
+  // Đề nghị thanh toán chỉ lập sau khi đã hoàn tất đối chiếu
+  const tabTypes = types.filter((t) => t !== 'de_nghi_tt' || data?.k?.reconciled_at);
+  const ready = data && (['payment', 'contract', 'quote'].includes(data.kind) || !(perDelivery ? false : src.kind === 'delivery'));
   const fields = ready ? editableFields(type, data) : [];
   const saved = ready ? currentInfo(type, data) || {} : {};
   const info = ready ? { ...defaults(type, data, ds), ...saved, ...edit } : null;
   const doc = useMemo(() => { if (!ready) return null; try { return buildDoc(type, data, ds, info); } catch (e) { return { error: e.message }; } }, [ready, type, data, ds, JSON.stringify(info)]);
   const dirty = Object.keys(edit).length > 0;
   const canSave = data?.kind === 'payment' ? can('thu_chi') : can('ban_hang');
+  const subtitle = !data ? null : data.kind === 'payment' ? `Phiếu ${data.p.code}` : data.kind === 'quote' ? `Báo giá ${data.q.code} · ${data.q.customer_name}` : data.kind === 'contract' ? `Hợp đồng ${data.k.code} · ${data.o.customer_name}` : null;
 
   const save = async () => {
     if (!dirty || !canSave) return true;
@@ -137,26 +141,32 @@ export function DocDialog({ kind, id, type: type0, onClose }) {
   const dels = data?.dels || [];
   const orderId = data?.o?.id;
   return (
-    <Modal title="Xuất chứng từ PDF" subtitle={data ? (data.kind === 'payment' ? `Phiếu ${data.p.code}` : `Đơn ${data.o.code} · ${data.o.customer_name || ''}`) : ''} onClose={onClose} size="xl"
+    <Modal title="Xuất chứng từ PDF" subtitle={subtitle ?? (data ? `Đơn ${data.o.code} · ${data.o.customer_name || ''}` : '')} onClose={onClose} size="xl"
       footer={<>
         <span className="muted small grow">{dirty ? 'Có thay đổi chưa lưu — bấm Tải PDF sẽ tự lưu.' : 'Khổ A4 · chữ trong PDF chọn và sao chép được.'}</span>
         <Btn onClick={onClose}>Đóng</Btn>
         {canSave && <Btn disabled={!dirty} onClick={async () => { if (await save()) toast('Đã lưu thông tin chứng từ'); }}>Lưu thông tin</Btn>}
         <Btn kind="primary" icon="dl" busy={busy} disabled={!doc || !!doc?.error} onClick={download}>Tải PDF</Btn>
       </>}>
-      {types.length > 1 && <Tabs value={type} onChange={setType} tabs={types.map((t) => ({ value: t, label: DOC_TYPES[t].label }))} />}
+      {types.length > 1 && <Tabs value={type} onChange={setType} tabs={tabTypes.map((t) => ({ value: t, label: DOC_TYPES[t].label }))} />}
       <ErrorBox error={err || doc?.error} />
       {!data ? !err && <Loading /> : (
         <div className="doc-wrap">
           <div className="doc-side">
-            {perDelivery && data.kind !== 'payment' && (
+            {perDelivery && !['payment', 'contract', 'quote'].includes(data.kind) && (
               <Field label="Lập theo">
-                <Select value={src.kind === 'delivery' ? src.id : ''} onChange={(v) => setSrc(v ? { kind: 'delivery', id: v } : { kind: 'order', id: orderId })}
+                <Select value={src.kind === 'delivery' ? src.id : ''} onChange={(v) => setSrc(v ? { kind: 'delivery', id: v } : { kind: 'order', id: data.o.id })}
                   options={[{ value: '', label: 'Cả đơn (hàng còn trong đơn)' }, ...dels.map((d) => ({ value: d.id, label: `Phiếu giao ${d.code} · ${dmy(d.delivery_date)}` }))]} />
               </Field>
             )}
             <button className="link-btn small" onClick={() => setShowForm((x) => !x)}>{showForm ? '▾' : '▸'} Thông tin trên chứng từ</button>
             {showForm && ready && <div className="stack-s">
+              {ds.profiles.length > 1 && (
+                <Field label="Đơn vị đứng tên">
+                  <Select value={profileFor(ds, type, info).id} onChange={(v) => setEdit((s) => ({ ...s, [`profile_${type}`]: v }))}
+                    options={ds.profiles.map((p) => ({ value: p.id, label: p.legal_name || p.name }))} />
+                </Field>
+              )}
               {fields.map((f) => {
                 const v = info[f.key];
                 const set = (x) => setEdit((s) => ({ ...s, [f.key]: x }));
@@ -186,11 +196,12 @@ function FontLoader() { useDocFonts(); return null; }
 // ---------- Cài đặt → Mẫu chứng từ ----------
 const PROFILE_FIELDS = [
   ['name', 'Tên in đầu trang (IN HOA)', true], ['legal_name', 'Tên dùng trong nội dung', true], ['address', 'Địa chỉ', true], ['phone', 'Điện thoại'], ['email', 'Email'],
-  ['website', 'Website'], ['bank_line', 'Dòng số tài khoản (sau chữ “STK:”)', true], ['representative', 'Người đại diện'], ['rep_title', 'Chức danh người đại diện'],
+  ['website', 'Website'], ['tax_code', 'Mã số thuế'], ['bank_line', 'Dòng số tài khoản (sau chữ “STK:”)', true], ['representative', 'Người đại diện'], ['rep_title', 'Chức danh người đại diện'],
 ];
 const TEXT_FIELDS = {
   hoa_don: [['invoice_notes', 'Ghi chú / chính sách đổi trả (in cuối hóa đơn)', 12, 'Mỗi dòng một ý. Bọc chữ trong **hai dấu sao** để in đậm. Thụt đầu dòng bằng dấu cách để lùi vào.']],
   don_dat_hang: [['order_footer', 'Dòng cuối đơn đặt hàng', 2]],
+  bao_gia: [['quote_ngoi', 'Lưu ý mặc định - mẫu ngói', 8], ['quote_mosaic', 'Lưu ý mặc định - mẫu tranh mosaic', 8]],
   bien_ban: [['handover_closing', 'Đoạn cam kết cuối biên bản', 3], ['goods_condition', 'Tình trạng hàng hóa mặc định', 1]],
   phieu_xuat_kho: [['form_xuat', 'Mẫu số (góc phải)', 3]],
   phieu_thu: [['form_thu', 'Mẫu số phiếu thu', 3], ['form_chi', 'Mẫu số phiếu chi', 3]],

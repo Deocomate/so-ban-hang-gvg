@@ -96,11 +96,9 @@ export function ImportDialog({ kind = 'products', onClose }) {
   const cols = isProducts ? [
     { key: 'n', label: 'Dòng', render: (x) => x.__row }, stateCol,
     { key: 'sku', label: 'SKU', render: (x) => x.sku || <span className="muted">tự cấp</span> },
-    { key: 'name', label: 'Tên hàng hóa', render: (x) => <><div>{x.name}</div><div className="cell-sub">{[x.category, x.pattern, x.size, x.color, x.unit, x.units_per_pack ? `${x.units_per_pack}/${x.pack_unit || 'hộp'}` : '', x.pack_weight ? `${x.pack_weight} kg/${x.pack_unit || 'hộp'}` : '', x.unit_weight ? `${x.unit_weight} kg/${String(x.unit || 'đv').toLowerCase()}` : ''].filter(Boolean).join(' · ')}</div></> },
+    { key: 'name', label: 'Tên hàng hóa', render: (x) => <><div>{x.name}</div><div className="cell-sub">{[x.category, x.brand, x.pattern, x.size, x.color, x.unit, x.units_per_pack ? `${x.units_per_pack}/${x.pack_unit || 'hộp'}` : '', x.pack_weight ? `${x.pack_weight} kg/${x.pack_unit || 'hộp'}` : '', x.unit_weight ? `${x.unit_weight} kg/${String(x.unit || 'đv').toLowerCase()}` : ''].filter(Boolean).join(' · ')}</div></> },
     { key: 'cost', label: 'Giá vốn', align: 'right', render: (x) => money(x.cost) },
-    { key: 'p1', label: pn[0], align: 'right', render: (x) => money(x.price1) },
-    { key: 'p2', label: pn[1], align: 'right', render: (x) => money(x.price2) },
-    { key: 'p3', label: pn[2], align: 'right', render: (x) => money(x.price3) },
+    ...pn.map((label, i) => ({ key: `p${i + 1}`, label, align: 'right', render: (x) => money(x[`price${i + 1}`]) })),
     { key: 'qty', label: 'SL tồn', align: 'right', render: (x) => fq(x.qty) },
     checkCol,
   ] : [

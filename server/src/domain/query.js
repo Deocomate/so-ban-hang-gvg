@@ -6,7 +6,7 @@ import { requirePerm } from './access.js';
 const VIEWS = {
   products: '', customers: '', suppliers: '', sales_orders: '', sales_order_lines: '', deliveries: '', delivery_lines: '', sales_returns: '',
   stock_moves: '', adjustments: '', opening_debts: '', doc_payments: '', purchase_orders: '', purchase_order_lines: '', receipts: '',
-  supplier_returns: '', funds: '', payments: 'thu_chi', open_docs: '', expenses: 'chi_phi', members: 'owner', audit: 'owner', shipments: '', bank_txns: 'thu_chi',
+  supplier_returns: '', funds: '', drivers: '', driver_trips: '', quotes: '', contracts: '', attachments: '', tax_invoices: 'xem_bao_cao', payments: 'thu_chi', open_docs: '', expenses: 'chi_phi', members: 'owner', audit: 'owner', shipments: '', bank_txns: 'thu_chi',
 };
 const BOOL_COLS = new Set(['is_kit', 'active', 'is_low', 'voided', 'restock', 'is_late', 'is_final', 'has_problem', 'assigned', 'order_cancelled']);
 const IDENT = /^[a-z_][a-z0-9_]*$/;

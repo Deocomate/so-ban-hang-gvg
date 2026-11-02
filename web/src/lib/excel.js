@@ -166,6 +166,10 @@ export function productRules(priceNames = []) {
     ['sku', (k) => k === 'sku' || k.startsWith('ma sku') || k === 'ma sp' || k === 'ma hang' || k === 'ma san pham' || k === 'ma hang hoa' || k === 'ma'],
     ['name', starts('ten hang', 'ten san pham', 'ten sp', 'ten')],
     ['category', starts('chung loai', 'nhom hang', 'loai hang', 'danh muc', 'nhom')],
+    ['brand', starts('thuong hieu', 'nhan hieu')],
+    ['material', starts('chat lieu')],
+    ['norm_m2', (k) => k.startsWith('dinh muc m2') || k.startsWith('dinh muc theo m2')],
+    ['norm_m', (k) => k.startsWith('dinh muc m dai') || k.startsWith('dinh muc theo m')],
     ['color', (k, raw) => raw.startsWith('màu') || k.startsWith('mau sac') || k.startsWith('mau men') || k === 'color'],
     ['pattern', (k, raw) => raw.startsWith('mẫu') || k === 'mau ma' || k === 'kieu dang' || k === 'kieu'],
     ['units_per_pack', (k) => /^so (vien|cai|tam|chiec|luong) ?(\/|tren|moi|1) ?(hop|thung|kien|bao)/.test(k) || k.startsWith('so luong moi hop') || k === 'quy cach dong goi' || k.startsWith('dong goi')],
@@ -178,6 +182,7 @@ export function productRules(priceNames = []) {
     ['price1', (k) => k === pn[0] || ['gia ban le', 'gia le', 'gia ban 1', 'gia 1', 'gia ban tham khao', 'gia ban'].includes(k)],
     ['price2', (k) => k === pn[1] || ['gia si', 'gia ban si', 'gia dai ly', 'gia dai ly i', 'gia dai ly 1', 'gia ban 2', 'gia 2'].includes(k)],
     ['price3', (k) => k === pn[2] || ['gia cong trinh', 'gia ctv', 'gia ban 3', 'gia 3', 'gia du an'].includes(k)],
+    ['price4', (k) => k === pn[3] || ['gia dai ly ii', 'gia dai ly 2', 'gia ban 4', 'gia 4'].includes(k)],
     ['qty', (k) => ['so luong', 'sl', 'ton', 'so luong ton', 'sl ton', 'ton dau ky', 'so luong ton dau', 'ton kho', 'sl ton dau'].includes(k) || k.startsWith('so luong ton')],
     ['low_stock', starts('ton toi thieu', 'canh bao ton', 'nguong')],
     ['note', starts('ghi chu')],
@@ -205,8 +210,8 @@ export function partyRules(type) {
 export function importFields(kind, pn = []) {
   if (kind === 'products') {
     return [
-      ['sku', 'Mã SKU'], ['name', 'Tên hàng hóa'], ['category', 'Chủng loại'], ['pattern', 'Mẫu'], ['size', 'Kích thước'], ['color', 'Màu sắc / men'], ['unit', 'ĐVT'],
-      ['cost', 'Giá vốn', 'num'], ['price1', pn[0] || 'Giá 1', 'num'], ['price2', pn[1] || 'Giá 2', 'num'], ['price3', pn[2] || 'Giá 3', 'num'],
+      ['sku', 'Mã SKU'], ['name', 'Tên hàng hóa'], ['category', 'Chủng loại'], ['brand', 'Thương hiệu'], ['pattern', 'Mẫu'], ['size', 'Kích thước'], ['color', 'Màu sắc / men'], ['unit', 'ĐVT'],
+      ['cost', 'Giá vốn', 'num'], ...(pn.length ? pn : ['Giá 1', 'Giá 2', 'Giá 3']).map((label, i) => [`price${i + 1}`, label, 'num']),
       ['qty', 'Số lượng tồn', 'num'], ['low_stock', 'Tồn tối thiểu', 'num'], ['units_per_pack', 'Số viên/hộp', 'pack'], ['pack_unit', 'Đơn vị đóng gói'],
       ['pack_weight', 'Trọng lượng/thùng (kg)', 'pack'], ['unit_weight', 'Trọng lượng/viên (kg)', 'pack'], ['note', 'Ghi chú'],
     ].map(([key, label, type = 'text']) => ({ key, label, type }));
@@ -229,6 +234,7 @@ const leadNum = (v) => { if (typeof v === 'number') return v; const m = String(v
 const packWord = (v) => { const m = norm(String(v ?? '')).match(/\/\s*(thung|hop|kien|bao|pallet)\b/); return m ? { thung: 'thùng', hop: 'hộp', kien: 'kiện', bao: 'bao', pallet: 'pallet' }[m[1]] : ''; };
 const numField = (v) => (blank(v) ? null : parseNum(v));
 const parseTier = (v, pn) => { const t = norm(v); const idx = pn.findIndex((n) => norm(n) === t); return idx >= 0 ? idx + 1 : Number(v); };
+const validTier = (t, pn) => Number.isInteger(t) && t >= 1 && t <= pn.length;
 const dmyText = (v) => { const [y, m, d] = parseDateCell(v).split('-'); return `${d}/${m}/${y}`; };
 function textCell(v) { return v instanceof Date ? dmyText(v) : String(v ?? '').trim(); }
 const showValue = (type, v, pn) => (v === null || v === undefined || v === '' ? '(trống)' : type === 'tier' ? pn[v - 1] || v : typeof v === 'number' ? v.toLocaleString('vi-VN') : v);
@@ -238,7 +244,7 @@ function isBadCell(type, v, pn) {
   if (type === 'num') return Number.isNaN(parseNum(v));
   if (type === 'pack') return Number.isNaN(leadNum(v));
   if (type === 'date') return parseDateCell(v) === 'INVALID';
-  if (type === 'tier') return ![1, 2, 3].includes(parseTier(v, pn));
+  if (type === 'tier') return !validTier(parseTier(v, pn), pn);
   return false;
 }
 
@@ -270,7 +276,7 @@ export function columnIssues(kind, columns, fields, sheet, headerIdx, pn = []) {
   for (const c of on) {
     const field = fields.find((f) => f.key === c.field);
     const bad = badCells(sheet, headerIdx, c, field, pn);
-    if (bad.length) out.push({ tone: 'warn', text: `Cột ${name(c)} có ${bad.length} ô sai định dạng ${{ date: '(cần dd/mm/yyyy)', tier: '(cần 1, 2, 3 hoặc đúng tên mức giá)' }[field.type] || '(cần là số)'}, ví dụ dòng ${bad[0].row}: “${bad[0].value}”. Các dòng này sẽ bị bỏ qua, trừ khi sửa file hoặc bỏ chọn cột.` });
+    if (bad.length) out.push({ tone: 'warn', text: `Cột ${name(c)} có ${bad.length} ô sai định dạng ${{ date: '(cần dd/mm/yyyy)', tier: `(cần số 1 đến ${pn.length} hoặc đúng tên mức giá)` }[field.type] || '(cần là số)'}, ví dụ dòng ${bad[0].row}: “${bad[0].value}”. Các dòng này sẽ bị bỏ qua, trừ khi sửa file hoặc bỏ chọn cột.` });
   }
   const empty = on.filter((c) => !c.filled);
   if (empty.length) out.push({ tone: 'info', text: `Cột trống ${list(empty)}: nhập bình thường. Hàng mới để trống các ô này, dữ liệu đã có trong sổ được giữ nguyên.` });
@@ -323,10 +329,10 @@ export function validateProducts(rows, existing, pn = []) {
   const seen = new Map(); const combos = new Map();
   const out = rows.map((r) => {
     const o = {
-      __row: r.__row, sku: textCell(r.sku), name: textCell(r.name), category: textCell(r.category),
+      __row: r.__row, sku: textCell(r.sku), name: textCell(r.name), category: textCell(r.category), brand: textCell(r.brand),
       pattern: textCell(r.pattern), size: textCell(r.size), color: textCell(r.color),
       unit: textCell(r.unit), note: textCell(r.note),
-      cost: numField(r.cost), price1: numField(r.price1), price2: numField(r.price2), price3: numField(r.price3),
+      cost: numField(r.cost), price1: numField(r.price1), price2: numField(r.price2), price3: numField(r.price3), price4: numField(r.price4),
       qty: numField(r.qty), low_stock: numField(r.low_stock), errors: [], warnings: [], changes: [],
       ...(!blank(r.units_per_pack) ? { units_per_pack: leadNum(r.units_per_pack) } : {}),
       ...(!blank(r.pack_unit) ? { pack_unit: textCell(r.pack_unit) } : packWord(r.units_per_pack) || packWord(r.pack_weight) ? { pack_unit: packWord(r.units_per_pack) || packWord(r.pack_weight) } : {}),
@@ -339,7 +345,7 @@ export function validateProducts(rows, existing, pn = []) {
     if (o.units_per_pack === undefined && packWord(o.size) && !Number.isNaN(leadNum(o.size))) { o.units_per_pack = leadNum(o.size); if (!o.pack_unit) o.pack_unit = packWord(o.size); o.size = ''; }
     if (o.units_per_pack !== undefined && (Number.isNaN(o.units_per_pack) || !(o.units_per_pack > 0))) o.errors.push('Số viên/hộp phải là số lớn hơn 0');
     for (const [k, lb] of [['pack_weight', 'Trọng lượng/thùng'], ['unit_weight', 'Trọng lượng/viên']]) if (o[k] !== undefined && (Number.isNaN(o[k]) || o[k] < 0)) o.errors.push(`${lb} không phải số hợp lệ`);
-    for (const f of ['cost', 'price1', 'price2', 'price3', 'qty', 'low_stock']) {
+    for (const f of ['cost', 'price1', 'price2', 'price3', 'price4', 'qty', 'low_stock']) {
       if (Number.isNaN(o[f])) o.errors.push(`Cột ${f === 'qty' ? 'số lượng' : f === 'cost' ? 'giá vốn' : f === 'low_stock' ? 'tồn tối thiểu' : 'giá bán'} không phải số`);
       else if (o[f] !== null && o[f] < 0) o.errors.push('Số âm không hợp lệ');
     }
@@ -387,7 +393,7 @@ export function validateParties(rows, existing, priceNames, kind = 'kh') {
     };
     const old = o.code ? exist.get(o.code.toLowerCase()) : null;
     if (!o.name && !old) o.errors.push(o.code ? `Mã ${o.code} chưa có trong sổ nên cần có tên` : 'Thiếu tên');
-    if (o.price_tier !== null && ![1, 2, 3].includes(o.price_tier)) o.errors.push('Mức giá phải là 1, 2, 3 hoặc đúng tên mức giá');
+    if (o.price_tier !== null && !validTier(o.price_tier, priceNames)) o.errors.push(`Mức giá phải là số 1 đến ${priceNames.length} hoặc đúng tên mức giá`);
     if (o.due_date === 'INVALID') o.errors.push('Hạn trả không đúng dạng dd/mm/yyyy');
     for (const f of ['credit_days', 'credit_limit', 'opening_debt']) if (Number.isNaN(o[f])) o.errors.push('Có ô số không hợp lệ');
     if (o.code) {
@@ -411,24 +417,25 @@ export function validateParties(rows, existing, priceNames, kind = 'kh') {
 }
 
 export function productTemplate(priceNames) {
-  const cols = ['Mã SKU (để trống = tự cấp)', 'Tên hàng hóa *', 'Chủng loại', 'Mẫu', 'Kích thước', 'Màu sắc / men', 'ĐVT', 'Giá vốn',
-    priceNames[0], priceNames[1], priceNames[2], 'Số lượng tồn', 'Tồn tối thiểu', 'Số viên/hộp', 'Đơn vị đóng gói', 'Trọng lượng/thùng (kg)', 'Trọng lượng/viên (kg)', 'Ghi chú'];
+  const cols = ['Mã SKU (để trống = tự cấp)', 'Tên hàng hóa *', 'Chủng loại', 'Thương hiệu', 'Mẫu', 'Kích thước', 'Màu sắc / men', 'ĐVT', 'Giá vốn',
+    ...priceNames, 'Số lượng tồn', 'Tồn tối thiểu', 'Số viên/hộp', 'Đơn vị đóng gói', 'Trọng lượng/thùng (kg)', 'Trọng lượng/viên (kg)', 'Ghi chú'];
+  const px = (...p) => p.concat(p[1]).slice(0, priceNames.length);
   const ex = [
-    ['NAD-L-DO', 'Ngói âm dương cỡ L', 'Ngói', 'Âm dương', 'L', 'Đỏ gốm', 'Viên', 10000, 18000, 16000, 15000, 5000, 1000, 140, 'thùng', 28, 0.2, ''],
-    ['', 'Bình hút lộc men lam 30cm', 'Bình hút lộc', 'Hũ tròn', '30cm', 'Men lam', 'Cái', 320000, 650000, 590000, 550000, 12, 3, '', '', 4.5, '', 'Ví dụ SKU để trống'],
-    ['NGHE-40-VHG', 'Nghê phong thủy 40cm', 'Linh vật - phong thủy', 'Nghê', '40cm', 'Vàng hoàng gia', 'Đôi', 2000000, 3500000, 3000000, 2800000, 4, 2, '', '', '', '', ''],
+    ['NAD-L-DO', 'Ngói âm dương cỡ L', 'Ngói', '', 'Âm dương', 'L', 'Đỏ gốm', 'Viên', 10000, ...px(18000, 16000, 15000), 5000, 1000, 140, 'thùng', 28, 0.2, ''],
+    ['', 'Bình hút lộc men lam 30cm', 'Bình hút lộc', '', 'Hũ tròn', '30cm', 'Men lam', 'Cái', 320000, ...px(650000, 590000, 550000), 12, 3, '', '', 4.5, '', 'Ví dụ SKU để trống'],
+    ['NGHE-40-VHG', 'Nghê phong thủy 40cm', 'Linh vật - phong thủy', '', 'Nghê', '40cm', 'Vàng hoàng gia', 'Đôi', 2000000, ...px(3500000, 3000000, 2800000), 4, 2, '', '', '', '', ''],
   ];
   const guide = [
     ['HƯỚNG DẪN NHẬP HÀNG HÓA'],
     ['• Mỗi dòng là 1 biến thể (mẫu + kích thước + màu + ĐVT) và có 1 mã SKU riêng. Để trống SKU thì hệ thống tự cấp SP00001, SP00002…'],
-    ['• Bắt buộc: Tên hàng hóa. Nên có: Giá vốn, 3 mức giá bán, Số lượng tồn.'],
+    ['• Bắt buộc: Tên hàng hóa. Nên có: Giá vốn, các mức giá bán, Số lượng tồn.'],
     ['• Không dùng cột nào thì để trống cả cột, xóa hẳn cột, hoặc bỏ chọn cột đó khi nhập đều được. Hàng đã có trong sổ sẽ giữ nguyên các ô để trống.'],
     ['• "Số lượng tồn" + "Giá vốn" được ghi thành phiếu TỒN ĐẦU KỲ (1 lần). Đây không phải giao dịch mua/bán nên không làm tăng doanh thu hay công nợ.'],
     ['• Nếu SKU đã có trong phần mềm: chỉ cập nhật tên, loại, giá… KHÔNG đổi tồn kho (tồn chỉ đổi qua phiếu nhập/xuất/điều chỉnh).'],
     ['• Số tiền ghi số thường (vd 1500000), không cần ký hiệu đ. Xóa 3 dòng ví dụ trước khi nhập.'],
     ['• "Số viên/hộp" + "Đơn vị đóng gói" (hộp, thùng, kiện…): dùng để in quy cách “4 hộp x 140 viên + 40 viên” trên hóa đơn và biên bản bàn giao. Để trống nếu không đóng hộp.'],
     ['• "Trọng lượng/thùng (kg)" và/hoặc "Trọng lượng/viên (kg)": dùng để tính tổng trọng lượng đơn hàng (báo xe, ship). Chỉ cần điền 1 trong 2 cột; có cả 2 thì ưu tiên kg/viên. Ghi kiểu "28kg/ thùng", "140 viên/ thùng", "0,20" cũng được.'],
-    [`• 3 cột giá: ${priceNames.join(' / ')} — tương ứng mức giá gán cho từng khách hàng.`],
+    [`• Các cột giá: ${priceNames.join(' / ')} — tương ứng mức giá gán cho từng khách hàng.`],
   ];
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([cols, ...ex]);

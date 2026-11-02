@@ -1,42 +1,63 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { money, parseNum, qty as fq, match } from '../lib/format.js';
+import {
+  Amphora, ArrowDownToLine, ArrowUpFromLine, Banknote, Bell, BookOpen, Calculator, Calendar, ChartColumn, Check as CheckIcon, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Copy, Download, Ellipsis, Factory, FilePenLine, FileText, History, House, Info, Landmark, Link, LogOut, Package, PackagePlus, Pencil, Plus, Printer, QrCode, Receipt, ReceiptText, RefreshCw, Route, Search as SearchIcon, Settings, ShoppingCart, Smartphone, Tag, TriangleAlert, Truck, Undo2, Upload, Users, Wallet, X,
+} from 'lucide-react';
 
 // ---------- Biểu tượng ----------
-const P = {
-  home: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z',
-  cart: 'M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h9.2a1 1 0 0 0 1-.8L20 8H6.2M9 20a1 1 0 1 0 0 .01M17 20a1 1 0 1 0 0 .01',
-  order: 'M8 3h8l1 3h3v15H4V6h3zM9 11h6M9 15h6',
-  kiln: 'M4 21V10l8-6 8 6v11M9 21v-6a3 3 0 0 1 6 0v6M12 4V2',
-  truck: 'M2 6h12v10H2zM14 9h4l3 3v4h-7M6 19a2 2 0 1 0 0-.01M17 19a2 2 0 1 0 0-.01',
-  box: 'M21 8l-9-5-9 5 9 5zM3 8v8l9 5 9-5V8M12 13v8',
-  vase: 'M9 3h6M10 3v3c-3 2-5 5-5 9a6 6 0 0 0 14 0c0-4-2-7-5-9V3',
-  users: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21v-1a6 6 0 0 1 12 0v1M16 3.5a4 4 0 0 1 0 7.5M22 21v-1a6 6 0 0 0-4-5.6',
-  cash: 'M2 6h20v12H2zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 9v6M18 9v6',
-  receipt: 'M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2zM9 8h6M9 12h6M9 16h4',
-  chart: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
-  gear: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.9-1.2V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.9H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z',
-  plus: 'M12 5v14M5 12h14', x: 'M6 6l12 12M18 6L6 18', search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM21 21l-5-5',
-  chev: 'M9 6l6 6-6 6', down: 'M6 9l6 6 6-6', info: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 16v-4M12 8h.01',
-  print: 'M6 9V3h12v6M6 18H4v-7h16v7h-2M8 14h8v7H8z', dl: 'M12 3v12M7 10l5 5 5-5M4 21h16', up: 'M12 21V9M7 14l5-5 5 5M4 3h16',
-  in: 'M12 3v12M7 10l5 5 5-5M3 21h18', out: 'M12 21V9M7 14l5-5 5 5M3 3h18', more: 'M5 12h.01M12 12h.01M19 12h.01',
-  alert: 'M12 3l10 18H2zM12 10v5M12 18h.01', check: 'M5 12l5 5 9-10', back: 'M15 6l-6 6 6 6', edit: 'M4 20h4L19 9l-4-4L4 16zM14 6l4 4',
-  logout: 'M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10', book: 'M4 4h11a3 3 0 0 1 3 3v14H7a3 3 0 0 1-3-3zM4 18a3 3 0 0 1 3-3h11',
-  history: 'M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 3',
-  bell: 'M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21a2 2 0 0 0 4 0',
-  qr: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM20 14v.01M14 20h.01M17 17h4v4h-4z',
-  route: 'M6 19a2 2 0 1 0 0-.01M18 7a2 2 0 1 0 0-.01M6 17V9a3 3 0 0 1 3-3h3M18 9v6a3 3 0 0 1-3 3h-3',
-  bank: 'M3 10l9-6 9 6M5 10v8M9 10v8M15 10v8M19 10v8M3 21h18',
-  refresh: 'M20 11a8 8 0 0 0-14.9-3M4 4v4h4M4 13a8 8 0 0 0 14.9 3M20 20v-4h-4',
-  copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
-  link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',
-  phone: 'M7 2h10v20H7zM11 18h2',
-  calendar: 'M4 5h16v16H4zM4 10h16M8 3v4M16 3v4',
+const ICONS = {
+  home: House,
+  cart: ShoppingCart,
+  order: ClipboardList,
+  kiln: Factory,
+  truck: Truck,
+  box: Package,
+  vase: Amphora,
+  users: Users,
+  cash: Banknote,
+  receipt: Receipt,
+  invoice: ReceiptText,
+  chart: ChartColumn,
+  gear: Settings,
+  plus: Plus,
+  x: X,
+  search: SearchIcon,
+  chev: ChevronRight,
+  down: ChevronDown,
+  info: Info,
+  print: Printer,
+  dl: Download,
+  up: Upload,
+  'in': ArrowDownToLine,
+  out: ArrowUpFromLine,
+  more: Ellipsis,
+  alert: TriangleAlert,
+  check: CheckIcon,
+  back: ChevronLeft,
+  return: Undo2,
+  edit: Pencil,
+  logout: LogOut,
+  book: BookOpen,
+  history: History,
+  bell: Bell,
+  qr: QrCode,
+  route: Route,
+  bank: Landmark,
+  refresh: RefreshCw,
+  copy: Copy,
+  link: Link,
+  phone: Smartphone,
+  calendar: Calendar,
+  quote: FileText,
+  contract: FilePenLine,
+  tag: Tag,
+  tax: Calculator,
+  import: PackagePlus,
+  wallet: Wallet,
 };
-export function Icon({ name, size = 18, stroke = 1.8, className }) {
-  return (
-    <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke}
-      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={P[name] || P.info} /></svg>
-  );
+export function Icon({ name, size = 18, stroke = 1.75, className }) {
+  const C = ICONS[name] || Info;
+  return <C className={className} size={size} strokeWidth={stroke} aria-hidden="true" />;
 }
 
 export function Btn({ kind = 'ghost', icon, children, busy, small, className = '', ...rest }) {

@@ -6,6 +6,7 @@ import { cats as expCats } from '../lib/expenseCats.js';
 import { Btn, Tabs, ErrorBox, Note, Table, Pill, MonthInput } from '../components/ui.jsx';
 import { PeriodPicker, usePeriod } from '../components/Period.jsx';
 import { StockReport } from './Inventory.jsx';
+import { FactoryReport } from './Tax.jsx';
 
 const PL_ROWS = [
   ['revenue_goods', 'Tiền hàng đã giao'], ['revenue_shipping', '+ Phí vận chuyển thu khách'], ['revenue_returns', '− Hàng khách trả lại'],
@@ -25,9 +26,10 @@ export function ReportsPage() {
         <div className="page-sub">Doanh thu tính theo ngày giao hàng. Tiền thu tính theo ngày thu. Mọi bảng đều xuất được ra Excel.</div></div></div>
       <Tabs value={tab} onChange={setTab} tabs={[
         { value: 'pl', label: 'Lãi lỗ theo tháng' }, { value: 'prod', label: 'Theo sản phẩm' }, { value: 'grp', label: 'Theo kênh / khách / nhóm' },
-        { value: 'stock', label: 'Nhập – xuất – tồn' }, { value: 'debt', label: 'Công nợ' }, ...(cost ? [{ value: 'exp', label: 'Chi phí' }] : []),
+        { value: 'factory', label: 'Đơn đặt xưởng' }, { value: 'stock', label: 'Nhập – xuất – tồn' }, { value: 'debt', label: 'Công nợ' }, ...(cost ? [{ value: 'exp', label: 'Chi phí' }] : []),
       ]} />
       {tab === 'pl' && <MonthlyPL />}
+      {tab === 'factory' && <FactoryReport />}
       {tab === 'prod' && <ProductReport />}
       {tab === 'grp' && <GroupReport />}
       {tab === 'stock' && <StockReport />}

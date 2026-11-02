@@ -4,6 +4,7 @@ import { requirePerm, isOwner, checkDate, nextCode, once, bookSettings } from '.
 import { postMove, doAdjust } from './stock.js';
 import { doPayment } from './cash.js';
 import { notifyOrderConfirmed } from './notify.js';
+import { saveOrderTrip } from './drivers.js';
 
 export function availabilityWarnings(orderId) {
   return all(`select p.sku, p.name, max(p.on_hand - coalesce(rs.reserved, 0) + x.need, 0) as avail, x.need
@@ -13,7 +14,7 @@ export function availabilityWarnings(orderId) {
     .map((r) => `${r.sku} – ${r.name}: còn có thể bán ${r.avail}, đơn cần ${r.need}`);
 }
 
-export function doDeliver(orderId, date, lines, ship, note, override) {
+export function doDeliver(orderId, date, lines, ship, note, override, depositUsed) {
   const o = one(`select * from sales_orders where id = ?`, orderId);
   if (!o) fail('Không tìm thấy đơn hàng');
   if (o.status === 'nhap') fail(`Đơn ${o.code} đang là nháp — hãy xác nhận đơn trước khi giao`);
@@ -55,9 +56,16 @@ export function doDeliver(orderId, date, lines, ship, note, override) {
   const factor = (gross ?? 0) > 0 ? Math.max(0, 1 - o.discount / gross) : 1;
   const shipped = one(`select coalesce(sum(shipping_fee), 0) as s from deliveries where order_id = ?`, o.id).s;
 
+  const dep = rnd(num(depositUsed) ?? 0);
+  if (dep < 0) fail('Tiền cọc khấu trừ không được âm');
+  if (dep > 0) {
+    const v = one(`select paid_net, deposit_used from v_sales_orders where id = ?`, o.id);
+    if (dep > v.paid_net - v.deposit_used) fail(`Tiền cọc còn lại chỉ ${Math.max(v.paid_net - v.deposit_used, 0)}`);
+  }
+
   const dcode = nextCode(o.book_id, 'GH'); const dlv = uuid();
   insert('deliveries', { id: dlv, book_id: o.book_id, code: dcode, order_id: o.id, delivery_date: date,
-    shipping_fee: rnd(ship ?? Math.max(o.shipping_fee - shipped, 0)), note: note ?? null, created_by: ctx.uid, created_at: nowIso() });
+    shipping_fee: rnd(ship ?? Math.max(o.shipping_fee - shipped, 0)), note: note ?? null, deposit_used: dep, created_by: ctx.uid, created_at: nowIso() });
 
   let lastDl = null;
   for (const { sl, q } of req.sort((a, b) => a.sl.line_no - b.sl.line_no)) {
@@ -98,11 +106,13 @@ export function save_sales_order(p) {
     const kind = nz(p.kind) || 'ban_san';
     if (!['ban_san', 'dat_hang'].includes(kind)) fail('Loại đơn không hợp lệ');
     if ((num(p.discount) ?? 0) < 0 || (num(p.shipping_fee) ?? 0) < 0) fail('Giảm giá / phí vận chuyển không được âm');
+    const vat = num(p.vat_rate) ?? 0;
+    if (vat < 0 || vat > 100) fail('Thuế suất VAT không hợp lệ');
     if (!(p.lines || []).length) fail('Đơn hàng chưa có sản phẩm');
     const deliverNow = bool(p.deliver_now) ?? false;
     const st = deliverNow || p.status === 'xac_nhan' ? 'xac_nhan' : 'nhap';
     const head = { customer_id: cust.id, channel: p.channel ?? null, order_date: d, due_date: asDate(p.due_date), staff: p.staff ?? null,
-      discount: rnd(num(p.discount) ?? 0), shipping_fee: rnd(num(p.shipping_fee) ?? 0), note: p.note ?? null };
+      discount: rnd(num(p.discount) ?? 0), shipping_fee: rnd(num(p.shipping_fee) ?? 0), note: p.note ?? null, vat_rate: vat };
     let o; let wasConfirmed = false;
     if (!nz(p.id)) {
       const id = uuid();
@@ -132,7 +142,7 @@ export function save_sales_order(p) {
       if (!pr) fail(`Dòng ${i}: chưa chọn sản phẩm`);
       const q = num(ln.qty) ?? 0;
       if (q <= 0) fail(`Dòng ${i} (${pr.sku}): số lượng phải lớn hơn 0`);
-      const price = num(ln.unit_price) ?? (cust.price_tier === 2 ? pr.price2 : cust.price_tier === 3 ? pr.price3 : pr.price1);
+      const price = num(ln.unit_price) ?? pr[`price${cust.price_tier}`];
       if (price < 0) fail(`Dòng ${i}: đơn giá không được âm`);
       const disc = num(ln.discount_pct) ?? 0;
       if (disc < 0 || disc > 100) fail(`Dòng ${i}: chiết khấu phải từ 0 đến 100%`);
@@ -153,6 +163,11 @@ export function save_sales_order(p) {
     run(`update purchase_order_lines set sales_order_line_id = null where sales_order_line_id in
       (select id from sales_order_lines where order_id = ? and id not in (select value from json_each(?)))`, o.id, ks);
     run(`delete from sales_order_lines where order_id = ? and id not in (select value from json_each(?))`, o.id, ks);
+
+    if (p.transport !== undefined) saveOrderTrip(b, o, d, p.transport);
+    if (nz(p.quote_id)) {
+      if (!run(`update quotes set order_id = ?, status = 'chot', updated_at = ? where id = ? and book_id = ?`, o.id, nowIso(), p.quote_id, b).changes) fail('Không tìm thấy báo giá');
+    }
 
     let dep = null, dlv = null;
     const depAmt = num(p.deposit?.amount) ?? 0;
@@ -228,7 +243,7 @@ export function deliver(p) {
   const o = one(`select * from sales_orders where id = ?`, p.order_id);
   if (!o) fail('Không tìm thấy đơn hàng');
   requirePerm(o.book_id, 'ban_hang');
-  return once(p, o.book_id, 'deliver', () => doDeliver(o.id, asDate(p.date) || today(), p.lines || [], num(p.shipping_fee), p.note ?? null, bool(p.override) ?? false));
+  return once(p, o.book_id, 'deliver', () => doDeliver(o.id, asDate(p.date) || today(), p.lines || [], num(p.shipping_fee), p.note ?? null, bool(p.override) ?? false, p.deposit_used));
 }
 
 // Trả hàng: nhận hàng về (theo giá vốn lúc giao), giảm doanh thu, giảm công nợ, hoàn tiền nếu có

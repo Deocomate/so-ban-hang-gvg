@@ -45,7 +45,7 @@ export function SalesPage() {
   ];
   const sum = (k) => rows.reduce((s, o) => s + (o[k] || 0), 0);
   return (
-    <ListPage title="Đơn bán hàng" sub="Đơn nháp không ảnh hưởng tồn kho hay doanh thu. Doanh thu ghi nhận khi giao hàng."
+    <ListPage title="Hóa đơn" sub="Đơn nháp không ảnh hưởng tồn kho hay doanh thu. Doanh thu ghi nhận khi giao hàng."
       filters={<>
         <FilterBox title="Trạng thái">
           <RadioList value={tab} onChange={setTab} options={[
@@ -64,7 +64,7 @@ export function SalesPage() {
           { key: 'code', label: 'Mã đơn' }, { key: 'order_date', label: 'Ngày', type: 'date' }, { key: 'customer_name', label: 'Khách hàng' }, { key: 'channel', label: 'Kênh' },
           { key: 'order_total', label: 'Tổng đơn' }, { key: 'delivered_value', label: 'Đã giao (doanh thu)' }, { key: 'paid_net', label: 'Đã thu' }, { key: 'receivable', label: 'Còn nợ' },
           { key: 'prepaid', label: 'Trả trước' }, { key: 'delivery_status', label: 'Giao hàng', get: (o) => DELIVERY[o.delivery_status]?.[0] }, { key: 'payment_status', label: 'Thanh toán', get: (o) => PAYMENT[o.payment_status]?.[0] }] }])}>Xuất Excel</Btn>
-        {can('ban_hang') && <Btn kind="primary" icon="plus" onClick={() => open('order-form', {})}>Tạo đơn bán</Btn>}
+        {can('ban_hang') && <Btn kind="primary" icon="plus" onClick={() => open('order-form', {})}>Tạo hóa đơn</Btn>}
       </>}>
       <ErrorBox error={error} />
       <Table columns={cols} rows={data ? rows : null} onRow={(o) => open('order', { id: o.id })} rowClass={(o) => (o.is_late || o.overdue_days > 0 ? 'row-late' : '')}
@@ -91,10 +91,10 @@ export function SpecialPage() {
   return (
     <>
       <div className="page-head">
-        <div className="grow"><h1 className="page-title">Đơn đặt riêng</h1>
+        <div className="grow"><h1 className="page-title">Đặt hàng</h1>
           <div className="page-sub">Mới nhận → Xác nhận → Sản xuất / đặt NCC → Hàng về → Giao một phần / giao đủ → Hoàn tất. Các bước tự chuyển theo đơn đặt xưởng, phiếu nhận, phiếu giao và tiền thu.</div></div>
         <Check checked={showDone} onChange={setShowDone}>Hiện đơn đã xong / đã hủy</Check>
-        {can('ban_hang') && <Btn kind="primary" icon="plus" onClick={() => open('order-form', { kind: 'dat_hang' })}>Nhận đơn đặt riêng</Btn>}
+        {can('ban_hang') && <Btn kind="primary" icon="plus" onClick={() => open('order-form', { kind: 'dat_hang' })}>Tạo đơn đặt hàng</Btn>}
       </div>
       <ErrorBox error={error} />
       {!data ? <Loading /> : (
@@ -149,6 +149,7 @@ export function OrderDetail({ id, onClose }) {
   const pays = useQ('doc_payments', [['doc_id', 'eq', id]], 'pay_date');
   const pos = useQ('purchase_orders', [['sales_order_id', 'eq', id]], 'created_at', 50, can('nhap_hang'));
   const audit = useQ('audit', [['row_id', 'eq', id]], 'at desc', 50, can('owner'));
+  const contract = useQ('contracts', [['order_id', 'eq', id]]);
   const { run, busy } = useAction();
   const [cancelMode, setCancelMode] = useState(null);
   const [reason, setReason] = useState('');
@@ -162,6 +163,8 @@ export function OrderDetail({ id, onClose }) {
       subtitle={<span className="row gap-s">{KIND_LABEL[d.kind]} · {dmy(d.order_date)} · <StatusPill map={DELIVERY} value={d.delivery_status} /> <StatusPill map={PAYMENT} value={d.payment_status} /> {d.kind === 'dat_hang' && <Pill tone="accent">{d.progress}</Pill>} {d.is_late && <Pill tone="bad">trễ hẹn giao</Pill>}</span>}
       footer={<>
         <Btn icon="dl" onClick={() => open('doc', { kind: 'order', id })}>Xuất PDF</Btn>
+        {contract.data?.[0] ? <Btn icon="receipt" onClick={() => open('contract', { id: contract.data[0].id })}>Hợp đồng {contract.data[0].code}</Btn>
+          : canSell && d.status !== 'huy' && d.kind === 'dat_hang' && <Btn icon="receipt" onClick={() => open('contract-form', { order_id: id })}>Lập hợp đồng</Btn>}
         <span className="grow" />
         {canSell && d.status === 'nhap' && <Btn onClick={() => { onClose(); open('order-form', { id }); }} icon="edit">Sửa</Btn>}
         {canSell && d.status === 'xac_nhan' && d.delivery_count === 0 && <Btn onClick={() => { onClose(); open('order-form', { id }); }} icon="edit">Sửa</Btn>}
@@ -171,7 +174,7 @@ export function OrderDetail({ id, onClose }) {
             alloc: { doc_type: 'don_ban', doc_id: d.id, code: d.code, amount: payKind === 'thu_khach' ? d.remaining_to_pay : d.paid_net - d.delivered_value } })}>
             {payKind === 'thu_khach' ? (d.delivered_value === 0 ? 'Nhận cọc / thu tiền' : 'Thu tiền') : 'Hoàn tiền cho khách'}</Btn>
         )}
-        {canSell && d.delivered_value > 0 && <Btn icon="back" onClick={() => open('return', { order: d })}>Trả hàng</Btn>}
+        {canSell && d.delivered_value > 0 && <Btn icon="return" onClick={() => open('return', { order: d })}>Trả hàng</Btn>}
         {canSell && d.status === 'xac_nhan' && d.remaining_qty > 0 && <Btn kind="primary" icon="truck" onClick={() => open('deliver', { order: d })}>Giao hàng</Btn>}
       </>}>
       <div className="grid-2">
@@ -183,6 +186,7 @@ export function OrderDetail({ id, onClose }) {
         ]} />
         <div className="card"><div className="totals">
           <span>Tổng đơn</span><span className="r strong">{money(d.order_total)}</span>
+          {d.vat_rate > 0 && <><span className="muted">Gồm VAT {fq(d.vat_rate)}%</span><span className="r muted">{money(d.vat_total)}</span></>}
           <span>Đã giao (doanh thu)</span><span className="r">{money(d.delivered_value + d.returned_value)}</span>
           {d.returned_value > 0 && <><span>− Khách trả lại</span><span className="r">{money(d.returned_value)}</span></>}
           <span>Đã thu (thuần)</span><span className="r">{money(d.paid_net)}</span>
@@ -194,6 +198,7 @@ export function OrderDetail({ id, onClose }) {
           {d.overdue_days > 0 && <><span className="bad">Quá hạn thanh toán</span><span className="r bad">{d.overdue_days} ngày</span></>}
         </div></div>
       </div>
+      {d.status === 'xac_nhan' && d.eff_qty > 0 && <div className="deliv-bar"><span>Đã giao <b>{fq(d.delivered_qty)}</b> / {fq(d.eff_qty)}</span><div className="prog grow"><i style={{ width: `${Math.min(100, (d.delivered_qty / d.eff_qty) * 100)}%` }} /></div><b>{fq((d.delivered_qty / d.eff_qty) * 100)}%</b><span>Còn phải giao <b className="warn">{fq(d.remaining_qty)}</b></span></div>}
       <Section title="Hàng trong đơn">
         <Table dense rows={lines.data} columns={[
           { key: 'p', label: 'Sản phẩm', render: (l) => <div><div className="cell-main">{l.sku} · {l.product_name}{l.is_kit ? ' (bộ)' : ''}</div>{l.note && <div className="cell-sub"><i>{l.note}</i></div>}{l.po_code && <div className="cell-sub"><Icon name="kiln" size={12} /> {l.po_code}: {l.po_step || 'đã đặt'} · đã về {fq(l.po_received)}</div>}</div> },
@@ -227,12 +232,12 @@ export function OrderDetail({ id, onClose }) {
         </Section>
       )}
       <div className="grid-2">
-        <Section title="Các lần giao hàng">
-          <Table dense rows={dels.data} empty="Chưa giao" onRow={(r) => open('doc', { kind: 'delivery', id: r.id, type: 'bien_ban' })} columns={[
-            { key: 'c', label: 'Phiếu', render: (r) => <><b>{r.code}</b><div className="cell-sub">{dmy(r.delivery_date)}</div></> },
-            { key: 'v', label: 'Tiền hàng + ship', align: 'right', render: (r) => money(r.total) },
+        <Section title="Các đợt giao hàng" actions={canSell && d.status === 'xac_nhan' && d.remaining_qty > 0 && <Btn small icon="plus" onClick={() => open('deliver', { order: d })}>Tạo đợt giao tiếp theo</Btn>}>
+          <Table dense rows={dels.data} empty="Chưa giao" columns={[
+            { key: 'c', label: 'Đợt', render: (r) => <><b>Đợt {dels.data.indexOf(r) + 1}</b><div className="cell-sub">{r.code} · {dmy(r.delivery_date)}</div></> },
+            { key: 'v', label: 'Tiền đợt này', align: 'right', render: (r) => money(r.total) },
             { key: 'g', label: 'Giá vốn', align: 'right', render: (r) => (r.cogs === null || r.cogs === undefined ? '—' : money(r.cogs)) },
-            { key: 'p', label: '', render: () => <span className="muted small row gap-s" title="Biên bản bàn giao / phiếu xuất kho"><Icon name="dl" size={14} />PDF</span> },
+            { key: 'p', label: 'Chứng từ', render: (r) => <div className="row gap-s">{[['hoa_don', 'Hóa đơn'], ['bien_ban', 'Biên bản'], ['hd_van_chuyen', 'HĐVC']].map(([t, l]) => <Btn small key={t} onClick={() => open('doc', { kind: 'delivery', id: r.id, type: t })}>{l}</Btn>)}{canSell && <Btn small onClick={() => open('trip', { order_id: id, delivery_id: r.id })}>Lái xe</Btn>}</div> },
           ]} />
           {(rets.data || []).length > 0 && <Table dense rows={rets.data} columns={[
             { key: 'c', label: 'Phiếu trả', render: (r) => <><b>{r.code}</b><div className="cell-sub">{dmy(r.return_date)} · {r.reason}</div></> },
@@ -240,7 +245,8 @@ export function OrderDetail({ id, onClose }) {
             { key: 'v', label: 'Giảm doanh thu', align: 'right', render: (r) => money(r.revenue) },
           ]} />}
         </Section>
-        <Section title="Thanh toán">
+        <Section title="Thanh toán & đặt cọc">
+          {d.paid_net > 0 && <div className="totals"><span>Đã nhận</span><span className="r">{money(d.paid_net)}</span><span>Đã khấu trừ vào hóa đơn</span><span className="r">{money(d.deposit_used)}</span><span className="strong">Cọc còn lại</span><span className="r strong good">{money(Math.max(d.paid_net - d.deposit_used, 0))}</span></div>}
           <Table dense rows={pays.data} empty="Chưa có khoản thu" columns={[
             { key: 'c', label: 'Phiếu', render: (r) => <><b>{r.code}</b><div className="cell-sub">{dmy(r.pay_date)} · {r.fund_name}</div></> },
             { key: 'k', label: 'Loại', render: (r) => (r.kind === 'hoan_khach' ? <Pill tone="warn">Hoàn tiền</Pill> : d.delivery_count === 0 || r.pay_date < (d.last_delivery_date || '9999') ? 'Cọc / trả trước' : 'Thu tiền') },
@@ -288,6 +294,8 @@ export function DeliverDialog({ order, onClose }) {
   const [date, setDate] = useState(todayVN());
   const [ship, setShip] = useState(Math.max(0, order.shipping_fee - order.ship_billed));
   const [note, setNote] = useState('');
+  const [deposit, setDeposit] = useState(null);
+  const depositLeft = Math.max(order.paid_net - (order.deposit_used || 0), 0);
   const [collect, setCollect] = useState(false);
   const [fund, setFund] = useState('');
   const [override, setOverride] = useState(false);
@@ -297,7 +305,7 @@ export function DeliverDialog({ order, onClose }) {
   useEffect(() => { if (!fund && funds.data?.length) setFund(funds.data[0].id); }, [funds.data]);
   const allowOver = book.role === 'owner' && settings.allow_oversell;
   const submit = async () => {
-    const r = await run('deliver', { order_id: order.id, date, shipping_fee: ship, note, override, lines: Object.entries(qtys).map(([k, v]) => ({ order_line_id: k, qty: Number(v) || 0 })) },
+    const r = await run('deliver', { order_id: order.id, date, shipping_fee: ship, note, override, deposit_used: deposit || 0, lines: Object.entries(qtys).map(([k, v]) => ({ order_line_id: k, qty: Number(v) || 0 })) },
       (x) => `Đã giao – phiếu ${x.code}`);
     if (!r) return;
     if (collect) {
@@ -335,6 +343,7 @@ export function DeliverDialog({ order, onClose }) {
         <Field label="Ngày giao"><DateInput value={date} onChange={setDate} max={todayVN()} /></Field>
         <Field label="Phí vận chuyển tính khách" hint={`Đã tính ${money(order.ship_billed)} / ${money(order.shipping_fee)} theo đơn`}><NumInput value={ship} onChange={setShip} /></Field>
         <Field label="Ghi chú"><Input value={note} onChange={setNote} placeholder="vd. Giao đợt 1, xe anh Đức" /></Field>
+        {depositLeft > 0 && <Field label="Khấu trừ tiền cọc vào đợt này" hint={`Cọc còn lại ${money(depositLeft)} đ`}><NumInput min={0} max={depositLeft} value={deposit} onChange={setDeposit} /></Field>}
       </div>
       <div className="row gap"><Check checked={viaSpx} onChange={(v) => { setViaSpx(v); if (v) setCollect(false); }}>Gửi qua đơn vị vận chuyển</Check>
         {viaSpx && <Select value={cr} onChange={setCr} options={CARRIERS.map((c) => ({ value: c.code, label: c.name }))} style={{ maxWidth: 170 }} aria-label="Đơn vị vận chuyển" />}

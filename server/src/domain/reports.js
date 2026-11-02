@@ -12,6 +12,12 @@ export const custBalances = (b, d) => allN(`select pid as party_id, sum(amt) as 
     union all
     select o.customer_id, d.shipping_fee from deliveries d join sales_orders o on o.id = d.order_id where d.book_id = @b and d.delivery_date <= @d
     union all
+    select o.customer_id, round(sum(x.revenue) * o.vat_rate / 100.0) from delivery_lines x join deliveries d on d.id = x.delivery_id join sales_orders o on o.id = d.order_id
+      where d.book_id = @b and d.delivery_date <= @d and o.vat_rate > 0 group by o.id
+    union all
+    select o.customer_id, -round(sum(x.revenue) * o.vat_rate / 100.0) from sales_return_lines x join sales_returns r on r.id = x.return_id join sales_orders o on o.id = r.order_id
+      where r.book_id = @b and r.return_date <= @d and o.vat_rate > 0 group by o.id
+    union all
     select o.customer_id, -x.revenue from sales_return_lines x join sales_returns r on r.id = x.return_id join sales_orders o on o.id = r.order_id
       where r.book_id = @b and r.return_date <= @d
     union all
@@ -297,4 +303,79 @@ export function rpt_expenses(p) {
         from stock_adjustment_lines l join stock_adjustments a on a.id = l.adjustment_id
        where a.book_id = @b and a.reason <> 'dau_ky' and a.adj_date between @d1 and @d2 having count(*) > 0
     ) x order by grp_amount desc, grp, amount desc`, { b, d1, d2 }));
+}
+
+// ---------- TRANG TỔNG QUAN ĐIỀU HÀNH ----------
+export function rpt_dashboard(p) {
+  const { b, d1, d2 } = period(p);
+  requirePerm(b, 'xem_bao_cao');
+  const days = Math.round((Date.parse(d2) - Date.parse(d1)) / 86400e3) + 1;
+  const prevEnd = addDays(d1, -1); const prevStart = addDays(prevEnd, -(days - 1));
+  const cur = calcPl(b, d1, d2); const prev = calcPl(b, prevStart, prevEnd);
+  const cost = can(b, 'xem_gia_von');
+  const o = { b, d1, d2, soon: addDays(today(), 3), stale: addDays(today(), -3) };
+  const target = rnd((Number(bookSettings(b).monthly_target) || 0) * days / 30);
+  const margin = cur.revenue_net > 0 ? (cur.revenue_net - cur.cogs) / cur.revenue_net : 0;
+  const daily = allN(`with r as (
+      select d.delivery_date as day, x.revenue as v from delivery_lines x join deliveries d on d.id = x.delivery_id where d.book_id = @b and d.delivery_date between @d1 and @d2
+      union all select delivery_date, shipping_fee from deliveries where book_id = @b and delivery_date between @d1 and @d2
+      union all select r.return_date, -x.revenue from sales_return_lines x join sales_returns r on r.id = x.return_id where r.book_id = @b and r.return_date between @d1 and @d2)
+    select day, sum(v) as revenue from r group by day order by day`, o);
+  const cash = allN(`select pay_date as day, coalesce(sum(amount - fee) filter (where direction = 'thu'), 0) as cash_in, coalesce(sum(amount) filter (where direction = 'chi'), 0) as cash_out
+    from payments where book_id = @b and voided = 0 and pay_date between @d1 and @d2 group by pay_date order by pay_date`, o);
+  const funnel = oneN(`select
+      (select count(*) from customers where book_id = @b and code <> 'KL' and vn_date(created_at) between @d1 and @d2) as moi,
+      (select count(*) from customers c where c.book_id = @b and c.code <> 'KL' and c.stage = 'tu_van' and vn_date(c.created_at) <= @d2) as tu_van,
+      (select count(distinct customer_name) from quotes where book_id = @b and status <> 'huy' and quote_date between @d1 and @d2) as bao_gia,
+      (select coalesce(sum(total), 0) from quotes where book_id = @b and status <> 'huy' and quote_date between @d1 and @d2) as bao_gia_value,
+      (select count(distinct customer_id) from v_sales_orders where book_id = @b and status = 'xac_nhan' and paid_net > 0 and order_date between @d1 and @d2) as coc,
+      (select coalesce(sum(order_total), 0) from v_sales_orders where book_id = @b and status = 'xac_nhan' and paid_net > 0 and order_date between @d1 and @d2) as coc_value,
+      (select count(distinct customer_id) from v_sales_orders where book_id = @b and status = 'xac_nhan' and order_date between @d1 and @d2) as chot,
+      (select coalesce(sum(order_total), 0) from v_sales_orders where book_id = @b and status = 'xac_nhan' and order_date between @d1 and @d2) as chot_value`, o);
+  const top_products = allN(`select p.id, p.name, p.image_url, sum(x.revenue) as revenue, sum(x.qty) as qty from delivery_lines x join deliveries d on d.id = x.delivery_id
+    join products p on p.id = x.product_id where d.book_id = @b and d.delivery_date between @d1 and @d2 group by p.id order by revenue desc limit 5`, o);
+  const top_customers = allN(`select c.id, c.name, sum(x.revenue) as revenue from delivery_lines x join deliveries d on d.id = x.delivery_id join sales_orders so on so.id = d.order_id
+    join customers c on c.id = so.customer_id where d.book_id = @b and d.delivery_date between @d1 and @d2 and c.code <> 'KL' group by c.id order by revenue desc limit 5`, o);
+  const costs = cost ? [{ label: 'Giá vốn hàng bán', amount: cur.cogs },
+    ...allN(`select expense_group as label, sum(amount) as amount from v_expense_alloc where book_id = @b and alloc_date between @d1 and @d2 group by expense_group order by amount desc`, o)] : [];
+  const todo = oneN(`select
+      (select count(*) from quotes where book_id = @b and status = 'da_gui' and quote_date <= @stale) as quotes_followup,
+      (select count(*) from v_customers where book_id = @b and overdue > 0) as overdue_customers,
+      (select coalesce(sum(overdue), 0) from v_customers where book_id = @b) as overdue_amount,
+      (select count(*) from v_sales_orders where book_id = @b and status = 'xac_nhan' and remaining_qty > 0 and due_date is not null and due_date <= @soon) as orders_due,
+      (select count(*) from v_contracts where book_id = @b and advance_short > 0 and order_status = 'xac_nhan') as contracts_short`, o);
+  const ops = oneN(`select
+      (select count(*) from v_products where book_id = @b and active and not is_kit and on_hand > 0) as stock_items,
+      (select count(*) from v_sales_orders where book_id = @b and status = 'xac_nhan' and remaining_qty > 0) as open_orders,
+      (select coalesce(sum(order_total - delivered_value), 0) from v_sales_orders where book_id = @b and status = 'xac_nhan' and remaining_qty > 0) as open_value,
+      (select coalesce(sum(receivable), 0) from v_customers where book_id = @b) as receivable,
+      (select count(*) from v_customers where book_id = @b and receivable > 0) as receivable_count,
+      (select coalesce(sum(payable), 0) from v_suppliers where book_id = @b) as payable,
+      (select count(*) from v_suppliers where book_id = @b and payable > 0) as payable_count,
+      (select coalesce(sum(unpaid), 0) from v_drivers where book_id = @b) as driver_payable`, o);
+  const growth = (k) => (prev[k] > 0 ? rnd((cur[k] - prev[k]) / prev[k], 4) : null);
+  return mask(b, { ...cur, from: d1, to: d2, target, break_even: margin > 0 ? rnd((cur.expenses + cur.stock_loss) / margin) : null,
+    growth_revenue: growth('revenue'), growth_profit: cost ? growth('profit') : null, growth_cash: growth('cash_in'),
+    daily, cash, funnel, top_products, top_customers, costs, todo, ops,
+    stock_value: cost ? oneN(`select coalesce(sum(stock_value), 0) as v from products where book_id = @b`, o).v : null, can_cost: cost });
+}
+
+// ---------- ĐƠN ĐẶT XƯỞNG: mỗi khách một khối, mỗi ngày giao một cột, còn phải sản xuất và ngày trả dự kiến ----------
+export function rpt_factory(p) {
+  const b = p.book_id;
+  requirePerm(b, null);
+  const o = { b, d1: asDate(p.from) || '0000-01-01', d2: asDate(p.to) || '9999-12-31' };
+  const lines = allN(`select l.id, l.order_id, so.code as order_code, so.customer_id, c.name as customer_name, so.due_date, so.order_date, p.name as product_name, p.unit,
+      l.qty, l.cancelled_qty, l.delivered_qty, max(l.qty - l.cancelled_qty - l.delivered_qty, 0) as remaining
+    from sales_order_lines l join sales_orders so on so.id = l.order_id join products p on p.id = l.product_id left join customers c on c.id = so.customer_id
+    where l.book_id = @b and so.status = 'xac_nhan' and so.kind = 'dat_hang' and so.order_date <= @d2
+      and (max(l.qty - l.cancelled_qty - l.delivered_qty, 0) > 0
+        or exists (select 1 from deliveries d where d.order_id = so.id and d.delivery_date between @d1 and @d2))
+    order by c.name, so.code, l.line_no`, o);
+  const moves = allN(`select x.order_line_id, d.delivery_date as day, sum(x.qty) as qty from delivery_lines x join deliveries d on d.id = x.delivery_id
+    where x.book_id = @b and d.delivery_date between @d1 and @d2 group by x.order_line_id, d.delivery_date`, o);
+  const days = [...new Set(moves.map((m) => m.day))].sort();
+  const byLine = new Map();
+  for (const m of moves) byLine.set(m.order_line_id, { ...(byLine.get(m.order_line_id) || {}), [m.day]: m.qty });
+  return { days, lines: lines.map((l) => ({ ...l, stopped: l.cancelled_qty > 0 && l.remaining === 0, moves: byLine.get(l.id) || {} })) };
 }

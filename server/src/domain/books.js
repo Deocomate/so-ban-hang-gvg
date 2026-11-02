@@ -12,16 +12,37 @@ export const DEFAULT_EXPENSE_CATS = [
   { group: 'Quản lý & khác', items: ['Phần mềm, ứng dụng', 'Thuế môn bài, lệ phí', 'Văn phòng phẩm', 'Tiếp khách', 'Chi phí khác'] },
 ];
 
+// Đơn vị đứng tên trên chứng từ. Thanh Hải là công ty, Mai Hiếu là hộ kinh doanh; mỗi sổ khai báo cả hai và chọn được trên từng chứng từ.
+const LEGAL_ENTITIES = [
+  { id: 'thanh_hai', name: 'CÔNG TY TNHH SẢN XUẤT VÀ THƯƠNG MẠI THANH HẢI', legal_name: 'Công ty TNHH Sản xuất và Thương mại Thanh Hải',
+    address: 'Số 41B Giang Cao, Xã Bát Tràng, Huyện Gia Lâm, Thành phố Hà Nội', phone: '0913.381.021', email: 'gshaithanh@gmail.com', website: 'www.gomsuxaydung.com',
+    tax_code: '0101716287', representative: 'Vũ Mạnh Hải', rep_title: 'Giám đốc', bank_line: '1027833793 - Vietcombank Hưng Yên', logo: '' },
+  { id: 'mai_hieu', name: 'HỘ KINH DOANH GỐM SỨ MAI HIẾU', legal_name: 'Hộ kinh doanh Gốm sứ Mai Hiếu',
+    address: 'Số 18 Thôn 2 Giang Cao - Xã Bát Tràng - Hà Nội', phone: '0966.55.8808', email: 'vtmai88@gmail.com', website: '',
+    tax_code: '', representative: '', rep_title: 'Người đại diện hộ kinh doanh', bank_line: '1106738888 - Vietcombank Hưng Yên', logo: '' },
+];
+
+// Hóa đơn bán lẻ của Thanh Hải đứng tên Mai Hiếu; các chứng từ còn lại mặc định đứng tên công ty
+export const defaultDocs = (variant) => ({ profiles: LEGAL_ENTITIES, types: variant === 'TH' ? { hoa_don: { profile: 'mai_hieu' } } : {} });
+
+const VARIANTS = {
+  TH: { price_names: ['Giá lẻ', 'Giá đại lý', 'Giá công trình', 'Giá đại lý II'], channels: ['Bán tại cửa hàng'],
+    categories: ['Ngói', 'Gạch thông gió', 'Lan can - con tiện', 'Đèn vườn', 'Linh vật - phong thủy', 'Phụ kiện mái', 'Khác'] },
+  VG: { price_names: ['Giá lẻ', 'Giá sỉ', 'Giá CTV'], channels: ['Facebook', 'TikTok'],
+    categories: ['Đồ thờ', 'Bình hút lộc', 'Ấm chén', 'Lọ hoa', 'Mosaic', 'Khác'] },
+  AN: { price_names: ['Giá lẻ', 'Giá đại lý', 'Giá công trình'], channels: ['Bán tại cửa hàng'], categories: ['Tranh mosaic', 'Khác'] },
+};
+
 export function defaultSettings(variant) {
-  const vg = variant === 'VG';
   return {
     vat_rate: 0.01,
     pit_rate: 0.17,
-    price_names: vg ? ['Giá lẻ', 'Giá sỉ', 'Giá CTV'] : ['Giá lẻ', 'Giá đại lý', 'Giá công trình'],
-    channels: vg ? ['Facebook', 'TikTok'] : ['Bán tại cửa hàng'],
-    categories: vg ? ['Đồ thờ', 'Bình hút lộc', 'Ấm chén', 'Lọ hoa', 'Mosaic', 'Khác']
-      : ['Ngói', 'Gạch thông gió', 'Lan can - con tiện', 'Đèn vườn', 'Linh vật - phong thủy', 'Phụ kiện mái', 'Khác'],
-    units: ['Cái', 'Viên', 'Bộ', 'Đôi', 'Chiếc', 'm²', 'Thùng'],
+    ...(VARIANTS[variant] || VARIANTS.TH),
+    docs: defaultDocs(variant),
+    units: ['Cái', 'Viên', 'Cặp', 'Bộ', 'Đôi', 'Chiếc', 'm²', 'Thùng'],
+    customer_groups: ['Khách lẻ', 'Khách sỉ', 'Công trình'],
+    default_vat: 8,
+    monthly_target: 0,
     expense_groups: DEFAULT_EXPENSE_CATS.map((g) => g.group),
     expense_cats: DEFAULT_EXPENSE_CATS,
     fee_category: 'Phí sàn TMĐT',
@@ -46,7 +67,7 @@ export function createBook(name, short, owner) {
   return id;
 }
 
-// Lần đầu đăng nhập: nếu hệ thống chưa có sổ nào, người đầu tiên thành chủ cửa hàng của 2 sổ.
+// Lần đầu đăng nhập: nếu hệ thống chưa có sổ nào, người đầu tiên thành chủ cửa hàng của cả 3 sổ.
 export function bootstrap() {
   if (!ctx.uid) fail('Bạn chưa đăng nhập', 401);
   if (!one(`select 1 from book_members where user_id = ?`, ctx.uid)) {
@@ -62,6 +83,14 @@ export function bootstrap() {
 export function createDefaultBooks(owner) {
   createBook('Gốm sứ Thanh Hải', 'TH', owner);
   createBook('Gốm Vũ Gia', 'VG', owner);
+  createBook('Anamtile', 'AN', owner);
+}
+
+// Hệ thống đã chạy trước khi có Anamtile: thêm sổ thứ ba cho chủ sổ Thanh Hải
+export function addAnamtileBook() {
+  const th = one(`select b.is_demo, m.user_id from books b join book_members m on m.book_id = b.id and m.role = 'owner' where b.short_name = 'TH' order by b.created_at limit 1`);
+  if (!th || one(`select 1 from books where short_name = 'AN'`)) return;
+  run(`update books set is_demo = ? where id = ?`, th.is_demo, createBook('Anamtile', 'AN', th.user_id));
 }
 
 export function my_books() {
@@ -73,7 +102,8 @@ export function update_book_settings(p) {
   const b = p.book_id; const s = p.settings || {};
   requirePerm(b, 'owner');
   if ('vat_rate' in s && (num(s.vat_rate) < 0 || num(s.vat_rate) > 0.2)) fail('Thuế suất GTGT không hợp lệ');
-  if ('price_names' in s && (!Array.isArray(s.price_names) || s.price_names.length !== 3)) fail('Cần đúng 3 tên mức giá');
+  if ('price_names' in s && (!Array.isArray(s.price_names) || ![3, 4].includes(s.price_names.length))) fail('Cần 3 hoặc 4 tên mức giá');
+  if ('price_names' in s && s.price_names.length < 4 && one(`select 1 from customers where book_id = ? and price_tier = 4`, b)) fail('Còn khách hàng đang dùng mức giá 4 — hãy đổi mức giá của họ trước');
   const settings = { ...bookSettings(b), ...s };
   run(`update books set settings = ?, name = coalesce(?, name) where id = ?`, settings, nz(p.name), b);
   const r = one(`select settings, name from books where id = ?`, b);
@@ -132,7 +162,8 @@ export function save_bank_account(p) {
 const EXPORT_TABLES = ['books', 'book_members', 'funds', 'products', 'customers', 'suppliers', 'opening_debts', 'sales_orders', 'sales_order_lines',
   'deliveries', 'delivery_lines', 'sales_returns', 'sales_return_lines', 'purchase_orders', 'purchase_order_lines', 'goods_receipts',
   'goods_receipt_lines', 'supplier_returns', 'supplier_return_lines', 'stock_adjustments', 'stock_adjustment_lines', 'stock_moves',
-  'payments', 'payment_allocations', 'expenses', 'doc_counters', 'shipments', 'shipment_events', 'bank_txns', 'notifications', 'doc_info'];
+  'payments', 'payment_allocations', 'expenses', 'doc_counters', 'shipments', 'shipment_events', 'bank_txns', 'notifications', 'doc_info',
+  'drivers', 'driver_trips', 'quotes', 'contracts', 'tax_invoices'];
 
 export function export_book(p) {
   const b = p.book_id;

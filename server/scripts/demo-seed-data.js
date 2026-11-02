@@ -10,6 +10,17 @@ function demoDocs(withCompany, thLogo = '') {
   return { profiles: withCompany ? [hkd, cty] : [hkd], types: withCompany ? { bien_ban: { profile: 'cty', sep: '.' } } : {} };
 }
 
+export const VG_PRODUCTS = [
+  { sku: 'BHL-LAM-30', name: 'Bình hút lộc men lam 30cm', category: 'Bình hút lộc', pattern: 'Hũ tròn vẽ rồng', size: '30cm', color: 'Men lam', unit: 'Cái', cost: 320000, price1: 650000, price2: 590000, price3: 550000, qty: 14, low_stock: 4 },
+  { sku: 'BHL-VANG-25', name: 'Bình hút lộc vẽ vàng 25cm', category: 'Bình hút lộc', pattern: 'Phú quý', size: '25cm', color: 'Vẽ vàng 24k', unit: 'Cái', cost: 450000, price1: 890000, price2: 800000, price3: 750000, qty: 9, low_stock: 3 },
+  { sku: 'BHL-RAN-35', name: 'Bình hút lộc men rạn 35cm', category: 'Bình hút lộc', pattern: 'Hũ tròn', size: '35cm', color: 'Men rạn cổ', unit: 'Cái', cost: 520000, price1: 990000, price2: 900000, price3: 850000, qty: 3, low_stock: 3 },
+  { sku: 'BH-LAM-16', name: 'Bát hương men lam 16cm', category: 'Đồ thờ', pattern: 'Vẽ rồng', size: '16cm', color: 'Men lam', unit: 'Cái', cost: 260000, price1: 520000, price2: 470000, price3: 440000, qty: 10, low_stock: 3 },
+  { sku: 'LH-LAM-30', name: 'Lọ hoa men lam 30cm', category: 'Đồ thờ', pattern: 'Vẽ sen', size: '30cm', color: 'Men lam', unit: 'Cái', cost: 180000, price1: 360000, price2: 320000, price3: 300000, qty: 16, low_stock: 4 },
+  { sku: 'MB-LAM-25', name: 'Mâm bồng men lam 25cm', category: 'Đồ thờ', pattern: 'Hoa văn cổ', size: '25cm', color: 'Men lam', unit: 'Cái', cost: 150000, price1: 300000, price2: 270000, price3: 250000, qty: 8, low_stock: 2 },
+  { sku: 'DN-LAM', name: 'Đài nước men lam', category: 'Đồ thờ', pattern: 'Đài sen', size: '12cm', color: 'Men lam', unit: 'Cái', cost: 45000, price1: 95000, price2: 85000, price3: 80000, qty: 30, low_stock: 10 },
+  { sku: 'AC-SEN-6', name: 'Bộ ấm chén hoa sen 6 chén', category: 'Ấm chén', pattern: 'Hoa sen', size: '6 chén', color: 'Men trắng', unit: 'Bộ', cost: 210000, price1: 420000, price2: 380000, price3: 350000, qty: 12, low_stock: 3 },
+];
+
 export async function seedDemo({ call, ensureUser, setUser, today, onProgress = () => {}, logo = '' }) {
   const D = (n) => { const t = new Date(today + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() - n); return t.toISOString().slice(0, 10); };
   const rid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()));
@@ -193,16 +204,7 @@ export async function seedDemo({ call, ensureUser, setUser, today, onProgress = 
       HA: { name: 'Xưởng vẽ vàng Hải Anh', phone: '0966 101 202', address: 'Bát Tràng', credit_days: 15 },
       ML: { name: 'Lò Bát Tràng Minh Long', phone: '0966 303 404', address: 'Bát Tràng', credit_days: 10 },
     },
-    products: [
-      { sku: 'BHL-LAM-30', name: 'Bình hút lộc men lam 30cm', category: 'Bình hút lộc', pattern: 'Hũ tròn vẽ rồng', size: '30cm', color: 'Men lam', unit: 'Cái', cost: 320000, price1: 650000, price2: 590000, price3: 550000, qty: 14, low_stock: 4 },
-      { sku: 'BHL-VANG-25', name: 'Bình hút lộc vẽ vàng 25cm', category: 'Bình hút lộc', pattern: 'Phú quý', size: '25cm', color: 'Vẽ vàng 24k', unit: 'Cái', cost: 450000, price1: 890000, price2: 800000, price3: 750000, qty: 9, low_stock: 3 },
-      { sku: 'BHL-RAN-35', name: 'Bình hút lộc men rạn 35cm', category: 'Bình hút lộc', pattern: 'Hũ tròn', size: '35cm', color: 'Men rạn cổ', unit: 'Cái', cost: 520000, price1: 990000, price2: 900000, price3: 850000, qty: 3, low_stock: 3 },
-      { sku: 'BH-LAM-16', name: 'Bát hương men lam 16cm', category: 'Đồ thờ', pattern: 'Vẽ rồng', size: '16cm', color: 'Men lam', unit: 'Cái', cost: 260000, price1: 520000, price2: 470000, price3: 440000, qty: 10, low_stock: 3 },
-      { sku: 'LH-LAM-30', name: 'Lọ hoa men lam 30cm', category: 'Đồ thờ', pattern: 'Vẽ sen', size: '30cm', color: 'Men lam', unit: 'Cái', cost: 180000, price1: 360000, price2: 320000, price3: 300000, qty: 16, low_stock: 4 },
-      { sku: 'MB-LAM-25', name: 'Mâm bồng men lam 25cm', category: 'Đồ thờ', pattern: 'Hoa văn cổ', size: '25cm', color: 'Men lam', unit: 'Cái', cost: 150000, price1: 300000, price2: 270000, price3: 250000, qty: 8, low_stock: 2 },
-      { sku: 'DN-LAM', name: 'Đài nước men lam', category: 'Đồ thờ', pattern: 'Đài sen', size: '12cm', color: 'Men lam', unit: 'Cái', cost: 45000, price1: 95000, price2: 85000, price3: 80000, qty: 30, low_stock: 10 },
-      { sku: 'AC-SEN-6', name: 'Bộ ấm chén hoa sen 6 chén', category: 'Ấm chén', pattern: 'Hoa sen', size: '6 chén', color: 'Men trắng', unit: 'Bộ', cost: 210000, price1: 420000, price2: 380000, price3: 350000, qty: 12, low_stock: 3 },
-    ],
+    products: VG_PRODUCTS,
     kits: [{ sku: 'BO-DT-LAM-5', name: 'Bộ đồ thờ men lam 5 món', category: 'Đồ thờ', unit: 'Bộ', price1: 1690000, price2: 1550000, price3: 1450000,
       components: [['BH-LAM-16', 1], ['LH-LAM-30', 2], ['MB-LAM-25', 1], ['DN-LAM', 1]] }],
     debts: [{ party_type: 'kh', party: 'PA', amount: 6500000, due_date: D(20), note: 'Nợ cũ' }],

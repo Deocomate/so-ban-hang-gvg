@@ -205,7 +205,7 @@ api.as(staff); await api.call('save_notify_prefs', { book_id: VG, prefs: { van_c
 C('Tắt loại “vận chuyển” thì không nhận nữa', (await notes(staff, VG)).items.some((x) => x.kind === 'van_chuyen'), false);
 api.as(owner);
 r = await svc('run_scheduled', { kind: 'daily_report' });
-C('Báo cáo ngày tạo cho cả 2 sổ', r.created, 2);
+C('Báo cáo ngày tạo cho cả 3 sổ', r.created, 3);
 r = await svc('run_scheduled', { kind: 'daily_report' });
 C('Chạy lại trong ngày không gửi trùng', r.created, 0);
 const daily = (await notes(owner, VG)).items.find((x) => x.kind === 'bao_cao');

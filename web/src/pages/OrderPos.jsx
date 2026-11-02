@@ -7,6 +7,7 @@ import { money, qty as fq, todayVN, match } from '../lib/format.js';
 import { useProducts, useCustomers, useFunds, tierPrice, productSub } from '../lib/lookups.js';
 import { packing, weightOf, fmtKg } from '../lib/docs/model.js';
 import { Btn, Icon, Input, Select, DateInput, NumInput, Loading, Picker } from '../components/ui.jsx';
+import { ChargesDialog } from './Charges.jsx';
 
 let seq = 0;
 const METHODS = ['Tiền mặt', 'Chuyển khoản', 'Thẻ / POS', 'TikTok Shop', 'COD'];
@@ -65,18 +66,19 @@ function ProductSearch({ products, tier, onPick, inputRef }) {
   );
 }
 
-export function OrderPos({ id, kind: kind0, customer_id: cust0, onClose }) {
+export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_contract, onClose }) {
   const { settings, open, can, rpc, toast, book } = useApp();
   const products = useProducts();
   const customers = useCustomers();
   const funds = useFunds(can('thu_chi'));
   const { run, busy } = useAction();
   const searchRef = useRef(null); const rootRef = useRef(null); const lastAdded = useRef(null);
-  const [loaded, setLoaded] = useState(!id);
+  const [loaded, setLoaded] = useState(!id && !quote_id);
   const [armClose, setArmClose] = useState(false);
+  const [showCharges, setShowCharges] = useState(false);
   const [f, setF] = useState({
     kind: kind0 || 'ban_san', customer_id: cust0 || '', channel: (settings.channels || [])[0] || '', order_date: todayVN(), due_date: '',
-    staff: lsGet('gomsu.staff'), note: '', discount: 0, shipping_fee: 0, lines: [],
+    staff: lsGet('gomsu.staff'), note: '', discount: 0, shipping_fee: 0, vat_rate: 0, transport: null, lines: [],
     pay: { amount: null, fund_id: '', method: 'Tiền mặt', fee: null },
   });
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
@@ -87,12 +89,24 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, onClose }) {
     (async () => {
       const [o] = await rpc('q', { view: 'sales_orders', filters: [['id', 'eq', id]] });
       const ls = await rpc('q', { view: 'sales_order_lines', filters: [['order_id', 'eq', id]], order: 'line_no' });
+      const trip = (await rpc('q', { view: 'driver_trips', filters: [['order_id', 'eq', id]] })).find((t) => !t.delivery_id);
       setF((s) => ({ ...s, kind: o.kind, customer_id: o.customer_id, channel: o.channel || '', order_date: o.order_date, due_date: o.due_date || '', staff: o.staff || '',
-        note: o.note || '', discount: o.discount, shipping_fee: o.shipping_fee, status0: o.status, code: o.code,
+        note: o.note || '', discount: o.discount, shipping_fee: o.shipping_fee, vat_rate: o.vat_rate || 0, transport: trip ? { driver_id: trip.driver_id, amount: trip.amount, payer: trip.payer, collect: trip.collect, note: trip.note || '' } : null, status0: o.status, code: o.code,
         lines: ls.map((l) => ({ key: ++seq, id: l.id, product_id: l.product_id, qty: l.qty, unit_price: l.unit_price, discount_pct: l.discount_pct, po_line_id: l.po_line_id, note: l.note || '', manual: true })) }));
       setLoaded(true);
     })().catch((e) => toast(e.message, 'err'));
   }, [id]);
+
+  // Chuyển từ báo giá: sao chép khách và các dòng có gắn hàng hóa
+  useEffect(() => {
+    if (!quote_id) return;
+    rpc('q', { view: 'quotes', filters: [['id', 'eq', quote_id]] }).then(([q]) => {
+      const b = q.body; const ls = b.groups.flatMap((g) => g.lines).filter((l) => l.product_id);
+      setF((s) => ({ ...s, customer_id: q.customer_id || s.customer_id, note: `Theo báo giá ${q.code}${q.site ? ' · ' + q.site : ''}`, vat_rate: b.vat_mode === 'them' ? b.vat_rate : 0, shipping_fee: b.ship?.amount || 0,
+        lines: ls.map((l) => ({ key: ++seq, product_id: l.product_id, qty: l.qty, unit_price: l.price, discount_pct: 0, note: l.note || '', manual: true })) }));
+      setLoaded(true);
+    }).catch((e) => toast(e.message, 'err'));
+  }, [quote_id]);
 
   useEffect(() => {
     if (!f.customer_id && customers.data) { const kl = customers.data.find((c) => c.code === 'KL'); if (kl) set('customer_id', kl.id); }
@@ -134,12 +148,14 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, onClose }) {
   const packUnits = [...new Set(f.lines.map((l) => pmap[l.product_id]).filter((p) => p && p.units_per_pack).map((p) => p.pack_unit || 'hộp'))];
   const boxLabel = packUnits.length === 1 ? packUnits[0] : 'kiện';
   const goods = Math.max(0, Math.round(gross - (Number(f.discount) || 0)));
-  const total = goods + (Number(f.shipping_fee) || 0);
+  const vatAmt = Math.round(goods * (Number(f.vat_rate) || 0) / 100);
+  const total = goods + vatAmt + (Number(f.shipping_fee) || 0);
   const payAmt = Number(f.pay.amount) || 0;
   const editing = !!id;
   const isDat = f.kind === 'dat_hang';
   const isOnline = /tiktok|shopee|lazada|facebook/i.test(f.channel || '');
   const priceNames = settings.price_names || ['Giá 1', 'Giá 2', 'Giá 3'];
+  const allowOver = can('owner') && !!settings.allow_oversell;
 
   // Phím tắt: F3 tìm hàng, F4 tìm khách
   useEffect(() => {
@@ -161,8 +177,8 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, onClose }) {
     lsSet('gomsu.staff', f.staff || '');
     const p = {
       id: id || null, kind: f.kind, customer_id: f.customer_id, channel: f.channel, order_date: f.order_date, due_date: f.due_date || null, staff: f.staff,
-      note: f.note, discount: Number(f.discount) || 0, shipping_fee: Number(f.shipping_fee) || 0,
-      status: mode === 'draft' ? 'nhap' : 'xac_nhan', deliver_now: mode === 'deliver',
+      note: f.note, discount: Number(f.discount) || 0, shipping_fee: Number(f.shipping_fee) || 0, vat_rate: Number(f.vat_rate) || 0, transport: f.transport, quote_id: quote_id || null,
+      status: mode === 'draft' ? 'nhap' : 'xac_nhan', deliver_now: mode === 'deliver', override: mode === 'deliver' && allowOver,
       lines: lines.map((l) => ({ id: l.id || null, product_id: l.product_id, qty: Number(l.qty), unit_price: l.unit_price, discount_pct: Number(l.discount_pct) || 0,
         po_line_id: l.po_line_id || null, note: (l.note || '').trim() || null })),
       deposit: payAmt > 0 && mode !== 'draft' ? { amount: Math.min(payAmt, mode === 'deliver' ? total : payAmt), fund_id: f.pay.fund_id, method: f.pay.method, fee: f.pay.fee || 0 } : null,
@@ -171,7 +187,8 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, onClose }) {
     if (r) {
       onClose();
       if (r.warnings?.length) toast('Lưu ý tồn kho: ' + r.warnings.join('; '), 'err');
-      if (print) open('doc', { kind: 'order', id: r.id, type: isDat ? 'don_dat_hang' : 'hoa_don' });
+      if (then_contract) open('contract-form', { order_id: r.id });
+      else if (print) open('doc', { kind: 'order', id: r.id, type: isDat ? 'don_dat_hang' : 'hoa_don' });
       else if (!editing) open('order', { id: r.id });
     }
   };
@@ -195,6 +212,8 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, onClose }) {
         <button className={`pos-close${armClose ? ' armed' : ''}`} onClick={tryClose} title="Đóng">{armClose ? <span className="small">Bỏ đơn đang làm? Bấm lần nữa</span> : <Icon name="x" />}</button>
       </div>
 
+      {showCharges && <ChargesDialog goods={goods} vatRate={f.vat_rate} shippingFee={f.shipping_fee} transport={f.transport} onClose={() => setShowCharges(false)}
+        onApply={(r) => setF((s) => ({ ...s, vat_rate: r.vat_rate, shipping_fee: r.shipping_fee, transport: r.transport }))} />}
       <div className="pos-body">
         <div className="pos-left">
           <div className="pos-lines">
@@ -217,7 +236,7 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, onClose }) {
                   <div className="pos-line-info">
                     <div className="pos-line-name"><span className="muted">{p.sku}</span> <b>{p.name || '…'}</b>{p.is_kit ? ' (bộ)' : ''}</div>
                     <div className={`small ${short ? 'bad' : 'muted'}`}>
-                      {productSub(p) ? productSub(p) + ' · ' : ''}Có thể bán {fq(p.available)} {p.unit}{p.incoming ? ` · đang về ${fq(p.incoming)}` : ''}{short ? ' — không đủ để giao ngay' : ''}
+                      {productSub(p) ? productSub(p) + ' · ' : ''}Có thể bán {fq(p.available)} {p.unit}{p.incoming ? ` · đang về ${fq(p.incoming)}` : ''}{short ? (allowOver ? ' — sẽ giao vượt tồn' : ' — không đủ để giao ngay') : ''}
                     </div>
                     <div className="pos-split">
                       {pk.text ? <span className="pos-pack"><Icon name="box" size={14} /> {pk.text}</span>
@@ -270,7 +289,9 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, onClose }) {
               <b className="r">{fmtKg(weightSum)}{noWeight > 0 && <div className="small muted" style={{ fontWeight: 400 }}>thiếu {noWeight} mặt hàng chưa khai</div>}</b></>}
             <span>Tổng tiền hàng <span className="pos-count">{fq(qtySum)}</span></span><b className="r">{money(gross)}</b>
             <span>Giảm giá</span><NumInput suffix={false} min={0} value={f.discount} onChange={(v) => set('discount', v)} className="pos-uline" aria-label="Giảm giá" />
-            <span>Phí vận chuyển</span><NumInput suffix={false} min={0} value={f.shipping_fee} onChange={(v) => set('shipping_fee', v)} className="pos-uline" aria-label="Phí vận chuyển" />
+            <button className="link-btn pos-charge" onClick={() => setShowCharges(true)}>Thu khác ›</button><b className="r">{money(vatAmt + (Number(f.shipping_fee) || 0))}</b>
+            {f.vat_rate > 0 && <><span className="muted small">VAT {fq(f.vat_rate)}%</span><span className="r muted small">{money(vatAmt)}</span></>}
+            {Number(f.shipping_fee) > 0 && <><span className="muted small">Tiền vận chuyển</span><span className="r muted small">{money(f.shipping_fee)}</span></>}
             <b>Khách cần trả</b><b className="r pos-due-amt">{money(total)}</b>
           </div>
 

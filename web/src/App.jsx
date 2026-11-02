@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AppProvider, useApp } from './lib/store.jsx';
 import { createApiBackend } from './lib/backend.js';
 import { Btn, Icon, Loading, Note, Field, Input, Modal } from './components/ui.jsx';
@@ -16,56 +16,118 @@ import { ShippingPage } from './pages/Shipping.jsx';
 import { BankPage } from './pages/BankTxns.jsx';
 import { Bell, NotifyPanel, useNotifications, openLink } from './components/Notify.jsx';
 import { registerSW } from './lib/push.js';
+import { PriceBookPage, DriversPage, SalesReturnsPage, SupplierReturnsPage } from './pages/Catalog.jsx';
+import { QuotesPage } from './pages/Quotes.jsx';
+import { ContractsPage } from './pages/Contracts.jsx';
+import { TaxPage, InputInvoicesPage } from './pages/Tax.jsx';
 
 const PAGES = [
   { id: 'tong-quan', label: 'Tổng quan', icon: 'home', perm: 'xem_bao_cao', comp: Overview },
   { id: 'san-pham', label: 'Danh sách hàng hóa', icon: 'vase', comp: ProductsPage },
+  { id: 'bang-gia', label: 'Bảng giá', icon: 'tag', comp: PriceBookPage },
   { id: 'kho', label: 'Tồn kho & kiểm kho', icon: 'box', comp: InventoryPage },
-  { id: 'ban-hang', label: 'Đơn bán hàng', icon: 'order', comp: SalesPage },
-  { id: 'dat-rieng', label: 'Đơn đặt riêng', icon: 'kiln', comp: SpecialPage },
+  { id: 'bao-gia', label: 'Báo giá', icon: 'quote', comp: QuotesPage },
+  { id: 'hop-dong', label: 'Hợp đồng', icon: 'contract', comp: ContractsPage },
+  { id: 'dat-rieng', label: 'Đặt hàng', icon: 'order', comp: SpecialPage },
+  { id: 'ban-hang', label: 'Hóa đơn', icon: 'invoice', comp: SalesPage },
+  { id: 'tra-hang', label: 'Trả hàng', icon: 'return', comp: SalesReturnsPage },
   { id: 'van-chuyen', label: 'Vận chuyển', icon: 'route', comp: ShippingPage },
-  { id: 'nhap-hang', label: 'Nhập hàng / đặt xưởng', icon: 'truck', perm: 'nhap_hang', comp: PurchasesPage },
+  { id: 'lai-xe', label: 'Lái xe & công nợ', icon: 'truck', comp: DriversPage },
+  { id: 'nhap-hang', label: 'Nhập hàng / đặt xưởng', icon: 'import', perm: 'nhap_hang', comp: PurchasesPage },
+  { id: 'hoa-don-vao', label: 'Hóa đơn đầu vào', icon: 'receipt', perm: 'xem_bao_cao', comp: InputInvoicesPage },
+  { id: 'tra-nhap', label: 'Trả hàng nhập', icon: 'return', comp: SupplierReturnsPage },
   { id: 'khach-hang', label: 'Khách hàng', icon: 'users', comp: (p) => <PartiesPage type="kh" {...p} /> },
   { id: 'nha-cung-cap', label: 'Nhà cung cấp', icon: 'kiln', comp: (p) => <PartiesPage type="ncc" {...p} /> },
   { id: 'thu-chi', label: 'Phiếu thu chi', icon: 'cash', perm: 'thu_chi', comp: CashPage },
   { id: 'tien-ve', label: 'Tiền về tài khoản', icon: 'bank', perm: 'thu_chi', comp: BankPage },
   { id: 'chi-phi', label: 'Chi phí vận hành', icon: 'receipt', perm: 'chi_phi', comp: ExpensesPage },
   { id: 'bao-cao', label: 'Báo cáo', icon: 'chart', perm: 'xem_bao_cao', comp: ReportsPage },
+  { id: 'thue', label: 'Thuế HKD', icon: 'tax', perm: 'xem_bao_cao', comp: TaxPage },
   { id: 'cai-dat', label: 'Cài đặt', icon: 'gear', comp: SettingsPage },
 ];
 // Thanh menu ngang: mục đơn hoặc nhóm có menu con
 const MENU = [
   { id: 'tong-quan' },
-  { label: 'Hàng hóa', icon: 'vase', items: ['san-pham', 'kho'] },
-  { label: 'Đơn hàng', icon: 'order', items: ['ban-hang', 'dat-rieng', 'van-chuyen'] },
-  { id: 'nhap-hang', label: 'Nhập hàng' },
-  { label: 'Đối tác', icon: 'users', items: ['khach-hang', 'nha-cung-cap'] },
-  { label: 'Sổ quỹ', icon: 'cash', items: ['thu-chi', 'tien-ve', 'chi-phi'] },
+  { label: 'Hàng hóa', icon: 'vase', items: ['san-pham', 'bang-gia', 'kho'] },
+  { label: 'Mua hàng', icon: 'truck', items: ['nha-cung-cap', 'nhap-hang', 'hoa-don-vao', 'tra-nhap'] },
+  { id: 'bao-gia' },
+  { id: 'hop-dong' },
+  { label: 'Đơn hàng', icon: 'order', items: ['dat-rieng', 'ban-hang', 'tra-hang', 'van-chuyen', 'lai-xe'] },
+  { id: 'khach-hang' },
+  { label: 'Sổ quỹ', icon: 'wallet', items: ['thu-chi', 'tien-ve', 'chi-phi'] },
   { id: 'bao-cao' },
+  { id: 'thue' },
 ];
 
 function readHash() { const h = (location.hash || '').replace('#', ''); return PAGES.some((p) => p.id === h) ? h : null; }
 
-// Menu thả xuống: bấm để mở (máy tính rê chuột cũng mở); bấm ra ngoài hoặc Esc để đóng
+// Menu thả xuống: bấm để mở (máy tính rê chuột cũng mở); bấm ra ngoài hoặc Esc để đóng.
+// Rê chuột phải dừng một nhịp mới mở (lướt qua nút bên cạnh thì không đổi menu); rời chuột cũng chờ một nhịp mới đóng.
+// Chỉ một menu hiện tại một thời điểm: mở menu khác thì menu cũ tắt ngay, không chạy hiệu ứng đóng.
+const DD_ENTER_MS = 110; const DD_LEAVE_MS = 240; const DD_EXIT_MS = 130;
+let activeDropdown = null; // ref tới hàm đóng của menu đang mở
 function Dropdown({ label, icon, active, align = 'left', className = '', btnClass = 'mnav', children }) {
-  const [show, setShow] = useState(false);
-  const ref = useRef(null);
+  const [phase, setPhase] = useState('closed'); // closed → open → closing → closed
+  const [side, setSide] = useState(align);
+  const menuRef = useRef(null); const ref = useRef(null); const timer = useRef(null); const closeRef = useRef(null);
+  const show = phase === 'open';
+  const close = () => {
+    clearTimeout(timer.current);
+    setPhase((v) => (v === 'open' ? 'closing' : v));
+    timer.current = setTimeout(() => setPhase('closed'), DD_EXIT_MS);
+    if (activeDropdown === closeRef) activeDropdown = null;
+  };
+  closeRef.current = () => {
+    clearTimeout(timer.current);
+    setPhase('closed');
+    if (activeDropdown === closeRef) activeDropdown = null;
+  };
+  const openNow = () => {
+    clearTimeout(timer.current);
+    if (activeDropdown && activeDropdown !== closeRef) activeDropdown.current();
+    activeDropdown = closeRef;
+    setPhase('open');
+  };
+  const hoverIn = () => {
+    clearTimeout(timer.current);
+    if (phase === 'closing') openNow();
+    else if (!show) timer.current = setTimeout(openNow, DD_ENTER_MS);
+  };
+  const hoverOut = () => {
+    clearTimeout(timer.current);
+    if (show) timer.current = setTimeout(close, DD_LEAVE_MS);
+  };
+  useEffect(() => () => clearTimeout(timer.current), []);
+  // Thanh menu có thể xuống dòng: căn lại menu con nếu tràn khỏi mép màn hình
+  useLayoutEffect(() => {
+    if (phase === 'closed') { setSide(align); return; }
+    if (!show) return;
+    const r = menuRef.current?.getBoundingClientRect();
+    if (r && r.left < 0) setSide('left');
+    else if (r && r.right > document.documentElement.clientWidth) setSide('right');
+  }, [phase, align]);
   useEffect(() => {
     if (!show) return;
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setShow(false); };
-    const k = (e) => { if (e.key === 'Escape') setShow(false); };
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) close(); };
+    const k = (e) => { if (e.key === 'Escape') close(); };
     document.addEventListener('mousedown', h); window.addEventListener('keydown', k);
     return () => { document.removeEventListener('mousedown', h); window.removeEventListener('keydown', k); };
   }, [show]);
   const hover = typeof window !== 'undefined' && window.matchMedia?.('(hover: hover)').matches;
   return (
-    <div className={`dd ${className}`} ref={ref} onMouseEnter={hover ? () => setShow(true) : undefined} onMouseLeave={hover ? () => setShow(false) : undefined}>
-      <button type="button" className={`${btnClass}${active ? ' on' : ''}`} aria-haspopup="menu" aria-expanded={show} onClick={() => setShow((v) => (hover ? true : !v))}>
+    <div className={`dd ${className}`} ref={ref} onMouseEnter={hover ? hoverIn : undefined} onMouseLeave={hover ? hoverOut : undefined}>
+      <button type="button" className={`${btnClass}${active ? ' on' : ''}`} aria-haspopup="menu" aria-expanded={show} onClick={() => (hover || !show ? openNow() : close())}>
         {icon && <Icon name={icon} size={17} />}{label}<Icon name="down" size={14} className="dd-caret" />
       </button>
-      {show && <div className={`dd-menu dd-${align}`} role="menu" onClick={() => setShow(false)}>{children}</div>}
+      {phase !== 'closed' && <div ref={menuRef} className={`dd-menu dd-${side}${show ? '' : ' closing'}`} role="menu" onClick={close}>{children}</div>}
     </div>
   );
+}
+
+const BRAND_LOGOS = { TH: 'th', VG: 'vg', AN: 'an' };
+function BrandMark({ book }) {
+  const logo = BRAND_LOGOS[book.short_name];
+  return logo ? <img className="seal seal-img" src={`/logos/${logo}.png`} alt={book.name} /> : <div className="seal">{book.short_name}</div>;
 }
 
 function Shell() {
@@ -93,6 +155,8 @@ function Shell() {
   const go = (id) => { setPage(id); setMoreOpen(false); try { history.replaceState(null, '', '#' + id); } catch (e) { /* bỏ qua */ } window.scrollTo(0, 0); };
   const signOut = () => backend.signOut().then(() => setSession(null));
   const switchBook = (id) => { closeAll(); setBookId(id); };
+  // Màu giao diện theo logo của sổ đang mở
+  useEffect(() => { const r = document.documentElement; if (book?.short_name) r.dataset.book = book.short_name; return () => { delete r.dataset.book; }; }, [book?.short_name]);
 
   if (bootError) return <div className="center-screen"><div className="login"><Note tone="warn">{bootError}</Note><Btn onClick={signOut}>Đăng xuất</Btn></div></div>;
   if (!books || !book) return <div className="center-screen"><Loading text="Đang mở sổ…" /></div>;
@@ -118,10 +182,16 @@ function Shell() {
   return (
     <div className="app">
       <header className="hdr">
-        <div className="hdr-in">
-          <div className="brand"><div className="seal">{book.short_name}</div><div className="brand-text"><div className="brand-name">{book.name}</div><div className="brand-sub">{book.role === 'owner' ? 'Chủ cửa hàng' : (book.display_name || 'Nhân viên')}</div></div></div>
+        <div className={`hdr-in${books.length > 1 ? ' multi' : ''}`}>
+          <div className="brand"><BrandMark book={book} /><div className="brand-text"><div className="brand-name">{book.name}</div><div className="brand-sub">{book.role === 'owner' ? 'Chủ cửa hàng' : (book.display_name || 'Nhân viên')}</div></div></div>
           {bookSwitch()}
           <span className="grow" />
+          {quick.length > 1 && (
+            <Dropdown label="Tạo nhanh" icon="plus" align="right" className="hdr-action" btnClass="hdr-quick">
+              {quick.map((q) => <button key={q.label} role="menuitem" className="dd-item" onClick={q.on}><Icon name={q.icon} size={16} />{q.label}</button>)}
+            </Dropdown>
+          )}
+          {can('ban_hang') && <button className="sell-btn hdr-action" onClick={() => open('order-form', {})}><Icon name="cart" size={18} />Bán hàng</button>}
           <Bell data={notif.data} onOpen={() => setNotifyOpen(true)} />
           {byId['cai-dat'] && <button className={`icon-btn hdr-gear${cur.id === 'cai-dat' ? ' on' : ''}`} onClick={() => go('cai-dat')} aria-label="Cài đặt" title="Cài đặt"><Icon name="gear" size={20} /></button>}
           <Dropdown className="hdr-user" btnClass="user-btn" align="right" icon="users" label={<span className="user-name">{userName}</span>}>
@@ -138,13 +208,6 @@ function Shell() {
               {m.items.map((x) => <button key={x.id} role="menuitem" className={`dd-item${x.id === cur.id ? ' on' : ''}`} onClick={() => go(x.id)}><Icon name={x.icon} size={16} />{x.label}</button>)}
             </Dropdown>
           ) : <button key={m.id} className={`mnav${cur.id === m.id ? ' on' : ''}`} onClick={() => go(m.id)}><Icon name={m.icon} size={17} />{m.label}</button>))}
-          <span className="grow" />
-          {quick.length > 1 && (
-            <Dropdown label="Tạo nhanh" icon="plus" align="right">
-              {quick.map((q) => <button key={q.label} role="menuitem" className="dd-item" onClick={q.on}><Icon name={q.icon} size={16} />{q.label}</button>)}
-            </Dropdown>
-          )}
-          {can('ban_hang') && <button className="sell-btn" onClick={() => open('order-form', {})}><Icon name="cart" size={18} />Bán hàng</button>}
         </div>
       </nav>
       <main className="page" key={book.id + cur.id}><Page go={go} /></main>
@@ -198,7 +261,7 @@ function Login() {
   return (
     <div className="center-screen login-screen">
       <form className="login card" onSubmit={submit}>
-        <div className="brand"><div className="seal">G</div><div><div className="brand-name">Sổ bán hàng gốm</div><div className="brand-sub">Thanh Hải · Vũ Gia</div></div></div>
+        <div className="brand"><div className="seal">G</div><div><div className="brand-name">Sổ bán hàng gốm</div><div className="brand-sub">Thanh Hải · Vũ Gia · Anamtile</div></div></div>
         <h1 className="login-title">{mode === 'in' ? 'Đăng nhập' : mode === 'up' ? 'Tạo tài khoản' : 'Quên mật khẩu'}</h1>
         {mode === 'up' && <Field label="Tên hiển thị"><Input id="name" value={name} onChange={setName} placeholder="vd. Chị Lan" /></Field>}
         <Field label="Email"><Input id="email" type="email" required value={email} onChange={setEmail} autoComplete="email" /></Field>

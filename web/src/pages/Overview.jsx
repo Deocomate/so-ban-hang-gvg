@@ -3,6 +3,7 @@ import { useApp, useRpcData, useQ } from '../lib/store.jsx';
 import { money, moneyD, short, pct, dmy, addMonths, monthStart, monthLabel, todayVN, monthEnd } from '../lib/format.js';
 import { Icon, Loading, ErrorBox, Note, Section, Table, Pill, Btn } from '../components/ui.jsx';
 import { PeriodPicker, usePeriod } from '../components/Period.jsx';
+import { DashboardBlocks } from './Dashboard.jsx';
 
 export const METRICS = {
   revenue: { label: 'Doanh thu', how: 'Tiền hàng ĐÃ GIAO cho khách trong kỳ (theo giá bán sau chiết khấu, đã gồm thuế) + phí vận chuyển thu của khách − hàng khách trả lại. Tiền cọc và đơn chưa giao KHÔNG tính.' },
@@ -85,9 +86,11 @@ export default function Overview({ go }) {
         <PeriodPicker value={period} onChange={setPeriod} />
       </div>
       <ErrorBox error={error} />
+      <DashboardBlocks period={period} go={go} />
       {!data ? <Loading /> : (
         <>
           {!cost && <Note>Bạn chưa được cấp quyền xem giá vốn và lợi nhuận — các ô này để trống.</Note>}
+          <h2 className="sec-h">Số liệu chi tiết</h2>
           <div className="kpis kpis-3">
             <Kpi k="revenue" data={data} onOpen={drill} tone="key" sub={`Thuần: ${short(data.revenue_net)} · thuế ước tính ${short(data.vat)}`} />
             <Kpi k="cash_in" data={data} onOpen={drill} sub={`Chi ra: ${short(data.cash_out)} · dòng tiền thuần ${short(data.net_cash)}`} />

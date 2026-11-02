@@ -11,7 +11,8 @@ import {
 const here = path.dirname(fileURLToPath(import.meta.url));
 const XLSX = createRequire(path.join(here, '../../web/package.json'))('xlsx');
 const { G, C, E } = suite();
-const PN = ['Giá lẻ', 'Giá đại lý', 'Giá công trình'];
+const PN = ['Giá lẻ', 'Giá đại lý', 'Giá công trình', 'Giá đại lý II'];
+const PN3 = PN.slice(0, 3);
 
 const fileOf = (name, data) => ({ name, arrayBuffer: async () => data });
 const xlsxFile = (sheets) => {
@@ -63,13 +64,18 @@ C('Giá lẻ vào mức 1', fieldOf(o.columns, 'Giá lẻ'), 'price1');
 C('Giá công trình vào mức 3', fieldOf(o.columns, 'Giá công trình'), 'price3');
 C('Trọng lượng/hộp vào kg mỗi hộp', fieldOf(o.columns, 'Trọng lượng/hộp (kg)'), 'pack_weight');
 C('Trọng lượng/viên vào kg mỗi viên', fieldOf(o.columns, 'Trọng lượng/viên (kg)'), 'unit_weight');
-C('Cột không có chỗ nhập thì không tự chọn', [fieldOf(o.columns, 'Giá đại lý II'), fieldOf(o.columns, 'Thương hiệu')], ['', '']);
+C('Giá đại lý II vào mức giá 4', fieldOf(o.columns, 'Giá đại lý II'), 'price4');
+C('Thương hiệu được nhận', fieldOf(o.columns, 'Thương hiệu'), 'brand');
+C('Mọi cột có tiêu đề đều được chọn', o.columns.every((c) => c.on), true);
 C('Cột không tiêu đề, không dữ liệu bị lược bỏ', o.columns.length, 20);
+const three = guessColumns(o.sheet, o.headerIdx, importRules('products', PN3));
+C('Sổ chỉ có 3 mức giá thì không tự chọn Giá đại lý II', fieldOf(three, 'Giá đại lý II'), '');
 
 G('2. Cảnh báo định dạng');
 const iss = issuesOf(o);
 C('File của khách không bị chặn', iss.filter((x) => x.tone === 'bad').length, 0);
-C('Báo các cột có dữ liệu chưa được nhập', iss.some((x) => x.text.includes('Giá đại lý II') && x.text.includes('Thương hiệu')), true);
+C('Không còn cột nào có dữ liệu mà không có chỗ nhập', iss.some((x) => x.text.startsWith('Có dữ liệu nhưng')), false);
+C('Sổ 3 mức giá báo cột chưa được nhập', columnIssues('products', three, importFields('products', PN3), o.sheet, o.headerIdx, PN3).some((x) => x.text.includes('Giá đại lý II')), true);
 C('Cột trống Mẫu, Màu vẫn nhập được', iss.some((x) => x.tone === 'info' && x.text.includes('Mẫu') && x.text.includes('Màu sắc')), true);
 C('Bỏ cả Tên lẫn SKU thì bị chặn', issuesOf(o, 'products', without(o.columns, 'Tên hàng hóa *', 'Mã hàng (SKU)')).some((x) => x.tone === 'bad'), true);
 C('Bỏ SKU thì báo sẽ cấp mã mới', issuesOf(o, 'products', without(o.columns, 'Mã hàng (SKU)')).some((x) => x.text.includes('Không có cột Mã SKU')), true);
@@ -83,7 +89,8 @@ const imp = await api.call('import_products', { book_id: TH, request_id: rid(), 
 C('Tạo 3 mã', imp.created, 3);
 C('Không có tồn nên không có phiếu tồn đầu kỳ', imp.adjustment_code, null);
 let P = Object.fromEntries((await products()).map((p) => [p.sku, p]));
-C('Ô giá trống thành 0, không lỗi', P['NAD15-ND004'].price2, 40689);
+C('Ô giá trống thành 0, không lỗi', P['NAD15-ND004'].price4, 0);
+C('Thương hiệu và Giá đại lý II được ghi', [P['NAD27-DC001'].brand, P['NAD27-DC001'].price4, P['NAD27-DC001'].price2], ['Thanh Hải', 19000, 16500]);
 C('Đóng gói sọt được giữ', P['NAD15-ND004'].pack_unit, 'sọt');
 C('Mẫu, màu để trống', [P['NAD27-DC001'].pattern ?? '', P['NAD27-DC001'].color ?? ''], ['', '']);
 
@@ -123,8 +130,8 @@ C('Giống hàng đã có thì nghi trùng', rowsOf(noSku, await products()).map
 G('7. Xuất ra rồi nhập lại');
 const exported = await products();
 const columns = [
-  { key: 'sku', label: 'Mã SKU' }, { key: 'name', label: 'Tên hàng hóa' }, { key: 'category', label: 'Chủng loại' }, { key: 'pattern', label: 'Mẫu' }, { key: 'size', label: 'Kích thước' },
-  { key: 'color', label: 'Màu sắc / men' }, { key: 'unit', label: 'ĐVT' }, { key: 'avg_cost', label: 'Giá vốn' }, { key: 'price1', label: PN[0] }, { key: 'price2', label: PN[1] }, { key: 'price3', label: PN[2] },
+  { key: 'sku', label: 'Mã SKU' }, { key: 'name', label: 'Tên hàng hóa' }, { key: 'category', label: 'Chủng loại' }, { key: 'brand', label: 'Thương hiệu' }, { key: 'pattern', label: 'Mẫu' }, { key: 'size', label: 'Kích thước' },
+  { key: 'color', label: 'Màu sắc / men' }, { key: 'unit', label: 'ĐVT' }, { key: 'avg_cost', label: 'Giá vốn' }, ...PN.map((label, i) => ({ key: `price${i + 1}`, label })),
   { key: 'on_hand', label: 'Số lượng tồn' }, { key: 'low_stock', label: 'Tồn tối thiểu' }, { key: 'units_per_pack', label: 'Số viên/hộp' }, { key: 'pack_unit', label: 'Đơn vị đóng gói' },
   { key: 'pack_weight', label: 'Trọng lượng/thùng (kg)' }, { key: 'unit_weight', label: 'Trọng lượng/viên (kg)' }, { key: 'note', label: 'Ghi chú' },
 ];
@@ -169,4 +176,24 @@ const old = await open(xlsxFile({ 'Hàng hóa': [['SKU', 'Tên hàng hóa', 'Gi�
 const merged = mergeOpening(buildRows(old.sheet, old.headerIdx, old.columns), openingSheet(old.sheets));
 C('Ghép tồn từ sheet Tồn đầu kỳ', [merged[0].qty, merged[0].cost], [12, 500]);
 
-await finish('excel');
+G('10. Mức giá 4 và bán khi chưa có tồn');
+const tier4 = await open(xlsxFile({ S: [['Tên khách hàng', 'Mức giá'], ['Đại lý cấp 2', 'Giá đại lý II'], ['Mức sai', 5]] }), 'kh');
+const t4 = validateParties(buildRows(tier4.sheet, tier4.headerIdx, tier4.columns), [], PN, 'kh');
+C('Tên mức giá 4 được hiểu', [t4[0].price_tier, rowState(t4[1])], [4, 'err']);
+C('Sổ 3 mức giá không nhận mức 4', rowState(validateParties([{ __row: 2, name: 'A', price_tier: 4 }], [], PN3, 'kh')[0]), 'err');
+await api.call('import_parties', { book_id: TH, type: 'kh', request_id: rid(), rows: payload(t4) });
+const dl2 = await api.one('customers', TH, [['name', 'eq', 'Đại lý cấp 2']]);
+C('Khách lưu được mức giá 4', dl2.price_tier, 4);
+await E('Không bỏ được mức 4 khi còn khách đang dùng', () => api.call('update_book_settings', { book_id: TH, settings: { price_names: PN3 } }), 'mức giá 4');
+const stockless = (await products()).find((p) => p.sku === 'NAD27-DC002');
+const order = (extra = {}) => api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: dl2.id, status: 'xac_nhan', deliver_now: true, lines: [{ product_id: stockless.id, qty: 3 }], ...extra });
+C('Hàng chưa có tồn', stockless.on_hand, 0);
+await E('Mặc định không giao được khi hết tồn', () => order({ override: true }), 'Không đủ hàng');
+await api.call('update_book_settings', { book_id: TH, settings: { allow_oversell: true } });
+await E('Bật cài đặt nhưng không xác nhận vẫn chặn', () => order(), 'Không đủ hàng');
+const sold = await order({ override: true });
+C('Bật cài đặt thì giao ngay được', !!sold.delivery_code, true);
+C('Đơn lấy đúng giá mức 4', (await api.q('sales_order_lines', TH, [['order_id', 'eq', sold.id]]))[0].unit_price, 14000);
+C('Tồn bị âm đúng số đã giao', (await api.one('products', TH, [['id', 'eq', stockless.id]])).on_hand, -3);
+
+finish('excel');

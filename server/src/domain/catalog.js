@@ -7,15 +7,16 @@ export function save_product(p) {
   requirePerm(b, 'danh_muc');
   if ((num(p.units_per_pack) ?? 1) <= 0) fail('Số lượng mỗi hộp phải lớn hơn 0');
   if ((num(p.pack_weight) ?? 0) < 0 || (num(p.unit_weight) ?? 0) < 0) fail('Trọng lượng không được âm');
+  if ((num(p.norm_m2) ?? 0) < 0 || (num(p.norm_m) ?? 0) < 0) fail('Định mức không được âm');
   if (!trimNz(p.name)) fail('Thiếu tên sản phẩm');
-  if ((num(p.price1) ?? 0) < 0 || (num(p.price2) ?? 0) < 0 || (num(p.price3) ?? 0) < 0) fail('Giá bán không được âm');
+  if ((num(p.price1) ?? 0) < 0 || (num(p.price2) ?? 0) < 0 || (num(p.price3) ?? 0) < 0 || (num(p.price4) ?? 0) < 0) fail('Giá bán không được âm');
   let pid = nz(p.id); let s = trimNz(p.sku); const kit = bool(p.is_kit) ?? false;
   const fields = {
-    name: trimNz(p.name), category: p.category ?? null, pattern: p.pattern ?? null, size: p.size ?? null, color: p.color ?? null,
-    unit: nz(p.unit) || 'Cái', image_url: p.image_url ?? null, price1: num(p.price1) ?? 0, price2: num(p.price2) ?? 0, price3: num(p.price3) ?? 0,
+    name: trimNz(p.name), category: p.category ?? null, brand: p.brand ?? null, pattern: p.pattern ?? null, size: p.size ?? null, color: p.color ?? null,
+    unit: nz(p.unit) || 'Cái', image_url: p.image_url ?? null, price1: num(p.price1) ?? 0, price2: num(p.price2) ?? 0, price3: num(p.price3) ?? 0, price4: num(p.price4) ?? 0,
     low_stock: num(p.low_stock) ?? 0, is_kit: kit ? 1 : 0, active: (bool(p.active) ?? true) ? 1 : 0, note: p.note ?? null,
     pack_unit: trimNz(p.pack_unit) || 'hộp', units_per_pack: num(p.units_per_pack),
-    pack_weight: num(p.pack_weight), unit_weight: num(p.unit_weight), updated_at: nowIso(),
+    pack_weight: num(p.pack_weight), unit_weight: num(p.unit_weight), material: p.material ?? null, norm_m2: num(p.norm_m2), norm_m: num(p.norm_m), updated_at: nowIso(),
   };
   if (!pid) {
     if (!s) s = newMasterCode(b, 'SP', 'products');
@@ -62,7 +63,8 @@ export function save_party(p) {
   if (c && one(`select 1 from ${tbl} where book_id = ? and lower(code) = lower(?) and id is not ?`, b, c, pid)) fail(`Mã "${c}" đã tồn tại`);
   const common = { name: trimNz(p.name), phone: p.phone ?? null, address: p.address ?? null, contact: p.contact ?? null,
     credit_days: int(p.credit_days) ?? 0, note: p.note ?? null };
-  const extra = k === 'kh' ? { kind: p.kind ?? null, price_tier: int(p.price_tier) ?? 1, credit_limit: num(p.credit_limit) ?? 0 } : {};
+  if (k === 'kh' && p.stage != null && !['moi', 'tu_van'].includes(p.stage)) fail('Giai đoạn khách hàng không hợp lệ');
+  const extra = k === 'kh' ? { kind: p.kind ?? null, price_tier: int(p.price_tier) ?? 1, credit_limit: num(p.credit_limit) ?? 0, extra: p.extra && typeof p.extra === 'object' ? p.extra : {}, stage: p.stage || 'moi' } : {};
   if (!pid) {
     pid = uuid();
     insert(tbl, { id: pid, book_id: b, code: c, ...common, ...extra, created_at: nowIso() });
@@ -111,6 +113,20 @@ export function delete_opening_debt(p) {
   if (one(`select 1 from v_alloc_signed where doc_id = ?`, d.id)) fail('Khoản nợ đã có thanh toán — hãy hủy phiếu thu/chi trước');
   run(`delete from opening_debts where id = ?`, d.id);
   return { ok: true };
+}
+
+// Sửa nhanh nhiều giá bán trên màn Bảng giá. p.rows = [{id, price1…price4}]
+export function save_prices(p) {
+  const b = p.book_id;
+  requirePerm(b, 'danh_muc');
+  let n = 0;
+  for (const r of p.rows || []) {
+    const ps = [1, 2, 3, 4].map((i) => num(r[`price${i}`]));
+    if (ps.some((v) => (v ?? 0) < 0)) fail('Giá bán không được âm');
+    n += run(`update products set price1 = coalesce(?, price1), price2 = coalesce(?, price2), price3 = coalesce(?, price3), price4 = coalesce(?, price4), updated_at = ?
+      where id = ? and book_id = ?`, ...ps, nowIso(), r.id, b).changes;
+  }
+  return { updated: n };
 }
 
 // Nhập khách hàng / nhà cung cấp kèm nợ đầu kỳ. Mã đã có: ô trống giữ nguyên giá trị cũ, không ghi đè.

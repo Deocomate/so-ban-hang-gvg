@@ -16,13 +16,13 @@ export function ProductsPage() {
   const rows = useMemo(() => all.filter((p) => (state === 'all' || (state === 'active' ? p.active : !p.active)) && (!cat || p.category === cat)
     && (!type || (type === 'kit' ? p.is_kit : !p.is_kit))
     && (!stock || (stock === 'low' && p.is_low) || (stock === 'in' && p.available > 0) || (stock === 'out' && p.available <= 0))
-    && match(`${p.sku} ${p.name} ${p.size || ''} ${p.color || ''} ${p.pattern || ''}`, search)), [all, search, cat, state, stock, type]);
+    && match(`${p.sku} ${p.name} ${p.size || ''} ${p.color || ''} ${p.pattern || ''} ${p.brand || ''}`, search)), [all, search, cat, state, stock, type]);
   const cats = [...new Set([...(settings.categories || []), ...all.map((p) => p.category).filter(Boolean)])];
   const unitLc = (p) => String(p.unit || 'đv').toLowerCase();
   const pack = (p) => [p.units_per_pack ? `${fq(p.units_per_pack)} ${unitLc(p)}/${p.pack_unit || 'hộp'}` : '',
     p.unit_weight ? `${fq(p.unit_weight)} kg/${unitLc(p)}` : p.pack_weight ? `${fq(p.pack_weight)} kg/${p.pack_unit || 'hộp'}` : ''].filter(Boolean).join(' · ');
   return (
-    <ListPage title="Hàng hóa" sub={`Mỗi biến thể (mẫu + kích thước + màu men + ĐVT) có một mã SKU riêng. 3 mức giá: ${pn.join(' / ')}.`}
+    <ListPage title="Hàng hóa" sub={`Mỗi biến thể (mẫu + kích thước + màu men + ĐVT) có một mã SKU riêng. ${pn.length} mức giá: ${pn.join(' / ')}.`}
       filters={<>
         <FilterBox title="Nhóm hàng"><RadioList value={cat} onChange={setCat} options={[{ value: '', label: 'Tất cả', count: all.length }, ...cats.map((c) => ({ value: c, label: c, count: all.filter((p) => p.category === c).length }))]} /></FilterBox>
         <FilterBox title="Tồn kho"><RadioList value={stock} onChange={setStock} options={[{ value: '', label: 'Tất cả' }, { value: 'low', label: 'Dưới định mức', count: all.filter((p) => p.is_low).length }, { value: 'in', label: 'Còn hàng' }, { value: 'out', label: 'Hết hàng' }]} /></FilterBox>
@@ -32,10 +32,10 @@ export function ProductsPage() {
       search={<Search value={search} onChange={setSearch} placeholder="Tìm SKU, tên, màu, kích thước…" />}
       actions={<>
         <Btn icon="dl" onClick={() => exportXlsx('san-pham.xlsx', [{ name: 'Sản phẩm', rows, columns: [
-          { key: 'sku', label: 'Mã SKU' }, { key: 'name', label: 'Tên hàng hóa' }, { key: 'category', label: 'Chủng loại' }, { key: 'pattern', label: 'Mẫu' }, { key: 'size', label: 'Kích thước' },
+          { key: 'sku', label: 'Mã SKU' }, { key: 'name', label: 'Tên hàng hóa' }, { key: 'category', label: 'Chủng loại' }, { key: 'brand', label: 'Thương hiệu' }, { key: 'pattern', label: 'Mẫu' }, { key: 'size', label: 'Kích thước' },
           { key: 'color', label: 'Màu sắc / men' }, { key: 'unit', label: 'ĐVT' }, ...(cost ? [{ key: 'avg_cost', label: 'Giá vốn' }] : []),
-          { key: 'price1', label: pn[0] }, { key: 'price2', label: pn[1] }, { key: 'price3', label: pn[2] }, { key: 'on_hand', label: 'Số lượng tồn' }, { key: 'low_stock', label: 'Tồn tối thiểu' },
-          { key: 'units_per_pack', label: 'Số viên/hộp' }, { key: 'pack_unit', label: 'Đơn vị đóng gói' }, { key: 'pack_weight', label: 'Trọng lượng/thùng (kg)' }, { key: 'unit_weight', label: 'Trọng lượng/viên (kg)' },
+          ...pn.map((label, i) => ({ key: `price${i + 1}`, label })), { key: 'on_hand', label: 'Số lượng tồn' }, { key: 'low_stock', label: 'Tồn tối thiểu' },
+          { key: 'material', label: 'Chất liệu' }, { key: 'norm_m2', label: 'Định mức m2' }, { key: 'norm_m', label: 'Định mức m dài' }, { key: 'units_per_pack', label: 'Số viên/hộp' }, { key: 'pack_unit', label: 'Đơn vị đóng gói' }, { key: 'pack_weight', label: 'Trọng lượng/thùng (kg)' }, { key: 'unit_weight', label: 'Trọng lượng/viên (kg)' },
           { key: 'note', label: 'Ghi chú' }] }])}>Xuất Excel</Btn>
         {can('owner') && <Btn icon="up" onClick={() => open('import', { kind: 'products' })}>Nhập từ Excel</Btn>}
         {can('danh_muc') && <Btn kind="primary" icon="plus" onClick={() => open('product', {})}>Thêm hàng hóa</Btn>}
@@ -44,11 +44,9 @@ export function ProductsPage() {
       <Table rows={q.data ? rows : null} onRow={(p) => open('stockcard', { product_id: p.id })} empty={<span>Chưa có sản phẩm. {can('owner') && 'Bấm “Nhập từ Excel” để đưa toàn bộ hàng hóa vào một lần.'}</span>}
         foot={rows.length ? { p: `${rows.length} mã hàng` } : null} columns={[
         { key: 'img', label: '', width: 48, render: (p) => (p.image_url ? <img className="thumb" src={p.image_url} alt="" /> : <span className="thumb"><Icon name="vase" size={18} /></span>) },
-        { key: 'p', label: 'Hàng hóa', render: (p) => <><div className="cell-main">{p.sku} · {p.name} {p.is_kit && <Pill tone="accent">Bộ</Pill>} {!p.active && <Pill tone="mute">ngừng bán</Pill>}</div><div className="cell-sub">{[p.category, productSub(p), p.unit, pack(p)].filter(Boolean).join(' · ')}</div></> },
+        { key: 'p', label: 'Hàng hóa', render: (p) => <><div className="cell-main">{p.sku} · {p.name} {p.is_kit && <Pill tone="accent">Bộ</Pill>} {!p.active && <Pill tone="mute">ngừng bán</Pill>}</div><div className="cell-sub">{[p.category, p.brand, productSub(p), p.unit, pack(p)].filter(Boolean).join(' · ')}</div></> },
         ...(cost ? [{ key: 'c', label: 'Giá vốn', align: 'right', render: (p) => money(p.avg_cost) }] : []),
-        { key: 'p1', label: pn[0], align: 'right', render: (p) => money(p.price1) },
-        { key: 'p2', label: pn[1], align: 'right', render: (p) => money(p.price2) },
-        { key: 'p3', label: pn[2], align: 'right', render: (p) => money(p.price3) },
+        ...pn.map((label, i) => ({ key: `p${i + 1}`, label, align: 'right', render: (p) => money(p[`price${i + 1}`]) })),
         { key: 'oh', label: 'Có thể bán', align: 'right', render: (p) => <span className={p.is_low ? 'warn strong' : ''}>{fq(p.available)}</span> },
       ]} />
     </ListPage>
@@ -70,7 +68,7 @@ export function ProductForm({ id, onClose, onSaved }) {
   const { settings, rpc, toast, can } = useApp();
   const all = useProducts();
   const { run, busy } = useAction();
-  const [f, setF] = useState({ sku: '', name: '', category: '', pattern: '', size: '', color: '', unit: (settings.units || ['Cái'])[0], price1: null, price2: null, price3: null,
+  const [f, setF] = useState({ sku: '', name: '', category: '', brand: '', pattern: '', size: '', color: '', unit: (settings.units || ['Cái'])[0], price1: null, price2: null, price3: null, price4: null,
     low_stock: 0, is_kit: false, active: true, note: '', image_url: '', components: [], units_per_pack: null, pack_unit: 'hộp', pack_weight: null, unit_weight: null });
   const [loaded, setLoaded] = useState(!id);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
@@ -101,9 +99,13 @@ export function ProductForm({ id, onClose, onSaved }) {
           <Field label="Mã SKU" hint={id ? '' : 'Để trống: hệ thống tự cấp'}><Input value={f.sku} onChange={(v) => set('sku', v)} placeholder="vd. NAD-L-DO" /></Field>
           <Field label="Tên sản phẩm" required wide><Input value={f.name} onChange={(v) => set('name', v)} /></Field>
           <Field label="Chủng loại"><Input value={f.category} onChange={(v) => set('category', v)} list="cats" /><datalist id="cats">{(settings.categories || []).map((c) => <option key={c} value={c} />)}</datalist></Field>
+          <Field label="Thương hiệu"><Input value={f.brand} onChange={(v) => set('brand', v)} /></Field>
           <Field label="Mẫu"><Input value={f.pattern} onChange={(v) => set('pattern', v)} /></Field>
           <Field label="Kích thước"><Input value={f.size} onChange={(v) => set('size', v)} /></Field>
           <Field label="Màu sắc / men"><Input value={f.color} onChange={(v) => set('color', v)} /></Field>
+          <Field label="Chất liệu"><Input value={f.material} onChange={(v) => set('material', v)} placeholder="Gốm, sứ…" /></Field>
+          <Field label="Định mức theo m²" hint="vd. 27 cặp/m². Dùng để tính số lượng khi báo giá"><NumInput money={false} min={0} value={f.norm_m2} onChange={(v) => set('norm_m2', v)} /></Field>
+          <Field label="Định mức theo mét dài" hint="vd. 5 cặp/m diềm"><NumInput money={false} min={0} value={f.norm_m} onChange={(v) => set('norm_m', v)} /></Field>
           <Field label="Đơn vị tính"><Input value={f.unit} onChange={(v) => set('unit', v)} list="units" /><datalist id="units">{(settings.units || []).map((c) => <option key={c} value={c} />)}</datalist></Field>
           <Field label={`Quy cách: số ${String(f.unit || 'cái').toLowerCase()} / ${f.pack_unit || 'hộp'}`} hint="Để in “4 hộp x 140 viên + 40 viên” trên hóa đơn, biên bản"><NumInput money={false} min={1} value={f.units_per_pack} onChange={(v) => set('units_per_pack', v)} placeholder="vd. 140" /></Field>
           <Field label="Đơn vị đóng gói"><Input value={f.pack_unit} onChange={(v) => set('pack_unit', v)} list="packs" /><datalist id="packs">{['hộp', 'thùng', 'kiện', 'bao', 'pallet'].map((c) => <option key={c} value={c} />)}</datalist></Field>
@@ -114,7 +116,7 @@ export function ProductForm({ id, onClose, onSaved }) {
         </div>
       </div>
       <div className="grid">
-        {[1, 2, 3].map((i) => <Field key={i} label={pn[i - 1]}><NumInput value={f['price' + i]} onChange={(v) => set('price' + i, v)} /></Field>)}
+        {pn.map((label, i) => <Field key={label} label={label}><NumInput value={f[`price${i + 1}`]} onChange={(v) => set(`price${i + 1}`, v)} /></Field>)}
       </div>
       <div className="row gap"><Check checked={f.is_kit} onChange={(v) => set('is_kit', v)}>Đây là bộ sản phẩm (bán theo bộ, trừ kho từng thành phần)</Check><Check checked={f.active} onChange={(v) => set('active', v)}>Đang bán</Check></div>
       {f.is_kit && (

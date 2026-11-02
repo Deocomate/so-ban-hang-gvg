@@ -14,6 +14,10 @@ import * as notify from './notify.js';
 import * as shipping from './shipping.js';
 import * as bank from './bank.js';
 import * as documents from './documents.js';
+import * as drivers from './drivers.js';
+import * as quotes from './quotes.js';
+import * as contracts from './contracts.js';
+import * as tax from './tax.js';
 import { set_member_password } from '../lib/auth.js';
 import { import_book } from './import-backup.js';
 
@@ -24,17 +28,21 @@ const pick = (mod, names) => Object.fromEntries(names.map((n) => {
 
 export const RPC = {
   ...pick(books, ['bootstrap', 'my_books', 'update_book_settings', 'upsert_member', 'remove_member', 'save_bank_account', 'export_book']),
-  ...pick(catalog, ['save_product', 'save_party', 'save_fund', 'save_opening_debt', 'delete_opening_debt', 'import_parties']),
+  ...pick(catalog, ['save_product', 'save_party', 'save_prices', 'save_fund', 'save_opening_debt', 'delete_opening_debt', 'import_parties']),
   ...pick(stock, ['adjust_stock', 'import_products']),
   ...pick(cash, ['create_payment', 'void_payment', 'save_expense', 'void_expense']),
   ...pick(sales, ['save_sales_order', 'confirm_sales_order', 'cancel_sales_order', 'cancel_remaining', 'deliver', 'sales_return']),
   ...pick(purchases, ['save_purchase_order', 'confirm_purchase_order', 'cancel_purchase_order', 'cancel_po_remaining', 'set_prod_step', 'receive', 'supplier_return']),
-  ...pick(reports, ['rpt_overview', 'rpt_drill', 'rpt_monthly', 'rpt_products', 'rpt_groups', 'rpt_stock', 'rpt_expenses']),
+  ...pick(reports, ['rpt_overview', 'rpt_drill', 'rpt_monthly', 'rpt_products', 'rpt_groups', 'rpt_stock', 'rpt_expenses', 'rpt_dashboard', 'rpt_factory']),
   ...pick(query, ['q']),
   ...pick(notify, ['my_notifications', 'mark_notifications_read', 'save_notify_prefs', 'save_push_sub', 'delete_push_sub', 'demo_run_scheduled']),
   ...pick(shipping, ['create_shipment', 'update_shipment', 'update_shipment_status', 'settle_cod', 'import_shipment_statuses', 'carrier_webhook_log']),
   ...pick(bank, ['assign_bank_txn', 'ignore_bank_txn', 'demo_simulate']),
   ...pick(documents, ['get_doc_info', 'save_doc_info']),
+  ...pick(drivers, ['save_driver', 'save_trip', 'delete_trip', 'pay_driver']),
+  ...pick(quotes, ['save_quote', 'set_quote_status']),
+  ...pick(contracts, ['save_contract', 'set_contract_reconciled', 'upload_attachment', 'get_attachment', 'delete_attachment']),
+  ...pick(tax, ['save_tax_invoice', 'void_tax_invoice', 'rpt_tax']),
   set_member_password,
   import_book,
 };

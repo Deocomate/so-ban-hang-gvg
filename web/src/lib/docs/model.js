@@ -1,3 +1,5 @@
+import { buildExtraDoc } from './contract-docs.js';
+
 // Chứng từ xuất cho khách: hóa đơn bán hàng, đơn đặt hàng, biên bản bàn giao, phiếu xuất kho, phiếu thu/chi.
 // Mỗi chứng từ được dựng thành một danh sách "khối" (blocks) trung gian; cùng một danh sách đó
 // được vẽ ra bản xem trước HTML (DocPreview) và tệp PDF (pdf.js), nên hai bản luôn khớp nhau.
@@ -8,9 +10,18 @@ export const DOC_TYPES = {
   bien_ban: { label: 'Biên bản bàn giao', from: ['order', 'delivery'], font: 'Tinos', sep: '.' },
   phieu_xuat_kho: { label: 'Phiếu xuất kho', from: ['order', 'delivery'], font: 'Tinos', sep: '.' },
   phieu_thu: { label: 'Phiếu thu / chi', from: ['payment'], font: 'Tinos', sep: '.' },
+  hd_van_chuyen: { label: 'Hợp đồng vận chuyển', from: ['order', 'delivery'], font: 'Tinos', sep: '.' },
+  de_nghi_tam_ung: { label: 'Đề nghị tạm ứng', from: ['contract'], font: 'Tinos', sep: '.' },
+  doi_chieu_sl: { label: 'Đối chiếu số lượng', from: ['contract'], font: 'Tinos', sep: '.' },
+  doi_chieu_tt: { label: 'Đối chiếu kèm thanh toán', from: ['contract'], font: 'Tinos', sep: '.' },
+  de_nghi_tt: { label: 'Đề nghị thanh toán', from: ['contract'], font: 'Tinos', sep: '.' },
+  bao_gia: { label: 'Báo giá', from: ['quote'], font: 'Arimo', sep: '.' },
 };
 
 export const DEFAULT_TEXTS = {
+  quote_ngoi: `- Giá bán đã bao gồm VAT, chi phí vận chuyển và bốc xếp hàng lên xe tại kho bên bán; chưa bao gồm chi phí bốc dỡ hàng tại địa điểm nhận của bên mua.\n- Đặc tính sản phẩm thủ công: Do được tạo hình và nung thủ công ở nhiệt độ cao, sản phẩm có thể có các đặc điểm sau:\n    + Kích thước chênh lệch khoảng 5–10%.\n    + Màu sắc khác nhau giữa các viên và các lô nung; có độ cong vênh nhất định do quá trình nung ở nhiệt độ trên 1.300°C.\n    + Bề mặt có thể xuất hiện các chấm hoặc lỗ nhỏ.\n- Định mức lợp: Định mức nêu trên áp dụng cho mái bê tông. Với các kết cấu mái khác, lượng ngói thực tế cần được xác định theo đặc điểm và điều kiện thi công cụ thể của từng công trình.\n- Thời gian sản xuất: _____ kể từ ngày bên bán nhận được tiền đặt cọc.\n- Điều khoản thanh toán:\n    + Bên mua đặt cọc 30% tổng giá trị đơn hàng ngay sau khi ký hợp đồng.\n    + Thanh toán toàn bộ số tiền còn lại ngay sau khi bên mua nhận đủ hàng tại công trình.\n- Hiệu lực giá: Giá áp dụng tại thời điểm báo giá và có thể thay đổi theo biến động giá nhiên liệu. Quý khách vui lòng xác nhận lại giá trước khi đặt hàng. Mọi điều chỉnh sẽ được thông báo và thống nhất trước khi xác nhận đơn hàng.\n- Điều chỉnh đơn hàng: Khi có thay đổi về sản phẩm hoặc khối lượng đặt hàng, hai bên sẽ xác nhận lại giá và tiến độ thực hiện.`,
+  quote_mosaic: `- Giá đã bao gồm VAT, vận chuyển và lắp đặt tại địa chỉ công trình ghi trong báo giá.\n- Phí lắp đặt áp dụng cho bề mặt phẳng, liền mạch, không gấp khúc; điểm cao nhất không quá 2 m so với mặt sàn/đất tại vị trí thi công. Nếu cao hơn, khách hàng bố trí giàn giáo và phương tiện phụ trợ an toàn. Chi phí phát sinh, nếu có, phải được hai bên thống nhất trước khi thực hiện.\n- Khách hàng bàn giao bề mặt đã trát xi măng phẳng, chắc chắn, đủ khô và xử lý chống thấm. Giá không bao gồm xử lý mặt bằng, chống thấm; Công ty không chịu trách nhiệm về hư hỏng do nền hoặc chống thấm công trình.\n- Kích thước ghi trong báo giá là kích thước tạm tính và có thể được điều chỉnh theo kết quả đo đạc thực tế tại công trình.\n- Thời gian sản xuất: 35-40 ngày kể từ khi nhận đủ 50% thanh toán đợt 1 và chốt mẫu, kích thước, số lượng. Lịch lắp đặt được thống nhất riêng.\n- Thanh toán: 50% khi ký hợp đồng; 50% còn lại ngay sau khi giao đủ hàng tại công trình.\n- Hiệu lực giá: Giá áp dụng tại thời điểm báo giá và có thể thay đổi theo biến động giá nhiên liệu. Quý khách vui lòng xác nhận lại giá trước khi đặt hàng. Mọi điều chỉnh sẽ được thông báo và thống nhất trước khi xác nhận đơn hàng.\n- Điều chỉnh đơn hàng: Khi có thay đổi về sản phẩm hoặc khối lượng đặt hàng, hai bên sẽ xác nhận lại giá và tiến độ thực hiện.`,
+  transport_terms: `**Điều II:** Nhận hàng phải cân đo, đong đếm. Quá trình vận chuyển hư hỏng, mất mát, thiếu hụt phải đền bù theo giá bán tại cửa hàng. Nếu hàng dễ vỡ phải kiểm tra ngay khi giao hàng và có biên bản của hai bên để xử lý kịp thời.\nThời gian giao hàng không quá {days} ngày, nếu chậm lái xe bị phạt tùy theo giá trị lô hàng.\n**Điều III: Hình thức thanh toán:**\n**Điều IV:** Hai bên thực hiện đúng những cam kết trên. Hợp đồng được làm thành 02 bản, mỗi bên giữ 01 bản.`,
   invoice_notes: [
     '**1. Quý khách hàng vui lòng kiểm tra kỹ số lượng, chất lượng hàng hóa khi được nhận bàn giao. Chúng tôi không chịu trách nhiệm với những lỗi phát sinh sau khi khách hàng đã nghiệm thu.**',
     '**2. Chi phí vận chuyển khi giao hàng (nếu có) không bao gồm chi phí bốc dỡ hàng hóa xuống xe.**',
@@ -59,7 +70,8 @@ export function docSettings(book, settings) {
   // Một phông chữ cho mọi chứng từ (mặc định Arial / Arimo như mẫu hóa đơn của cửa hàng)
   return { profiles, types, font: d.font === 'Tinos' ? 'Tinos' : 'Arimo' };
 }
-export function profileFor(ds, type) { return ds.profiles.find((p) => p.id === ds.types[type].profile) || ds.profiles[0]; }
+// Đơn vị đứng tên: chọn riêng trên chứng từ (info) nếu có, không thì theo cài đặt của loại chứng từ
+export function profileFor(ds, type, info) { return ds.profiles.find((p) => p.id === (info?.[`profile_${type}`] || ds.types[type].profile)) || ds.profiles[0]; }
 
 // ---------- Định dạng ----------
 export function fmtNum(v, sep = ',') {
@@ -141,7 +153,18 @@ export async function loadDocData(q, rpc, src) {
     const info = await rpc('get_doc_info', { ref_type: 'payment', ref_id: src.id });
     return { kind: 'payment', p, party, info: info || {} };
   }
-  let d = null; let dlines = null; let orderId = src.id;
+  if (src.kind === 'quote') {
+    const [qu] = await q('quotes', [['id', 'eq', src.id]]);
+    if (!qu) throw new Error('Không tìm thấy báo giá');
+    return { kind: 'quote', q: qu, info: (await rpc('get_doc_info', { ref_type: 'quote', ref_id: src.id })) || {} };
+  }
+  let d = null; let dlines = null; let orderId = src.id; let k = null; let allDl = null; let kInfo = null;
+  if (src.kind === 'contract') {
+    [k] = await q('contracts', [['id', 'eq', src.id]]);
+    if (!k) throw new Error('Không tìm thấy hợp đồng');
+    orderId = k.order_id;
+    [allDl, kInfo] = await Promise.all([q('delivery_lines', [['order_id', 'eq', orderId]], 'delivery_date'), rpc('get_doc_info', { ref_type: 'contract', ref_id: src.id })]);
+  }
   if (src.kind === 'delivery') {
     [d] = await q('deliveries', [['id', 'eq', src.id]]);
     if (!d) throw new Error('Không tìm thấy phiếu giao');
@@ -150,30 +173,40 @@ export async function loadDocData(q, rpc, src) {
   }
   const [o] = await q('sales_orders', [['id', 'eq', orderId]]);
   if (!o) throw new Error('Không tìm thấy đơn hàng');
-  const [lines, dels, custs] = await Promise.all([
+  const [lines, dels, custs, trips] = await Promise.all([
     q('sales_order_lines', [['order_id', 'eq', orderId]], 'line_no'),
     q('deliveries', [['order_id', 'eq', orderId]], 'created_at'),
     o.customer_id ? q('customers', [['id', 'eq', o.customer_id]]) : Promise.resolve([]),
+    q('driver_trips', [['order_id', 'eq', orderId]], 'created_at'),
   ]);
+  // Lái xe của đợt giao này, không có thì lấy chuyến khai trên đơn
+  const trip = (d && trips.find((t) => t.delivery_id === d.id)) || trips.find((t) => !t.delivery_id) || null;
+  const [driver] = trip ? await q('drivers', [['id', 'eq', trip.driver_id]]) : [null];
   const ids = [...new Set([...(lines || []), ...(dlines || [])].map((l) => l.product_id))];
   const prods = ids.length ? await q('products', [['id', 'in', ids]]) : [];
   const orderInfo = (await rpc('get_doc_info', { ref_type: 'order', ref_id: orderId })) || {};
   const delInfo = d ? (await rpc('get_doc_info', { ref_type: 'delivery', ref_id: d.id })) || {} : null;
-  return { kind: src.kind, o, lines, dels, d, dlines, cust: custs[0] || null, prods: Object.fromEntries(prods.map((p) => [p.id, p])), orderInfo, delInfo };
+  return { kind: src.kind, o, lines, dels, d, dlines, cust: custs[0] || null, prods: Object.fromEntries(prods.map((p) => [p.id, p])), orderInfo, delInfo, k, allDl, kInfo: kInfo || {}, driver: driver || null };
 }
 
 // Thông tin sửa được của chứng từ được lưu ở đâu (đơn / phiếu giao / phiếu thu)
 export function infoRef(type, data) {
   if (data.kind === 'payment') return { ref_type: 'payment', ref_id: data.p.id };
-  if ((type === 'bien_ban' || type === 'phieu_xuat_kho') && data.d) return { ref_type: 'delivery', ref_id: data.d.id };
+  if (data.kind === 'quote') return { ref_type: 'quote', ref_id: data.q.id };
+  if (data.kind === 'contract') return { ref_type: 'contract', ref_id: data.k.id };
+  if (PER_DELIVERY.includes(type) && data.d) return { ref_type: 'delivery', ref_id: data.d.id };
   return { ref_type: 'order', ref_id: data.o.id };
 }
 export function currentInfo(type, data) {
-  if (data.kind === 'payment') return data.info;
-  if ((type === 'bien_ban' || type === 'phieu_xuat_kho') && data.d) return { ...pick(data.orderInfo, ['recv_phone', 'recv_address', 'recv_name', 'recv_party']), ...data.delInfo };
+  if (data.kind === 'payment' || data.kind === 'quote') return data.info;
+  if (data.kind === 'contract') return data.kInfo;
+  if (PER_DELIVERY.includes(type) && data.d) return { ...pick(data.orderInfo, ['recv_phone', 'recv_address', 'recv_name', 'recv_party']), ...data.delInfo };
   return data.orderInfo;
 }
 const pick = (o, ks) => Object.fromEntries(ks.filter((k) => o && o[k]).map((k) => [k, o[k]]));
+
+// Chứng từ lập được theo từng đợt giao
+export const PER_DELIVERY = ['hoa_don', 'bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen'];
 
 // Các ô sửa được cho từng loại chứng từ
 export function editableFields(type, data) {
@@ -181,6 +214,11 @@ export function editableFields(type, data) {
   const D = { key: dateKey, label: 'Ngày trên chứng từ', kind: 'date' };
   if (type === 'hoa_don') return [D, { key: 'recv_phone', label: 'SĐT nhận hàng' }, { key: 'recv_address', label: 'Địa chỉ nhận hàng', wide: true },
     { key: 'box_total', label: 'Tổng số hộp', kind: 'num' }, { key: 'old_debt', label: 'Nợ cũ', kind: 'money' }];
+  if (type === 'hd_van_chuyen') return [D, { key: 'handover_rep', label: 'Đại diện bên giao' }, { key: 'carrier_party', label: 'Bên B (đơn vị / chủ xe)' }, { key: 'carrier_address', label: 'Địa chỉ bên B', wide: true },
+    { key: 'driver_name', label: 'Lái xe' }, { key: 'driver_phone', label: 'SĐT lái xe' }, { key: 'id_no', label: 'CCCD lái xe' }, { key: 'vehicle', label: 'Biển số xe' }, { key: 'recv_address', label: 'Địa chỉ giao hàng', wide: true },
+    { key: 'recv_name', label: 'Người nhận' }, { key: 'recv_phone', label: 'SĐT nhận hàng' }, { key: 'box_total', label: 'Tổng số hộp', kind: 'num' }, { key: 'transit_days', label: 'Số ngày vận chuyển tối đa' },
+    { key: 'freight_note', label: 'Cân nặng và giá cước', wide: true }, { key: 'pay_at', label: 'Thanh toán cước phí tại' }];
+  if (data.kind === 'contract' || type === 'bao_gia') return type === 'bao_gia' ? [] : [D];
   if (type === 'don_dat_hang') return [D, { key: 'recv_phone', label: 'SĐT nhận hàng' }, { key: 'recv_address', label: 'Địa chỉ nhận hàng', wide: true }, { key: 'note', label: 'Ghi chú', wide: true }];
   if (type === 'bien_ban') return [D, { key: 'place', label: 'Nơi lập biên bản', wide: true }, { key: 'handover_rep', label: 'Đại diện bên giao' },
     { key: 'driver_name', label: 'Bên vận chuyển / lái xe' }, { key: 'driver_phone', label: 'SĐT lái xe' }, { key: 'recv_party', label: 'Bên nhận hàng', wide: true },
@@ -195,6 +233,8 @@ export function editableFields(type, data) {
 // Giá trị mặc định khi chưa sửa
 export function defaults(type, data, ds) {
   const prof = profileFor(ds, type);
+  if (data.kind === 'quote') return { profile_bao_gia: data.q.profile_id || undefined };
+  if (data.kind === 'contract') return { [`date_${type}`]: new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10), [`profile_${type}`]: data.k.profile_id || undefined };
   if (data.kind === 'payment') {
     const p = data.p; const pa = data.party || {};
     const allocs = (p.allocations || []).map((a) => a.doc_code).filter(Boolean);
@@ -202,7 +242,7 @@ export function defaults(type, data, ds) {
       reason: [p.kind_label, allocs.length ? `cho ${allocs.join(', ')}` : '', p.note || ''].filter(Boolean).join(' – '), attach: '' };
   }
   const o = data.o; const c = data.cust || {};
-  const useDel = (type === 'bien_ban' || type === 'phieu_xuat_kho') && data.d;
+  const useDel = PER_DELIVERY.includes(type) && data.d;
   const g = goodsLines(type, data);
   const oldDebt = c.balance !== undefined && c.balance !== null ? Number(c.balance) - (Number(o.delivered_value || 0) - Number(o.paid_net || 0)) : 0;
   const docDate = type === 'don_dat_hang' ? o.order_date : useDel ? data.d.delivery_date : (o.last_delivery_date || o.order_date);
@@ -210,13 +250,13 @@ export function defaults(type, data, ds) {
     [`date_${type}`]: docDate, recv_phone: o.customer_phone || '', recv_address: o.customer_address || '', recv_name: o.customer_name || '', recv_party: o.customer_name || '',
     box_total: String(g.reduce((s, l) => s + l.boxes, 0) || ''), old_debt: String(Math.round(oldDebt)), note: o.note || '',
     place: type === 'phieu_xuat_kho' ? 'Kho hàng' : `kho hàng thuộc ${prof.legal_name || prof.name}`, handover_rep: prof.representative || '',
-    driver_name: '', driver_phone: '', goods_condition: DEFAULT_TEXTS.goods_condition, attach: '',
+    driver_name: data.driver?.name || '', driver_phone: data.driver?.phone || '', vehicle: data.driver?.plate || '', id_no: data.driver?.id_no || '', goods_condition: DEFAULT_TEXTS.goods_condition, attach: '',
   };
 }
 
 // Dòng hàng của chứng từ
 export function goodsLines(type, data) {
-  const useDel = (type === 'bien_ban' || type === 'phieu_xuat_kho') && data.d;
+  const useDel = PER_DELIVERY.includes(type) && data.d;
   const noteOf = Object.fromEntries((data.lines || []).map((l) => [l.id, l.note || '']));
   const src = useDel ? data.dlines.map((l) => ({ product_id: l.product_id, sku: l.sku, name: l.product_name, unit: l.unit, qty: Number(l.qty), price: Number(l.unit_price_net), total: Number(l.revenue), note: noteOf[l.order_line_id] || '' }))
     : data.lines.filter((l) => Number(l.eff_qty) > 0).map((l) => ({ product_id: l.product_id, sku: l.sku, name: l.product_name, unit: l.unit, qty: Number(l.eff_qty),
@@ -229,7 +269,7 @@ export function totalKg(g) { const w = g.reduce((s, l) => s + (l.kg || 0), 0); r
 }
 
 // ---------- Dựng khối ----------
-const P = (runs, o = {}) => ({ t: 'p', runs: typeof runs === 'string' ? [{ text: runs }] : runs, ...o });
+export const P = (runs, o = {}) => ({ t: 'p', runs: typeof runs === 'string' ? [{ text: runs }] : runs, ...o });
 const L = (label, value, o = {}) => P([{ text: label, b: !!o.lb }, { text: value || '', b: !!o.vb }], o);
 
 function headerLines(prof, opt = {}) {
@@ -249,7 +289,8 @@ function headerLines(prof, opt = {}) {
 }
 
 export function buildDoc(type, data, ds, info) {
-  const prof = profileFor(ds, type); const cfg = ds.types[type]; const sep = cfg.sep;
+  if (['hd_van_chuyen', 'de_nghi_tam_ung', 'doi_chieu_sl', 'doi_chieu_tt', 'de_nghi_tt', 'bao_gia'].includes(type)) return buildExtraDoc(type, data, ds, info);
+  const prof = profileFor(ds, type, info); const cfg = ds.types[type]; const sep = cfg.sep;
   const N = (v) => fmtNum(v, sep);
   const font = ds.font || 'Arimo';
   const text = (k) => (cfg.text && cfg.text[k] !== undefined && cfg.text[k] !== null ? cfg.text[k] : DEFAULT_TEXTS[k]);
@@ -284,31 +325,36 @@ export function buildDoc(type, data, ds, info) {
       return [{ text: String(i + 1), align: 'center' }, nameCell, ...(isInv ? [q, u] : [u, q]), { text: N(l.price), align: 'right' }, { text: N(l.total), align: 'right' }];
     });
     const goods = g.reduce((s, l) => s + l.total, 0);
-    const ship = Math.max(0, Number(o.order_total || 0) - Number(o.goods_total || 0));
-    const disc = Math.max(0, goods - Number(o.goods_total || 0));
-    const ret = Number(o.returned_value || 0);
-    const paid = Number(o.paid_net || 0);
+    // Hóa đơn của 1 đợt giao chỉ tính hàng đợt đó, phần cọc trừ theo số đã khấu trừ; cả đơn thì tính theo đơn
+    const perDel = isInv && !!data.d;
+    const vat = perDel ? Number(data.d.vat || 0) : Number(o.vat_total || 0);
+    const ship = perDel ? Number(data.d.shipping_fee || 0) : Math.max(0, Number(o.order_total || 0) - Number(o.goods_total || 0) - vat);
+    const disc = perDel ? 0 : Math.max(0, goods - Number(o.goods_total || 0));
+    const ret = perDel ? 0 : Number(o.returned_value || 0);
+    const paid = perDel ? Number(data.d.deposit_used || 0) : Number(o.paid_net || 0);
     const sumRow = (label, v, bold) => [{ text: '' }, { text: label, colSpan: 4, align: 'right', b: bold }, {}, {}, {}, { text: N(v), align: 'right', b: bold }];
     const rows = [...body];
     let due;
     if (isInv) {
       rows.push([{ text: `Tổng cộng: ${info.box_total || 0} ${packLabel(g)}`, colSpan: 6, b: true }, {}, {}, {}, {}, {}]);
       const old = Number(info.old_debt || 0);
-      const total = goods - disc + old + ship - ret;
+      const total = goods - disc + old + ship + vat - ret;
       due = total - paid;
       rows.push(sumRow('Tổng tiền hàng:', goods, true));
       if (disc > 0) rows.push(sumRow('Chiết khấu:', -disc));
       rows.push(sumRow('Nợ cũ:', old));
+      if (Number(o.vat_rate) > 0) rows.push(sumRow(`VAT ${fmtNum(o.vat_rate)}%`, vat));
       rows.push(sumRow('Tiền vận chuyển', ship));
       if (ret > 0) rows.push(sumRow('Hàng trả lại', -ret));
       rows.push(sumRow('Tổng thanh toán', total));
-      rows.push(sumRow('Đã thanh toán', paid));
+      rows.push(sumRow(perDel ? 'Khấu trừ tiền cọc' : 'Đã thanh toán', paid));
       rows.push(sumRow('Còn thanh toán', due, true));
       rows.push([{ runs: [{ text: 'Bằng chữ:  ', b: true, i: true }, { text: moneyWords(due), i: true }], colSpan: 6 }, {}, {}, {}, {}, {}]);
     } else {
-      due = goods - disc + ship - ret - paid;
+      due = goods - disc + ship + vat - ret - paid;
       rows.push(sumRow('Tổng tiền hàng:', goods, true));
       if (disc > 0) rows.push(sumRow('Chiết khấu:', -disc, true));
+      if (Number(o.vat_rate) > 0) rows.push(sumRow(`VAT ${fmtNum(o.vat_rate)}%:`, vat, true));
       rows.push(sumRow('Tiền vận chuyển:', ship, true));
       if (ret > 0) rows.push(sumRow('Hàng trả lại:', -ret, true));
       rows.push(sumRow('Đặt cọc:', paid, true));
@@ -331,7 +377,7 @@ export function buildDoc(type, data, ds, info) {
       const ft = text('order_footer');
       if (ft) blocks.push(P([{ text: ft, b: true, i: true }], { align: 'center', size: 9.5, mt: 18 }));
     }
-    return { font, blocks, filename: `${isInv ? 'hoa-don' : 'don-dat-hang'}_${o.code}.pdf`, title: isInv ? 'Hóa đơn bán hàng' : 'Đơn đặt hàng', code: o.code, due };
+    return { font, blocks, filename: `${isInv ? 'hoa-don' : 'don-dat-hang'}_${perDel ? data.d.code : o.code}.pdf`, title: isInv ? 'Hóa đơn bán hàng' : 'Đơn đặt hàng', code: perDel ? data.d.code : o.code, due };
   }
 
   if (type === 'bien_ban') {

@@ -147,7 +147,7 @@ export function ShipmentDetail({ id, onClose }) {
         {cinfo.track && <a className="btn btn-ghost" href={cinfo.track} target="_blank" rel="noreferrer"><Icon name="link" size={17} /><span>Tra trên trang {cinfo.short}</span></a>}
         <span className="grow" />
         <Btn icon="order" onClick={() => open('order', { id: s.order_id })}>Mở đơn {s.order_code}</Btn>
-        {['dang_hoan', 'da_hoan'].includes(s.status) && can('ban_hang') && <Btn kind="primary" icon="back" onClick={async () => {
+        {['dang_hoan', 'da_hoan'].includes(s.status) && can('ban_hang') && <Btn kind="primary" icon="return" onClick={async () => {
           const [o] = await backend.rpc('q', { book_id: book.id, view: 'sales_orders', filters: [['id', 'eq', s.order_id]] });
           if (o?.delivered_value > 0) open('return', { order: o }); else toast('Đơn chưa ghi giao hàng nên không cần nhập lại kho', 'err');
         }}>Nhận hàng hoàn → nhập lại kho</Btn>}

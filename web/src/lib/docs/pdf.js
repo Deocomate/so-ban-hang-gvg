@@ -39,6 +39,7 @@ async function fontVfs(family) {
 const run = (r, base = {}) => ({ text: r.text, bold: r.b || base.bold || undefined, italics: r.i || base.italics || undefined, ...(r.size ? { fontSize: r.size } : {}), ...(r.color ? { color: r.color } : {}) });
 
 function cellOf(c, size) {
+  if (c?.image) return /^data:image\/(png|jpe?g);base64,/.test(c.image) ? { image: c.image, fit: [38, 38], alignment: 'center' } : {};
   if (!c || (c.text === undefined && !c.runs && !c.colSpan)) return {};
   const base = { alignment: c.align || 'left', bold: c.b || undefined, italics: c.i || undefined, ...(c.colSpan ? { colSpan: c.colSpan } : {}) };
   if (c.runs) return { ...base, text: c.runs.map((r) => run(r)) };

@@ -15,6 +15,10 @@ import { BankTxnDialog, BankSimDialog } from './BankTxns.jsx';
 import { QrBox } from './SettingsExtra.jsx';
 import { DocDialog } from './Documents.jsx';
 import { OrderPos } from './OrderPos.jsx';
+import { DriverForm, TripForm, PayDriverDialog } from './Catalog.jsx';
+import { QuoteForm, QuoteDetail } from './Quotes.jsx';
+import { ContractForm, ContractDetail } from './Contracts.jsx';
+import { TaxInvoiceForm } from './Tax.jsx';
 import { orderTransferContent } from '../lib/vietqr.js';
 
 const MAP = {
@@ -26,6 +30,8 @@ const MAP = {
   drill: DrillDialog, print: PrintSlip, doc: DocDialog,
   ship: ShipmentDetail, 'ship-form': ShipmentForm, 'cod-settle': CodSettleDialog, 'ship-import': ShipImportDialog,
   'bank-txn': BankTxnDialog, 'bank-sim': BankSimDialog,
+  driver: DriverForm, trip: TripForm, 'pay-driver': PayDriverDialog, 'quote-form': QuoteForm, quote: QuoteDetail,
+  'contract-form': ContractForm, contract: ContractDetail, 'tax-invoice': TaxInvoiceForm,
 };
 
 export function ModalHost() {
