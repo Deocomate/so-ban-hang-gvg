@@ -6,6 +6,7 @@
   "scripts": {
     "setup": "npm --prefix server install && npm --prefix web install",
     "dev": "node scripts/dev.js",
+    "start": "node scripts/start.js",
     "seed:sample": "npm --prefix server run seed:sample",
     "test": "npm --prefix server test"
   }

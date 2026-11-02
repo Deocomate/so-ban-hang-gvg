@@ -1,5 +1,5 @@
 // Nạp dữ liệu mẫu theo giấy tờ thật vào 3 sổ đang có — chỉ dùng trên máy, khi các sổ chưa có hàng hóa. Tự sao lưu CSDL trước khi ghi.
-// Chạy: npm run seed:sample   (máy chủ phải khởi động ít nhất 1 lần để có sổ và tài khoản chủ)
+// Chạy: npm run seed:sample
 import { openDb } from '../src/db/index.js';
 import { config } from '../src/config.js';
 import { ctx, today } from '../src/lib/context.js';
@@ -11,11 +11,9 @@ import { seedSample } from './sample-seed-data.js';
 const PASSWORD = process.env.DEMO_PASSWORD || 'demo1234';
 
 openDb(config.dbPath);
-const owner = ctx.db.prepare(`select m.user_id from books b join book_members m on m.book_id = b.id and m.role = 'owner' where b.short_name = 'TH' order by b.created_at limit 1`).get()?.user_id;
-if (!owner) {
-  console.error('Chưa có sổ nào — hãy chạy máy chủ một lần rồi đăng ký tài khoản chủ (hoặc đặt ADMIN_EMAIL) trước.');
-  process.exit(1);
-}
+// CSDL mới tinh chưa có sổ: tài khoản chủ mẫu thành chủ của cả 3 sổ
+const owner = ctx.db.prepare(`select m.user_id from books b join book_members m on m.book_id = b.id and m.role = 'owner' where b.short_name = 'TH' order by b.created_at limit 1`).get()?.user_id
+  ?? ctx.db.transaction(() => signUp({ email: 'chu.cuahang@demo.vn', password: PASSWORD, name: 'Chủ cửa hàng (mẫu)' }))().id;
 if (ctx.db.prepare('select count(*) n from products').get().n > 0) {
   console.error('Các sổ đã có hàng hóa — dữ liệu mẫu chỉ nạp khi chưa có. Dừng.');
   process.exit(1);

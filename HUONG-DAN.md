@@ -27,7 +27,15 @@ Cơ sở dữ liệu là **một tệp SQLite** (`/data/gomsu.db` trong Docker v
 
 > Không dùng Coolify: `cp .env.example .env`, sửa `.env`, rồi `docker compose up -d --build`, và cho reverse proxy (nginx, Caddy, Traefik…) trỏ vào dịch vụ `app` cổng 3000.
 >
-> Chạy trên máy tính (cần Node.js 20+): ở thư mục gốc chạy `npm run setup` (một lần, cài thư viện cho `server/` và `web/`), sau đó mỗi lần chỉ cần `npm run dev`, nó chạy cùng lúc API (cổng 3000) và giao diện, rồi mở http://localhost:5173. Bấm Ctrl+C để dừng cả hai. Dữ liệu trên máy nằm ở `server/data/gomsu.db`.
+> **Chạy trên máy Windows, không cần biết code:** bấm đúp tệp `Mo-Ung-Dung.bat` ở thư mục gốc.
+> - Lần đầu mất khoảng 1 phút: tự cài Node.js nếu máy chưa có, tự cài thư viện, nạp dữ liệu mẫu. Những lần sau chỉ vài giây.
+> - Trình duyệt tự mở http://localhost:5173. Trang đăng nhập hiện sẵn tài khoản dùng thử.
+> - Sửa mã là trình duyệt tự cập nhật, không cần tải lại hay chạy lại: sửa giao diện thì đổi ngay, sửa `server/src` thì máy chủ tự khởi động lại rồi trang tự tải lại.
+> - Giữ cửa sổ đen mở trong lúc dùng, đóng nó để tắt ứng dụng. Bấm mở lần nữa khi đang chạy thì chỉ mở lại trình duyệt.
+> - Muốn có nút ngoài màn hình: chuột phải tệp → **Send to → Desktop (create shortcut)**.
+> - Đã thêm cấu hình `app` trong `.claude/launch.json`: mở thư mục này bằng Claude Code rồi sửa thì xem luôn ở khung Preview.
+>
+> Chạy bằng lệnh (cần Node.js 20+): ở thư mục gốc chạy `npm run setup` (một lần, cài thư viện cho `server/` và `web/`), sau đó mỗi lần chỉ cần `npm run dev`, nó chạy cùng lúc API (cổng 3000) và giao diện, rồi mở http://localhost:5173. Bấm Ctrl+C để dừng cả hai. Dữ liệu trên máy nằm ở `server/data/gomsu.db`.
 >
 > **Dữ liệu mẫu theo giấy tờ thật (chỉ trên máy)**: khi các sổ chưa có hàng hóa, chạy `npm run seed:sample` ở thư mục gốc. Lệnh tự sao lưu `server/data/gomsu.db` rồi nạp bảng giá, khách hàng, nhà cung cấp, hợp đồng 1009, hóa đơn, bảng đặt xưởng, báo giá vào cả 3 sổ. Đăng nhập `chu.cuahang@demo.vn` (chủ) hoặc `lan.nhanvien@demo.vn` (nhân viên), mật khẩu `demo1234`. Giá vốn, tồn đầu kỳ, số dư quỹ, chi phí, số hóa đơn và cước xe là số giả định vì giấy tờ không có.
 >

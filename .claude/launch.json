@@ -2,9 +2,20 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "app",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "scripts/start.js",
+        "--no-open"
+      ],
+      "port": 5173
+    },
+    {
       "name": "demo-ui",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["server/src/index.js"],
+      "runtimeArgs": [
+        "server/src/index.js"
+      ],
       "port": 3100,
       "env": {
         "PORT": "3100",
