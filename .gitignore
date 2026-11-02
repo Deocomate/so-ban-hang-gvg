@@ -12,3 +12,8 @@ tasks/
 server/data-rieng/
 .bang-dieu-khien.json
 .bang-dieu-khien.log
+
+# File riêng của Claude, chỉ để ở máy
+.claude/
+CLAUDE.md
+CLAUDE.local.md
