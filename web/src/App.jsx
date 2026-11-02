@@ -263,7 +263,7 @@ function Login() {
       <form className="login card" onSubmit={submit}>
         <div className="brand"><div className="seal">G</div><div><div className="brand-name">Sổ bán hàng gốm</div><div className="brand-sub">Thanh Hải · Vũ Gia · Anamtile</div></div></div>
         <h1 className="login-title">{mode === 'in' ? 'Đăng nhập' : mode === 'up' ? 'Tạo tài khoản' : 'Quên mật khẩu'}</h1>
-        {import.meta.env.DEV && mode === 'in' && <Note>Bản chạy thử trên máy, đăng nhập bằng <b>chu.cuahang@demo.vn</b> / <b>demo1234</b></Note>}
+        {import.meta.env.VITE_SAMPLE_LOGIN && mode === 'in' && <Note>Dữ liệu mẫu: đăng nhập bằng <b>{import.meta.env.VITE_SAMPLE_LOGIN}</b>, mật khẩu xem ở Bảng điều khiển.</Note>}
         {mode === 'up' && <Field label="Tên hiển thị"><Input id="name" value={name} onChange={setName} placeholder="vd. Chị Lan" /></Field>}
         <Field label="Email"><Input id="email" type="email" required value={email} onChange={setEmail} autoComplete="email" /></Field>
         {mode !== 'forgot' && <Field label="Mật khẩu"><Input id="pw" type="password" required minLength={6} value={pw} onChange={setPw} autoComplete={mode === 'in' ? 'current-password' : 'new-password'} /></Field>}

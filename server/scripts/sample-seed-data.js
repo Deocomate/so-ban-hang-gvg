@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadSheets, productRules, importRules, guessSheet, findHeader, guessColumns, buildRows, validateProducts, validateParties } from '../../web/src/lib/excel.js';
 import { DEFAULT_TEXTS } from '../../web/src/lib/docs/model.js';
+import { SAMPLE_STAFF_EMAIL } from '../src/lib/auth.js';
 import { VG_PRODUCTS } from './demo-seed-data.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -78,11 +79,9 @@ export async function seedSample({ call, svc, ensureUser, setUser, owner, today,
   const TH = bookOf('TH').id; const VG = bookOf('VG').id; const AN = bookOf('AN').id;
   const q = (view, book_id, filters = [], order) => call('q', { view, book_id, filters, order });
 
-  await ensureUser('chu.cuahang@demo.vn', 'Chủ cửa hàng (mẫu)');
-  await ensureUser('lan.nhanvien@demo.vn', 'Nhân viên Lan (mẫu)');
+  await ensureUser(SAMPLE_STAFF_EMAIL, 'Nhân viên Lan (mẫu)');
   for (const b of [TH, VG, AN]) {
-    await call('upsert_member', { book_id: b, email: 'chu.cuahang@demo.vn', role: 'owner', display_name: 'Chủ cửa hàng' });
-    await call('upsert_member', { book_id: b, email: 'lan.nhanvien@demo.vn', role: 'staff', display_name: 'Nhân viên Lan',
+    await call('upsert_member', { book_id: b, email: SAMPLE_STAFF_EMAIL, role: 'staff', display_name: 'Nhân viên Lan',
       perms: { ban_hang: true, thu_chi: true, nhap_hang: true, kho: false, danh_muc: false, chi_phi: false, xem_gia_von: false, xem_bao_cao: false } });
   }
 

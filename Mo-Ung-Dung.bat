@@ -19,5 +19,4 @@ pause
 exit /b 1
 
 :run
-node scripts\start.js
-if errorlevel 1 pause
+powershell -NoProfile -Command "Start-Process node -ArgumentList 'scripts/control-panel.js' -WindowStyle Hidden -RedirectStandardError '.bang-dieu-khien.log'"

@@ -27,17 +27,21 @@ Cơ sở dữ liệu là **một tệp SQLite** (`/data/gomsu.db` trong Docker v
 
 > Không dùng Coolify: `cp .env.example .env`, sửa `.env`, rồi `docker compose up -d --build`, và cho reverse proxy (nginx, Caddy, Traefik…) trỏ vào dịch vụ `app` cổng 3000.
 >
-> **Chạy trên máy Windows, không cần biết code:** bấm đúp tệp `Mo-Ung-Dung.bat` ở thư mục gốc.
-> - Lần đầu mất khoảng 1 phút: tự cài Node.js nếu máy chưa có, tự cài thư viện, nạp dữ liệu mẫu. Những lần sau chỉ vài giây.
-> - Trình duyệt tự mở http://localhost:5173. Trang đăng nhập hiện sẵn tài khoản dùng thử.
-> - Sửa mã là trình duyệt tự cập nhật, không cần tải lại hay chạy lại: sửa giao diện thì đổi ngay, sửa `server/src` thì máy chủ tự khởi động lại rồi trang tự tải lại.
-> - Giữ cửa sổ đen mở trong lúc dùng, đóng nó để tắt ứng dụng. Bấm mở lần nữa khi đang chạy thì chỉ mở lại trình duyệt.
+> **Chạy trên máy Windows, không cần biết code:** bấm đúp tệp `Mo-Ung-Dung.bat` ở thư mục gốc. Một cửa sổ **Bảng điều khiển** hiện ra (mở bằng Edge hoặc Chrome có sẵn trên máy), mọi thao tác đều bấm nút trong đó:
+> - **Bật / Tắt / Khởi động lại ứng dụng**, nút **Mở trang bán hàng** (http://localhost:5173). Lần đầu mất khoảng 1 phút: tự cài Node.js nếu máy chưa có, tự cài thư viện, nạp dữ liệu mẫu.
+> - **Dữ liệu mẫu (bật/tắt):** bật thì dùng kho mẫu `server/data`, tài khoản chủ lấy theo `ADMIN_EMAIL`, `ADMIN_PASSWORD` trong `.env` (sửa `.env` rồi bấm Khởi động lại là cập nhật), có nút giả lập tiền về, vận đơn. Tắt thì dùng kho sổ riêng `server/data-rieng`, trống, người đăng ký đầu tiên thành chủ. Hai kho không lẫn nhau, đổi qua lại không mất dữ liệu.
+> - **Nạp lại dữ liệu mẫu:** làm lại từ đầu. Dữ liệu cũ được cất vào `server/data/truoc-nap-lai`.
+> - **Sao lưu ngay**, **Mở thư mục sao lưu**, **Nhật ký** (có nút sao chép để gửi người phụ trách).
+> - **Tùy chọn:** tự bật ứng dụng khi mở bảng điều khiển, tự mở trang bán hàng sau khi bật xong.
+> - Sửa mã là trình duyệt tự cập nhật: sửa giao diện thì đổi ngay, sửa `server/src` thì máy chủ tự khởi động lại rồi trang tự tải lại.
+> - Đóng bảng điều khiển thì ứng dụng tắt theo, không chạy ngầm. Bấm đúp tệp lần nữa khi đang mở thì chỉ mở thêm cửa sổ.
 > - Muốn có nút ngoài màn hình: chuột phải tệp → **Send to → Desktop (create shortcut)**.
-> - Đã thêm cấu hình `app` trong `.claude/launch.json`: mở thư mục này bằng Claude Code rồi sửa thì xem luôn ở khung Preview.
+> - Nếu ứng dụng đã chạy bằng cách khác (`npm run dev`, khung Preview), bảng điều khiển chỉ mở trang được; muốn tắt thì tắt ở nơi đã chạy.
+> - Mở thư mục này bằng Claude Code rồi sửa thì xem luôn ở khung Preview (cấu hình `app` trong `.claude/launch.json`, chạy `scripts/start.js`, dùng cùng chế độ dữ liệu với bảng điều khiển).
 >
 > Chạy bằng lệnh (cần Node.js 20+): ở thư mục gốc chạy `npm run setup` (một lần, cài thư viện cho `server/` và `web/`), sau đó mỗi lần chỉ cần `npm run dev`, nó chạy cùng lúc API (cổng 3000) và giao diện, rồi mở http://localhost:5173. Bấm Ctrl+C để dừng cả hai. Dữ liệu trên máy nằm ở `server/data/gomsu.db`.
 >
-> **Dữ liệu mẫu theo giấy tờ thật (chỉ trên máy)**: khi các sổ chưa có hàng hóa, chạy `npm run seed:sample` ở thư mục gốc. Lệnh tự sao lưu `server/data/gomsu.db` rồi nạp bảng giá, khách hàng, nhà cung cấp, hợp đồng 1009, hóa đơn, bảng đặt xưởng, báo giá vào cả 3 sổ. Đăng nhập `chu.cuahang@demo.vn` (chủ) hoặc `lan.nhanvien@demo.vn` (nhân viên), mật khẩu `demo1234`. Giá vốn, tồn đầu kỳ, số dư quỹ, chi phí, số hóa đơn và cước xe là số giả định vì giấy tờ không có.
+> **Dữ liệu mẫu theo giấy tờ thật (chỉ trên máy)**: khi các sổ chưa có hàng hóa, chạy `npm run seed:sample` ở thư mục gốc. Lệnh tự sao lưu `server/data/gomsu.db` rồi nạp bảng giá, khách hàng, nhà cung cấp, hợp đồng 1009, hóa đơn, bảng đặt xưởng, báo giá vào cả 3 sổ. Tài khoản chủ theo `ADMIN_EMAIL`, `ADMIN_PASSWORD` trong `.env` (chưa điền thì dùng `chu.cuahang@demo.vn` / `demo1234`); nhân viên `lan.nhanvien@demo.vn` dùng chung mật khẩu đó. Giá vốn, tồn đầu kỳ, số dư quỹ, chi phí, số hóa đơn và cước xe là số giả định vì giấy tờ không có.
 >
 > **Bản chạy thử có dữ liệu mẫu**: triển khai một bản riêng với `DEMO_MODE=true`, rồi chạy một lần `docker compose exec app npm run seed:demo` (chỉ chạy trên cơ sở dữ liệu trống). Đăng nhập `chu.cuahang@demo.vn` / `demo1234`.
 
