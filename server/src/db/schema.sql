@@ -79,6 +79,16 @@ create table if not exists products (
   material text,
   norm_m2 real check (norm_m2 is null or norm_m2 >= 0),               -- định mức theo m²
   norm_m real check (norm_m is null or norm_m >= 0),                  -- định mức theo mét dài
+  product_type text not null default 'hang',  -- hang | dich_vu (không quản lý kho) | combo (= is_kit) | san_xuat (có định mức thành phần)
+  description text,
+  order_note text,                             -- mẫu ghi chú tự điền vào dòng hóa đơn / đặt hàng
+  max_stock real check (max_stock is null or max_stock >= 0),
+  location text,
+  width real check (width is null or width >= 0),
+  length real check (length is null or length >= 0),
+  dim_unit text not null default 'cm',
+  sell_direct integer not null default 1,      -- 0: không hiện ở ô tìm hàng khi bán
+  images text not null default '[]',           -- tối đa 5 ảnh, ảnh đầu = image_url
   created_at text not null,
   updated_at text not null
 );
@@ -89,6 +99,44 @@ create table if not exists kit_items (
   component_id text not null references products(id),
   qty real not null check (qty > 0),
   primary key (kit_id, component_id)
+);
+
+-- Đơn vị quy đổi: 1 đơn vị = conv đơn vị cơ bản. prices = [giá mức 1..4], ô trống = giá cơ bản × conv
+create table if not exists product_units (
+  id text primary key,
+  book_id text not null,
+  product_id text not null references products(id) on delete cascade,
+  name text not null,
+  conv real not null check (conv > 0),
+  prices text not null default '[]',
+  sell_direct integer not null default 1,
+  sort integer not null default 0
+);
+create index if not exists product_units_prod_idx on product_units (product_id);
+
+-- Bảng giá có tên (ngoài các mức giá chung theo khách)
+create table if not exists price_books (
+  id text primary key,
+  book_id text not null references books(id) on delete cascade,
+  name text not null,
+  valid_from text,
+  valid_to text,
+  active integer not null default 1,
+  formula text not null default '{}',          -- {base: cost|last_in|tier1..4|book:<id>, op: + | -, value, pct}
+  allow_others integer not null default 1,     -- cho thêm hàng không có trong bảng (lấy giá chung)
+  warn_others integer not null default 0,
+  cust_groups text,                            -- null = tất cả nhóm khách; ngược lại mảng tên nhóm
+  user_ids text,                               -- null = mọi người tạo giao dịch; ngược lại mảng mã người dùng
+  created_at text not null,
+  updated_at text not null
+);
+create unique index if not exists price_books_name_uq on price_books (book_id, lower(name));
+
+create table if not exists price_book_items (
+  price_book_id text not null references price_books(id) on delete cascade,
+  product_id text not null references products(id) on delete cascade,
+  price real not null check (price >= 0),
+  primary key (price_book_id, product_id)
 );
 
 create table if not exists customers (
@@ -161,7 +209,8 @@ create table if not exists sales_orders (
   cancel_reason text,
   created_by text, created_at text not null,
   confirmed_at text, cancelled_at text,
-  vat_rate real not null default 0 check (vat_rate >= 0 and vat_rate <= 100)
+  vat_rate real not null default 0 check (vat_rate >= 0 and vat_rate <= 100),
+  price_book_id text
 );
 create unique index if not exists sales_orders_code_uq on sales_orders (book_id, code);
 
@@ -178,7 +227,9 @@ create table if not exists sales_order_lines (
   delivered_qty real not null default 0,
   returned_qty real not null default 0,
   po_line_id text,
-  note text
+  note text,
+  unit_name text,                              -- đơn vị đã chọn khi bán; qty và unit_price luôn theo đơn vị cơ bản
+  unit_conv real not null default 1
 );
 create index if not exists sol_order_idx on sales_order_lines (order_id);
 
@@ -263,7 +314,9 @@ create table if not exists purchase_order_lines (
   received_qty real not null default 0,
   returned_qty real not null default 0,
   sales_order_line_id text,
-  note text
+  note text,
+  unit_name text,
+  unit_conv real not null default 1
 );
 create index if not exists pol_po_idx on purchase_order_lines (po_id);
 
@@ -316,9 +369,10 @@ create table if not exists stock_adjustments (
   book_id text not null references books(id) on delete cascade,
   code text not null,
   adj_date text not null,
-  reason text not null check (reason in ('dau_ky','vo','loi','that_thoat','kiem_ke','hang_tra_loi','khac')),
+  reason text not null check (reason in ('dau_ky','vo','loi','that_thoat','kiem_ke','hang_tra_loi','noi_bo','khac')),
   note text,
-  created_by text, created_at text not null
+  created_by text, created_at text not null,
+  purpose text                            -- mục đích xuất dùng nội bộ (văn phòng phẩm, quà tặng…)
 );
 
 create table if not exists stock_adjustment_lines (
@@ -331,6 +385,38 @@ create table if not exists stock_adjustment_lines (
   value real not null
 );
 
+-- Phiếu sản xuất: xuất các nguyên liệu / thành phần, nhập thành phẩm với giá vốn bằng tổng giá trị đã xuất
+create table if not exists productions (
+  id text primary key,
+  book_id text not null references books(id) on delete cascade,
+  code text not null,
+  prod_date text not null,
+  product_id text not null references products(id),
+  qty real not null check (qty > 0),
+  value real not null default 0,
+  note text,
+  created_by text, created_at text not null
+);
+create index if not exists productions_book_date_idx on productions (book_id, prod_date);
+
+create table if not exists production_lines (
+  id text primary key,
+  production_id text not null references productions(id) on delete cascade,
+  book_id text not null,
+  product_id text not null references products(id),
+  qty real not null check (qty > 0),
+  value real not null default 0
+);
+
+-- Định mức sản xuất: số lượng mỗi thành phần cho 1 đơn vị thành phẩm
+create table if not exists bom_items (
+  book_id text not null,
+  product_id text not null references products(id) on delete cascade,
+  component_id text not null references products(id),
+  qty real not null check (qty > 0),
+  primary key (product_id, component_id)
+);
+
 -- Sổ kho: mỗi biến động truy ngược về chứng từ gốc. Chỉ hệ thống ghi.
 create table if not exists stock_moves (
   id integer primary key autoincrement,
@@ -340,7 +426,7 @@ create table if not exists stock_moves (
   qty real not null,
   value real not null,
   unit_cost real not null,
-  doc_type text not null,       -- dau_ky, nhap, tra_ncc, giao, tra_hang, dieu_chinh, chenh_lech
+  doc_type text not null,       -- dau_ky, nhap, tra_ncc, giao, tra_hang, dieu_chinh, san_xuat, chenh_lech
   doc_id text not null,
   doc_code text,
   line_id text,
@@ -400,6 +486,7 @@ create table if not exists expenses (
   amount real not null check (amount > 0),
   supplier_id text references suppliers(id),
   settled_payment_id text references payments(id),
+  invoice_no text,                        -- số hóa đơn đầu vào (mua dịch vụ)
   voided integer not null default 0,
   void_reason text,
   note text,
@@ -632,6 +719,99 @@ create table if not exists tax_invoices (
   created_by text, created_at text not null
 );
 create index if not exists tax_invoices_book_idx on tax_invoices (book_id, direction, inv_date);
+
+-- ---------- NHÂN VIÊN, CHẤM CÔNG, LƯƠNG ----------
+-- pay: cách tính lương {type: ca | gio | ngay_cong | co_dinh, rate, std_days, ot_rate, allowances[], deductions[], bonus[], commission_id}
+create table if not exists employees (
+  id text primary key,
+  book_id text not null references books(id) on delete cascade,
+  code text not null,
+  name text not null,
+  phone text, id_no text, title text, dept text, address text,
+  start_date text,
+  user_id text references users(id),        -- tài khoản đăng nhập (nếu có)
+  pay text not null default '{}',
+  active integer not null default 1,
+  note text,
+  created_at text not null
+);
+create unique index if not exists employees_code_uq on employees (book_id, lower(code));
+
+create table if not exists shifts (
+  id text primary key,
+  book_id text not null references books(id) on delete cascade,
+  name text not null,
+  start_time text not null,                  -- 'HH:MM'
+  end_time text not null,
+  hours real not null check (hours > 0),
+  active integer not null default 1
+);
+
+-- Lịch làm việc lặp lại theo thứ trong tuần (0 = Chủ nhật … 6 = Thứ bảy)
+create table if not exists work_schedules (
+  book_id text not null,
+  employee_id text not null references employees(id) on delete cascade,
+  shift_id text not null references shifts(id) on delete cascade,
+  weekday integer not null check (weekday between 0 and 6),
+  primary key (employee_id, shift_id, weekday)
+);
+
+create table if not exists timesheets (
+  id text primary key,
+  book_id text not null references books(id) on delete cascade,
+  employee_id text not null references employees(id) on delete cascade,
+  work_date text not null,
+  shift_id text references shifts(id),
+  status text not null check (status in ('di_lam','nghi_phep','nghi_khong_phep')),
+  check_in text, check_out text,             -- 'HH:MM'
+  hours real not null default 0,
+  late_minutes integer not null default 0,
+  early_minutes integer not null default 0,
+  ot_hours real not null default 0,
+  note text,
+  created_by text, created_at text not null
+);
+create unique index if not exists timesheets_uq on timesheets (employee_id, work_date, coalesce(shift_id, ''));
+create index if not exists timesheets_book_date_idx on timesheets (book_id, work_date);
+
+-- Bảng hoa hồng: rules [{scope: all | category | product, target, basis: doanh_thu | lai_gop | so_luong, value}]
+create table if not exists commission_tables (
+  id text primary key,
+  book_id text not null references books(id) on delete cascade,
+  name text not null,
+  rules text not null default '[]',
+  active integer not null default 1,
+  created_at text not null
+);
+
+create table if not exists paysheets (
+  id text primary key,
+  book_id text not null references books(id) on delete cascade,
+  code text not null,
+  name text not null,
+  period_from text not null,
+  period_to text not null,
+  status text not null default 'tam' check (status in ('tam','chot','huy')),
+  note text,
+  created_by text, created_at text not null, closed_at text
+);
+
+create table if not exists paysheet_lines (
+  id text primary key,
+  paysheet_id text not null references paysheets(id) on delete cascade,
+  book_id text not null,
+  employee_id text not null references employees(id),
+  base real not null default 0,
+  ot real not null default 0,
+  bonus real not null default 0,
+  commission real not null default 0,
+  allowance real not null default 0,
+  deduction real not null default 0,
+  adjust real not null default 0,            -- cộng/trừ tay khi duyệt bảng lương
+  total real not null default 0,
+  breakdown text not null default '{}',
+  expense_id text references expenses(id)    -- khoản chi phí "Lương" tạo khi chốt; trả lương = trả khoản này
+);
 
 -- ---------- NHẬT KÝ CHỈNH SỬA ----------
 create table if not exists audit_log (

@@ -2,9 +2,9 @@
 // gõ tên hoặc mã vào ô tìm kiếm → chọn là có ngay một dòng hàng, không cần bấm "Thêm dòng".
 // Mỗi dòng có ô ghi chú riêng (đặc điểm hàng, men, yêu cầu đóng gói…) và được in lên hóa đơn.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useApp, useAction } from '../lib/store.jsx';
+import { useApp, useAction, useQ } from '../lib/store.jsx';
 import { money, qty as fq, todayVN, match } from '../lib/format.js';
-import { useProducts, useCustomers, useFunds, tierPrice, productSub } from '../lib/lookups.js';
+import { useProducts, useCustomers, useFunds, productSub, priceOf, unitsOf, findUnit, usePriceBooks, booksFor } from '../lib/lookups.js';
 import { packing, weightOf, fmtKg } from '../lib/docs/model.js';
 import { Btn, Icon, Input, Select, DateInput, NumInput, Loading, Picker } from '../components/ui.jsx';
 import { ChargesDialog } from './Charges.jsx';
@@ -15,7 +15,7 @@ const lsGet = (k) => { try { return localStorage.getItem(k) || ''; } catch (e) {
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* bỏ qua */ } };
 
 // Ô tìm hàng hóa: chọn là thêm dòng; máy quét mã vạch (gõ mã + Enter) thêm ngay nếu trùng SKU
-function ProductSearch({ products, tier, onPick, inputRef }) {
+function ProductSearch({ products, tier, book, onPick, inputRef }) {
   const [q, setQ] = useState(''); const [open, setOpen] = useState(false); const [hi, setHi] = useState(0);
   const boxRef = useRef(null); const listRef = useRef(null);
   const list = useMemo(() => {
@@ -51,12 +51,12 @@ function ProductSearch({ products, tier, onPick, inputRef }) {
             <button type="button" key={p.id} className={`pos-result${i === hi ? ' hi' : ''}`} onMouseEnter={() => setHi(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => pick(p)}>
               {p.image_url ? <img src={p.image_url} alt="" /> : <span className="pos-thumb"><Icon name="box" size={18} /></span>}
               <span className="pos-result-main">
-                <b>{p.name}{p.is_kit ? ' (bộ)' : ''}</b>
+                <b>{p.name}{p.is_kit ? ' (bộ)' : p.is_service ? ' (dịch vụ)' : ''}</b>
                 <span className="muted small">{p.sku}{productSub(p) ? ' · ' + productSub(p) : ''}</span>
               </span>
               <span className="pos-result-side">
-                <b>{money(tierPrice(p, tier))}</b>
-                <span className={`small ${p.available <= 0 ? 'bad' : 'muted'}`}>Có thể bán: {fq(p.available)} {p.unit}</span>
+                <b>{money(priceOf(p, { tier, book }))}</b>
+                {p.is_service ? <span className="small muted">Dịch vụ</span> : <span className={`small ${p.available <= 0 ? 'bad' : 'muted'}`}>Có thể bán: {fq(p.available)} {p.unit}</span>}
               </span>
             </button>
           ))}
@@ -67,9 +67,11 @@ function ProductSearch({ products, tier, onPick, inputRef }) {
 }
 
 export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_contract, onClose }) {
-  const { settings, open, can, rpc, toast, book } = useApp();
+  const { settings, open, can, rpc, toast, book, session } = useApp();
   const products = useProducts();
+  const priceBooks = usePriceBooks();
   const customers = useCustomers();
+  const employees = useQ('employees', [['active', 'eq', 'true']], 'name', 500);
   const funds = useFunds(can('thu_chi'));
   const { run, busy } = useAction();
   const searchRef = useRef(null); const rootRef = useRef(null); const lastAdded = useRef(null);
@@ -78,7 +80,7 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
   const [showCharges, setShowCharges] = useState(false);
   const [f, setF] = useState({
     kind: kind0 || 'ban_san', customer_id: cust0 || '', channel: (settings.channels || [])[0] || '', order_date: todayVN(), due_date: '',
-    staff: lsGet('gomsu.staff'), note: '', discount: 0, shipping_fee: 0, vat_rate: 0, transport: null, lines: [],
+    staff: lsGet('gomsu.staff'), note: '', discount: 0, shipping_fee: 0, vat_rate: 0, transport: null, lines: [], price_book_id: '',
     pay: { amount: null, fund_id: '', method: 'Tiền mặt', fee: null },
   });
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
@@ -91,8 +93,9 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
       const ls = await rpc('q', { view: 'sales_order_lines', filters: [['order_id', 'eq', id]], order: 'line_no' });
       const trip = (await rpc('q', { view: 'driver_trips', filters: [['order_id', 'eq', id]] })).find((t) => !t.delivery_id);
       setF((s) => ({ ...s, kind: o.kind, customer_id: o.customer_id, channel: o.channel || '', order_date: o.order_date, due_date: o.due_date || '', staff: o.staff || '',
-        note: o.note || '', discount: o.discount, shipping_fee: o.shipping_fee, vat_rate: o.vat_rate || 0, transport: trip ? { driver_id: trip.driver_id, amount: trip.amount, payer: trip.payer, collect: trip.collect, note: trip.note || '' } : null, status0: o.status, code: o.code,
-        lines: ls.map((l) => ({ key: ++seq, id: l.id, product_id: l.product_id, qty: l.qty, unit_price: l.unit_price, discount_pct: l.discount_pct, po_line_id: l.po_line_id, note: l.note || '', manual: true })) }));
+        note: o.note || '', discount: o.discount, shipping_fee: o.shipping_fee, vat_rate: o.vat_rate || 0, price_book_id: o.price_book_id || '', transport: trip ? { driver_id: trip.driver_id, amount: trip.amount, payer: trip.payer, collect: trip.collect, note: trip.note || '' } : null, status0: o.status, code: o.code,
+        lines: ls.map((l) => { const c = l.unit_conv || 1; return { key: ++seq, id: l.id, product_id: l.product_id, qty: l.qty / c, unit_price: l.unit_price * c, unit: l.unit_name || l.unit, conv: c,
+          discount_pct: l.discount_pct, po_line_id: l.po_line_id, note: l.note || '', manual: true }; }) }));
       setLoaded(true);
     })().catch((e) => toast(e.message, 'err'));
   }, [id]);
@@ -102,8 +105,8 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
     if (!quote_id) return;
     rpc('q', { view: 'quotes', filters: [['id', 'eq', quote_id]] }).then(([q]) => {
       const b = q.body; const ls = b.groups.flatMap((g) => g.lines).filter((l) => l.product_id);
-      setF((s) => ({ ...s, customer_id: q.customer_id || s.customer_id, note: `Theo báo giá ${q.code}${q.site ? ' · ' + q.site : ''}`, vat_rate: b.vat_mode === 'them' ? b.vat_rate : 0, shipping_fee: b.ship?.amount || 0,
-        lines: ls.map((l) => ({ key: ++seq, product_id: l.product_id, qty: l.qty, unit_price: l.price, discount_pct: 0, note: l.note || '', manual: true })) }));
+      setF((s) => ({ ...s, customer_id: q.customer_id || s.customer_id, note: `Theo báo giá ${q.code}${q.site ? ' · ' + q.site : ''}`, vat_rate: b.vat_mode === 'them' ? b.vat_rate : 0, shipping_fee: b.ship?.amount || 0, price_book_id: b.price_book_id || '',
+        lines: ls.map((l) => ({ key: ++seq, product_id: l.product_id, qty: l.qty, unit_price: l.price, conv: 1, discount_pct: 0, note: l.note || '', manual: true })) }));
       setLoaded(true);
     }).catch((e) => toast(e.message, 'err'));
   }, [quote_id]);
@@ -115,19 +118,42 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
 
   const cust = customers.data?.find((c) => c.id === f.customer_id);
   const tier = cust?.price_tier || 1;
-  const pmap = useMemo(() => Object.fromEntries((products.data || []).map((p) => [p.id, p])), [products.data]);
-  // Đổi khách → giá các dòng chưa sửa tay theo mức giá của khách
+  // Giảm giá theo nhóm khách (Khách hàng → Nhóm khách hàng): % vào chiết khấu từng dòng mới, VND vào giảm giá cả đơn
+  const grpInfo = cust?.kind ? settings.customer_group_info?.[cust.kind] : null;
+  const grpPct = grpInfo?.discount_type === 'pct' ? Number(grpInfo.discount) || 0 : 0;
   useEffect(() => {
-    setF((s) => ({ ...s, lines: s.lines.map((l) => (!l.manual && pmap[l.product_id] ? { ...l, unit_price: tierPrice(pmap[l.product_id], tier) } : l)) }));
-  }, [tier, pmap]);
+    if (id || quote_id || !cust) return;
+    setF((s) => ({ ...s, discount: grpInfo?.discount_type === 'vnd' ? Number(grpInfo.discount) || 0 : 0,
+      lines: s.lines.map((l) => (l.manual ? l : { ...l, discount_pct: grpPct })) }));
+  }, [cust?.id, cust?.kind]);
+  const pmap = useMemo(() => Object.fromEntries((products.data || []).map((p) => [p.id, p])), [products.data]);
+  // Bảng giá có tên: chỉ hiện bảng đang hiệu lực, đúng nhóm khách và người tạo
+  const myBooks = booksFor(priceBooks.data, cust, session?.user?.id);
+  const pbook = (priceBooks.data || []).find((b) => b.id === f.price_book_id) || null;
+  useEffect(() => { if (f.price_book_id && priceBooks.data && cust && !id && !myBooks.some((b) => b.id === f.price_book_id)) set('price_book_id', ''); }, [cust?.id, priceBooks.data]);
+  const linePrice = (p, l) => priceOf(p, { tier, book: pbook, unit: findUnit(p, l.unit) });
+  // Đổi khách / bảng giá → giá các dòng chưa sửa tay theo mức giá của khách hoặc bảng giá
+  useEffect(() => {
+    setF((s) => ({ ...s, lines: s.lines.map((l) => (!l.manual && pmap[l.product_id] ? { ...l, unit_price: linePrice(pmap[l.product_id], l) } : l)) }));
+  }, [tier, pmap, pbook]);
+  const sellable = useMemo(() => (products.data || []).filter((p) => p.sell_direct), [products.data]);
 
   const addProduct = (p) => {
+    if (pbook && pbook.items[p.id] == null) {
+      if (!pbook.allow_others) { toast(`“${p.name}” không có trong bảng giá ${pbook.name}`, 'err'); return; }
+      if (pbook.warn_others) toast(`“${p.name}” không có trong bảng giá ${pbook.name} — lấy giá chung`, 'err');
+    }
     setF((s) => {
-      const ex = s.lines.find((l) => l.product_id === p.id && !l.po_line_id);
+      const ex = s.lines.find((l) => l.product_id === p.id && !l.po_line_id && (l.conv || 1) === 1);
       if (ex) { lastAdded.current = ex.key; return { ...s, lines: s.lines.map((l) => (l === ex ? { ...l, qty: (Number(l.qty) || 0) + 1 } : l)) }; }
       const key = ++seq; lastAdded.current = key;
-      return { ...s, lines: [...s.lines, { key, product_id: p.id, qty: 1, unit_price: tierPrice(p, tier), discount_pct: 0, note: '', manual: false }] };
+      const l = { key, product_id: p.id, qty: 1, unit: p.unit, conv: 1, discount_pct: grpPct, note: p.order_note || '', manual: false };
+      return { ...s, lines: [...s.lines, { ...l, unit_price: linePrice(p, l) }] };
     });
+  };
+  const setUnit = (l, name) => {
+    const p = pmap[l.product_id]; const u = findUnit(p, name);
+    setLine(l.key, { unit: u.name, conv: u.conv, unit_price: l.manual ? (Number(l.unit_price) || 0) / (l.conv || 1) * u.conv : linePrice(p, { unit: u.name }) });
   };
   useEffect(() => {
     if (!lastAdded.current) return;
@@ -140,11 +166,12 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
 
   const lineTotal = (l) => Math.round((Number(l.qty) || 0) * (Number(l.unit_price) || 0) * (1 - (Number(l.discount_pct) || 0) / 100));
   const gross = f.lines.reduce((s, l) => s + lineTotal(l), 0);
+  const baseQty = (l) => (Number(l.qty) || 0) * (l.conv || 1);
   const qtySum = f.lines.reduce((s, l) => s + (Number(l.qty) || 0), 0);
-  const wLines = f.lines.map((l) => weightOf(l.qty, pmap[l.product_id]));
+  const wLines = f.lines.map((l) => weightOf(baseQty(l), pmap[l.product_id]));
   const weightSum = wLines.reduce((s, w) => s + (w || 0), 0);
   const noWeight = f.lines.filter((l, i) => wLines[i] === null && Number(l.qty) > 0).length;
-  const boxSum = f.lines.reduce((s, l) => { const p = pmap[l.product_id]; return s + (p ? packing(l.qty, p.units_per_pack, p.pack_unit, p.unit).boxes : 0); }, 0);
+  const boxSum = f.lines.reduce((s, l) => { const p = pmap[l.product_id]; return s + (p ? packing(baseQty(l), p.units_per_pack, p.pack_unit, p.unit).boxes : 0); }, 0);
   const packUnits = [...new Set(f.lines.map((l) => pmap[l.product_id]).filter((p) => p && p.units_per_pack).map((p) => p.pack_unit || 'hộp'))];
   const boxLabel = packUnits.length === 1 ? packUnits[0] : 'kiện';
   const goods = Math.max(0, Math.round(gross - (Number(f.discount) || 0)));
@@ -178,8 +205,10 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
     const p = {
       id: id || null, kind: f.kind, customer_id: f.customer_id, channel: f.channel, order_date: f.order_date, due_date: f.due_date || null, staff: f.staff,
       note: f.note, discount: Number(f.discount) || 0, shipping_fee: Number(f.shipping_fee) || 0, vat_rate: Number(f.vat_rate) || 0, transport: f.transport, quote_id: quote_id || null,
+      price_book_id: f.price_book_id || null,
       status: mode === 'draft' ? 'nhap' : 'xac_nhan', deliver_now: mode === 'deliver', override: mode === 'deliver' && allowOver,
-      lines: lines.map((l) => ({ id: l.id || null, product_id: l.product_id, qty: Number(l.qty), unit_price: l.unit_price, discount_pct: Number(l.discount_pct) || 0,
+      lines: lines.map((l) => ({ id: l.id || null, product_id: l.product_id, qty: baseQty(l), unit_price: (Number(l.unit_price) || 0) / (l.conv || 1),
+        unit_name: (l.conv || 1) !== 1 ? l.unit : null, discount_pct: Number(l.discount_pct) || 0,
         po_line_id: l.po_line_id || null, note: (l.note || '').trim() || null })),
       deposit: payAmt > 0 && mode !== 'draft' ? { amount: Math.min(payAmt, mode === 'deliver' ? total : payAmt), fund_id: f.pay.fund_id, method: f.pay.method, fee: f.pay.fee || 0 } : null,
     };
@@ -199,7 +228,7 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
   return (
     <div className="pos-overlay" ref={rootRef} role="dialog" aria-modal="true" aria-label="Tạo đơn bán">
       <div className="pos-top">
-        <ProductSearch products={products.data} tier={tier} onPick={addProduct} inputRef={searchRef} />
+        <ProductSearch products={sellable} tier={tier} book={pbook} onPick={addProduct} inputRef={searchRef} />
         <div className="pos-tab">
           <Icon name="cart" size={17} />
           <b>{editing ? `Sửa đơn ${f.code}` : isDat ? 'Đơn đặt riêng' : 'Đơn bán mới'}</b>
@@ -226,21 +255,23 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
             )}
             {f.lines.map((l, i) => {
               const p = pmap[l.product_id] || {};
-              const short = !isDat && Number(l.qty) > (p.available ?? 0);
-              const pk = packing(l.qty, p.units_per_pack, p.pack_unit, p.unit);
+              const short = !isDat && !p.is_service && baseQty(l) > (p.available ?? 0);
+              const pk = packing(baseQty(l), p.units_per_pack, p.pack_unit, p.unit);
+              const us = unitsOf(p).filter((u) => u.conv === 1 || u.sell_direct || u.name === l.unit);
               const kg = wLines[i];
               return (
                 <div className="pos-line" key={l.key} data-line={l.key}>
                   <div className="pos-line-no">{i + 1}</div>
                   <button className="pos-line-del" onClick={() => delLine(l.key)} aria-label="Xóa dòng" title="Xóa dòng"><Icon name="x" size={16} /></button>
                   <div className="pos-line-info">
-                    <div className="pos-line-name"><span className="muted">{p.sku}</span> <b>{p.name || '…'}</b>{p.is_kit ? ' (bộ)' : ''}</div>
+                    <div className="pos-line-name"><span className="muted">{p.sku}</span> <b>{p.name || '…'}</b>{p.is_kit ? ' (bộ)' : p.is_service ? ' (dịch vụ)' : ''}</div>
                     <div className={`small ${short ? 'bad' : 'muted'}`}>
-                      {productSub(p) ? productSub(p) + ' · ' : ''}Có thể bán {fq(p.available)} {p.unit}{p.incoming ? ` · đang về ${fq(p.incoming)}` : ''}{short ? (allowOver ? ' — sẽ giao vượt tồn' : ' — không đủ để giao ngay') : ''}
+                      {productSub(p) ? productSub(p) + ' · ' : ''}{p.is_service ? 'Dịch vụ, không trừ kho' : <>Có thể bán {fq(p.available)} {p.unit}{p.incoming ? ` · đang về ${fq(p.incoming)}` : ''}</>}
+                      {(l.conv || 1) !== 1 ? ` · = ${fq(baseQty(l))} ${p.unit}` : ''}{short ? (allowOver ? ' — sẽ giao vượt tồn' : ' — không đủ để giao ngay') : ''}
                     </div>
                     <div className="pos-split">
                       {pk.text ? <span className="pos-pack"><Icon name="box" size={14} /> {pk.text}</span>
-                        : p.id && !p.is_kit ? <button className="link-btn small" onClick={() => open('product', { id: p.id })}>+ Khai số {String(p.unit || 'cái').toLowerCase()}/thùng để tự chia thùng</button> : null}
+                        : p.id && !p.is_kit && !p.is_service && !p.units?.length ? <button className="link-btn small" onClick={() => open('product', { id: p.id })}>+ Khai số {String(p.unit || 'cái').toLowerCase()}/thùng để tự chia thùng</button> : null}
                       {kg !== null && <span className="pos-kg">{fmtKg(kg)}</span>}
                     </div>
                     <input className="pos-note" value={l.note || ''} maxLength={300} onChange={(e) => setLine(l.key, { note: e.target.value })}
@@ -250,7 +281,8 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
                     <button onClick={() => setLine(l.key, { qty: Math.max(0, (Number(l.qty) || 0) - 1) })} aria-label="Bớt 1">−</button>
                     <NumInput money={false} min={0} value={l.qty} onChange={(v) => setLine(l.key, { qty: v })} aria-label="Số lượng" />
                     <button onClick={() => setLine(l.key, { qty: (Number(l.qty) || 0) + 1 })} aria-label="Thêm 1">+</button>
-                    <span className="pos-unit">{p.unit}</span>
+                    {us.length > 1 ? <select className="pos-unit pos-unit-sel" value={l.unit || p.unit} onChange={(e) => setUnit(l, e.target.value)} aria-label="Đơn vị tính">
+                      {us.map((u) => <option key={u.name} value={u.name}>{u.name}</option>)}</select> : <span className="pos-unit">{l.unit || p.unit}</span>}
                   </div>
                   <label className="pos-price"><span className="muted small">Đơn giá</span><NumInput suffix={false} value={l.unit_price} onChange={(v) => setLine(l.key, { unit_price: v, manual: true })} aria-label="Đơn giá" /></label>
                   <label className="pos-ck"><span className="muted small">CK %</span><NumInput money={false} min={0} max={100} value={l.discount_pct} onChange={(v) => setLine(l.key, { discount_pct: v })} aria-label="Chiết khấu %" /></label>
@@ -268,7 +300,7 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
         <div className="pos-right">
           <div className="pos-meta">
             <input className="pos-staff" value={f.staff} onChange={(e) => set('staff', e.target.value)} placeholder="Người bán" list="pos-staff-list" />
-            <datalist id="pos-staff-list">{[book?.my_name, ...(settings.staff_names || [])].filter(Boolean).map((x) => <option key={x} value={x} />)}</datalist>
+            <datalist id="pos-staff-list">{[...new Set([...(employees.data || []).map((e) => e.name), book?.my_name, ...(settings.staff_names || [])].filter(Boolean))].map((x) => <option key={x} value={x} />)}</datalist>
             <DateInput value={f.order_date} onChange={(v) => set('order_date', v)} max={todayVN()} />
           </div>
           <div className="pos-cust">
@@ -278,6 +310,8 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
               onCreate={(name) => open('party', { type: 'kh', name, onSaved: (r) => set('customer_id', r.id) })} createLabel="Thêm khách mới" />
             <button className="pos-cust-add" title="Thêm khách mới" onClick={() => open('party', { type: 'kh', onSaved: (r) => set('customer_id', r.id) })}><Icon name="plus" size={18} /></button>
           </div>
+          {myBooks.length > 0 && <Select value={f.price_book_id} onChange={(v) => set('price_book_id', v)} aria-label="Bảng giá"
+            options={[{ value: '', label: 'Bảng giá chung' + (cust ? ` (${priceNames[tier - 1]})` : '') }, ...myBooks.map((b) => ({ value: b.id, label: 'Bảng giá: ' + b.name }))]} />}
           {cust && cust.code !== 'KL' && <div className="small muted pos-cust-info">{cust.phone || 'Chưa có SĐT'} · {priceNames[tier - 1]}{cust.receivable > 0 ? <> · <span className="bad">đang nợ {money(cust.receivable)}</span></> : ''}{cust.prepaid > 0 ? ` · trả trước ${money(cust.prepaid)}` : ''}</div>}
           <div className="pos-grid2">
             <Select value={f.channel} onChange={(v) => set('channel', v)} options={settings.channels || []} placeholder="Kênh bán" aria-label="Kênh bán" />

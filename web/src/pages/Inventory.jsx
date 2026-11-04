@@ -4,18 +4,27 @@ import { money, qty as fq, dmy, todayVN, match } from '../lib/format.js';
 import { useProducts, productLabel, productSub } from '../lib/lookups.js';
 import { exportXlsx } from '../lib/excel.js';
 import { PeriodPicker, usePeriod } from '../components/Period.jsx';
-import { Btn, Icon, Pill, Field, Input, Select, DateInput, NumInput, Tabs, Search, Loading, ErrorBox, Note, Table, Modal, Picker, KV, Section, ListPage, FilterBox, RadioList } from '../components/ui.jsx';
+import { Btn, Icon, Pill, Field, Input, Select, DateInput, NumInput, Tabs, usePageTab, Search, Loading, ErrorBox, Note, Table, Modal, Picker, KV, Section, ListPage, FilterBox, RadioList } from '../components/ui.jsx';
 
 const REASONS = [
   { value: 'vo', label: 'Hàng vỡ' }, { value: 'loi', label: 'Hàng lỗi' }, { value: 'that_thoat', label: 'Thất thoát / mất' },
   { value: 'kiem_ke', label: 'Kiểm kê (nhập số đếm thực tế)' }, { value: 'khac', label: 'Khác' },
 ];
+export const DAMAGE_REASONS = REASONS.slice(0, 3);
+// Loại xuất dùng nội bộ (máy chủ kiểm tra đúng danh sách này)
+export const INTERNAL_PURPOSES = ['Văn phòng phẩm, dụng cụ làm việc', 'Vật tư tiêu hao, công cụ dụng cụ', 'Sự kiện, hội nghị nội bộ',
+  'Bồi thường, đền bù', 'Mẫu trưng bày, demo sản phẩm', 'Quà tặng khách hàng, đối tác', 'Khác'];
+const ADJ_MODES = {
+  huy: { title: 'Xuất hủy', sub: 'Ghi hàng vỡ, lỗi, thất thoát. Giá trị theo giá vốn bình quân tính vào hao hụt kho.', reasons: DAMAGE_REASONS },
+  noi_bo: { title: 'Xuất dùng nội bộ', sub: 'Lấy hàng trong kho ra dùng, trưng bày hoặc tặng. Giá trị theo giá vốn bình quân tính vào chi phí.', reasons: [{ value: 'noi_bo', label: 'Xuất dùng nội bộ' }] },
+  '': { title: 'Điều chỉnh kho', sub: 'Ghi hàng vỡ, lỗi, thất thoát hoặc kết quả kiểm kê. Phiếu có lý do, không sửa thẳng số tồn.', reasons: REASONS },
+};
 
-export function InventoryPage() {
+export function InventoryPage(nav) {
   const { open, can, settings } = useApp();
-  const [tab, setTab] = useState('stock');
+  const [tab, setTab] = usePageTab(nav, 'stock');
   const [search, setSearch] = useState(''); const [cat, setCat] = useState(''); const [only, setOnly] = useState('');
-  const prods = useQ('products', [['is_kit', 'eq', 'false']], 'sku', 5000);
+  const prods = useQ('products', [['is_kit', 'eq', 'false'], ['product_type', 'neq', 'dich_vu']], 'sku', 5000);
   const cost = can('xem_gia_von');
   const all = prods.data || [];
   const rows = useMemo(() => all.filter((p) => (!cat || p.category === cat) && match(`${p.sku} ${p.name} ${p.size || ''} ${p.color || ''}`, search)
@@ -147,11 +156,13 @@ export function StockCard({ product_id, onClose }) {
 }
 
 let seq = 0;
-export function AdjustForm({ product_id, onClose }) {
+export function AdjustForm({ product_id, mode = '', onClose }) {
   const { can } = useApp();
   const products = useProducts();
   const { run, busy } = useAction();
-  const [reason, setReason] = useState('vo'); const [date, setDate] = useState(todayVN()); const [note, setNote] = useState('');
+  const M = ADJ_MODES[mode] || ADJ_MODES[''];
+  const [reason, setReason] = useState(M.reasons[0].value); const [date, setDate] = useState(todayVN()); const [note, setNote] = useState('');
+  const [purpose, setPurpose] = useState(INTERNAL_PURPOSES[0]);
   const [lines, setLines] = useState([{ key: ++seq, product_id: product_id || '', qty: null, count: null, unit_cost: null }]);
   const pmap = useMemo(() => Object.fromEntries((products.data || []).map((p) => [p.id, p])), [products.data]);
   const setL = (k, patch) => setLines((ls) => ls.map((l) => (l.key === k ? { ...l, ...patch } : l)));
@@ -162,14 +173,16 @@ export function AdjustForm({ product_id, onClose }) {
     return -(Math.abs(Number(l.qty) || 0));
   };
   return (
-    <Modal title="Điều chỉnh kho" onClose={onClose} size="lg" subtitle="Ghi hàng vỡ, lỗi, thất thoát hoặc kết quả kiểm kê. Phiếu có lý do, không sửa thẳng số tồn."
+    <Modal title={M.title} onClose={onClose} size="lg" subtitle={M.sub}
       footer={<><Btn onClick={onClose}>Thôi</Btn><Btn kind="primary" busy={busy} onClick={async () => {
         const ls = lines.filter((l) => l.product_id && delta(l) !== 0).map((l) => ({ product_id: l.product_id, qty_delta: delta(l), unit_cost: delta(l) > 0 ? l.unit_cost : null }));
-        const r = await run('adjust_stock', { date, reason, note, lines: ls }, (x) => 'Đã lập phiếu ' + x.code);
+        const r = await run('adjust_stock', { date, reason, note, purpose: reason === 'noi_bo' ? purpose : null, lines: ls }, (x) => 'Đã lập phiếu ' + x.code);
         if (r) onClose();
       }}>Lưu phiếu</Btn></>}>
       <div className="grid">
-        <Field label="Lý do"><Select value={reason} onChange={setReason} options={REASONS} /></Field>
+        {reason === 'noi_bo'
+          ? <Field label="Loại xuất"><Select value={purpose} onChange={setPurpose} options={INTERNAL_PURPOSES.map((x) => ({ value: x, label: x }))} /></Field>
+          : <Field label="Lý do"><Select value={reason} onChange={setReason} options={M.reasons} /></Field>}
         <Field label="Ngày"><DateInput value={date} onChange={setDate} max={todayVN()} /></Field>
         <Field label="Ghi chú" hint={reason === 'kiem_ke' || reason === 'khac' ? 'Bắt buộc' : ''}><Input value={note} onChange={setNote} placeholder="vd. Rơi vỡ khi dỡ hàng" /></Field>
       </div>
@@ -179,11 +192,11 @@ export function AdjustForm({ product_id, onClose }) {
           const p = pmap[l.product_id];
           return (
             <div key={l.key} className="row gap" style={{ alignItems: 'flex-end' }}>
-              <div className="grow" style={{ minWidth: 220 }}><Field label="Sản phẩm"><Picker items={(products.data || []).filter((x) => !x.is_kit)} value={l.product_id} onChange={(v) => setL(l.key, { product_id: v })}
+              <div className="grow" style={{ minWidth: 220 }}><Field label="Sản phẩm"><Picker items={(products.data || []).filter((x) => !x.is_kit && !x.is_service)} value={l.product_id} onChange={(v) => setL(l.key, { product_id: v })}
                 getLabel={productLabel} getSub={(x) => `${productSub(x)} · tồn ${fq(x.on_hand)}`} /></Field></div>
               {reason === 'kiem_ke'
                 ? <Field label={`Số đếm thực tế${p ? ` (sổ: ${fq(p.on_hand)})` : ''}`}><NumInput money={false} stepper min={0} value={l.count} onChange={(v) => setL(l.key, { count: v })} style={{ maxWidth: 170 }} /></Field>
-                : <Field label={reason === 'khac' ? 'Số lượng ± (âm = giảm)' : 'Số lượng mất / hỏng'}><NumInput money={false} stepper value={l.qty} onChange={(v) => setL(l.key, { qty: v })} style={{ maxWidth: 170 }} /></Field>}
+                : <Field label={reason === 'khac' ? 'Số lượng ± (âm = giảm)' : reason === 'noi_bo' ? 'Số lượng xuất' : 'Số lượng mất / hỏng'}><NumInput money={false} stepper value={l.qty} onChange={(v) => setL(l.key, { qty: v })} style={{ maxWidth: 170 }} /></Field>}
               {p && <span className="muted small" style={{ paddingBottom: 10 }}>chênh {delta(l) > 0 ? '+' : ''}{fq(delta(l))} → còn {fq(p.on_hand + delta(l))}</span>}
               {delta(l) > 0 && can('xem_gia_von') && <Field label="Giá vốn (để trống = bình quân)"><NumInput value={l.unit_cost} onChange={(v) => setL(l.key, { unit_cost: v })} style={{ maxWidth: 140 }} /></Field>}
             </div>

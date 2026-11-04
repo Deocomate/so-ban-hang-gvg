@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp, useQ, useAction } from '../lib/store.jsx';
 import { money, qty as fq, dmy, match, todayVN } from '../lib/format.js';
-import { useProducts, useCustomers, tierPrice } from '../lib/lookups.js';
+import { useProducts, useCustomers, priceOf, usePriceBooks, booksFor } from '../lib/lookups.js';
 import { docSettings, DEFAULT_TEXTS, weightOf } from '../lib/docs/model.js';
 import { exportXlsx } from '../lib/excel.js';
 import { Btn, Icon, Pill, Field, Input, TextArea, Select, DateInput, NumInput, Check, Search, ErrorBox, Loading, Note, Table, Modal, Picker, KV, Section, ListPage, FilterBox, RadioList } from '../components/ui.jsx';
@@ -70,8 +70,8 @@ function LineRow({ l, mosaic, showNorm, onChange, onDel, pmap }) {
 }
 
 export function QuoteForm({ id, onClose, onSaved }) {
-  const { rpc, book, settings, toast, open } = useApp();
-  const products = useProducts(); const customers = useCustomers();
+  const { rpc, book, settings, toast, open, session } = useApp();
+  const products = useProducts(); const customers = useCustomers(); const priceBooks = usePriceBooks();
   const { run, busy } = useAction();
   const ds = useMemo(() => docSettings(book, settings), [book, settings]);
   const mosaicBook = book.short_name === 'AN';
@@ -90,10 +90,13 @@ export function QuoteForm({ id, onClose, onSaved }) {
   const mosaic = f.template === 'mosaic';
   const pmap = useMemo(() => Object.fromEntries((products.data || []).map((p) => [p.id, p])), [products.data]);
   const cust = customers.data?.find((c) => c.id === f.customer_id);
+  const myBooks = booksFor(priceBooks.data, cust, session?.user?.id);
+  const pbook = myBooks.find((b) => b.id === f.price_book_id) || null;
   const setGroup = (key, patch) => setF((s) => ({ ...s, groups: s.groups.map((g) => (g.key === key ? { ...g, ...patch } : g)) }));
   const addProduct = (g, pid) => {
     const p = pmap[pid]; if (!p) return;
-    const line = { ...newLine(), product_id: p.id, name: mosaic ? 'Tranh mosaic khảm trai' : p.name, spec: specOf(p), image: p.image_url || '', norm: p.norm_m2 || null, unit: String(p.unit || 'viên').toLowerCase(), price: tierPrice(p, cust?.price_tier || 1) };
+    const line = { ...newLine(), product_id: p.id, name: mosaic ? 'Tranh mosaic khảm trai' : p.name, spec: specOf(p), image: p.image_url || '', norm: p.norm_m2 || null, unit: String(p.unit || 'viên').toLowerCase(), price: priceOf(p, { tier: cust?.price_tier || 1, book: pbook }) };
+    if (pbook && pbook.items[p.id] == null && !pbook.allow_others) { toast(`“${p.name}” không có trong bảng giá ${pbook.name}`, 'err'); return; }
     setGroup(g.key, { lines: [...g.lines, line] });
   };
   const goods = f.groups.reduce((s, g) => s + g.lines.reduce((t, l) => t + Math.round((Number(l.qty) || 0) * (Number(l.price) || 0)), 0), 0);
@@ -102,7 +105,7 @@ export function QuoteForm({ id, onClose, onSaved }) {
   const kg = f.groups.reduce((s, g) => s + g.lines.reduce((t, l) => t + (weightOf(l.qty, pmap[l.product_id]) || 0), 0), 0);
   const save = async () => {
     const r = await run('save_quote', { id: id || null, template: f.template, customer_id: f.customer_id || null, customer_name: f.customer_name || cust?.name, address: f.address, site: f.site, quote_date: f.quote_date, profile_id: f.profile_id,
-      body: { groups: f.groups, vat_mode: f.vat_mode, vat_rate: f.vat_rate, ship: f.ship, terms: f.terms, show_norm: f.show_norm } }, (x) => `Đã lưu báo giá ${x.code}`);
+      body: { groups: f.groups, vat_mode: f.vat_mode, vat_rate: f.vat_rate, ship: f.ship, terms: f.terms, show_norm: f.show_norm, price_book_id: f.price_book_id || null } }, (x) => `Đã lưu báo giá ${x.code}`);
     if (r) { onSaved?.(r); onClose(); if (!id) open('quote', { id: r.id }); }
   };
   if (!loaded || !products.data || !customers.data) return <Modal title="Báo giá" onClose={onClose} size="xl"><Loading /></Modal>;
@@ -117,6 +120,8 @@ export function QuoteForm({ id, onClose, onSaved }) {
         <Field label="Ngày báo giá"><DateInput value={f.quote_date} onChange={(v) => set('quote_date', v)} /></Field>
         <Field label="Địa chỉ"><Input value={f.address} onChange={(v) => set('address', v)} /></Field>
         <Field label="Địa điểm công trình"><Input value={f.site} onChange={(v) => set('site', v)} /></Field>
+        {myBooks.length > 0 && <Field label="Bảng giá" hint="Giá điền sẵn khi thêm hàng"><Select value={f.price_book_id || ''} onChange={(v) => set('price_book_id', v)}
+          options={[{ value: '', label: 'Bảng giá chung (mức giá của khách)' }, ...myBooks.map((b) => ({ value: b.id, label: b.name }))]} /></Field>}
         <Field label="Đơn vị đứng tên"><Select value={f.profile_id} onChange={(v) => set('profile_id', v)} options={ds.profiles.map((p) => ({ value: p.id, label: p.legal_name || p.name }))} /></Field>
       </div>
       {f.groups.map((g, gi) => (

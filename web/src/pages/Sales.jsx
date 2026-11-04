@@ -202,7 +202,7 @@ export function OrderDetail({ id, onClose }) {
       <Section title="Hàng trong đơn">
         <Table dense rows={lines.data} columns={[
           { key: 'p', label: 'Sản phẩm', render: (l) => <div><div className="cell-main">{l.sku} · {l.product_name}{l.is_kit ? ' (bộ)' : ''}</div>{l.note && <div className="cell-sub"><i>{l.note}</i></div>}{l.po_code && <div className="cell-sub"><Icon name="kiln" size={12} /> {l.po_code}: {l.po_step || 'đã đặt'} · đã về {fq(l.po_received)}</div>}</div> },
-          { key: 'q', label: 'SL đặt', align: 'right', render: (l) => <>{fq(l.eff_qty)}{l.cancelled_qty > 0 && <div className="cell-sub">hủy {fq(l.cancelled_qty)}</div>}</> },
+          { key: 'q', label: 'SL đặt', align: 'right', render: (l) => <>{fq(l.eff_qty)} {l.unit}{l.unit_name && l.unit_conv !== 1 && <div className="cell-sub">= {fq(l.eff_qty / l.unit_conv)} {l.unit_name}</div>}{l.cancelled_qty > 0 && <div className="cell-sub">hủy {fq(l.cancelled_qty)}</div>}</> },
           { key: 'pr', label: 'Đơn giá', align: 'right', render: (l) => <>{money(l.unit_price)}{l.discount_pct > 0 && <div className="cell-sub">CK {fq(l.discount_pct)}%</div>}</> },
           { key: 't', label: 'Thành tiền', align: 'right', render: (l) => money(l.line_total) },
           { key: 'dq', label: 'Đã giao', align: 'right', render: (l) => <>{fq(l.delivered_qty)}{l.returned_qty > 0 && <div className="cell-sub">trả {fq(l.returned_qty)}</div>}</> },

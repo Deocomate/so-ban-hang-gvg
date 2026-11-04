@@ -147,7 +147,8 @@ export function rpt_drill(p) {
           coalesce(ea.supplier_name, ea.description) as party, ea.description as ref, 'chi_phi' as doc_type, ea.expense_id as doc_id, ea.amount
         from v_expense_alloc ea where ea.book_id = @b and ea.alloc_date between @d1 and @d2 and @m <> 'stock_loss'
         union all
-        select a.adj_date, a.code, 'Hao hụt kho: ' || v.reason_label, null, a.note, 'dieu_chinh', a.id, -coalesce(v.value, 0)
+        select a.adj_date, a.code, case when a.reason = 'noi_bo' then 'Xuất dùng nội bộ: ' || coalesce(a.purpose, '') else 'Hao hụt kho: ' || v.reason_label end,
+          null, a.note, 'dieu_chinh', a.id, -coalesce(v.value, 0)
         from stock_adjustments a join v_adjustments v on v.id = a.id
         where a.book_id = @b and a.reason <> 'dau_ky' and a.adj_date between @d1 and @d2 and @m <> 'expenses' and @cost
       ) order by date, code`, { ...o, m, cost });
@@ -265,7 +266,7 @@ export function rpt_stock(p) {
   const OPEN = `(m.move_date < @d1 or (m.doc_type = 'dau_ky' and m.move_date <= @d2))`;
   const IN = `(m.doc_type in ('nhap','tra_ncc') and m.move_date between @d1 and @d2)`;
   const SOLDF = `(m.doc_type in ('giao','tra_hang') and m.move_date between @d1 and @d2)`;
-  const ADJ = `(m.doc_type in ('dieu_chinh','chenh_lech') and m.move_date between @d1 and @d2)`;
+  const ADJ = `(m.doc_type in ('dieu_chinh','san_xuat','chenh_lech') and m.move_date between @d1 and @d2)`;
   const CLOSE = `(m.move_date <= @d2)`;
   const rows = allN(`select p.id, p.sku, p.name, p.unit, p.category,
       coalesce(sum(m.qty) filter (where ${OPEN}), 0) as open_qty, coalesce(sum(m.qty) filter (where ${IN}), 0) as in_qty,
@@ -290,9 +291,9 @@ export function rpt_expenses(p) {
         select expense_group as grp, date(alloc_date, 'start of month') as month, sum(amount) as amount
           from v_expense_alloc where book_id = @b and alloc_date between @d1 and @d2 group by 1, 2
         union all
-        select 'Hao hụt kho', date(a.adj_date, 'start of month'), -sum(l.value)
+        select case when a.reason = 'noi_bo' then 'Xuất dùng nội bộ' else 'Hao hụt kho' end, date(a.adj_date, 'start of month'), -sum(l.value)
           from stock_adjustment_lines l join stock_adjustments a on a.id = l.adjustment_id
-         where a.book_id = @b and a.reason <> 'dau_ky' and a.adj_date between @d1 and @d2 group by 2
+         where a.book_id = @b and a.reason <> 'dau_ky' and a.adj_date between @d1 and @d2 group by 1, 2
       ) order by grp, month`, { b, d1, d2 });
   }
   return outRows(allN(`select x.*, sum(x.amount) over (partition by x.grp) as grp_amount from (
@@ -301,7 +302,11 @@ export function rpt_expenses(p) {
       union all
       select 'Hao hụt kho', 'Vỡ, lỗi, thất thoát, hàng trả lỗi', coalesce(-sum(l.value), 0), count(distinct a.id), 0
         from stock_adjustment_lines l join stock_adjustments a on a.id = l.adjustment_id
-       where a.book_id = @b and a.reason <> 'dau_ky' and a.adj_date between @d1 and @d2 having count(*) > 0
+       where a.book_id = @b and a.reason not in ('dau_ky', 'noi_bo') and a.adj_date between @d1 and @d2 having count(*) > 0
+      union all
+      select 'Xuất dùng nội bộ', coalesce(a.purpose, 'Khác'), -sum(l.value), count(distinct a.id), 0
+        from stock_adjustment_lines l join stock_adjustments a on a.id = l.adjustment_id
+       where a.book_id = @b and a.reason = 'noi_bo' and a.adj_date between @d1 and @d2 group by 2
     ) x order by grp_amount desc, grp, amount desc`, { b, d1, d2 }));
 }
 
@@ -378,4 +383,41 @@ export function rpt_factory(p) {
   const byLine = new Map();
   for (const m of moves) byLine.set(m.order_line_id, { ...(byLine.get(m.order_line_id) || {}), [m.day]: m.qty });
   return { days, lines: lines.map((l) => ({ ...l, stopped: l.cancelled_qty > 0 && l.remaining === 0, moves: byLine.get(l.id) || {} })) };
+}
+
+// ---------- BÁO CÁO CUỐI NGÀY ----------
+// Một ngày: lãi lỗ tóm tắt, các lần giao (bán), trả hàng, đơn mới, hàng bán theo mặt hàng, thu chi theo quỹ
+export function rpt_end_of_day(p) {
+  const b = p.book_id; const d = asDate(p.date) || today();
+  requirePerm(b, 'xem_bao_cao');
+  const cost = can(b, 'xem_gia_von');
+  const o = { b, d };
+  const pl = calcPl(b, d, d);
+  const sales = allN(`select d.code, o.code as order_code, o.id as order_id, c.name as customer_name, o.staff,
+      coalesce(sum(x.revenue), 0) + d.shipping_fee as revenue, coalesce(sum(x.cogs), 0) as cogs
+    from deliveries d join sales_orders o on o.id = d.order_id left join customers c on c.id = o.customer_id
+    left join delivery_lines x on x.delivery_id = d.id where d.book_id = @b and d.delivery_date = @d group by d.id order by d.code`, o);
+  const returns = allN(`select r.code, o.code as order_code, o.id as order_id, c.name as customer_name, coalesce(sum(x.revenue), 0) as revenue
+    from sales_returns r join sales_orders o on o.id = r.order_id left join customers c on c.id = o.customer_id
+    left join sales_return_lines x on x.return_id = r.id where r.book_id = @b and r.return_date = @d group by r.id order by r.code`, o);
+  const products = allN(`select p.sku, p.name, p.unit, sum(q) as qty, sum(rev) as revenue from (
+      select x.product_id, x.qty as q, x.revenue as rev from delivery_lines x join deliveries d on d.id = x.delivery_id where d.book_id = @b and d.delivery_date = @d
+      union all
+      select x.product_id, -x.qty, -x.revenue from sales_return_lines x join sales_returns r on r.id = x.return_id where r.book_id = @b and r.return_date = @d
+    ) t join products p on p.id = t.product_id group by p.id order by revenue desc`, o);
+  const orders = allN(`select id, code, kind, customer_name, order_total, staff from v_sales_orders
+    where book_id = @b and order_date = @d and status = 'xac_nhan' order by code`, o);
+  const payments = allN(`select code, kind_label, direction, fund_name, party_name, cash_amount as amount, note from v_payments
+    where book_id = @b and pay_date = @d and voided = 0 and direction <> 'chuyen' order by code`, o);
+  const funds = {};
+  for (const x of payments) {
+    const f = funds[x.fund_name] || (funds[x.fund_name] = { fund: x.fund_name, cash_in: 0, cash_out: 0 });
+    if (x.direction === 'thu') f.cash_in += x.amount; else f.cash_out += x.amount;
+  }
+  return {
+    date: d,
+    summary: { revenue: pl.revenue, returns: pl.revenue_returns, gross_profit: cost ? pl.gross_profit : null, cash_in: pl.cash_in, cash_out: pl.cash_out,
+      deliveries: sales.length, return_count: returns.length, new_orders: orders.length, new_order_value: orders.reduce((s, x) => s + x.order_total, 0) },
+    sales: sales.map((x) => ({ ...x, cogs: cost ? x.cogs : null })), returns, products, orders, payments, funds: Object.values(funds),
+  };
 }

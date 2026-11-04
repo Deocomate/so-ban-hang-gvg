@@ -18,6 +18,9 @@ import * as drivers from './drivers.js';
 import * as quotes from './quotes.js';
 import * as contracts from './contracts.js';
 import * as tax from './tax.js';
+import * as groups from './customer-groups.js';
+import * as staff from './staff.js';
+import * as priceBooks from './price-books.js';
 import { set_member_password } from '../lib/auth.js';
 import { import_book } from './import-backup.js';
 
@@ -28,12 +31,12 @@ const pick = (mod, names) => Object.fromEntries(names.map((n) => {
 
 export const RPC = {
   ...pick(books, ['bootstrap', 'my_books', 'update_book_settings', 'upsert_member', 'remove_member', 'save_bank_account', 'export_book']),
-  ...pick(catalog, ['save_product', 'save_party', 'save_prices', 'save_fund', 'save_opening_debt', 'delete_opening_debt', 'import_parties']),
-  ...pick(stock, ['adjust_stock', 'import_products']),
+  ...pick(catalog, ['save_product', 'create_product_variants', 'delete_product', 'save_party', 'save_prices', 'save_fund', 'save_opening_debt', 'delete_opening_debt', 'import_parties']),
+  ...pick(stock, ['adjust_stock', 'save_production', 'import_products']),
   ...pick(cash, ['create_payment', 'void_payment', 'save_expense', 'void_expense']),
   ...pick(sales, ['save_sales_order', 'confirm_sales_order', 'cancel_sales_order', 'cancel_remaining', 'deliver', 'sales_return']),
   ...pick(purchases, ['save_purchase_order', 'confirm_purchase_order', 'cancel_purchase_order', 'cancel_po_remaining', 'set_prod_step', 'receive', 'supplier_return']),
-  ...pick(reports, ['rpt_overview', 'rpt_drill', 'rpt_monthly', 'rpt_products', 'rpt_groups', 'rpt_stock', 'rpt_expenses', 'rpt_dashboard', 'rpt_factory']),
+  ...pick(reports, ['rpt_end_of_day', 'rpt_overview', 'rpt_drill', 'rpt_monthly', 'rpt_products', 'rpt_groups', 'rpt_stock', 'rpt_expenses', 'rpt_dashboard', 'rpt_factory']),
   ...pick(query, ['q']),
   ...pick(notify, ['my_notifications', 'mark_notifications_read', 'save_notify_prefs', 'save_push_sub', 'delete_push_sub', 'demo_run_scheduled']),
   ...pick(shipping, ['create_shipment', 'update_shipment', 'update_shipment_status', 'settle_cod', 'import_shipment_statuses', 'carrier_webhook_log']),
@@ -43,6 +46,10 @@ export const RPC = {
   ...pick(quotes, ['save_quote', 'set_quote_status']),
   ...pick(contracts, ['save_contract', 'set_contract_reconciled', 'upload_attachment', 'get_attachment', 'delete_attachment']),
   ...pick(tax, ['save_tax_invoice', 'void_tax_invoice', 'rpt_tax']),
+  ...pick(staff, ['save_employee', 'save_shift', 'save_schedule', 'save_timesheet', 'delete_timesheet', 'fill_timesheets', 'save_commission_table',
+    'create_paysheet', 'recalc_paysheet', 'adjust_paysheet_line', 'close_paysheet', 'cancel_paysheet', 'rpt_staff']),
+  ...pick(groups, ['save_customer_group', 'delete_customer_group', 'set_customer_group', 'refresh_customer_groups']),
+  ...pick(priceBooks, ['save_price_book', 'delete_price_book', 'save_price_book_items', 'apply_price_formula']),
   set_member_password,
   import_book,
 };

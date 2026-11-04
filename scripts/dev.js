@@ -3,8 +3,12 @@ import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadSettings, appEnv } from './app-control.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+// Chạy thẳng "npm run dev": lấy thư mục dữ liệu và DEMO_MODE theo chế độ đã chọn ở bảng điều khiển,
+// tránh mở CSDL mẫu với DEMO_MODE=false (máy chủ sẽ tạo thêm bộ sổ thật trùng tên). Bảng điều khiển đã tự đặt sẵn.
+const env = process.env.DATA_DIR ? process.env : appEnv(loadSettings());
 const apps = [
   { name: 'api', dir: 'server', color: 36 },
   { name: 'web', dir: 'web', color: 35 },
@@ -19,7 +23,7 @@ for (const a of apps) {
 
 const children = apps.map((a) => {
   const tag = `\x1b[${a.color}m[${a.name}]\x1b[0m `;
-  const child = spawn('npm run dev', { cwd: path.join(root, a.dir), shell: true, env: process.env });
+  const child = spawn('npm run dev', { cwd: path.join(root, a.dir), shell: true, env });
   const pipe = (src, dst) => {
     let buf = '';
     src.on('data', (d) => {

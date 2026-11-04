@@ -4,11 +4,11 @@ import { requirePerm } from './access.js';
 
 // view → quyền cần có ('' = chỉ cần là thành viên sổ)
 const VIEWS = {
-  products: '', customers: '', suppliers: '', sales_orders: '', sales_order_lines: '', deliveries: '', delivery_lines: '', sales_returns: '',
-  stock_moves: '', adjustments: '', opening_debts: '', doc_payments: '', purchase_orders: '', purchase_order_lines: '', receipts: '',
+  products: '', price_books: '', price_book_items: '', customers: '', suppliers: '', sales_orders: '', sales_order_lines: '', deliveries: '', delivery_lines: '', sales_returns: '',
+  stock_moves: '', adjustments: '', productions: '', bom_items: '', employees: '', shifts: '', work_schedules: '', timesheets: 'cham_cong', commission_tables: 'owner', paysheets: 'owner', paysheet_lines: 'owner', opening_debts: '', doc_payments: '', purchase_orders: '', purchase_order_lines: '', receipts: '',
   supplier_returns: '', funds: '', drivers: '', driver_trips: '', quotes: '', contracts: '', attachments: '', tax_invoices: 'xem_bao_cao', payments: 'thu_chi', open_docs: '', expenses: 'chi_phi', members: 'owner', audit: 'owner', shipments: '', bank_txns: 'thu_chi',
 };
-const BOOL_COLS = new Set(['is_kit', 'active', 'is_low', 'voided', 'restock', 'is_late', 'is_final', 'has_problem', 'assigned', 'order_cancelled']);
+const BOOL_COLS = new Set(['is_kit', 'active', 'is_low', 'voided', 'restock', 'is_late', 'is_final', 'has_problem', 'assigned', 'order_cancelled', 'sell_direct', 'in_effect']);
 const IDENT = /^[a-z_][a-z0-9_]*$/;
 
 // Giá trị lọc: 'true'/'false' cho cột đúng/sai → 1/0; chuỗi số chuẩn → số (so được cả với cột tính toán)

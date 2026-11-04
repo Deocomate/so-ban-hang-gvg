@@ -1,7 +1,8 @@
 // Bán hàng: đơn bán (bán sẵn / đặt riêng), xác nhận, hủy, giao hàng (trừ kho, ghi doanh thu + giá vốn), trả hàng.
 import { ctx, fail, one, all, run, insert, uuid, nowIso, num, bool, nz, trimNz, rnd, asDate, today } from '../lib/context.js';
 import { requirePerm, isOwner, checkDate, nextCode, once, bookSettings } from './access.js';
-import { postMove, doAdjust } from './stock.js';
+import { postMove, doAdjust, lineUnit } from './stock.js';
+import { checkPriceBook } from './price-books.js';
 import { doPayment } from './cash.js';
 import { notifyOrderConfirmed } from './notify.js';
 import { saveOrderTrip } from './drivers.js';
@@ -41,6 +42,7 @@ export function doDeliver(orderId, date, lines, ship, note, override, depositUse
   // kiểm tra tồn có thể bán (đã trừ hàng giữ cho đơn khác)
   const need = new Map();
   for (const { sl, q } of req) {
+    if (one(`select 1 from products where id = ? and product_type = 'dich_vu'`, sl.product_id)) continue;
     const comps = all(`select k.component_id as pid, k.qty from kit_items k join products p on p.id = k.kit_id and p.is_kit = 1 where k.kit_id = ?`, sl.product_id);
     for (const c of comps.length ? comps : [{ pid: sl.product_id, qty: 1 }]) need.set(c.pid, (need.get(c.pid) || 0) + q * c.qty);
   }
@@ -74,7 +76,10 @@ export function doDeliver(orderId, date, lines, ship, note, override, depositUse
     insert('delivery_lines', { id: dlid, delivery_id: dlv, book_id: o.book_id, order_line_id: sl.id, product_id: sl.product_id, qty: q,
       unit_price_net: unet, revenue: rnd(q * unet), cogs: 0 });
     let cg = 0;
-    if (one(`select 1 from products where id = ? and is_kit = 1`, sl.product_id)) {
+    const sp = one(`select is_kit, product_type, last_cost from products where id = ?`, sl.product_id);
+    if (sp.product_type === 'dich_vu') {
+      cg = rnd(q * sp.last_cost);                                  // dịch vụ: không trừ kho, giá vốn theo giá vốn khai ở danh mục
+    } else if (sp.is_kit) {
       for (const kc of all(`select component_id, qty from kit_items where kit_id = ? order by component_id`, sl.product_id)) {
         cg -= postMove(o.book_id, kc.component_id, date, -(q * kc.qty), null, 'giao', dlv, dcode, dlid, 'Thành phần bộ');
       }
@@ -112,7 +117,8 @@ export function save_sales_order(p) {
     const deliverNow = bool(p.deliver_now) ?? false;
     const st = deliverNow || p.status === 'xac_nhan' ? 'xac_nhan' : 'nhap';
     const head = { customer_id: cust.id, channel: p.channel ?? null, order_date: d, due_date: asDate(p.due_date), staff: p.staff ?? null,
-      discount: rnd(num(p.discount) ?? 0), shipping_fee: rnd(num(p.shipping_fee) ?? 0), note: p.note ?? null, vat_rate: vat };
+      discount: rnd(num(p.discount) ?? 0), shipping_fee: rnd(num(p.shipping_fee) ?? 0), note: p.note ?? null, vat_rate: vat,
+      price_book_id: checkPriceBook(b, nz(p.price_book_id), cust, d, (p.lines || []).map((l) => l.product_id)) };
     let o; let wasConfirmed = false;
     if (!nz(p.id)) {
       const id = uuid();
@@ -142,6 +148,7 @@ export function save_sales_order(p) {
       if (!pr) fail(`Dòng ${i}: chưa chọn sản phẩm`);
       const q = num(ln.qty) ?? 0;
       if (q <= 0) fail(`Dòng ${i} (${pr.sku}): số lượng phải lớn hơn 0`);
+      const un = lineUnit(pr, ln.unit_name);
       const price = num(ln.unit_price) ?? pr[`price${cust.price_tier}`];
       if (price < 0) fail(`Dòng ${i}: đơn giá không được âm`);
       const disc = num(ln.discount_pct) ?? 0;
@@ -150,12 +157,12 @@ export function save_sales_order(p) {
       if (polid && pr.is_kit) fail(`Dòng ${i}: bộ sản phẩm không gắn trực tiếp với đơn đặt xưởng`);
       let lid = nz(ln.id);
       if (lid && one(`select 1 from sales_order_lines where id = ? and order_id = ?`, lid, o.id)) {
-        run(`update sales_order_lines set line_no = ?, product_id = ?, qty = ?, unit_price = ?, discount_pct = ?, cancelled_qty = 0, po_line_id = ?, note = ? where id = ?`,
-          i, pr.id, q, price, disc, polid, ln.note ?? null, lid);
+        run(`update sales_order_lines set line_no = ?, product_id = ?, qty = ?, unit_price = ?, discount_pct = ?, cancelled_qty = 0, po_line_id = ?, note = ?, unit_name = ?, unit_conv = ? where id = ?`,
+          i, pr.id, q, price, disc, polid, ln.note ?? null, un.unit_name, un.unit_conv, lid);
       } else {
         lid = uuid();
         insert('sales_order_lines', { id: lid, order_id: o.id, book_id: b, line_no: i, product_id: pr.id, qty: q, unit_price: price, discount_pct: disc,
-          po_line_id: polid, note: ln.note ?? null });
+          po_line_id: polid, note: ln.note ?? null, ...un });
       }
       keep.push(lid);
     }
@@ -285,6 +292,7 @@ export function sales_return(p) {
         cg += v;
         if (!restock) loss.push({ product_id: m.product_id, qty_delta: -cq, value: v });
       }
+      if (one(`select 1 from products where id = ? and product_type = 'dich_vu'`, dl.product_id)) cg = full ? dl.cogs - one(`select coalesce(sum(cogs), 0) as s from sales_return_lines where delivery_line_id = ? and id <> ?`, dl.id, rlid).s : rnd(dl.cogs * q / dl.qty);
       run(`update sales_return_lines set cogs = ? where id = ?`, cg, rlid);
       run(`update delivery_lines set returned_qty = returned_qty + ? where id = ?`, q, dl.id);
       run(`update sales_order_lines set returned_qty = returned_qty + ? where id = ?`, q, dl.order_line_id);

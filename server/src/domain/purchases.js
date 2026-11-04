@@ -1,7 +1,7 @@
 // Mua hàng / đặt xưởng: đơn nhập, bước sản xuất, nhận hàng (tăng kho + giá vốn bình quân), trả hàng cho NCC.
 import { ctx, fail, one, all, run, insert, uuid, nowIso, num, bool, nz, trimNz, rnd, asDate, today } from '../lib/context.js';
 import { requirePerm, checkDate, nextCode, once, setting } from './access.js';
-import { postMove } from './stock.js';
+import { postMove, lineUnit } from './stock.js';
 import { doPayment } from './cash.js';
 
 export function doReceive(poId, date, lines, note) {
@@ -72,6 +72,8 @@ export function save_purchase_order(p) {
       const pr = one(`select * from products where id = ? and book_id = ?`, ln.product_id, b);
       if (!pr) fail(`Dòng ${i}: chưa chọn sản phẩm`);
       if (pr.is_kit) fail(`Dòng ${i}: "${pr.name}" là bộ — hãy nhập từng thành phần`);
+      if (pr.product_type === 'dich_vu') fail(`Dòng ${i}: "${pr.name}" là dịch vụ — hãy dùng phiếu Mua dịch vụ`);
+      const un = lineUnit(pr, ln.unit_name);
       const q = num(ln.qty) ?? 0; const uc = num(ln.unit_cost);
       if (q <= 0) fail(`Dòng ${i}: số lượng phải lớn hơn 0`);
       if ((uc ?? -1) < 0) fail(`Dòng ${i} (${pr.sku}): chưa nhập giá nhập`);
@@ -82,11 +84,11 @@ export function save_purchase_order(p) {
       }
       let lid = nz(ln.id);
       if (lid && one(`select 1 from purchase_order_lines where id = ? and po_id = ?`, lid, po.id)) {
-        run(`update purchase_order_lines set line_no = ?, product_id = ?, qty = ?, unit_cost = ?, cancelled_qty = 0, sales_order_line_id = ?, note = ? where id = ?`,
-          i, pr.id, q, uc, sol, ln.note ?? null, lid);
+        run(`update purchase_order_lines set line_no = ?, product_id = ?, qty = ?, unit_cost = ?, cancelled_qty = 0, sales_order_line_id = ?, note = ?, unit_name = ?, unit_conv = ? where id = ?`,
+          i, pr.id, q, uc, sol, ln.note ?? null, un.unit_name, un.unit_conv, lid);
       } else {
         lid = uuid();
-        insert('purchase_order_lines', { id: lid, po_id: po.id, book_id: b, line_no: i, product_id: pr.id, qty: q, unit_cost: uc, sales_order_line_id: sol, note: ln.note ?? null });
+        insert('purchase_order_lines', { id: lid, po_id: po.id, book_id: b, line_no: i, product_id: pr.id, qty: q, unit_cost: uc, sales_order_line_id: sol, note: ln.note ?? null, ...un });
       }
       keep.push(lid);
       if (sol) run(`update sales_order_lines set po_line_id = ? where id = ?`, lid, sol);

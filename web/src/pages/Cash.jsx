@@ -181,13 +181,14 @@ export function CashPage() {
 }
 
 // ===================== CHI PHÍ =====================
-export function ExpenseForm({ id, onClose }) {
+// service: phiếu mua dịch vụ (bắt buộc nhà cung cấp, có số hóa đơn đầu vào, trả ngay được một phần)
+export function ExpenseForm({ id, service, onClose }) {
   const { settings, can, rpc } = useApp();
   const suppliers = useSuppliers(); const funds = useFunds(can('thu_chi'));
   const { run, busy } = useAction();
   const tree = cats(settings);
   const [f, setF] = useState({ date: todayVN(), group: tree[0].group, category: tree[0].items[0], custom: '', description: '', amount: null, alloc_months: 1,
-    supplier_id: '', note: '', payNow: true, fund_id: '', method: 'Tiền mặt' });
+    supplier_id: '', note: '', payNow: !service, fund_id: '', method: 'Tiền mặt', invoice_no: '', pay_amount: null });
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
   useEffect(() => { if (!f.fund_id && funds.data?.length) set('fund_id', funds.data[0].id); }, [funds.data]);
   useEffect(() => {
@@ -195,22 +196,30 @@ export function ExpenseForm({ id, onClose }) {
       const g = e.expense_group || groupOf(settings, e.category) || tree[0].group;
       const known = tree.find((x) => x.group === g)?.items.includes(e.category);
       setF((s) => ({ ...s, date: e.exp_date, group: g, category: known ? e.category : '__other', custom: known ? '' : e.category, description: e.description || '',
-        amount: e.amount, alloc_months: e.alloc_months || 1, supplier_id: e.supplier_id || '', note: e.note || '', payNow: false }));
+        amount: e.amount, alloc_months: e.alloc_months || 1, supplier_id: e.supplier_id || '', note: e.note || '', payNow: false, invoice_no: e.invoice_no || '' }));
     });
   }, [id]);
   const items = tree.find((x) => x.group === f.group)?.items || [];
   const category = f.category === '__other' ? f.custom.trim() : f.category;
   const perMonth = f.amount && f.alloc_months > 1 ? Math.round(f.amount / f.alloc_months) : null;
   return (
-    <Modal title={id ? 'Sửa chi phí' : 'Ghi chi phí'} onClose={onClose} size="lg" subtitle="Chi phí vận hành tính vào lợi nhuận theo ngày phát sinh. Tiền nhập hàng KHÔNG ghi ở đây (đã nằm trong giá vốn)."
+    <Modal title={service ? (id ? 'Sửa phiếu mua dịch vụ' : 'Tạo phiếu mua dịch vụ') : id ? 'Sửa chi phí' : 'Ghi chi phí'} onClose={onClose} size="lg"
+      subtitle={service ? 'Dịch vụ mua của nhà cung cấp (vận chuyển, gia công, sửa chữa…): tính vào chi phí vận hành, phần chưa trả ghi vào công nợ nhà cung cấp.'
+        : 'Chi phí vận hành tính vào lợi nhuận theo ngày phát sinh. Tiền nhập hàng KHÔNG ghi ở đây (đã nằm trong giá vốn).'}
       footer={<><Btn onClick={onClose}>Thôi</Btn><Btn kind="primary" busy={busy} onClick={async () => {
-        const r = await run('save_expense', { id: id || null, date: f.date, expense_group: f.group, category, description: f.description, amount: f.amount,
-          alloc_months: Number(f.alloc_months) || 1, supplier_id: f.supplier_id || null, note: f.note,
-          pay_now: f.payNow && can('thu_chi') ? { fund_id: f.fund_id, method: f.method } : null }, (x) => `Đã ghi chi phí ${x.code} · ${x.expense_group}${x.payment_code ? ' · phiếu chi ' + x.payment_code : ''}`);
+        const r = await run('save_expense', { id: id || null, service: !!service, date: f.date, expense_group: f.group, category, description: f.description, amount: f.amount,
+          alloc_months: Number(f.alloc_months) || 1, supplier_id: f.supplier_id || null, invoice_no: f.invoice_no, note: f.note,
+          pay_now: f.payNow && can('thu_chi') ? { fund_id: f.fund_id, method: f.method, amount: service && f.pay_amount != null ? f.pay_amount : null } : null },
+        (x) => `Đã ghi ${service ? 'phiếu mua dịch vụ' : 'chi phí'} ${x.code} · ${x.expense_group}${x.payment_code ? ' · phiếu chi ' + x.payment_code : ''}`);
         if (r) onClose();
       }}>Lưu</Btn></>}>
+      {service && <div className="grid">
+        <Field label="Nhà cung cấp" required wide><Picker items={suppliers.data} value={f.supplier_id} onChange={(v) => set('supplier_id', v)} getLabel={(s) => s.name}
+          getSub={(s) => [s.code, s.phone].filter(Boolean).join(' · ')} placeholder="Tìm nhà cung cấp dịch vụ" /></Field>
+        <Field label="Số hóa đơn đầu vào"><Input value={f.invoice_no} onChange={(v) => set('invoice_no', v)} placeholder="vd. 0001234" /></Field>
+      </div>}
       <div className="stack" style={{ gap: 6 }}>
-        <div className="field-label">Nhóm chi phí</div>
+        <div className="field-label">{service ? 'Loại chi' : 'Nhóm chi phí'}</div>
         <div className="row gap-s">{tree.map((g) => <button key={g.group} type="button" className={`chip${f.group === g.group ? ' on' : ''}`}
           onClick={() => setF((s) => ({ ...s, group: g.group, category: g.items[0] || '__other', custom: '' }))}>{g.group}</button>)}</div>
         {GROUP_HINT[f.group] && <div className="muted small">{GROUP_HINT[f.group]}</div>}
@@ -223,13 +232,57 @@ export function ExpenseForm({ id, onClose }) {
         <Field label="Phân bổ vào lãi lỗ" hint={perMonth ? `≈ ${money(perMonth)} đ / tháng trong ${f.alloc_months} tháng` : 'Tính hết vào tháng phát sinh'}>
           <Select value={String(f.alloc_months)} onChange={(v) => set('alloc_months', Number(v))} options={[1, 2, 3, 6, 12, 18, 24, 36].map((n) => ({ value: String(n), label: n === 1 ? 'Không phân bổ (1 tháng)' : `Chia đều ${n} tháng` }))} /></Field>
         <Field label="Diễn giải" wide><Input value={f.description} onChange={(v) => set('description', v)} placeholder="vd. Tiền thuê showroom tháng 10 / Quảng cáo video bình hút lộc" /></Field>
-        <Field label="Ghi nợ nhà cung cấp dịch vụ (nếu chưa trả)" wide><Select value={f.supplier_id} onChange={(v) => set('supplier_id', v)} placeholder="(không)" options={(suppliers.data || []).map((s) => ({ value: s.id, label: s.name }))} /></Field>
+        {!service && <Field label="Ghi nợ nhà cung cấp dịch vụ (nếu chưa trả)" wide><Select value={f.supplier_id} onChange={(v) => set('supplier_id', v)} placeholder="(không)" options={(suppliers.data || []).map((s) => ({ value: s.id, label: s.name }))} /></Field>}
       </div>
       {f.alloc_months > 1 && <Note>Tiền vẫn trả 1 lần {f.amount ? money(f.amount) + ' đ' : ''} (quỹ giảm ngay); chỉ phần tính vào lãi lỗ được chia đều {f.alloc_months} tháng, từ tháng {f.date.slice(5, 7)}/{f.date.slice(0, 4)}.</Note>}
-      {!id && can('thu_chi') && <div className="row gap"><Check checked={f.payNow} onChange={(v) => set('payNow', v)}>Đã trả ngay</Check>
-        {f.payNow && <Select value={f.fund_id} onChange={(v) => set('fund_id', v)} options={(funds.data || []).map((x) => ({ value: x.id, label: `${x.name} (${money(x.balance)})` }))} style={{ maxWidth: 260 }} />}</div>}
+      {!id && can('thu_chi') && <div className="row gap"><Check checked={f.payNow} onChange={(v) => set('payNow', v)}>{service ? 'Trả ngay' : 'Đã trả ngay'}</Check>
+        {f.payNow && <Select value={f.fund_id} onChange={(v) => set('fund_id', v)} options={(funds.data || []).map((x) => ({ value: x.id, label: `${x.name} (${money(x.balance)})` }))} style={{ maxWidth: 260 }} />}
+        {f.payNow && service && <NumInput value={f.pay_amount ?? f.amount} onChange={(v) => set('pay_amount', v)} placeholder="Số tiền trả" style={{ maxWidth: 180 }} aria-label="Số tiền trả ngay" />}</div>}
       {!f.payNow && <div className="muted small">Chưa trả: chi phí vẫn tính vào lợi nhuận đúng kỳ; khi trả tiền, lập phiếu chi gắn vào khoản này (không bị tính 2 lần).</div>}
     </Modal>
+  );
+}
+
+// Mua dịch vụ: các khoản chi phí có nhà cung cấp (người nhận), theo dõi cần trả / đã trả / còn phải trả
+export function ServicePurchasesPage() {
+  const { open, can } = useApp();
+  const [period, setPeriod] = usePeriod('month');
+  const [st, setSt] = useState(''); const [search, setSearch] = useState('');
+  const q = useQ('expenses', [['supplier_id', 'not_null'], ['exp_date', 'gte', period.from], ['exp_date', 'lte', period.to]], 'exp_date desc', 5000);
+  const live = (q.data || []).filter((e) => !e.voided);
+  const rows = (q.data || []).filter((e) => (!st || (st === 'no' ? !e.voided && e.unpaid > 0 : st === 'du' ? !e.voided && e.unpaid <= 0 : e.voided))
+    && match(`${e.code} ${e.category} ${e.description || ''} ${e.supplier_name || ''} ${e.invoice_no || ''}`, search));
+  const sum = (k) => rows.filter((e) => !e.voided).reduce((s, e) => s + (e[k] || 0), 0);
+  return (
+    <ListPage title="Mua dịch vụ" sub="Dịch vụ mua của nhà cung cấp: vận chuyển, gia công, sửa chữa, quảng cáo… Tính vào chi phí vận hành; phần chưa trả nằm trong công nợ nhà cung cấp."
+      filters={<>
+        <FilterBox title="Thời gian"><PeriodPicker value={period} onChange={setPeriod} /></FilterBox>
+        <FilterBox title="Trạng thái"><RadioList value={st} onChange={setSt} options={[{ value: '', label: 'Tất cả', count: (q.data || []).length },
+          { value: 'no', label: 'Còn phải trả', count: live.filter((e) => e.unpaid > 0).length }, { value: 'du', label: 'Đã trả đủ', count: live.filter((e) => e.unpaid <= 0).length },
+          { value: 'huy', label: 'Đã hủy', count: (q.data || []).filter((e) => e.voided).length }]} /></FilterBox>
+      </>}
+      search={<Search value={search} onChange={setSearch} placeholder="Tìm mã phiếu, nhà cung cấp, số hóa đơn…" />}
+      actions={<>
+        <Btn icon="dl" onClick={() => exportXlsx('mua-dich-vu.xlsx', [{ name: 'Mua dịch vụ', rows, columns: [{ key: 'code', label: 'Mã phiếu' }, { key: 'exp_date', label: 'Ngày', type: 'date' },
+          { key: 'category', label: 'Loại chi' }, { key: 'supplier_name', label: 'Người nhận' }, { key: 'invoice_no', label: 'Số hóa đơn' }, { key: 'description', label: 'Diễn giải' },
+          { key: 'amount', label: 'Cần thanh toán' }, { key: 'paid', label: 'Đã thanh toán' }, { key: 'unpaid', label: 'Còn phải trả' }] }])}>Xuất Excel</Btn>
+        {can('chi_phi') && <Btn kind="primary" icon="plus" onClick={() => open('expense', { service: true })}>Tạo phiếu mua</Btn>}
+      </>}>
+      <ErrorBox error={q.error} />
+      <Table rows={q.data ? rows : null} rowClass={(e) => (e.voided ? 'row-void' : '')} foot={{ a: money(sum('amount')), p: money(sum('paid')), u: money(sum('unpaid')) }}
+        empty="Chưa có phiếu mua dịch vụ trong kỳ" columns={[
+          { key: 'c', label: 'Mã phiếu', render: (e) => <><div className="cell-main">{e.code}</div><div className="cell-sub">{dmy(e.exp_date)}</div></> },
+          { key: 'g', label: 'Loại chi', render: (e) => <><div className="cell-main">{e.category}</div><div className="cell-sub">{e.description}</div></> },
+          { key: 'n', label: 'Người nhận', render: (e) => <><div className="cell-main">{e.supplier_name}</div>{e.invoice_no && <div className="cell-sub">HĐ {e.invoice_no}</div>}</> },
+          { key: 'a', label: 'Cần thanh toán', align: 'right', render: (e) => money(e.amount) },
+          { key: 'p', label: 'Đã thanh toán', align: 'right', render: (e) => money(e.paid) },
+          { key: 'u', label: 'Còn phải trả', align: 'right', render: (e) => (e.voided ? <Pill tone="mute">Đã hủy</Pill> : e.unpaid > 0 ? <b className="warn">{money(e.unpaid)}</b> : <Pill tone="good">Đã trả</Pill>) },
+          { key: 'x', label: '', render: (e) => !e.voided && <div className="row gap-s" onClick={(ev) => ev.stopPropagation()}>
+            {e.unpaid > 0 && can('thu_chi') && <Btn small onClick={() => open('payment', { kind: 'tra_ncc', party_id: e.supplier_id, alloc: { doc_type: 'chi_phi', doc_id: e.id, code: e.code, amount: e.unpaid } })}>Trả</Btn>}
+            {e.paid === 0 && can('chi_phi') && <Btn small onClick={() => open('expense', { id: e.id, service: true })}>Sửa</Btn>}
+          </div> },
+        ]} />
+    </ListPage>
   );
 }
 

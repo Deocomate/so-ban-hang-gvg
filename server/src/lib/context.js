@@ -116,9 +116,9 @@ export const inList = (arr) => `(${arr.map(() => '?').join(', ') || 'null'})`;
 
 // ---------- Định dạng dữ liệu trả về (giống JSON của Postgres) ----------
 const BOOL_COLS = new Set(['is_kit', 'active', 'is_low', 'voided', 'restock', 'is_late', 'is_final', 'has_problem', 'assigned',
-  'order_cancelled', 'is_demo', 'has_alloc', 'unread', 'all_received', 'any_received', 'can_cost', 'duplicate', 'transport_included']);
+  'order_cancelled', 'is_demo', 'has_alloc', 'unread', 'all_received', 'any_received', 'can_cost', 'duplicate', 'transport_included', 'sell_direct', 'allow_others', 'warn_others', 'is_service', 'in_effect']);
 const JSON_COLS = new Set(['settings', 'perms', 'notify', 'components', 'lines', 'allocations', 'events', 'cod_payment_codes', 'payment_ids',
-  'payment_codes', 'candidate_books', 'cod_payment_ids', 'old_data', 'new_data', 'data', 'payload', 'raw', 'subs', 'extra', 'body']);
+  'payment_codes', 'candidate_books', 'cod_payment_ids', 'old_data', 'new_data', 'data', 'payload', 'raw', 'subs', 'extra', 'body', 'pay', 'rules', 'breakdown', 'images', 'units', 'prices', 'formula', 'cust_groups', 'user_ids', 'bom']);
 export function outRow(r) {
   if (!r) return r;
   for (const k of Object.keys(r)) {

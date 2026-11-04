@@ -160,11 +160,12 @@ export function save_bank_account(p) {
 }
 
 // ---------- XUẤT TOÀN BỘ DỮ LIỆU 1 SỔ (sao lưu) ----------
-const EXPORT_TABLES = ['books', 'book_members', 'funds', 'products', 'customers', 'suppliers', 'opening_debts', 'sales_orders', 'sales_order_lines',
+const EXPORT_TABLES = ['books', 'book_members', 'funds', 'products', 'product_units', 'price_books', 'customers', 'suppliers', 'opening_debts', 'sales_orders', 'sales_order_lines',
   'deliveries', 'delivery_lines', 'sales_returns', 'sales_return_lines', 'purchase_orders', 'purchase_order_lines', 'goods_receipts',
-  'goods_receipt_lines', 'supplier_returns', 'supplier_return_lines', 'stock_adjustments', 'stock_adjustment_lines', 'stock_moves',
+  'goods_receipt_lines', 'supplier_returns', 'supplier_return_lines', 'stock_adjustments', 'stock_adjustment_lines', 'productions', 'production_lines', 'bom_items', 'stock_moves',
   'payments', 'payment_allocations', 'expenses', 'doc_counters', 'shipments', 'shipment_events', 'bank_txns', 'notifications', 'doc_info',
-  'drivers', 'driver_trips', 'quotes', 'contracts', 'tax_invoices'];
+  'drivers', 'driver_trips', 'quotes', 'contracts', 'tax_invoices',
+  'employees', 'shifts', 'work_schedules', 'timesheets', 'commission_tables', 'paysheets', 'paysheet_lines'];
 
 export function export_book(p) {
   const b = p.book_id;
@@ -174,6 +175,7 @@ export function export_book(p) {
   // Tiền về chưa xác định sổ (2 sổ dùng chung tài khoản) cũng thuộc về sổ này
   r.bank_txns.push(...outRows(all(`select * from bank_txns where book_id is null and exists (select 1 from json_each(candidate_books) where value = ?)`, b)));
   r.kit_items = all(`select k.* from kit_items k join products pr on pr.id = k.kit_id where pr.book_id = ?`, b);
+  r.price_book_items = all(`select i.* from price_book_items i join price_books pb on pb.id = i.price_book_id where pb.book_id = ?`, b);
   r.exported_at = nowIso();
   r.format = 'gomsu-backup-v1';
   return r;

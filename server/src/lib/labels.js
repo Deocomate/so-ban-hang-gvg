@@ -9,6 +9,7 @@ export const PERM_LABELS = {
   chi_phi: 'Ghi chi phí',
   xem_gia_von: 'Xem giá vốn, lợi nhuận, giá trị tồn kho',
   xem_bao_cao: 'Xem tổng quan và báo cáo',
+  cham_cong: 'Chấm công và lịch làm việc',
   owner: 'Chủ cửa hàng',
 };
 export const permLabel = (p) => PERM_LABELS[p] || p;

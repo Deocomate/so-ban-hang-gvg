@@ -257,11 +257,18 @@ export function defaults(type, data, ds) {
 // Dòng hàng của chứng từ
 export function goodsLines(type, data) {
   const useDel = PER_DELIVERY.includes(type) && data.d;
-  const noteOf = Object.fromEntries((data.lines || []).map((l) => [l.id, l.note || '']));
-  const src = useDel ? data.dlines.map((l) => ({ product_id: l.product_id, sku: l.sku, name: l.product_name, unit: l.unit, qty: Number(l.qty), price: Number(l.unit_price_net), total: Number(l.revenue), note: noteOf[l.order_line_id] || '' }))
-    : data.lines.filter((l) => Number(l.eff_qty) > 0).map((l) => ({ product_id: l.product_id, sku: l.sku, name: l.product_name, unit: l.unit, qty: Number(l.eff_qty),
-      price: Number(l.unit_price) * (1 - Number(l.discount_pct || 0) / 100), total: Number(l.line_total), note: l.note || '' }));
-  return src.map((l) => { const p = data.prods[l.product_id] || {}; const pk = packing(l.qty, p.units_per_pack, p.pack_unit, l.unit); return { ...l, pack: pk.text, boxes: pk.boxes, packUnit: p.units_per_pack ? (p.pack_unit || 'hộp') : null, kg: weightOf(l.qty, p), sub: [pk.text, l.note].filter(Boolean).join('\n') }; });
+  const byId = Object.fromEntries((data.lines || []).map((l) => [l.id, l]));
+  // Dòng bán theo đơn vị quy đổi (hộp, thùng…): in số lượng và đơn giá theo đơn vị đó; quy cách, trọng lượng tính theo đơn vị cơ bản
+  const src = useDel ? data.dlines.map((l) => ({ product_id: l.product_id, sku: l.sku, name: l.product_name, unit: l.unit, bq: Number(l.qty), bprice: Number(l.unit_price_net), total: Number(l.revenue), ol: byId[l.order_line_id] }))
+    : data.lines.filter((l) => Number(l.eff_qty) > 0).map((l) => ({ product_id: l.product_id, sku: l.sku, name: l.product_name, unit: l.unit, bq: Number(l.eff_qty),
+      bprice: Number(l.unit_price) * (1 - Number(l.discount_pct || 0) / 100), total: Number(l.line_total), ol: l }));
+  return src.map(({ ol, bq, bprice, ...l }) => {
+    const p = data.prods[l.product_id] || {}; const conv = Number(ol?.unit_conv) || 1;
+    const pk = conv === 1 ? packing(bq, p.units_per_pack, p.pack_unit, l.unit) : { text: `= ${bq.toLocaleString('vi-VN')} ${String(l.unit || '').toLowerCase()}`, boxes: bq / conv };
+    const note = ol?.note || '';
+    return { ...l, unit: conv === 1 ? l.unit : ol.unit_name, qty: bq / conv, price: bprice * conv, note, pack: pk.text, boxes: pk.boxes,
+      packUnit: conv !== 1 ? String(ol.unit_name).toLowerCase() : p.units_per_pack ? (p.pack_unit || 'hộp') : null, kg: weightOf(bq, p), sub: [pk.text, note].filter(Boolean).join('\n') };
+  });
 }
 // "hộp" / "thùng" theo quy cách các dòng hàng; trộn nhiều loại thì gọi chung "kiện"
 export function packLabel(g) { const u = [...new Set(g.map((l) => l.packUnit).filter(Boolean))]; return u.length === 1 ? u[0] : u.length ? 'kiện' : 'hộp'; }

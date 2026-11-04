@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AppProvider, useApp } from './lib/store.jsx';
 import { createApiBackend } from './lib/backend.js';
 import { Btn, Icon, Loading, Note, Field, Input, Modal } from './components/ui.jsx';
@@ -8,7 +8,10 @@ import { PurchasesPage } from './pages/Purchases.jsx';
 import { InventoryPage } from './pages/Inventory.jsx';
 import { ProductsPage } from './pages/Products.jsx';
 import { PartiesPage } from './pages/Parties.jsx';
-import { CashPage, ExpensesPage } from './pages/Cash.jsx';
+import { CashPage, ExpensesPage, ServicePurchasesPage } from './pages/Cash.jsx';
+import { DamagePage, InternalUsePage, ProductionPage } from './pages/StockDocs.jsx';
+import { CustomerGroupsPage } from './pages/CustomerGroups.jsx';
+import { EmployeesPage, SchedulePage, TimesheetPage, PaysheetsPage, CommissionPage, StaffSettingsPage } from './pages/Staff.jsx';
 import { ReportsPage } from './pages/Reports.jsx';
 import { SettingsPage } from './pages/Settings.jsx';
 import { ModalHost } from './pages/modals.jsx';
@@ -26,6 +29,9 @@ const PAGES = [
   { id: 'san-pham', label: 'Danh sách hàng hóa', icon: 'vase', comp: ProductsPage },
   { id: 'bang-gia', label: 'Bảng giá', icon: 'tag', comp: PriceBookPage },
   { id: 'kho', label: 'Tồn kho & kiểm kho', icon: 'box', comp: InventoryPage },
+  { id: 'san-xuat', label: 'Sản xuất', icon: 'hammer', comp: ProductionPage },
+  { id: 'xuat-huy', label: 'Xuất hủy', icon: 'trash', comp: DamagePage },
+  { id: 'xuat-noi-bo', label: 'Xuất dùng nội bộ', icon: 'gift', comp: InternalUsePage },
   { id: 'bao-gia', label: 'Báo giá', icon: 'quote', comp: QuotesPage },
   { id: 'hop-dong', label: 'Hợp đồng', icon: 'contract', comp: ContractsPage },
   { id: 'dat-rieng', label: 'Đặt hàng', icon: 'order', comp: SpecialPage },
@@ -36,37 +42,62 @@ const PAGES = [
   { id: 'nhap-hang', label: 'Nhập hàng / đặt xưởng', icon: 'import', perm: 'nhap_hang', comp: PurchasesPage },
   { id: 'hoa-don-vao', label: 'Hóa đơn đầu vào', icon: 'receipt', perm: 'xem_bao_cao', comp: InputInvoicesPage },
   { id: 'tra-nhap', label: 'Trả hàng nhập', icon: 'return', comp: SupplierReturnsPage },
+  { id: 'mua-dich-vu', label: 'Mua dịch vụ', icon: 'wrench', perm: 'chi_phi', comp: ServicePurchasesPage },
   { id: 'khach-hang', label: 'Khách hàng', icon: 'users', comp: (p) => <PartiesPage type="kh" {...p} /> },
   { id: 'nha-cung-cap', label: 'Nhà cung cấp', icon: 'kiln', comp: (p) => <PartiesPage type="ncc" {...p} /> },
+  { id: 'nhom-khach', label: 'Nhóm khách hàng', icon: 'group', comp: CustomerGroupsPage },
   { id: 'thu-chi', label: 'Phiếu thu chi', icon: 'cash', perm: 'thu_chi', comp: CashPage },
   { id: 'tien-ve', label: 'Tiền về tài khoản', icon: 'bank', perm: 'thu_chi', comp: BankPage },
   { id: 'chi-phi', label: 'Chi phí vận hành', icon: 'receipt', perm: 'chi_phi', comp: ExpensesPage },
+  { id: 'nhan-vien', label: 'Danh sách nhân viên', icon: 'users', perm: 'owner', comp: EmployeesPage },
+  { id: 'lich-lam-viec', label: 'Lịch làm việc', icon: 'calendar', perm: 'cham_cong', comp: SchedulePage },
+  { id: 'cham-cong', label: 'Bảng chấm công', icon: 'check', perm: 'cham_cong', comp: TimesheetPage },
+  { id: 'bang-luong', label: 'Bảng lương', icon: 'cash', perm: 'owner', comp: PaysheetsPage },
+  { id: 'hoa-hong', label: 'Bảng hoa hồng', icon: 'tag', perm: 'owner', comp: CommissionPage },
+  { id: 'thiet-lap-nv', label: 'Thiết lập nhân viên', icon: 'gear', perm: 'owner', comp: StaffSettingsPage },
   { id: 'bao-cao', label: 'Báo cáo', icon: 'chart', perm: 'xem_bao_cao', comp: ReportsPage },
   { id: 'thue', label: 'Thuế HKD', icon: 'tax', perm: 'xem_bao_cao', comp: TaxPage },
   { id: 'cai-dat', label: 'Cài đặt', icon: 'gear', comp: SettingsPage },
 ];
-// Thanh menu ngang: mục đơn hoặc nhóm có menu con
+// Thanh menu ngang: liên kết thẳng ({ id }), menu thả xuống (items) hoặc mega-menu (groups: tiêu đề nhóm + danh sách).
+// Mỗi liên kết là id trang hoặc { id, sub (tab mở sẵn), label, perm, badge }.
 const MENU = [
   { id: 'tong-quan' },
-  { label: 'Hàng hóa', icon: 'vase', items: ['san-pham', 'bang-gia', 'kho'] },
-  { label: 'Mua hàng', icon: 'truck', items: ['nha-cung-cap', 'nhap-hang', 'hoa-don-vao', 'tra-nhap'] },
-  { id: 'bao-gia' },
-  { id: 'hop-dong' },
-  { label: 'Đơn hàng', icon: 'order', items: ['dat-rieng', 'ban-hang', 'tra-hang', 'van-chuyen', 'lai-xe'] },
-  { id: 'khach-hang' },
+  { label: 'Hàng hóa', icon: 'vase', groups: [
+    { title: 'Hàng hóa', items: ['san-pham', { id: 'bang-gia', label: 'Thiết lập giá' }] },
+    { title: 'Kho hàng', items: [{ id: 'kho', sub: 'stock', label: 'Tồn kho' }, { id: 'kho', sub: 'adj', label: 'Kiểm kho' }, { id: 'kho', sub: 'nxt', label: 'Nhập – xuất – tồn' },
+      { id: 'san-xuat', badge: 'Mới' }, { id: 'xuat-noi-bo', badge: 'Mới' }, { id: 'xuat-huy', badge: 'Mới' }] },
+  ] },
+  { label: 'Mua hàng', icon: 'truck', groups: [
+    { title: 'Nhà cung cấp', items: ['nha-cung-cap', 'hoa-don-vao'] },
+    { title: 'Mua hàng', items: ['nhap-hang', 'tra-nhap'] },
+    { title: 'Mua dịch vụ', items: [{ id: 'mua-dich-vu', badge: 'Mới' }] },
+  ] },
+  { label: 'Đơn hàng', icon: 'order', groups: [
+    { title: 'Báo giá & hợp đồng', items: ['bao-gia', 'hop-dong'] },
+    { title: 'Đơn hàng', items: ['dat-rieng', 'ban-hang', 'tra-hang'] },
+    { title: 'Giao hàng', items: ['van-chuyen', 'lai-xe'] },
+  ] },
+  { label: 'Khách hàng', icon: 'users', groups: [{ title: 'Khách hàng', items: ['khach-hang', { id: 'nhom-khach', badge: 'Mới' }] }] },
+  { label: 'Nhân viên', icon: 'users', items: ['nhan-vien', 'lich-lam-viec', 'cham-cong', 'bang-luong', 'hoa-hong', 'thiet-lap-nv'].map((id) => ({ id, badge: 'Mới' })) },
   { label: 'Sổ quỹ', icon: 'wallet', items: ['thu-chi', 'tien-ve', 'chi-phi'] },
-  { id: 'bao-cao' },
-  { id: 'thue' },
+  { label: 'Báo cáo', icon: 'chart', groups: [
+    { title: 'Bán hàng', items: [{ id: 'bao-cao', sub: 'eod', label: 'Cuối ngày', badge: 'Mới' }, { id: 'bao-cao', sub: 'pl', label: 'Lãi lỗ theo tháng' }, { id: 'bao-cao', sub: 'prod', label: 'Theo sản phẩm' },
+      { id: 'bao-cao', sub: 'grp', label: 'Theo kênh / khách / nhóm' }, { id: 'bao-cao', sub: 'orders', label: 'Đặt hàng', badge: 'Mới' }, { id: 'bao-cao', sub: 'staff', label: 'Nhân viên', badge: 'Mới' }] },
+    { title: 'Mua hàng & kho', items: [{ id: 'bao-cao', sub: 'factory', label: 'Đơn đặt xưởng' }, { id: 'bao-cao', sub: 'stock', label: 'Nhập – xuất – tồn' }] },
+    { title: 'Tài chính', items: [{ id: 'bao-cao', sub: 'debt', label: 'Công nợ' }, { id: 'bao-cao', sub: 'exp', label: 'Chi phí', perm: 'xem_gia_von' }] },
+  ] },
+  { label: 'Thuế & Kế toán', icon: 'tax', items: [{ id: 'thue', sub: 'tong', label: 'Tổng quan thuế' }, { id: 'thue', sub: 'vao', label: 'Hóa đơn đầu vào' }, { id: 'thue', sub: 'ra', label: 'Hóa đơn đầu ra' }, { id: 'thue', sub: 'so', label: 'Sổ sách & hồ sơ' }] },
 ];
 
-function readHash() { const h = (location.hash || '').replace('#', ''); return PAGES.some((p) => p.id === h) ? h : null; }
+function readHash() { const [id, sub = ''] = (location.hash || '').replace('#', '').split('/'); return PAGES.some((p) => p.id === id) ? { id, sub } : null; }
 
 // Menu thả xuống: bấm để mở (máy tính rê chuột cũng mở); bấm ra ngoài hoặc Esc để đóng.
 // Rê chuột phải dừng một nhịp mới mở (lướt qua nút bên cạnh thì không đổi menu); rời chuột cũng chờ một nhịp mới đóng.
 // Chỉ một menu hiện tại một thời điểm: mở menu khác thì menu cũ tắt ngay, không chạy hiệu ứng đóng.
 const DD_ENTER_MS = 110; const DD_LEAVE_MS = 240; const DD_EXIT_MS = 130;
 let activeDropdown = null; // ref tới hàm đóng của menu đang mở
-function Dropdown({ label, icon, active, align = 'left', className = '', btnClass = 'mnav', children }) {
+function Dropdown({ label, icon, active, align = 'left', className = '', btnClass = 'mnav', menuClass = '', children }) {
   const [phase, setPhase] = useState('closed'); // closed → open → closing → closed
   const [side, setSide] = useState(align);
   const menuRef = useRef(null); const ref = useRef(null); const timer = useRef(null); const closeRef = useRef(null);
@@ -119,7 +150,80 @@ function Dropdown({ label, icon, active, align = 'left', className = '', btnClas
       <button type="button" className={`${btnClass}${active ? ' on' : ''}`} aria-haspopup="menu" aria-expanded={show} onClick={() => (hover || !show ? openNow() : close())}>
         {icon && <Icon name={icon} size={17} />}{label}<Icon name="down" size={14} className="dd-caret" />
       </button>
-      {phase !== 'closed' && <div ref={menuRef} className={`dd-menu dd-${side}${show ? '' : ' closing'}`} role="menu" onClick={close}>{children}</div>}
+      {phase !== 'closed' && <div ref={menuRef} className={`dd-menu dd-${side} ${menuClass}${show ? '' : ' closing'}`} role="menu" onClick={close}>{children}</div>}
+    </div>
+  );
+}
+
+const Badge = ({ text }) => (text ? <span className="badge-new">{text}</span> : null);
+const linksOf = (m) => (m.groups ? m.groups.flatMap((g) => g.items) : [m]);
+
+function MenuLinks({ items, isOn, go }) {
+  return items.map((x) => (
+    <button key={x.key} role="menuitem" className={`dd-item${isOn(x) ? ' on' : ''}`} onClick={() => go(x.id, x.sub)}>
+      <Icon name={x.icon} size={16} /><span className="grow">{x.label}</span><Badge text={x.badge} />
+    </button>
+  ));
+}
+
+// Một nhóm: danh sách đơn; nhiều nhóm: mega-menu chia cột, mỗi cột một tiêu đề nhóm
+function MenuPanel({ groups, isOn, go }) {
+  if (groups.length === 1 && !groups[0].title) return <MenuLinks items={groups[0].items} isOn={isOn} go={go} />;
+  return (
+    <div className="mega" style={{ '--cols': Math.min(groups.length, 3) }}>
+      {groups.map((g, i) => (
+        <div key={g.title || i} className="mega-col">{g.title && <div className="mega-title">{g.title}</div>}<MenuLinks items={g.items} isOn={isOn} go={go} /></div>
+      ))}
+    </div>
+  );
+}
+
+function TopItem({ m, isOn, go }) {
+  if (!m.groups) return <button className={`mnav${isOn(m) ? ' on' : ''}`} onClick={() => go(m.id, m.sub)}><Icon name={m.icon} size={17} />{m.label}<Badge text={m.badge} /></button>;
+  return (
+    <Dropdown label={<>{m.label}<Badge text={m.badge} /></>} icon={m.icon} active={linksOf(m).some(isOn)} menuClass={m.groups.length > 1 ? 'dd-mega' : ''}>
+      <MenuPanel groups={m.groups} isOn={isOn} go={go} />
+    </Dropdown>
+  );
+}
+
+// Thanh menu một dòng: mục không đủ chỗ gom vào "Khác", giữ tên menu gốc làm tiêu đề nhóm.
+// Đo bằng một bản sao ẩn để biết bề rộng thật của từng mục (kể cả khi icon bị ẩn theo bề ngang màn hình).
+function MenuBar({ menu, isOn, go }) {
+  const inRef = useRef(null); const measRef = useRef(null);
+  const [fit, setFit] = useState(menu.length);
+  const sig = menu.map((m) => m.key).join('|');
+  useLayoutEffect(() => {
+    const el = inRef.current; const ms = measRef.current;
+    if (!el || !ms) return undefined;
+    const calc = () => {
+      const cs = getComputedStyle(el);
+      const avail = el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      const gap = parseFloat(cs.columnGap) || 0;
+      const ws = [...ms.children].map((c) => c.getBoundingClientRect().width);
+      const more = ws.pop();
+      let n = ws.length; let used = ws.reduce((t, w) => t + w, 0) + gap * (n - 1);
+      if (used > avail) while (n > 0 && used + gap + more > avail) { n -= 1; used -= ws[n] + gap; }
+      setFit(n);
+    };
+    calc();
+    const ro = new ResizeObserver(calc); ro.observe(el); ro.observe(ms);
+    return () => ro.disconnect();
+  }, [sig]);
+  const rest = menu.slice(fit);
+  const restGroups = rest.map((m) => ({ title: m.groups ? m.label : '', items: linksOf(m) }));
+  return (
+    <div className="mbar-in" ref={inRef}>
+      {menu.slice(0, fit).map((m) => <TopItem key={m.key} m={m} isOn={isOn} go={go} />)}
+      {rest.length > 0 && (
+        <Dropdown label="Khác" icon="more" align="right" active={rest.some((m) => linksOf(m).some(isOn))} menuClass={restGroups.length > 1 ? 'dd-mega' : ''}>
+          <MenuPanel groups={restGroups} isOn={isOn} go={go} />
+        </Dropdown>
+      )}
+      <div className="mbar-measure" aria-hidden="true"><div ref={measRef}>
+        {menu.map((m) => <span key={m.key} className="mnav"><Icon name={m.icon} size={17} />{m.label}<Badge text={m.badge} />{m.groups && <Icon name="down" size={14} />}</span>)}
+        <span className="mnav"><Icon name="more" size={17} />Khác<Icon name="down" size={14} /></span>
+      </div></div>
     </div>
   );
 }
@@ -132,7 +236,8 @@ function BrandMark({ book }) {
 
 function Shell() {
   const { book, books, setBookId, can, open, closeAll, toasts, bootError, backend, session, setSession } = useApp();
-  const [page, setPage] = useState(readHash() || 'tong-quan');
+  const [route, setRoute] = useState(() => readHash() || { id: 'tong-quan', sub: '' });
+  const { id: page, sub } = route;
   const [moreOpen, setMoreOpen] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [notifyOpen, setNotifyOpen] = useState(false);
@@ -148,11 +253,14 @@ function Shell() {
     try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) { /* bỏ qua */ }
     setTimeout(() => openLink(l, { open, go }), 50);
   }, [pendingOpen, books, book?.id]);
-  useEffect(() => { const h = () => { const r = readHash(); if (r) setPage(r); }; window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h); }, []);
+  useEffect(() => { const h = () => { const r = readHash(); if (r) setRoute(r); }; window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h); }, []);
   const visible = PAGES.filter((p) => !p.perm || can(p.perm));
   const byId = Object.fromEntries(visible.map((p) => [p.id, p]));
   const cur = byId[page] || byId['ban-hang'] || visible[0];
-  const go = (id) => { setPage(id); setMoreOpen(false); try { history.replaceState(null, '', '#' + id); } catch (e) { /* bỏ qua */ } window.scrollTo(0, 0); };
+  const go = (id, s = '') => { setRoute({ id, sub: s }); setMoreOpen(false); window.scrollTo(0, 0); };
+  // Trang báo tab đang mở để địa chỉ và mục menu đang chọn khớp theo
+  const onSub = useCallback((v) => setRoute((r) => (r.sub === v ? r : { ...r, sub: v })), []);
+  useEffect(() => { try { history.replaceState(null, '', '#' + page + (sub ? '/' + sub : '')); } catch (e) { /* bỏ qua */ } }, [page, sub]);
   const signOut = () => backend.signOut().then(() => setSession(null));
   const switchBook = (id) => { closeAll(); setBookId(id); };
   // Màu giao diện theo logo của sổ đang mở
@@ -167,8 +275,18 @@ function Shell() {
     can('thu_chi') && { label: 'Thu tiền', icon: 'in', on: () => open('payment', { kind: 'thu_khach' }) },
     can('thu_chi') && { label: 'Chi tiền', icon: 'out', on: () => open('payment', { kind: 'tra_ncc' }) },
   ].filter(Boolean);
-  const menu = MENU.map((m) => (m.items ? { ...m, items: m.items.map((id) => byId[id]).filter(Boolean) } : byId[m.id] && { ...byId[m.id], label: m.label || byId[m.id].label }))
-    .filter((m) => m && (!m.items || m.items.length));
+  const link = (l) => {
+    const x = typeof l === 'string' ? { id: l } : l; const p = byId[x.id];
+    return p && (!x.perm || can(x.perm)) && { ...p, ...x, key: x.id + (x.sub ? '/' + x.sub : '') };
+  };
+  const menu = MENU.map((m) => {
+    if (!m.groups && !m.items) return link(m);
+    const groups = (m.groups || [{ items: m.items }]).map((g) => ({ ...g, items: g.items.map(link).filter(Boolean) })).filter((g) => g.items.length);
+    const all = groups.flatMap((g) => g.items);
+    if (all.length === 1) return { ...all[0], label: m.label, icon: m.icon || all[0].icon, key: m.label }; // chỉ còn một mục: liên kết thẳng
+    return all.length > 0 && { ...m, key: m.label, groups };
+  }).filter(Boolean);
+  const isOn = (x) => x.id === cur.id && (!x.sub || x.sub === sub);
   const userName = session?.user?.name || book.display_name || session?.user?.email || 'Tài khoản';
   const bookSwitch = (onPick) => books.length > 1 && (
     <div className="book-switch" role="tablist" aria-label="Chọn sổ">
@@ -202,15 +320,9 @@ function Shell() {
         </div>
       </header>
       <nav className="mbar" aria-label="Chức năng">
-        <div className="mbar-in">
-          {menu.map((m) => (m.items ? (
-            <Dropdown key={m.label} label={m.label} icon={m.icon} active={m.items.some((x) => x.id === cur.id)}>
-              {m.items.map((x) => <button key={x.id} role="menuitem" className={`dd-item${x.id === cur.id ? ' on' : ''}`} onClick={() => go(x.id)}><Icon name={x.icon} size={16} />{x.label}</button>)}
-            </Dropdown>
-          ) : <button key={m.id} className={`mnav${cur.id === m.id ? ' on' : ''}`} onClick={() => go(m.id)}><Icon name={m.icon} size={17} />{m.label}</button>))}
-        </div>
+        <MenuBar menu={menu} isOn={isOn} go={go} />
       </nav>
-      <main className="page" key={book.id + cur.id}><Page go={go} /></main>
+      <main className="page" key={book.id + cur.id}><Page go={go} sub={cur.id === page ? sub : ''} onSub={onSub} /></main>
       <nav className="bottom-nav" aria-label="Điều hướng">
         {[byId['tong-quan'] || byId['kho'], byId['ban-hang']].filter(Boolean).map((p) => (
           <button key={p.id} className={cur.id === p.id ? 'on' : ''} onClick={() => go(p.id)}><Icon name={p.icon} />{p.id === 'ban-hang' ? 'Đơn hàng' : p.id === 'kho' ? 'Kho' : p.label}</button>
@@ -227,10 +339,10 @@ function Shell() {
       {moreOpen && (
         <Modal title="Chức năng" onClose={() => setMoreOpen(false)} size="sm">
           {bookSwitch(() => setMoreOpen(false))}
-          {[...menu, byId['cai-dat'] && { label: 'Hệ thống', items: [byId['cai-dat']] }].filter(Boolean).map((m) => (
-            <div key={m.label || m.id} className="more-group">
-              {m.items && <div className="more-title">{m.label}</div>}
-              <div className="more-menu">{(m.items || [m]).map((p) => <Btn key={p.id} kind={cur.id === p.id ? 'soft' : 'ghost'} icon={p.icon} onClick={() => go(p.id)}>{p.label}</Btn>)}</div>
+          {[...menu, byId['cai-dat'] && { label: 'Hệ thống', key: 'he-thong', groups: [{ items: [{ ...byId['cai-dat'], key: 'cai-dat' }] }] }].filter(Boolean).map((m) => (
+            <div key={m.key} className="more-group">
+              {m.groups && <div className="more-title">{m.label}</div>}
+              <div className="more-menu">{linksOf(m).map((p) => <Btn key={p.key} kind={isOn(p) ? 'soft' : 'ghost'} icon={p.icon} onClick={() => go(p.id, p.sub)}>{p.label}</Btn>)}</div>
             </div>
           ))}
           <Btn icon="logout" onClick={signOut}>Đăng xuất</Btn>

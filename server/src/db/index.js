@@ -9,18 +9,18 @@ import { can } from '../domain/access.js';
 import { addAnamtileBook, defaultDocs } from '../domain/books.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 6;
 
 // Bảng ghi nhật ký chỉnh sửa; cột bỏ qua khi so sánh UPDATE (do hệ thống tự cập nhật)
 const AUDIT_TABLES = {
   books: '', book_members: '', products: 'on_hand,stock_value,last_cost', customers: '', suppliers: '', funds: '', opening_debts: '',
   sales_orders: '', sales_order_lines: 'delivered_qty,returned_qty', deliveries: '', sales_returns: '', purchase_orders: '',
-  purchase_order_lines: 'received_qty,returned_qty', goods_receipts: '', supplier_returns: '', stock_adjustments: '', payments: '',
-  payment_allocations: '', expenses: '', drivers: '', driver_trips: '', quotes: '', contracts: '', tax_invoices: '',
+  purchase_order_lines: 'received_qty,returned_qty', goods_receipts: '', supplier_returns: '', stock_adjustments: '', productions: '', payments: '',
+  payment_allocations: '', expenses: '', drivers: '', driver_trips: '', quotes: '', contracts: '', tax_invoices: '', employees: '', paysheets: '', commission_tables: '',
   shipments: 'status,status_at,status_detail,last_sync_at,tracking_registered_at,cod_status,cod_settled_at,cod_payment_ids',
-  bank_txns: '',
+  bank_txns: '', product_units: '', price_books: '',
 };
-const JSON_TEXT_COLS = new Set(['settings', 'perms', 'notify', 'cod_payment_ids', 'candidate_books', 'payment_ids', 'raw', 'data', 'payload', 'extra', 'body']);
+const JSON_TEXT_COLS = new Set(['pay', 'rules', 'settings', 'perms', 'notify', 'cod_payment_ids', 'candidate_books', 'payment_ids', 'raw', 'data', 'payload', 'extra', 'body', 'images', 'prices', 'formula', 'cust_groups', 'user_ids']);
 
 function registerFunctions(db) {
   db.function('today', () => today());
@@ -29,14 +29,16 @@ function registerFunctions(db) {
   db.function('vn_date', { deterministic: true }, (ts) => vnDate(ts));
   db.function('days', { deterministic: true }, (a, b) => daysBetween(a, b));
   db.function('can_cost', (book) => (can(book, 'xem_gia_von') ? 1 : 0));
+  db.function('is_owner', (book) => (can(book, 'owner') ? 1 : 0));
   db.function('ship_status_label', { deterministic: true }, (s) => shipStatusLabel(s));
   db.function('cod_status_label', { deterministic: true }, (s) => codStatusLabel(s));
   db.function('carrier_name', { deterministic: true }, (c) => carrierName(c));
   db.function('vi_lower', { deterministic: true }, (s) => (s == null ? null : String(s).toLowerCase()));
 }
 
+// Xóa mọi trigger nhật ký, kể cả của bảng đã bỏ khỏi danh sách theo dõi
 export function dropAuditTriggers(db) {
-  for (const t of Object.keys(AUDIT_TABLES)) db.exec(`drop trigger if exists audit_${t}_ins; drop trigger if exists audit_${t}_upd; drop trigger if exists audit_${t}_del;`);
+  for (const { name } of db.prepare(`select name from sqlite_master where type = 'trigger' and name like 'audit\\_%' escape '\\'`).all()) db.exec(`drop trigger if exists "${name}"`);
 }
 
 export function auditTriggers(db) {
@@ -72,6 +74,23 @@ const ADDED_COLUMNS = [
   ['customers', 'stage', "text not null default 'moi'"],
   ['sales_orders', 'vat_rate', 'real not null default 0 check (vat_rate >= 0 and vat_rate <= 100)'],
   ['deliveries', 'deposit_used', 'real not null default 0 check (deposit_used >= 0)'],
+  ['stock_adjustments', 'purpose', 'text'],
+  ['expenses', 'invoice_no', 'text'],
+  ['products', 'product_type', "text not null default 'hang'"],
+  ['products', 'description', 'text'],
+  ['products', 'order_note', 'text'],
+  ['products', 'max_stock', 'real check (max_stock is null or max_stock >= 0)'],
+  ['products', 'location', 'text'],
+  ['products', 'width', 'real check (width is null or width >= 0)'],
+  ['products', 'length', 'real check (length is null or length >= 0)'],
+  ['products', 'dim_unit', "text not null default 'cm'"],
+  ['products', 'sell_direct', 'integer not null default 1'],
+  ['products', 'images', "text not null default '[]'"],
+  ['sales_orders', 'price_book_id', 'text'],
+  ['sales_order_lines', 'unit_name', 'text'],
+  ['sales_order_lines', 'unit_conv', 'real not null default 1'],
+  ['purchase_order_lines', 'unit_name', 'text'],
+  ['purchase_order_lines', 'unit_conv', 'real not null default 1'],
 ];
 
 // SQLite không sửa được CHECK của bảng đã có nên phải dựng lại bảng khách hàng để nhận mức giá 4
@@ -110,6 +129,22 @@ function widenDocInfo(db) {
   })();
 }
 
+// Phiếu kho cũ chưa nhận lý do "xuất dùng nội bộ"; dựng lại bảng (dòng phiếu trỏ tới bảng này nên tắt kiểm tra khóa ngoại khi đổi tên)
+function widenAdjReason(db) {
+  const t = db.prepare(`select sql from sqlite_master where type = 'table' and name = 'stock_adjustments'`).get();
+  if (t.sql.includes("'noi_bo'")) return;
+  db.pragma('foreign_keys = OFF');
+  db.pragma('legacy_alter_table = ON');
+  db.transaction(() => {
+    db.exec(t.sql.replace('stock_adjustments', 'stock_adjustments_new').replace("'hang_tra_loi','khac'", "'hang_tra_loi','noi_bo','khac'"));
+    db.exec(`insert into stock_adjustments_new select * from stock_adjustments; drop table stock_adjustments; alter table stock_adjustments_new rename to stock_adjustments;`);
+    const broken = db.pragma('foreign_key_check');
+    if (broken.length) throw new Error(`Nâng cấp bảng phiếu kho làm hỏng ${broken.length} liên kết`);
+  })();
+  db.pragma('legacy_alter_table = OFF');
+  db.pragma('foreign_keys = ON');
+}
+
 // Sổ chưa khai đơn vị phát hành thì nhận 2 pháp nhân mặc định; sổ đã tự khai giữ nguyên
 function addLegalEntities(db) {
   for (const b of db.prepare(`select id, short_name, settings from books`).all()) {
@@ -125,8 +160,17 @@ function migrate(db, from) {
   }
   widenPriceTier(db);
   widenDocInfo(db);
+  widenAdjReason(db);
   if (from === 1) addFourthPriceName(db);
   if (from > 0 && from < 3) addLegalEntities(db);
+  if (from > 0 && from < 6) setProductTypes(db);
+}
+
+// Loại hàng mới: bộ cũ thành combo, hàng đã có định mức sản xuất thành hàng sản xuất; ảnh cũ thành ảnh đầu tiên
+function setProductTypes(db) {
+  db.exec(`update products set product_type = 'combo' where is_kit = 1;
+    update products set product_type = 'san_xuat' where is_kit = 0 and id in (select product_id from bom_items);
+    update products set images = json_array(image_url) where image_url is not null and image_url <> '' and images = '[]';`);
 }
 
 // Sao lưu nguyên CSDL trước khi nâng cấp cấu trúc

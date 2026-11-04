@@ -7,16 +7,17 @@ import { expenseGroupOf } from './cash.js';
 import { auditTriggers, dropAuditTriggers } from '../db/index.js';
 
 // Thứ tự nhập theo ràng buộc khóa ngoại
-const TABLES = ['funds', 'products', 'kit_items', 'customers', 'suppliers', 'opening_debts', 'sales_orders', 'sales_order_lines', 'deliveries',
+const TABLES = ['funds', 'products', 'kit_items', 'product_units', 'price_books', 'price_book_items', 'customers', 'suppliers', 'opening_debts', 'sales_orders', 'sales_order_lines', 'deliveries',
   'delivery_lines', 'sales_returns', 'sales_return_lines', 'purchase_orders', 'purchase_order_lines', 'goods_receipts', 'goods_receipt_lines',
-  'supplier_returns', 'supplier_return_lines', 'stock_adjustments', 'stock_adjustment_lines', 'stock_moves', 'payments', 'payment_allocations',
-  'expenses', 'shipments', 'shipment_events', 'bank_txns', 'notifications', 'doc_info', 'doc_counters', 'drivers', 'driver_trips', 'quotes', 'contracts', 'tax_invoices'];
+  'supplier_returns', 'supplier_return_lines', 'stock_adjustments', 'stock_adjustment_lines', 'productions', 'production_lines', 'bom_items', 'stock_moves', 'payments', 'payment_allocations',
+  'expenses', 'shipments', 'shipment_events', 'bank_txns', 'notifications', 'doc_info', 'doc_counters', 'drivers', 'driver_trips', 'quotes', 'contracts', 'tax_invoices',
+  'employees', 'shifts', 'work_schedules', 'timesheets', 'commission_tables', 'paysheets', 'paysheet_lines'];
 // Bảng có khóa số tự tăng: bỏ khóa cũ (tránh trùng với sổ khác), giữ thứ tự ghi
 const AUTO_ID = new Set(['stock_moves', 'shipment_events', 'notifications']);
 // Bảng đã có chứng từ thì không cho nhập đè
-const TXN_TABLES = ['sales_orders', 'purchase_orders', 'payments', 'stock_moves', 'expenses', 'opening_debts', 'stock_adjustments', 'shipments'];
+const TXN_TABLES = ['sales_orders', 'purchase_orders', 'payments', 'stock_moves', 'expenses', 'opening_debts', 'stock_adjustments', 'productions', 'shipments'];
 // Danh mục mặc định của sổ trống, xóa trước khi nhập
-const CLEAR = ['tax_invoices', 'contracts', 'quotes', 'driver_trips', 'drivers', 'doc_info', 'notifications', 'bank_txns', 'kit_items', 'products', 'customers', 'suppliers', 'funds', 'doc_counters'];
+const CLEAR = ['tax_invoices', 'contracts', 'quotes', 'driver_trips', 'drivers', 'doc_info', 'notifications', 'bank_txns', 'kit_items', 'price_book_items', 'price_books', 'product_units', 'products', 'customers', 'suppliers', 'funds', 'doc_counters'];
 
 // Thời điểm Postgres ("2026-10-12 08:00:00.123456+00", "…T…+07:00") → ISO UTC giống dữ liệu do máy chủ này ghi
 const TS_RE = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}(:?\d{2})?)$/;
@@ -43,6 +44,7 @@ export function import_book(p) {
   try {
     for (const t of CLEAR) {
       if (t === 'kit_items') run(`delete from kit_items where kit_id in (select id from products where book_id = ?)`, b);
+      else if (t === 'price_book_items') run(`delete from price_book_items where price_book_id in (select id from price_books where book_id = ?)`, b);
       else if (t === 'bank_txns') run(`delete from bank_txns where book_id = ?`, b);
       else run(`delete from ${t} where book_id = ?`, b);
     }
@@ -64,6 +66,8 @@ export function import_book(p) {
           }
           r.book_id = r0.book_id == null ? null : b; r.candidate_books = [b];
         }
+        // Tài khoản đăng nhập chưa có trên máy chủ này: bỏ liên kết, giữ hồ sơ nhân viên
+        if (t === 'employees' && r.user_id && !one(`select 1 from users where id = ?`, r.user_id)) r.user_id = null;
         if (t === 'expenses' && !r.expense_group) r.expense_group = expenseGroupOf(b, r.category);
         const keys = cols.filter((c) => r[c] !== undefined);
         const sql = t === 'doc_counters'

@@ -3,6 +3,7 @@ import { ctx, fail, one, all, run, val, nowIso, json, int, vnd, dm, today, addDa
 import { requirePerm, memberCan, setting } from './access.js';
 import { carrierShort } from '../lib/labels.js';
 import { calcPl } from './reports.js';
+import { refreshGroups } from './customer-groups.js';
 
 export const NOTIFY_KINDS = ['don_hang', 'van_chuyen', 'tien_ve', 'cong_no', 'bao_cao'];
 
@@ -147,6 +148,7 @@ export function runScheduled(p) {
   const d = p.date || today(); let n = 0;
   const books = p.book_id ? all(`select id from books where id = ?`, p.book_id) : all(`select id from books where is_demo = 0`);
   for (const bk of books) {
+    if (p.kind === 'daily_report') refreshGroups(bk.id);   // nhóm khách theo điều kiện cập nhật mỗi ngày
     const r = p.kind === 'daily_report' ? digestDaily(bk.id, d) : p.kind === 'debt_reminder' ? digestDebt(bk.id, d) : null;
     if (r != null) n++;
   }

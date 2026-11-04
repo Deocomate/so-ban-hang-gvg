@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp, useQ, useAction } from '../lib/store.jsx';
 import { money, qty as fq, dmy, todayVN, match, dmyhm } from '../lib/format.js';
-import { useProducts, useSuppliers, useFunds, productLabel, productSub, KIND_LABEL } from '../lib/lookups.js';
+import { useProducts, useSuppliers, useFunds, productLabel, productSub, KIND_LABEL, unitsOf, findUnit } from '../lib/lookups.js';
 import { exportXlsx } from '../lib/excel.js';
 import {
   Btn, Icon, Pill, StatusPill, RECEIVE, Field, Input, TextArea, Select, DateInput, NumInput, Check, Tabs, Search, Loading,
@@ -81,7 +81,7 @@ export function PoForm({ id, kind: kind0, sales_order_id, supplier_id: sup0, lin
       const [o] = await rpc('q', { view: 'purchase_orders', filters: [['id', 'eq', id]] });
       const ls = await rpc('q', { view: 'purchase_order_lines', filters: [['po_id', 'eq', id]], order: 'line_no' });
       setF((s) => ({ ...s, code: o.code, kind: o.kind, supplier_id: o.supplier_id, order_date: o.order_date, expected_date: o.expected_date || '', sales_order_id: o.sales_order_id || '',
-        note: o.note || '', lines: ls.map((l) => nl({ id: l.id, product_id: l.product_id, qty: l.qty, unit_cost: l.unit_cost, sales_order_line_id: l.sales_order_line_id })) }));
+        note: o.note || '', lines: ls.map((l) => { const c = l.unit_conv || 1; return nl({ id: l.id, product_id: l.product_id, qty: l.qty / c, unit_cost: l.unit_cost * c, unit: l.unit_name || l.unit, conv: c, sales_order_line_id: l.sales_order_line_id }); }) }));
       setLoaded(true);
     })().catch((e) => toast(e.message, 'err'));
   }, [id]);
@@ -99,7 +99,8 @@ export function PoForm({ id, kind: kind0, sales_order_id, supplier_id: sup0, lin
     const r = await run('save_purchase_order', {
       id: id || null, kind: f.kind, supplier_id: f.supplier_id, order_date: f.order_date, expected_date: f.expected_date || null, sales_order_id: f.sales_order_id || null,
       note: f.note, prod_step: f.prod_step || null, status: mode === 'draft' ? 'nhap' : 'xac_nhan', receive_now: mode === 'receive',
-      lines: lines.map((l) => ({ id: l.id || null, product_id: l.product_id, qty: Number(l.qty), unit_cost: l.unit_cost, sales_order_line_id: l.sales_order_line_id || null })),
+      lines: lines.map((l) => ({ id: l.id || null, product_id: l.product_id, qty: (Number(l.qty) || 0) * (l.conv || 1), unit_cost: l.unit_cost == null ? null : Number(l.unit_cost) / (l.conv || 1),
+        unit_name: (l.conv || 1) !== 1 ? l.unit : null, sales_order_line_id: l.sales_order_line_id || null })),
       deposit: amt > 0 ? { amount: amt, fund_id: f.pay.fund_id, method: f.pay.method } : null,
     }, (x) => `Đã lưu đơn nhập ${x.code}${x.receipt_code ? ' · đã nhập kho ' + x.receipt_code : ''}${x.payment_code ? ' · phiếu chi ' + x.payment_code : ''}`);
     if (r) { onClose(); if (!id) open('po', { id: r.id }); }
@@ -132,11 +133,17 @@ export function PoForm({ id, kind: kind0, sales_order_id, supplier_id: sup0, lin
         {f.lines.map((l) => (
           <div className="line" key={l.key} style={{ gridTemplateColumns: 'minmax(0,2.4fr) 100px 140px 140px 32px' }}>
             <div className="stack" style={{ gap: 2 }}>
-              <Picker items={(products.data || []).filter((p) => !p.is_kit)} value={l.product_id} placeholder="Tìm sản phẩm…" getLabel={productLabel}
+              <Picker items={(products.data || []).filter((p) => !p.is_kit && !p.is_service)} value={l.product_id} placeholder="Tìm sản phẩm…" getLabel={productLabel}
                 filterKeys={(p) => `${p.sku} ${p.name} ${p.size || ''} ${p.color || ''}`}
-                onChange={(v, p) => setLine(l.key, { product_id: v, unit_cost: p.avg_cost ? Math.round(p.avg_cost) : l.unit_cost })}
+                onChange={(v, p) => setLine(l.key, { product_id: v, unit: p.unit, conv: 1, unit_cost: p.avg_cost ? Math.round(p.avg_cost) : l.unit_cost })}
                 renderItem={(p) => <><span><b>{p.sku}</b> · {p.name}</span><span className="muted small">{productSub(p)} · tồn {fq(p.on_hand)}{p.avg_cost ? ` · giá vốn ${money(p.avg_cost)}` : ''}</span></>} />
               {l.sales_order_line_id && <span className="stockhint">Gắn với dòng đơn bán</span>}
+              {pmap[l.product_id]?.units?.length > 0 && <div className="row gap-s small"><span className="muted">Đơn vị</span>
+                <select className="pos-unit-sel" value={l.unit || pmap[l.product_id].unit} aria-label="Đơn vị tính" onChange={(e) => {
+                  const u = findUnit(pmap[l.product_id], e.target.value);
+                  setLine(l.key, { unit: u.name, conv: u.conv, unit_cost: l.unit_cost == null ? null : Math.round(Number(l.unit_cost) / (l.conv || 1) * u.conv) });
+                }}>{unitsOf(pmap[l.product_id]).map((u) => <option key={u.name} value={u.name}>{u.name}</option>)}</select>
+                {(l.conv || 1) !== 1 && <span className="muted">= {fq((Number(l.qty) || 0) * l.conv)} {pmap[l.product_id].unit}</span>}</div>}
             </div>
             <NumInput money={false} min={0} value={l.qty} onChange={(v) => setLine(l.key, { qty: v })} aria-label="Số lượng" />
             <NumInput value={l.unit_cost} onChange={(v) => setLine(l.key, { unit_cost: v })} />
@@ -216,7 +223,7 @@ export function PoDetail({ id, onClose }) {
       <Section title="Hàng đặt">
         <Table dense rows={lines.data} columns={[
           { key: 'p', label: 'Sản phẩm', render: (l) => <><div className="cell-main">{l.sku} · {l.product_name}</div>{l.sales_order_code && <div className="cell-sub">giữ cho đơn {l.sales_order_code}</div>}</> },
-          { key: 'q', label: 'SL đặt', align: 'right', render: (l) => <>{fq(l.eff_qty)}{l.cancelled_qty > 0 && <div className="cell-sub">hủy {fq(l.cancelled_qty)}</div>}</> },
+          { key: 'q', label: 'SL đặt', align: 'right', render: (l) => <>{fq(l.eff_qty)} {l.unit}{l.unit_name && l.unit_conv !== 1 && <div className="cell-sub">= {fq(l.eff_qty / l.unit_conv)} {l.unit_name}</div>}{l.cancelled_qty > 0 && <div className="cell-sub">hủy {fq(l.cancelled_qty)}</div>}</> },
           { key: 'c', label: 'Giá nhập', align: 'right', render: (l) => money(l.unit_cost) },
           { key: 'r', label: 'Đã nhận', align: 'right', render: (l) => <>{fq(l.received_qty)}{l.returned_qty > 0 && <div className="cell-sub">trả {fq(l.returned_qty)}</div>}</> },
           { key: 'rm', label: 'Còn chờ', align: 'right', render: (l) => (l.remaining_qty > 0 ? <b>{fq(l.remaining_qty)}</b> : '—') },

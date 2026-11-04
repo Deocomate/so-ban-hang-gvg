@@ -6,6 +6,8 @@
 --  Tệp này được chạy lại mỗi lần khởi động (drop + create), không đụng dữ liệu.
 -- =====================================================================
 
+drop view if exists v_price_book_items;
+drop view if exists v_price_books;
 drop view if exists v_tax_invoices;
 drop view if exists v_attachments;
 drop view if exists v_contracts;
@@ -26,6 +28,15 @@ drop view if exists v_expense_alloc;
 drop view if exists v_expenses;
 drop view if exists v_customers;
 drop view if exists v_opening_debts;
+drop view if exists v_paysheet_lines;
+drop view if exists v_paysheets;
+drop view if exists v_commission_tables;
+drop view if exists v_timesheets;
+drop view if exists v_work_schedules;
+drop view if exists v_shifts;
+drop view if exists v_employees;
+drop view if exists v_bom_items;
+drop view if exists v_productions;
 drop view if exists v_adjustments;
 drop view if exists v_stock_moves;
 drop view if exists v_supplier_returns;
@@ -78,7 +89,7 @@ join sales_orders o on o.id = l.order_id and o.status = 'xac_nhan'
 join products p on p.id = l.product_id
 left join kit_items k on p.is_kit = 1 and k.kit_id = p.id
 left join purchase_order_lines pl on pl.id = l.po_line_id
-where l.qty - l.cancelled_qty - l.delivered_qty > 0;
+where l.qty - l.cancelled_qty - l.delivered_qty > 0 and p.product_type <> 'dich_vu';
 
 create view v_reserve_sum as
 select product_id, sum(qty) as reserved from v_reserve group by product_id;
@@ -104,6 +115,16 @@ with base as (
     json_group_array(json_object('product_id', c.id, 'sku', c.sku, 'name', c.name, 'unit', c.unit, 'qty', k.qty,
                                  'on_hand', c.on_hand) order by c.sku) as components
   from kit_items k join base c on c.id = k.component_id group by k.kit_id
+), sold as (
+  -- bán 30 ngày gần nhất (đã giao, kể cả qua bộ) để ước số ngày còn đủ hàng
+  select m.product_id, -sum(m.qty) as qty from stock_moves m
+  where m.doc_type = 'giao' and m.move_date >= date(today(), '-29 days') group by m.product_id
+), units as (
+  select product_id, json_group_array(json_object('id', id, 'name', name, 'conv', conv, 'prices', json(prices), 'sell_direct', sell_direct) order by sort, conv) as units
+  from product_units group by product_id
+), bom as (
+  select bi.product_id, json_group_array(json_object('product_id', c.id, 'sku', c.sku, 'name', c.name, 'unit', c.unit, 'qty', bi.qty)) as bom
+  from bom_items bi join products c on c.id = bi.component_id group by bi.product_id
 )
 select b.id, b.book_id, b.sku, b.name, b.category, b.pattern, b.size, b.color, b.unit, b.image_url,
   b.price1, b.price2, b.price3, b.price4, b.brand, b.low_stock, b.is_kit, b.active, b.note, b.created_at, b.updated_at,
@@ -115,10 +136,19 @@ select b.id, b.book_id, b.sku, b.name, b.category, b.pattern, b.size, b.color, b
     case when b.is_kit then coalesce(kit.avg_cost, 0) else case when b.on_hand > 0 then b.stock_value / b.on_hand else b.last_cost end end end as avg_cost,
   case when can_cost(b.book_id) then case when b.is_kit then 0 else b.stock_value end end as stock_value,
   coalesce(kit.components, '[]') as components,
-  (not b.is_kit and b.active and b.on_hand - b.reserved <= b.low_stock) as is_low,
+  (not b.is_kit and b.product_type <> 'dich_vu' and b.active and b.on_hand - b.reserved <= b.low_stock) as is_low,
   b.pack_unit, b.units_per_pack, b.pack_weight, b.unit_weight, b.material, b.norm_m2, b.norm_m,
-  coalesce(b.unit_weight, round(b.pack_weight / nullif(b.units_per_pack, 0), 4)) as weight_per_unit
-from base b left join kit on kit.kit_id = b.id;
+  coalesce(b.unit_weight, round(b.pack_weight / nullif(b.units_per_pack, 0), 4)) as weight_per_unit,
+  b.product_type, b.product_type = 'dich_vu' as is_service, b.description, b.order_note, b.max_stock, b.location, b.width, b.length, b.dim_unit,
+  b.sell_direct, b.images, case when can_cost(b.book_id) then b.last_cost end as last_cost,
+  case when can_cost(b.book_id) then (select g.unit_cost from goods_receipt_lines g join goods_receipts r on r.id = g.receipt_id
+    where g.product_id = b.id order by r.receipt_date desc, r.created_at desc limit 1) end as last_in_cost,
+  coalesce(units.units, '[]') as units, coalesce(bom.bom, '[]') as bom,
+  coalesce(sold.qty, 0) as sold_30d,
+  case when b.is_kit or b.product_type = 'dich_vu' or coalesce(sold.qty, 0) <= 0 then null
+       else cast(max(b.on_hand, 0) * 30 / sold.qty as integer) end as days_left
+from base b left join kit on kit.kit_id = b.id left join sold on sold.product_id = b.id
+left join units on units.product_id = b.id left join bom on bom.product_id = b.id;
 
 -- ---------- GIÁ TRỊ TỪNG ĐƠN BÁN ----------
 create view v_order_values as
@@ -182,7 +212,7 @@ create view v_sales_orders as
 select o.id, o.book_id, o.code, o.kind, o.status, o.customer_id, c.code as customer_code, c.name as customer_name,
   c.phone as customer_phone, c.address as customer_address, c.price_tier,
   o.channel, o.order_date, o.due_date, o.staff, o.discount, o.shipping_fee, o.note, o.cancel_reason,
-  o.created_at, o.confirmed_at, o.cancelled_at, o.vat_rate, v.vat_total, v.vat_net, v.deposit_used,
+  o.created_at, o.confirmed_at, o.cancelled_at, o.vat_rate, o.price_book_id, v.vat_total, v.vat_net, v.deposit_used,
   v.goods_gross, v.goods_total, v.order_total, v.eff_qty, v.delivered_qty, v.returned_qty, v.remaining_qty, v.line_count,
   v.delivered_value, v.returned_value, v.ship_billed, v.paid_net, v.last_pay_date, v.last_delivery_date, v.delivery_count,
   v.order_total - v.returned_value as net_total,
@@ -234,7 +264,7 @@ select l.id, l.book_id, l.order_id, o.code as order_code, o.status as order_stat
   max(l.qty - l.cancelled_qty - l.delivered_qty, 0) as remaining_qty,
   round((l.qty - l.cancelled_qty) * l.unit_price * (1 - l.discount_pct / 100.0)) as line_total,
   l.po_line_id, po.code as po_code, po.id as po_id, po.prod_step as po_step,
-  pl.received_qty - pl.returned_qty as po_received, l.note
+  pl.received_qty - pl.returned_qty as po_received, l.note, l.unit_name, l.unit_conv, p.product_type
 from sales_order_lines l
 join sales_orders o on o.id = l.order_id
 join products p on p.id = l.product_id
@@ -327,7 +357,7 @@ create view v_purchase_order_lines as
 select l.id, l.book_id, l.po_id, po.code as po_code, l.line_no, l.product_id, p.sku, p.name as product_name, p.unit,
   l.qty, l.unit_cost, l.cancelled_qty, l.received_qty, l.returned_qty, l.qty - l.cancelled_qty as eff_qty,
   max(l.qty - l.cancelled_qty - l.received_qty, 0) as remaining_qty,
-  round((l.qty - l.cancelled_qty) * l.unit_cost) as line_total, l.sales_order_line_id, so.code as sales_order_code, l.note
+  round((l.qty - l.cancelled_qty) * l.unit_cost) as line_total, l.sales_order_line_id, so.code as sales_order_code, l.note, l.unit_name, l.unit_conv
 from purchase_order_lines l join purchase_orders po on po.id = l.po_id join products p on p.id = l.product_id
 left join sales_order_lines sl on sl.id = l.sales_order_line_id left join sales_orders so on so.id = sl.order_id;
 
@@ -355,6 +385,7 @@ select m.id, m.book_id, m.product_id, p.sku, p.name as product_name, p.unit, m.m
   m.doc_type,
   case m.doc_type when 'dau_ky' then 'Tồn đầu kỳ' when 'nhap' then 'Nhập hàng' when 'tra_ncc' then 'Trả nhà cung cấp'
     when 'giao' then 'Giao hàng (bán)' when 'tra_hang' then 'Khách trả hàng' when 'dieu_chinh' then 'Điều chỉnh kho'
+    when 'san_xuat' then case when m.qty > 0 then 'Sản xuất (thành phẩm)' else 'Sản xuất (xuất nguyên liệu)' end
     when 'chenh_lech' then 'Chênh lệch giá vốn' else m.doc_type end as doc_label,
   m.doc_id, m.doc_code, m.line_id, m.note, m.created_at,
   coalesce(so.code, po.code) as order_code, so.id as order_id, po.id as po_id, coalesce(c.name, s.name) as party_name, sa.reason as adj_reason
@@ -373,13 +404,26 @@ create view v_adjustments as
 select a.id, a.book_id, a.code, a.adj_date, a.reason,
   case a.reason when 'dau_ky' then 'Tồn đầu kỳ' when 'vo' then 'Hàng vỡ' when 'loi' then 'Hàng lỗi'
     when 'that_thoat' then 'Thất thoát / mất' when 'kiem_ke' then 'Kiểm kê chênh lệch'
-    when 'hang_tra_loi' then 'Hàng khách trả bị lỗi (không nhập lại)' else 'Khác' end as reason_label,
-  a.note, a.created_at,
+    when 'hang_tra_loi' then 'Hàng khách trả bị lỗi (không nhập lại)' when 'noi_bo' then 'Xuất dùng nội bộ' else 'Khác' end as reason_label,
+  a.note, a.purpose, a.created_at, a.created_by, u.name as created_by_name,
   case when can_cost(a.book_id) then x.value end as value, x.lines
-from stock_adjustments a
+from stock_adjustments a left join users u on u.id = a.created_by
 left join (select l.adjustment_id, sum(l.value) as value, json_group_array(json_object('sku', p.sku, 'name', p.name, 'unit', p.unit, 'qty', l.qty_delta,
     'value', case when can_cost(l.book_id) then l.value end) order by p.sku) as lines
   from stock_adjustment_lines l join products p on p.id = l.product_id group by l.adjustment_id) x on x.adjustment_id = a.id;
+
+create view v_productions as
+select x.id, x.book_id, x.code, x.prod_date, x.product_id, p.sku, p.name, p.unit, x.qty, x.note, x.created_at,
+  case when can_cost(x.book_id) then x.value end as value,
+  case when can_cost(x.book_id) then x.value / x.qty end as unit_cost,
+  (select json_group_array(json_object('product_id', l.product_id, 'sku', q.sku, 'name', q.name, 'unit', q.unit, 'qty', l.qty,
+      'value', case when can_cost(l.book_id) then l.value end) order by q.sku)
+    from production_lines l join products q on q.id = l.product_id where l.production_id = x.id) as lines
+from productions x join products p on p.id = x.product_id;
+
+create view v_bom_items as
+select b.book_id, b.product_id, b.component_id, b.qty, p.sku, p.name, p.unit, p.on_hand
+from bom_items b join products p on p.id = b.component_id;
 
 -- ---------- KHÁCH HÀNG & CÔNG NỢ ----------
 create view v_opening_debts as
@@ -422,7 +466,7 @@ from t;
 
 create view v_expenses as
 select e.id, e.book_id, e.code, e.exp_date, e.category, e.description, e.amount, e.supplier_id, s.name as supplier_name,
-  e.settled_payment_id, sp.code as settled_payment_code, e.voided, e.void_reason, e.note, e.created_at,
+  e.settled_payment_id, sp.code as settled_payment_code, e.voided, e.void_reason, e.note, e.created_at, e.invoice_no,
   case when e.settled_payment_id is not null then e.amount else coalesce(pd.paid_net, 0) end as paid,
   case when e.voided then 0 when e.settled_payment_id is not null then 0 else e.amount - coalesce(pd.paid_net, 0) end as unpaid,
   e.expense_group, e.alloc_months,
@@ -613,3 +657,48 @@ create view v_tax_invoices as
 select t.id, t.book_id, t.direction, t.inv_no, t.inv_date, t.party_name, t.party_tax, t.profile_id, t.amount, t.vat_rate, t.vat_amount,
   t.amount + t.vat_amount as total, t.supplier_id, t.order_id, o.code as order_code, t.category, t.note, t.voided, t.created_at
 from tax_invoices t left join sales_orders o on o.id = t.order_id;
+
+-- ---------- NHÂN VIÊN ----------
+-- Cách tính lương chỉ chủ cửa hàng xem được
+create view v_employees as
+select e.id, e.book_id, e.code, e.name, e.phone, e.id_no, e.title, e.dept, e.address, e.start_date, e.user_id, u.email as user_email,
+  e.active, e.note, e.created_at, case when is_owner(e.book_id) then e.pay end as pay
+from employees e left join users u on u.id = e.user_id;
+
+create view v_shifts as select * from shifts;
+
+create view v_work_schedules as
+select w.book_id, w.employee_id, w.shift_id, w.weekday, s.name as shift_name, s.start_time, s.end_time
+from work_schedules w join shifts s on s.id = w.shift_id;
+
+create view v_timesheets as
+select t.*, e.code as employee_code, e.name as employee_name, s.name as shift_name, s.start_time, s.end_time,
+  case t.status when 'di_lam' then 'Đi làm' when 'nghi_phep' then 'Nghỉ có phép' else 'Nghỉ không phép' end as status_label
+from timesheets t join employees e on e.id = t.employee_id left join shifts s on s.id = t.shift_id;
+
+create view v_commission_tables as
+select c.*, (select count(*) from employees e where e.book_id = c.book_id and json_extract(e.pay, '$.commission_id') = c.id) as employees
+from commission_tables c;
+
+create view v_paysheet_lines as
+select l.id, l.paysheet_id, l.book_id, l.employee_id, e.code as employee_code, e.name as employee_name, e.title,
+  l.base, l.ot, l.bonus, l.commission, l.allowance, l.deduction, l.adjust, l.total, l.breakdown, l.expense_id,
+  coalesce(x.paid, 0) as paid, case when l.expense_id is null then l.total else coalesce(x.unpaid, 0) end as unpaid
+from paysheet_lines l join employees e on e.id = l.employee_id left join v_expenses x on x.id = l.expense_id;
+
+create view v_paysheets as
+select s.*, count(l.id) as employees, coalesce(sum(l.total), 0) as total, coalesce(sum(l.paid), 0) as paid,
+  case when s.status = 'huy' then 0 else coalesce(sum(l.unpaid), 0) end as unpaid,
+  case s.status when 'tam' then 'Tạm tính' when 'chot' then 'Đã chốt' else 'Đã hủy' end as status_label
+from paysheets s left join v_paysheet_lines l on l.paysheet_id = s.id group by s.id;
+
+-- ---------- BẢNG GIÁ CÓ TÊN ----------
+create view v_price_books as
+select b.id, b.book_id, b.name, b.valid_from, b.valid_to, b.active, b.formula, b.allow_others, b.warn_others, b.cust_groups, b.user_ids,
+  b.created_at, b.updated_at, (select count(*) from price_book_items i where i.price_book_id = b.id) as item_count,
+  (b.active and (b.valid_from is null or b.valid_from <= today()) and (b.valid_to is null or b.valid_to >= today())) as in_effect
+from price_books b;
+
+create view v_price_book_items as
+select i.price_book_id, b.book_id, i.product_id, i.price, p.sku, p.name as product_name, p.unit
+from price_book_items i join price_books b on b.id = i.price_book_id join products p on p.id = i.product_id;

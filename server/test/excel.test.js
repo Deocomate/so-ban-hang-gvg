@@ -196,4 +196,37 @@ C('Bật cài đặt thì giao ngay được', !!sold.delivery_code, true);
 C('Đơn lấy đúng giá mức 4', (await api.q('sales_order_lines', TH, [['order_id', 'eq', sold.id]]))[0].unit_price, 14000);
 C('Tồn bị âm đúng số đã giao', (await api.one('products', TH, [['id', 'eq', stockless.id]])).on_hand, -3);
 
+G('Trường kiểu KiotViet: loại hàng, đơn vị quy đổi, vị trí, tồn tối đa');
+const KV_HEAD = ['Mã hàng', 'Tên hàng', 'Loại hàng', 'Nhóm hàng', 'ĐVT', 'Đơn vị quy đổi', 'Giá lẻ', 'Giá vốn', 'Tồn kho', 'Tồn tối thiểu', 'Tồn tối đa', 'Vị trí',
+  'Rộng', 'Dài', 'Đơn vị kích thước', 'Bán trực tiếp', 'Mô tả', 'Mẫu ghi chú'];
+const kvFile = (rows) => xlsxFile({ 'Hàng hóa': [KV_HEAD, ...rows] });
+const kv = await open(kvFile([
+  ['KV-01', 'Ngói KiotViet', 'Hàng hóa', 'Ngói', 'Viên', 'Hộp=100:1500000; Pallet=1000', 16000, 9000, 300, 50, 5000, 'Kệ A1', 27, 20, 'cm', 'Có', 'Ngói men đỏ', 'Kiểm 4 góc'],
+  ['KV-02', 'Công lắp mái', 'Dịch vụ', '', 'm²', '', 80000, '', '', '', '', '', '', '', '', 'Không', '', ''],
+  ['KV-03', 'Gạch cũ', 'Gạch hoa', '', 'Viên', '', 5000, '', '', '', '', '', '', '', '', '', '', ''],
+]));
+C('Nhận đủ cột mới', ['product_type', 'units', 'max_stock', 'location', 'width', 'length', 'dim_unit', 'sell_direct', 'description', 'order_note', 'category']
+  .map((f) => kv.columns.some((c) => c.field === f && c.on !== false)), Array(11).fill(true));
+C('"Mẫu ghi chú" không bị hiểu là cột Mẫu', fieldOf(kv.columns, 'Mẫu ghi chú'), 'order_note');
+const kvRows = rowsOf(kv, await products());
+C('File đúng: không có lỗi', kvRows.map((r) => r.errors), [[], [], []]);
+C('Đọc loại hàng, đơn vị quy đổi, bán trực tiếp', [kvRows[0].product_type, kvRows[0].units.map((u) => [u.name, u.conv, u.prices[0] ?? null]), kvRows[1].product_type, kvRows[1].sell_direct],
+  ['hang', [['Hộp', 100, 1500000], ['Pallet', 1000, null]], 'dich_vu', false]);
+C('Chữ ở cột Loại hàng không phải loại hàng thì là chủng loại', [kvRows[2].product_type, kvRows[2].category], [undefined, 'Gạch hoa']);
+const kvBad = rowsOf(await open(kvFile([['KV-09', 'Sai', 'Hàng lạ', 'Ngói', 'Viên', 'Hộp 100', '', '', '', 10, 5, '', '', '', 'inch', 'Có lẽ', '', '']])), await products());
+C('Báo lỗi loại hàng, đơn vị quy đổi, tồn tối đa, kích thước, bán trực tiếp', kvBad[0].errors.length, 5);
+const kvRes = await api.call('import_products', { book_id: TH, request_id: rid(), rows: payload(kvRows) });
+C('Tạo 3 mã', kvRes.created, 3);
+const kv1 = await api.one('products', TH, [['sku', 'eq', 'KV-01']]);
+C('Lưu đủ trường mới', [kv1.on_hand, kv1.max_stock, kv1.location, kv1.width, kv1.length, kv1.dim_unit, kv1.sell_direct, kv1.description, kv1.order_note, kv1.units.map((u) => [u.name, u.conv])],
+  [300, 5000, 'Kệ A1', 27, 20, 'cm', true, 'Ngói men đỏ', 'Kiểm 4 góc', [['Hộp', 100], ['Pallet', 1000]]]);
+C('Dịch vụ không bán trực tiếp', [(await api.one('products', TH, [['sku', 'eq', 'KV-02']])).product_type, (await api.one('products', TH, [['sku', 'eq', 'KV-02']])).sell_direct], ['dich_vu', false]);
+const kvUpd = rowsOf(await open(kvFile([['KV-01', '', 'Dịch vụ', '', '', 'Thùng=50', '', '', '', '', '', 'Kệ B2', '', '', '', '', '', '']])), await products());
+C('Không đổi loại hàng qua Excel', kvUpd[0].errors.some((e) => e.includes('Không đổi loại hàng')), true);
+const kvUpd2 = rowsOf(await open(kvFile([['KV-01', '', '', '', '', 'Thùng=50', '', '', '', '', '', 'Kệ B2', '', '', '', '', '', '']])), await products());
+C('Cập nhật: liệt kê thay đổi vị trí và đơn vị', kvUpd2[0].changes.filter((c) => /Vị trí|Đơn vị quy đổi/.test(c)).length, 2);
+await api.call('import_products', { book_id: TH, request_id: rid(), rows: payload(kvUpd2) });
+const kv1b = await api.one('products', TH, [['sku', 'eq', 'KV-01']]);
+C('Cập nhật vị trí, thay đơn vị quy đổi, giữ trường để trống', [kv1b.location, kv1b.units.map((u) => u.name), kv1b.max_stock, kv1b.on_hand], ['Kệ B2', ['Thùng'], 5000, 300]);
+
 finish('excel');

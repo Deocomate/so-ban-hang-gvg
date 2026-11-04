@@ -5,7 +5,7 @@ import { money, qty as fq, dmy, match, todayVN, monthLabel } from '../lib/format
 import { useSuppliers } from '../lib/lookups.js';
 import { docSettings } from '../lib/docs/model.js';
 import { exportXlsx } from '../lib/excel.js';
-import { Btn, Pill, Field, Input, Select, DateInput, NumInput, Search, ErrorBox, Note, Table, Modal, Tabs, ConfirmBtn, Loading } from '../components/ui.jsx';
+import { Btn, Pill, Field, Input, Select, DateInput, NumInput, Search, ErrorBox, Note, Table, Modal, Tabs, usePageTab, ConfirmBtn, Loading } from '../components/ui.jsx';
 import { Attachments } from './Contracts.jsx';
 
 const LABEL = { vao: 'Hóa đơn đầu vào', ra: 'Hóa đơn đầu ra' };
@@ -97,12 +97,12 @@ function Ledgers() {
   return <div className="row gap"><Btn icon="dl" onClick={() => out('ra', 'doanh-thu')}>Sổ doanh thu (hóa đơn đầu ra)</Btn><Btn icon="dl" onClick={() => out('vao', 'chi-phi-dau-vao')}>Sổ hàng hóa, chi phí đầu vào</Btn></div>;
 }
 
-export function TaxPage() {
+export function TaxPage(nav) {
   const { book, settings } = useApp();
   const ds = useMemo(() => docSettings(book, settings), [book, settings]);
   const hkd = ds.profiles.find((p) => /hộ kinh doanh/i.test(p.legal_name || p.name)) || ds.profiles[0];
   const [profile, setProfile] = useState(hkd.id);
-  const [tab, setTab] = useState('tong');
+  const [tab, setTab] = usePageTab(nav, 'tong');
   return (
     <>
       <div className="page-head"><div className="grow"><h1 className="page-title">Thuế HKD</h1><div className="page-sub">Chứng từ đầu vào, đầu ra và đối soát doanh thu theo từng pháp nhân.</div></div>

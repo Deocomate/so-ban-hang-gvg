@@ -6,17 +6,17 @@ import { money, dmy, dmyhm, todayVN, pct } from '../lib/format.js';
 import { exportXlsx, saveFile } from '../lib/excel.js';
 import { BankSettings, NotifySettings, CarrierSettings } from './SettingsExtra.jsx';
 import { cats as expCats } from '../lib/expenseCats.js';
-import { Btn, Icon, Pill, Field, Input, Select, DateInput, NumInput, Check, Tabs, Loading, ErrorBox, Note, Table, Modal, ConfirmBtn, Section, KV } from '../components/ui.jsx';
+import { Btn, Icon, Pill, Field, Input, Select, DateInput, NumInput, Check, Tabs, usePageTab, Loading, ErrorBox, Note, Table, Modal, ConfirmBtn, Section, KV } from '../components/ui.jsx';
 
 export const PERMS = [
   ['ban_hang', 'Bán hàng (tạo đơn, giao hàng, trả hàng)'], ['thu_chi', 'Thu chi tiền'], ['nhap_hang', 'Nhập hàng / đặt xưởng'], ['kho', 'Điều chỉnh kho (vỡ, kiểm kê)'],
-  ['danh_muc', 'Sửa sản phẩm, khách hàng, NCC'], ['chi_phi', 'Ghi chi phí'], ['xem_gia_von', 'Xem giá vốn và lợi nhuận'], ['xem_bao_cao', 'Xem tổng quan và báo cáo'],
+  ['danh_muc', 'Sửa sản phẩm, khách hàng, NCC'], ['chi_phi', 'Ghi chi phí'], ['xem_gia_von', 'Xem giá vốn và lợi nhuận'], ['xem_bao_cao', 'Xem tổng quan và báo cáo'], ['cham_cong', 'Chấm công và lịch làm việc'],
 ];
 
-export function SettingsPage() {
+export function SettingsPage(nav) {
   const { can, book } = useApp();
   const owner = can('owner');
-  const [tab, setTab] = useState(owner ? 'book' : 'notify');
+  const [tab, setTab] = usePageTab(nav, owner ? 'book' : 'notify', owner ? undefined : ['notify', 'me']);
   useEffect(() => { const h = (e) => setTab(e.detail); window.addEventListener('settings-tab', h); return () => window.removeEventListener('settings-tab', h); }, []);
   return (
     <>

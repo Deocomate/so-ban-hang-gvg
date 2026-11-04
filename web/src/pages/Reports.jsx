@@ -3,10 +3,11 @@ import { useApp, useRpcData, useQ } from '../lib/store.jsx';
 import { money, qty as fq, pct, monthLabel, todayVN, monthStart, addMonths, monthEnd, dmy } from '../lib/format.js';
 import { exportXlsx } from '../lib/excel.js';
 import { cats as expCats } from '../lib/expenseCats.js';
-import { Btn, Tabs, ErrorBox, Note, Table, Pill, MonthInput } from '../components/ui.jsx';
+import { Btn, Tabs, usePageTab, ErrorBox, Note, Table, Pill, MonthInput, DateInput, Section } from '../components/ui.jsx';
 import { PeriodPicker, usePeriod } from '../components/Period.jsx';
 import { StockReport } from './Inventory.jsx';
 import { FactoryReport } from './Tax.jsx';
+import { StaffReport } from './Staff.jsx';
 
 const PL_ROWS = [
   ['revenue_goods', 'Tiền hàng đã giao'], ['revenue_shipping', '+ Phí vận chuyển thu khách'], ['revenue_returns', '− Hàng khách trả lại'],
@@ -16,18 +17,22 @@ const PL_ROWS = [
   ['cash_in', 'Tiền thực thu'], ['cash_out', 'Tiền thực chi'], ['net_cash', 'Chênh lệch tiền', 'b'],
 ];
 
-export function ReportsPage() {
+export function ReportsPage(nav) {
   const { can } = useApp();
-  const [tab, setTab] = useState('pl');
   const cost = can('xem_gia_von');
+  const [tab, setTab] = usePageTab(nav, 'pl', ['eod', 'pl', 'prod', 'grp', 'orders', 'staff', 'factory', 'stock', 'debt', ...(cost ? ['exp'] : [])]);
   return (
     <>
       <div className="page-head"><div className="grow"><h1 className="page-title">Báo cáo</h1>
         <div className="page-sub">Doanh thu tính theo ngày giao hàng. Tiền thu tính theo ngày thu. Mọi bảng đều xuất được ra Excel.</div></div></div>
       <Tabs value={tab} onChange={setTab} tabs={[
-        { value: 'pl', label: 'Lãi lỗ theo tháng' }, { value: 'prod', label: 'Theo sản phẩm' }, { value: 'grp', label: 'Theo kênh / khách / nhóm' },
+        { value: 'eod', label: 'Cuối ngày' }, { value: 'pl', label: 'Lãi lỗ theo tháng' }, { value: 'prod', label: 'Theo sản phẩm' }, { value: 'grp', label: 'Theo kênh / khách / nhóm' },
+        { value: 'orders', label: 'Đặt hàng' }, { value: 'staff', label: 'Nhân viên' },
         { value: 'factory', label: 'Đơn đặt xưởng' }, { value: 'stock', label: 'Nhập – xuất – tồn' }, { value: 'debt', label: 'Công nợ' }, ...(cost ? [{ value: 'exp', label: 'Chi phí' }] : []),
       ]} />
+      {tab === 'eod' && <EndOfDayReport />}
+      {tab === 'orders' && <OrdersReport />}
+      {tab === 'staff' && <StaffReport />}
       {tab === 'pl' && <MonthlyPL />}
       {tab === 'factory' && <FactoryReport />}
       {tab === 'prod' && <ProductReport />}
@@ -36,6 +41,81 @@ export function ReportsPage() {
       {tab === 'debt' && <DebtReport />}
       {tab === 'exp' && <ExpenseReport />}
     </>
+  );
+}
+
+// Cuối ngày: tóm tắt một ngày bán hàng, hàng bán, đơn mới, thu chi theo quỹ
+function EndOfDayReport() {
+  const { open, can } = useApp();
+  const [d, setD] = useState(todayVN());
+  const q = useRpcData('rpt_end_of_day', { date: d });
+  const r = q.data; const s = r?.summary; const cost = can('xem_gia_von');
+  return (
+    <div className="stack">
+      <div className="row gap"><span className="small">Ngày</span><DateInput value={d} onChange={(v) => v && setD(v)} max={todayVN()} /><span className="grow" />
+        <Btn icon="dl" disabled={!r} onClick={() => exportXlsx(`cuoi-ngay-${d}.xlsx`, [
+          { name: 'Bán hàng', rows: r.sales, columns: [{ key: 'code', label: 'Lần giao' }, { key: 'order_code', label: 'Đơn' }, { key: 'customer_name', label: 'Khách' }, { key: 'staff', label: 'Người bán' }, { key: 'revenue', label: 'Doanh thu' }] },
+          { name: 'Hàng hóa', rows: r.products, columns: [{ key: 'sku', label: 'SKU' }, { key: 'name', label: 'Tên' }, { key: 'qty', label: 'SL thuần' }, { key: 'revenue', label: 'Doanh thu' }] },
+          { name: 'Thu chi', rows: r.payments, columns: [{ key: 'code', label: 'Phiếu' }, { key: 'kind_label', label: 'Loại' }, { key: 'fund_name', label: 'Quỹ' }, { key: 'party_name', label: 'Đối tượng' }, { key: 'amount', label: 'Số tiền' }] }])}>Xuất Excel</Btn></div>
+      <ErrorBox error={q.error} />
+      {s && <div className="kpis kpis-4">
+        <div className="kpi"><span className="kpi-label">Doanh thu</span><span className="kpi-value">{money(s.revenue)}</span><span className="kpi-sub">{s.deliveries} lần giao · trả hàng {money(s.returns)}</span></div>
+        {cost && <div className="kpi"><span className="kpi-label">Lợi nhuận gộp</span><span className="kpi-value">{money(s.gross_profit)}</span></div>}
+        <div className="kpi"><span className="kpi-label">Đơn mới xác nhận</span><span className="kpi-value">{s.new_orders}</span><span className="kpi-sub">{money(s.new_order_value)} đ</span></div>
+        <div className="kpi"><span className="kpi-label">Tiền thu / chi</span><span className="kpi-value">{money(s.cash_in)}</span><span className="kpi-sub">chi {money(s.cash_out)}</span></div>
+      </div>}
+      {r && <>
+        <Section title="Bán hàng"><Table dense rows={r.sales} empty="Không có lần giao nào" onRow={(x) => open('order', { id: x.order_id })} columns={[
+          { key: 'c', label: 'Lần giao', render: (x) => <><b>{x.code}</b><div className="cell-sub">{x.order_code}</div></> },
+          { key: 'k', label: 'Khách hàng', render: (x) => <>{x.customer_name}{x.staff && <div className="cell-sub">{x.staff}</div>}</> },
+          { key: 'r', label: 'Doanh thu', align: 'right', render: (x) => money(x.revenue) },
+          ...(cost ? [{ key: 'g', label: 'Giá vốn', align: 'right', render: (x) => money(x.cogs) }] : []),
+        ]} /></Section>
+        {r.returns.length > 0 && <Section title="Trả hàng"><Table dense rows={r.returns} onRow={(x) => open('order', { id: x.order_id })} columns={[
+          { key: 'c', label: 'Phiếu', render: (x) => <><b>{x.code}</b><div className="cell-sub">{x.order_code}</div></> },
+          { key: 'k', label: 'Khách hàng', render: (x) => x.customer_name }, { key: 'r', label: 'Giá trị', align: 'right', render: (x) => money(x.revenue) }]} /></Section>}
+        <Section title="Hàng hóa"><Table dense rows={r.products} empty="Không bán hàng nào" rowKey="sku" columns={[
+          { key: 'n', label: 'Hàng hóa', render: (x) => <><b>{x.sku}</b> · {x.name}</> },
+          { key: 'q', label: 'Số lượng', align: 'right', render: (x) => `${fq(x.qty)} ${x.unit || ''}` },
+          { key: 'r', label: 'Doanh thu', align: 'right', render: (x) => money(x.revenue) }]} /></Section>
+        <Section title="Thu chi theo quỹ"><Table dense rows={r.funds} empty="Không có phiếu thu chi" rowKey="fund" columns={[
+          { key: 'f', label: 'Quỹ', render: (x) => <b>{x.fund}</b> }, { key: 'i', label: 'Thu', align: 'right', render: (x) => money(x.cash_in) },
+          { key: 'o', label: 'Chi', align: 'right', render: (x) => money(x.cash_out) }, { key: 'n', label: 'Chênh lệch', align: 'right', render: (x) => money(x.cash_in - x.cash_out) }]} /></Section>
+      </>}
+    </div>
+  );
+}
+
+// Đặt hàng: đơn đặt trong kỳ theo tình trạng giao và thanh toán
+function OrdersReport() {
+  const { open } = useApp();
+  const [period, setPeriod] = usePeriod('month');
+  const q = useQ('sales_orders', [['kind', 'eq', 'dat_hang'], ['status', 'neq', 'huy'], ['order_date', 'gte', period.from], ['order_date', 'lte', period.to]], 'order_date desc', 5000);
+  const rows = q.data || [];
+  const sum = (k, f = () => true) => rows.filter(f).reduce((s, o) => s + (o[k] || 0), 0);
+  const waiting = (o) => o.status === 'xac_nhan' && o.remaining_qty > 0;
+  return (
+    <div className="stack">
+      <div className="row gap"><PeriodPicker value={period} onChange={setPeriod} /><span className="grow" />
+        <Btn icon="dl" disabled={!q.data} onClick={() => exportXlsx('bao-cao-dat-hang.xlsx', [{ name: 'Đặt hàng', rows, columns: [{ key: 'code', label: 'Mã' }, { key: 'order_date', label: 'Ngày', type: 'date' },
+          { key: 'due_date', label: 'Hẹn giao', type: 'date' }, { key: 'customer_name', label: 'Khách' }, { key: 'order_total', label: 'Giá trị' }, { key: 'delivered_value', label: 'Đã giao' },
+          { key: 'paid_net', label: 'Đã thu' }, { key: 'delivery_status', label: 'Giao hàng' }, { key: 'payment_status', label: 'Thanh toán' }] }])}>Xuất Excel</Btn></div>
+      <ErrorBox error={q.error} />
+      {q.data && <div className="kpis kpis-4">
+        <div className="kpi"><span className="kpi-label">Đơn đặt</span><span className="kpi-value">{rows.length}</span><span className="kpi-sub">{money(sum('order_total'))} đ</span></div>
+        <div className="kpi"><span className="kpi-label">Chờ giao</span><span className="kpi-value">{rows.filter(waiting).length}</span><span className="kpi-sub">{money(sum('order_total', waiting) - sum('delivered_value', waiting))} đ còn lại</span></div>
+        <div className="kpi"><span className="kpi-label">Trễ hẹn</span><span className={`kpi-value ${rows.some((o) => o.is_late) ? 'bad' : ''}`}>{rows.filter((o) => o.is_late).length}</span></div>
+        <div className="kpi"><span className="kpi-label">Đã thu (cọc + thanh toán)</span><span className="kpi-value">{money(sum('paid_net'))}</span></div>
+      </div>}
+      <Table rows={q.data} empty="Không có đơn đặt hàng trong kỳ" onRow={(o) => open('order', { id: o.id })} columns={[
+        { key: 'c', label: 'Đơn', render: (o) => <><b>{o.code}</b><div className="cell-sub">{dmy(o.order_date)}{o.due_date ? ` · hẹn ${dmy(o.due_date)}` : ''}</div></> },
+        { key: 'k', label: 'Khách hàng', render: (o) => o.customer_name },
+        { key: 't', label: 'Giá trị', align: 'right', render: (o) => money(o.order_total) },
+        { key: 'd', label: 'Đã giao', align: 'right', render: (o) => money(o.delivered_value) },
+        { key: 'p', label: 'Đã thu', align: 'right', render: (o) => money(o.paid_net) },
+        { key: 's', label: 'Tình trạng', render: (o) => <>{o.is_late ? <Pill tone="bad">Trễ hẹn</Pill> : waiting(o) ? <Pill tone="warn">Chờ giao</Pill> : o.status === 'nhap' ? <Pill tone="neutral">Nháp</Pill> : <Pill tone="good">Đã giao đủ</Pill>}</> },
+      ]} />
+    </div>
   );
 }
 

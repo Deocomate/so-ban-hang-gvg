@@ -6,7 +6,10 @@ import { Btn, Loading, ErrorBox, Note, Table, Modal } from '../components/ui.jsx
 import { OrderDetail, DeliverDialog, ReturnDialog } from './Sales.jsx';
 import { PoForm, PoDetail, ReceiveDialog, SupplierReturnDialog } from './Purchases.jsx';
 import { PaymentForm, PaymentDetail, ExpenseForm } from './Cash.jsx';
-import { ProductForm } from './Products.jsx';
+import { ProductionForm } from './StockDocs.jsx';
+import { CustomerGroupForm } from './CustomerGroups.jsx';
+import { EmployeeForm, ScheduleForm, TimesheetForm, PaysheetNewForm, PaysheetDetail, CommissionForm, ShiftForm } from './Staff.jsx';
+import { ProductForm, ProductDetail } from './Products.jsx';
 import { StockCard, AdjustForm } from './Inventory.jsx';
 import { PartyForm, PartyDetail } from './Parties.jsx';
 import { ImportDialog } from '../components/Import.jsx';
@@ -15,7 +18,7 @@ import { BankTxnDialog, BankSimDialog } from './BankTxns.jsx';
 import { QrBox } from './SettingsExtra.jsx';
 import { DocDialog } from './Documents.jsx';
 import { OrderPos } from './OrderPos.jsx';
-import { DriverForm, TripForm, PayDriverDialog } from './Catalog.jsx';
+import { DriverForm, TripForm, PayDriverDialog, PriceBookForm } from './Catalog.jsx';
 import { QuoteForm, QuoteDetail } from './Quotes.jsx';
 import { ContractForm, ContractDetail } from './Contracts.jsx';
 import { TaxInvoiceForm } from './Tax.jsx';
@@ -25,7 +28,8 @@ const MAP = {
   'order-form': OrderPos, order: OrderDetail, deliver: DeliverDialog, return: ReturnDialog,
   'po-form': PoForm, po: PoDetail, receive: ReceiveDialog, 'po-return': SupplierReturnDialog,
   payment: PaymentForm, 'pay-detail': PaymentDetail, expense: ExpenseForm,
-  product: ProductForm, stockcard: StockCard, adjust: AdjustForm,
+  product: ProductForm, 'product-detail': ProductDetail, 'price-book': PriceBookForm, stockcard: StockCard, adjust: AdjustForm, production: ProductionForm, 'customer-group': CustomerGroupForm,
+  employee: EmployeeForm, schedule: ScheduleForm, timesheet: TimesheetForm, 'paysheet-new': PaysheetNewForm, paysheet: PaysheetDetail, commission: CommissionForm, shift: ShiftForm,
   party: PartyForm, 'party-detail': PartyDetail, import: ImportDialog,
   drill: DrillDialog, print: PrintSlip, doc: DocDialog,
   ship: ShipmentDetail, 'ship-form': ShipmentForm, 'cod-settle': CodSettleDialog, 'ship-import': ShipImportDialog,

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { money, parseNum, qty as fq, match } from '../lib/format.js';
 import {
-  Amphora, ArrowDownToLine, ArrowUpFromLine, Banknote, Bell, BookOpen, Calculator, Calendar, ChartColumn, Check as CheckIcon, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Copy, Download, Ellipsis, Factory, FilePenLine, FileText, History, House, Info, Landmark, Link, LogOut, Package, PackagePlus, Pencil, Plus, Printer, QrCode, Receipt, ReceiptText, RefreshCw, Route, Search as SearchIcon, Settings, ShoppingCart, Smartphone, Tag, TriangleAlert, Truck, Undo2, Upload, Users, Wallet, X,
+  Amphora, ArrowDownToLine, Gift, Hammer, Trash2, UsersRound, Wrench, ArrowUpFromLine, Banknote, Bell, BookOpen, Calculator, Calendar, ChartColumn, Check as CheckIcon, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Copy, Download, Ellipsis, Factory, FilePenLine, FileText, History, House, Info, Landmark, Link, LogOut, Package, PackagePlus, Pencil, Plus, Printer, QrCode, Receipt, ReceiptText, RefreshCw, Route, Search as SearchIcon, Settings, ShoppingCart, Smartphone, Tag, TriangleAlert, Truck, Undo2, Upload, Users, Wallet, X,
 } from 'lucide-react';
 
 // ---------- Biểu tượng ----------
@@ -54,6 +54,11 @@ const ICONS = {
   tax: Calculator,
   import: PackagePlus,
   wallet: Wallet,
+  trash: Trash2,
+  gift: Gift,
+  hammer: Hammer,
+  wrench: Wrench,
+  group: UsersRound,
 };
 export function Icon({ name, size = 18, stroke = 1.75, className }) {
   const C = ICONS[name] || Info;
@@ -165,6 +170,16 @@ export function NumInput({ value, onChange, money: isMoney = true, placeholder, 
 
 export function Check({ checked, onChange, children }) {
   return <label className="check"><input type="checkbox" checked={!!checked} onChange={(e) => onChange(e.target.checked)} /> <span>{children}</span></label>;
+}
+
+// Tab đang mở của một trang, đồng bộ với địa chỉ #trang/tab (menu chính mở thẳng một tab, đổi tab thì địa chỉ đổi theo).
+// valid: các tab người dùng được xem; địa chỉ trỏ tới tab khác thì mở tab mặc định.
+export function usePageTab({ sub, onSub } = {}, def, valid) {
+  const ok = (v) => v && (!valid || valid.includes(v));
+  const [tab, setTab] = useState(ok(sub) ? sub : def);
+  useEffect(() => { if (ok(sub) && sub !== tab) setTab(sub); }, [sub]);
+  useEffect(() => { onSub?.(tab); }, [tab]);
+  return [tab, setTab];
 }
 
 export function Tabs({ tabs, value, onChange }) {

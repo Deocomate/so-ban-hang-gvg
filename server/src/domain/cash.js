@@ -18,9 +18,9 @@ export function expenseGroupOf(book, cat) {
   return LEGACY_GROUPS[c] || 'Quản lý & khác';
 }
 
-export function insertExpense(book, e) {
+export function insertExpense(book, e, prefix = 'CP') {
   const id = uuid();
-  const code = nextCode(book, 'CP');
+  const code = nextCode(book, prefix);
   insert('expenses', { id, book_id: book, code, created_by: ctx.uid, created_at: nowIso(), alloc_months: 1, ...e,
     expense_group: trimNz(e.expense_group) || expenseGroupOf(book, e.category) });
   return one(`select * from expenses where id = ?`, id);
@@ -145,28 +145,33 @@ export function save_expense(p) {
     if (am < 1 || am > 60) fail('Số tháng phân bổ từ 1 đến 60');
     const d = asDate(p.date) || today();
     checkDate(b, d);
-    const sid = nz(p.supplier_id); const eid = nz(p.id); const grp = trimNz(p.expense_group);
+    const sid = nz(p.supplier_id); const eid = nz(p.id); const grp = trimNz(p.expense_group); const inv = trimNz(p.invoice_no);
+    // Mua dịch vụ: khoản chi phí mua của nhà cung cấp, ghi vào công nợ phải trả nhà cung cấp đó
+    if (p.service && !sid) fail('Chọn nhà cung cấp dịch vụ');
     if (sid && !one(`select 1 from suppliers where id = ? and book_id = ?`, sid, b)) fail('Không tìm thấy nhà cung cấp');
     let e;
     if (!eid) {
       e = insertExpense(b, { exp_date: d, category: trimNz(p.category), expense_group: grp, alloc_months: am, description: p.description ?? null,
-        amount: amt, supplier_id: sid, note: p.note ?? null });
+        amount: amt, supplier_id: sid, invoice_no: inv, note: p.note ?? null }, p.service ? 'DV' : 'CP');
     } else {
       e = one(`select * from expenses where id = ? and book_id = ?`, eid, b);
       if (!e) fail('Không tìm thấy khoản chi phí');
       if (e.voided || e.settled_payment_id) fail('Không thể sửa khoản chi phí này');
       if (one(`select 1 from v_alloc_signed where doc_id = ?`, e.id)) fail('Chi phí đã thanh toán — hãy hủy phiếu chi trước khi sửa');
       checkDate(b, e.exp_date);
-      run(`update expenses set exp_date = ?, category = ?, expense_group = ?, alloc_months = ?, description = ?, amount = ?, supplier_id = ?, note = ? where id = ?`,
-        d, trimNz(p.category), grp || expenseGroupOf(b, p.category), am, p.description ?? null, amt, sid, p.note ?? null, e.id);
+      run(`update expenses set exp_date = ?, category = ?, expense_group = ?, alloc_months = ?, description = ?, amount = ?, supplier_id = ?, invoice_no = ?, note = ? where id = ?`,
+        d, trimNz(p.category), grp || expenseGroupOf(b, p.category), am, p.description ?? null, amt, sid, inv, p.note ?? null, e.id);
       e = one(`select * from expenses where id = ?`, e.id);
     }
     let pay = null;
     if (nz(p.pay_now?.fund_id)) {
       requirePerm(b, 'thu_chi');
-      pay = doPayment(b, { kind: sid ? 'tra_ncc' : 'chi_phi', date: d, fund_id: p.pay_now.fund_id, party_id: sid, amount: amt, method: p.pay_now.method,
+      // Trả ngay một phần (chỉ khi có nhà cung cấp để ghi phần còn nợ) hoặc toàn bộ
+      const pa = sid && p.pay_now.amount != null ? rnd(num(p.pay_now.amount)) : amt;
+      if (!(pa > 0) || pa > amt) fail('Số tiền trả ngay phải lớn hơn 0 và không quá số cần thanh toán');
+      pay = doPayment(b, { kind: sid ? 'tra_ncc' : 'chi_phi', date: d, fund_id: p.pay_now.fund_id, party_id: sid, amount: pa, method: p.pay_now.method,
         note: 'Trả chi phí ' + e.code + (e.description != null ? ' – ' + e.description : ''),
-        allocations: [{ doc_type: 'chi_phi', doc_id: e.id, amount: amt }] });
+        allocations: [{ doc_type: 'chi_phi', doc_id: e.id, amount: pa }] });
     }
     return { id: e.id, code: e.code, payment_code: pay?.code ?? null, expense_group: e.expense_group };
   });

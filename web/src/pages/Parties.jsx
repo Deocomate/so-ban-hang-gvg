@@ -8,13 +8,14 @@ import { Btn, Icon, Pill, StatusPill, DELIVERY, PAYMENT, RECEIVE, Field, Input, 
 export function PartiesPage({ type }) {
   const { open, can, settings } = useApp();
   const isKh = type === 'kh';
-  const [search, setSearch] = useState(''); const [only, setOnly] = useState(''); const [tier, setTier] = useState('');
+  const [search, setSearch] = useState(''); const [only, setOnly] = useState(''); const [tier, setTier] = useState(''); const [grp, setGrp] = useState('');
   const q = useQ(isKh ? 'customers' : 'suppliers', [], 'name', 5000);
   const pn = settings.price_names || [];
   const all = q.data || [];
   const debtKey = isKh ? 'receivable' : 'payable';
-  const rows = useMemo(() => all.filter((c) => match(`${c.code} ${c.name} ${c.phone || ''} ${c.address || ''}`, search) && (!tier || String(c.price_tier) === tier)
-    && (!only || (only === 'debt' && c[debtKey] > 0) || (only === 'over' && c.overdue > 0) || (only === 'pre' && c.prepaid > 0))), [all, search, only, tier]);
+  const rows = useMemo(() => all.filter((c) => match(`${c.code} ${c.name} ${c.phone || ''} ${c.address || ''}`, search) && (!tier || String(c.price_tier) === tier) && (!grp || (grp === '-' ? !c.kind : c.kind === grp))
+    && (!only || (only === 'debt' && c[debtKey] > 0) || (only === 'over' && c.overdue > 0) || (only === 'pre' && c.prepaid > 0))), [all, search, only, tier, grp]);
+  const groups = isKh ? [...new Set([...(settings.customer_groups || []), ...all.map((c) => c.kind).filter(Boolean)])] : [];
   const tot = (k) => rows.reduce((s, c) => s + (c[k] || 0), 0);
   return (
     <ListPage title={isKh ? 'Khách hàng' : 'Nhà cung cấp / xưởng'}
@@ -23,6 +24,8 @@ export function PartiesPage({ type }) {
         <FilterBox title="Công nợ"><RadioList value={only} onChange={setOnly} options={[{ value: '', label: 'Tất cả', count: all.length },
           { value: 'debt', label: 'Còn nợ', count: all.filter((c) => c[debtKey] > 0).length }, { value: 'over', label: 'Quá hạn', count: all.filter((c) => c.overdue > 0).length },
           { value: 'pre', label: 'Có trả trước', count: all.filter((c) => c.prepaid > 0).length }]} /></FilterBox>
+        {isKh && groups.length > 0 && <FilterBox title="Nhóm khách"><RadioList value={grp} onChange={setGrp} options={[{ value: '', label: 'Tất cả' },
+          ...groups.map((g) => ({ value: g, label: g, count: all.filter((c) => c.kind === g).length })), { value: '-', label: 'Chưa có nhóm', count: all.filter((c) => !c.kind).length }]} /></FilterBox>}
         {isKh && pn.length > 0 && <FilterBox title="Mức giá"><RadioList value={tier} onChange={setTier} options={[{ value: '', label: 'Tất cả' }, ...pn.map((n, i) => ({ value: String(i + 1), label: n }))]} /></FilterBox>}
       </>}
       search={<Search value={search} onChange={setSearch} placeholder="Tìm tên, mã, số điện thoại…" />}
