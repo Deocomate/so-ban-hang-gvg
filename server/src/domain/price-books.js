@@ -74,6 +74,28 @@ export function save_price_book_items(p) {
   return { updated: n };
 }
 
+// Nhập giá từ Excel theo mã hàng: rows = [{sku, price}]. Mã không có trong sổ thì bỏ qua và báo lại.
+export function import_price_book_items(p) {
+  const b = p.book_id;
+  requirePerm(b, 'danh_muc');
+  const pb = getBook(p.price_book_id, b);
+  let n = 0; const missing = [];
+  for (const r of p.rows || []) {
+    const sku = trimNz(r.sku);
+    if (!sku) continue;
+    const v = num(r.price);
+    if (v == null || v < 0) fail(`${sku}: giá không hợp lệ`);
+    const pr = one(`select id from products where book_id = ? and lower(sku) = lower(?)`, b, sku);
+    if (!pr) { missing.push(sku); continue; }
+    run(`insert into price_book_items (price_book_id, product_id, price) values (?, ?, ?)
+      on conflict (price_book_id, product_id) do update set price = excluded.price`, pb.id, pr.id, rnd(v));
+    n++;
+  }
+  if (!n && !missing.length) fail('File không có dòng giá nào');
+  run(`update price_books set updated_at = ? where id = ?`, nowIso(), pb.id);
+  return { updated: n, missing };
+}
+
 // Tính giá theo công thức của bảng cho các hàng đã chọn (hoặc mọi hàng đang kinh doanh) rồi ghi vào bảng
 export function apply_price_formula(p) {
   const b = p.book_id;

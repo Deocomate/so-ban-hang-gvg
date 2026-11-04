@@ -37,3 +37,5 @@ export function usePriceBooks(enabled = true) {
 }
 // Bảng giá được dùng cho khách (theo nhóm khách) và người đang đăng nhập
 export const booksFor = (books, cust, uid) => (books || []).filter((b) => (!b.cust_groups || b.cust_groups.includes(cust?.kind)) && (!b.user_ids || b.user_ids.includes(uid)));
+// Bảng giá tự chọn khi đổi khách: bảng dành riêng cho nhóm của khách (bảng áp dụng cho mọi nhóm thì để người bán tự chọn)
+export const autoBookFor = (books, cust) => (cust?.kind ? (books || []).find((b) => b.cust_groups?.includes(cust.kind)) || null : null);

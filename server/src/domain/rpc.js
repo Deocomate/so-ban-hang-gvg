@@ -49,7 +49,7 @@ export const RPC = {
   ...pick(staff, ['save_employee', 'save_shift', 'save_schedule', 'save_timesheet', 'delete_timesheet', 'fill_timesheets', 'save_commission_table',
     'create_paysheet', 'recalc_paysheet', 'adjust_paysheet_line', 'close_paysheet', 'cancel_paysheet', 'rpt_staff']),
   ...pick(groups, ['save_customer_group', 'delete_customer_group', 'set_customer_group', 'refresh_customer_groups']),
-  ...pick(priceBooks, ['save_price_book', 'delete_price_book', 'save_price_book_items', 'apply_price_formula']),
+  ...pick(priceBooks, ['save_price_book', 'delete_price_book', 'save_price_book_items', 'import_price_book_items', 'apply_price_formula']),
   set_member_password,
   import_book,
 };

@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp, useQ, useAction } from '../lib/store.jsx';
 import { money, qty as fq, dmy, match, todayVN } from '../lib/format.js';
-import { useProducts, useCustomers, priceOf, usePriceBooks, booksFor } from '../lib/lookups.js';
+import { useProducts, useCustomers, priceOf, usePriceBooks, booksFor, autoBookFor } from '../lib/lookups.js';
 import { docSettings, DEFAULT_TEXTS, weightOf } from '../lib/docs/model.js';
 import { exportXlsx } from '../lib/excel.js';
 import { Btn, Icon, Pill, Field, Input, TextArea, Select, DateInput, NumInput, Check, Search, ErrorBox, Loading, Note, Table, Modal, Picker, KV, Section, ListPage, FilterBox, RadioList } from '../components/ui.jsx';
@@ -92,6 +92,12 @@ export function QuoteForm({ id, onClose, onSaved }) {
   const cust = customers.data?.find((c) => c.id === f.customer_id);
   const myBooks = booksFor(priceBooks.data, cust, session?.user?.id);
   const pbook = myBooks.find((b) => b.id === f.price_book_id) || null;
+  // Chọn khách: tự chọn bảng giá của nhóm khách (báo giá đang sửa giữ bảng đã lưu)
+  useEffect(() => {
+    if (id || !priceBooks.data || !cust) return;
+    const own = autoBookFor(myBooks, cust);
+    setF((s) => ({ ...s, price_book_id: own ? own.id : myBooks.some((b) => b.id === s.price_book_id) ? s.price_book_id : '' }));
+  }, [cust?.id, cust?.kind, priceBooks.data]);
   const setGroup = (key, patch) => setF((s) => ({ ...s, groups: s.groups.map((g) => (g.key === key ? { ...g, ...patch } : g)) }));
   const addProduct = (g, pid) => {
     const p = pmap[pid]; if (!p) return;

@@ -4,7 +4,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useAction, useQ } from '../lib/store.jsx';
 import { money, qty as fq, todayVN, match } from '../lib/format.js';
-import { useProducts, useCustomers, useFunds, productSub, priceOf, unitsOf, findUnit, usePriceBooks, booksFor } from '../lib/lookups.js';
+import { useProducts, useCustomers, useFunds, productSub, priceOf, unitsOf, findUnit, usePriceBooks, booksFor, autoBookFor } from '../lib/lookups.js';
 import { packing, weightOf, fmtKg } from '../lib/docs/model.js';
 import { Btn, Icon, Input, Select, DateInput, NumInput, Loading, Picker } from '../components/ui.jsx';
 import { ChargesDialog } from './Charges.jsx';
@@ -130,7 +130,12 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
   // Bảng giá có tên: chỉ hiện bảng đang hiệu lực, đúng nhóm khách và người tạo
   const myBooks = booksFor(priceBooks.data, cust, session?.user?.id);
   const pbook = (priceBooks.data || []).find((b) => b.id === f.price_book_id) || null;
-  useEffect(() => { if (f.price_book_id && priceBooks.data && cust && !id && !myBooks.some((b) => b.id === f.price_book_id)) set('price_book_id', ''); }, [cust?.id, priceBooks.data]);
+  // Đổi khách: tự chọn bảng giá của nhóm khách đó; bảng đang chọn không còn áp dụng thì về bảng giá chung
+  useEffect(() => {
+    if (id || quote_id || !priceBooks.data || !cust) return;
+    const own = autoBookFor(myBooks, cust);
+    setF((s) => ({ ...s, price_book_id: own ? own.id : myBooks.some((b) => b.id === s.price_book_id) ? s.price_book_id : '' }));
+  }, [cust?.id, cust?.kind, priceBooks.data]);
   const linePrice = (p, l) => priceOf(p, { tier, book: pbook, unit: findUnit(p, l.unit) });
   // Đổi khách / bảng giá → giá các dòng chưa sửa tay theo mức giá của khách hoặc bảng giá
   useEffect(() => {

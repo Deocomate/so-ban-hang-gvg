@@ -18,7 +18,7 @@ import { BankTxnDialog, BankSimDialog } from './BankTxns.jsx';
 import { QrBox } from './SettingsExtra.jsx';
 import { DocDialog } from './Documents.jsx';
 import { OrderPos } from './OrderPos.jsx';
-import { DriverForm, TripForm, PayDriverDialog, PriceBookForm } from './Catalog.jsx';
+import { DriverForm, TripForm, PayDriverDialog, PriceBookForm, PriceBookImport } from './Catalog.jsx';
 import { QuoteForm, QuoteDetail } from './Quotes.jsx';
 import { ContractForm, ContractDetail } from './Contracts.jsx';
 import { TaxInvoiceForm } from './Tax.jsx';
@@ -28,7 +28,7 @@ const MAP = {
   'order-form': OrderPos, order: OrderDetail, deliver: DeliverDialog, return: ReturnDialog,
   'po-form': PoForm, po: PoDetail, receive: ReceiveDialog, 'po-return': SupplierReturnDialog,
   payment: PaymentForm, 'pay-detail': PaymentDetail, expense: ExpenseForm,
-  product: ProductForm, 'product-detail': ProductDetail, 'price-book': PriceBookForm, stockcard: StockCard, adjust: AdjustForm, production: ProductionForm, 'customer-group': CustomerGroupForm,
+  product: ProductForm, 'product-detail': ProductDetail, 'price-book': PriceBookForm, 'price-book-import': PriceBookImport, stockcard: StockCard, adjust: AdjustForm, production: ProductionForm, 'customer-group': CustomerGroupForm,
   employee: EmployeeForm, schedule: ScheduleForm, timesheet: TimesheetForm, 'paysheet-new': PaysheetNewForm, paysheet: PaysheetDetail, commission: CommissionForm, shift: ShiftForm,
   party: PartyForm, 'party-detail': PartyDetail, import: ImportDialog,
   drill: DrillDialog, print: PrintSlip, doc: DocDialog,

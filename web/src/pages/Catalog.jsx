@@ -3,8 +3,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useApp, useQ, useAction } from '../lib/store.jsx';
 import { money, qty as fq, dmy, match, todayVN } from '../lib/format.js';
 import { useFunds } from '../lib/lookups.js';
-import { exportXlsx } from '../lib/excel.js';
-import { Btn, Pill, Field, Input, TextArea, Select, DateInput, NumInput, Check, Search, ErrorBox, Table, Modal, ConfirmBtn, ListPage, FilterBox, RadioList, Section, Loading } from '../components/ui.jsx';
+import { exportXlsx, loadSheets, readPriceBookFile } from '../lib/excel.js';
+import { Btn, Icon, Pill, Field, Input, TextArea, Select, DateInput, NumInput, Check, Search, ErrorBox, Note, Table, Modal, ConfirmBtn, ListPage, FilterBox, RadioList, Section, Loading } from '../components/ui.jsx';
 
 // ===================== BẢNG GIÁ =====================
 // "Bảng giá chung" = các mức giá theo khách (sửa nhanh ở đây). Bảng giá có tên: hiệu lực, công thức, phạm vi nhóm khách / người tạo.
@@ -51,6 +51,7 @@ export function PriceBookPage() {
       actions={<>
         <Btn icon="dl" onClick={() => exportXlsx('bang-gia.xlsx', [{ name: pb ? pb.name.slice(0, 30) : 'Bảng giá', rows: rows.map((p) => ({ ...p, book_price: inBook[p.id] })), columns: [{ key: 'sku', label: 'Mã SKU' }, { key: 'name', label: 'Tên hàng hóa' }, { key: 'unit', label: 'ĐVT' },
           ...(cost ? [{ key: 'avg_cost', label: 'Giá vốn' }, { key: 'last_in_cost', label: 'Giá nhập cuối' }] : []), ...pn.map((label, i) => ({ key: `price${i + 1}`, label })), ...(pb ? [{ key: 'book_price', label: pb.name }] : [])] }])}>Xuất Excel</Btn>
+        {pb && can('danh_muc') && <Btn icon="up" onClick={() => open('price-book-import', { book: pb })}>Nhập Excel</Btn>}
         {pb && can('danh_muc') && <Btn icon="edit" onClick={() => open('price-book', { id: pb.id })}>Sửa bảng giá</Btn>}
         {pb && can('danh_muc') && pb.formula?.base && <ConfirmBtn icon="refresh" busy={busy} confirmText={`Tính lại giá ${rows.length} mã theo công thức?`}
           onConfirm={() => run('apply_price_formula', { price_book_id: pb.id, product_ids: rows.map((p) => p.id) }, (r) => `Đã tính ${r.updated} mã${r.skipped ? `, bỏ qua ${r.skipped} mã chưa có giá gốc` : ''}`)}>Áp dụng công thức</ConfirmBtn>}
@@ -71,6 +72,39 @@ export function PriceBookPage() {
       ]} />
       {pb && <div className="muted small">Ô trống = hàng không có trong bảng giá (bán theo giá chung{pb.allow_others ? '' : ' — bảng này không cho thêm hàng ngoài bảng'}). Đơn vị quy đổi (hộp, thùng…) lấy giá bảng × giá trị quy đổi.</div>}
     </ListPage>
+  );
+}
+
+// Nhập giá của một bảng giá từ Excel: cột Mã hàng + cột giá (tên cột = tên bảng giá, như file Xuất Excel)
+export function PriceBookImport({ book, onClose }) {
+  const { toast } = useApp();
+  const { run, busy } = useAction();
+  const [r, setR] = useState(null); const [name, setName] = useState('');
+  const pick = async (file) => {
+    if (!file) return;
+    setName(file.name);
+    try { setR(readPriceBookFile(await loadSheets(file), book.name)); } catch (e) { setR({ error: 'Không đọc được file: ' + e.message }); }
+  };
+  const go = async () => {
+    const x = await run('import_price_book_items', { price_book_id: book.id, rows: r.rows.map(({ sku, price }) => ({ sku, price })) },
+      (y) => `Đã nhập giá ${y.updated} mã vào ${book.name}${y.missing.length ? ` · ${y.missing.length} mã không có trong sổ` : ''}`);
+    if (x) { if (x.missing.length) toast(`Mã không có trong sổ, đã bỏ qua: ${x.missing.slice(0, 20).join(', ')}${x.missing.length > 20 ? '…' : ''}`, 'err'); onClose(); }
+  };
+  return (
+    <Modal title={`Nhập giá vào bảng ${book.name}`} onClose={onClose}
+      footer={<><Btn onClick={onClose}>Bỏ qua</Btn><Btn kind="primary" busy={busy} disabled={!r?.rows?.length || r.errors?.length > 0} onClick={go}>Nhập {r?.rows?.length || ''} giá</Btn></>}>
+      <Note>File cần cột <b>Mã hàng</b> và cột giá đặt tên <b>{book.name}</b> (hoặc “Giá mới”). Cách nhanh nhất: bấm “Xuất Excel” ở bảng giá này, sửa cột giá rồi nhập lại.
+        Ô giá để trống thì bỏ qua, không xóa hàng khỏi bảng. Đơn vị quy đổi (hộp, thùng…) tự lấy giá bảng × quy đổi.</Note>
+      <label className="btn btn-soft" style={{ alignSelf: 'flex-start' }}><Icon name="up" /> <span>{name || 'Chọn file Excel (.xlsx, .xls, .csv)'}</span>
+        <input type="file" accept=".xlsx,.xls,.csv" hidden onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ''; }} /></label>
+      {r?.error && <Note tone="bad">{r.error}</Note>}
+      {r?.rows && <div className="stack">
+        <div>Sheet <b>{r.sheet}</b>: {r.rows.length} dòng có giá.</div>
+        {r.errors.length > 0 && <Note tone="bad">{r.errors.length} dòng lỗi, sửa file rồi chọn lại:<br />{r.errors.slice(0, 10).map((x) => `Dòng ${x.row}: ${x.text}`).join('; ')}{r.errors.length > 10 ? '…' : ''}</Note>}
+        {r.rows.length > 0 && <Table dense rowKey="__row" rows={r.rows.slice(0, 8)} columns={[{ key: 'r', label: 'Dòng', render: (x) => x.__row }, { key: 's', label: 'Mã hàng', render: (x) => x.sku }, { key: 'p', label: book.name, align: 'right', render: (x) => money(x.price) }]} />}
+        {r.rows.length > 8 && <div className="muted small">… và {r.rows.length - 8} dòng nữa</div>}
+      </div>}
+    </Modal>
   );
 }
 

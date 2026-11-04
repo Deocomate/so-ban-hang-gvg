@@ -30,6 +30,7 @@ Không làm: chi nhánh, tích điểm, liên kết kênh bán, in tem mã vạc
 - Mở CSDL giờ xóa mọi trigger nhật ký `audit_*` rồi tạo lại, kể cả của bảng đã bỏ khỏi danh sách theo dõi (lỗi gặp khi thử: trigger cũ trên `price_book_items` làm hỏng lệnh ghi).
 - Sao lưu / khôi phục sổ mang theo `product_units`, `price_books`, `price_book_items`.
 - Nhập Excel nhận thêm: Loại hàng (Hàng hóa / Dịch vụ / Hàng sản xuất; chữ khác ở cột này hiểu là chủng loại), Đơn vị quy đổi (`Hộp=100; Pallet=1000`, kèm giá mức 1 `Hộp=100:1500000`), Tồn tối đa, Vị trí, Rộng, Dài, Đơn vị kích thước, Bán trực tiếp (Có/Không), Chất liệu, Định mức m2 / m dài, Mô tả, Mẫu ghi chú. Combo phải tạo trong màn Hàng hóa; không đổi loại hàng qua Excel. File xuất Excel dùng đúng các tên cột này nên xuất ra rồi nhập lại được.
+- Bảng giá thay cho mức giá thứ 5 trở đi (mức giá chung vẫn tối đa 4): nhập giá bảng giá từ Excel theo Mã hàng (cột giá mang tên bảng giá, đúng file Xuất Excel; ô trống bỏ qua, mã không có trong sổ báo lại); màn bán và báo giá tự chọn bảng giá dành riêng cho nhóm của khách khi chọn khách.
 - Chưa làm: chi tiết đơn bán vẫn hiện đơn giá theo đơn vị cơ bản (bản in đã đổi theo đơn vị đã chọn).
 
 ## Tiêu chí hoàn thành

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { freshDb, makeApi, suite, finish, rid } from './harness.js';
 import {
   loadSheets, buildWorkbook, importFields, importRules, guessSheet, findHeader, guessColumns, buildRows, columnIssues, rowState,
-  openingSheet, mergeOpening, validateProducts, validateParties, parseDateCell,
+  openingSheet, mergeOpening, validateProducts, validateParties, parseDateCell, readPriceBookFile,
 } from '../../web/src/lib/excel.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -228,5 +228,17 @@ C('Cập nhật: liệt kê thay đổi vị trí và đơn vị', kvUpd2[0].cha
 await api.call('import_products', { book_id: TH, request_id: rid(), rows: payload(kvUpd2) });
 const kv1b = await api.one('products', TH, [['sku', 'eq', 'KV-01']]);
 C('Cập nhật vị trí, thay đơn vị quy đổi, giữ trường để trống', [kv1b.location, kv1b.units.map((u) => u.name), kv1b.max_stock, kv1b.on_hand], ['Kệ B2', ['Thùng'], 5000, 300]);
+
+G('Nhập giá bảng giá từ Excel');
+const pbk = await api.call('save_price_book', { book_id: TH, name: 'Giá đại lý cấp 3', cust_groups: ['Đại lý cấp 3'] });
+// Đúng dạng file "Xuất Excel" của bảng giá: nhiều cột giá, cột mang tên bảng giá
+const pbFile = (rows) => loadSheets(xlsxFile({ 'Giá đại lý cấp 3': [['Mã SKU', 'Tên hàng hóa', 'ĐVT', 'Giá vốn', 'Giá lẻ', 'Giá đại lý cấp 3'], ...rows] }));
+const pbr = readPriceBookFile(await pbFile([['KV-01', 'Ngói', 'Viên', 9000, 16000, 13500], ['NAD27-DC001', 'Ngói âm', 'Viên', 16500, 20000, ''], ['KHONG-CO', 'Lạ', 'Viên', 0, 0, 1000]]), 'Giá đại lý cấp 3');
+C('Lấy đúng cột mang tên bảng giá, bỏ dòng giá trống', [pbr.errors, pbr.rows.map((x) => [x.sku, x.price])], [[], [['KV-01', 13500], ['KHONG-CO', 1000]]]);
+C('Báo lỗi giá sai và mã trùng', readPriceBookFile(await pbFile([['KV-01', '', '', '', '', 'abc'], ['KV-02', '', '', '', '', 1], ['kv-02', '', '', '', '', 2]]), 'Giá đại lý cấp 3').errors.length, 2);
+C('Không có cột giá phù hợp thì báo lỗi', !!readPriceBookFile(await loadSheets(xlsxFile({ S: [['Mã SKU', 'Giá lẻ'], ['KV-01', 1]] })), 'Giá đại lý cấp 3').error, true);
+const pbi = await api.call('import_price_book_items', { book_id: TH, price_book_id: pbk.id, rows: pbr.rows });
+C('Ghi giá, báo mã không có trong sổ', [pbi.updated, pbi.missing], [1, ['KHONG-CO']]);
+C('Giá vào bảng theo mã hàng', (await api.q('price_book_items', TH, [['price_book_id', 'eq', pbk.id]])).map((x) => [x.sku, x.price]), [['KV-01', 13500]]);
 
 finish('excel');

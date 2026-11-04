@@ -516,3 +516,35 @@ export function partyTemplate(type, priceNames) {
   ]), 'Hướng dẫn');
   return new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })]);
 }
+
+// ---------- NHẬP GIÁ CỦA MỘT BẢNG GIÁ ----------
+// File cần cột Mã hàng và cột giá: tên cột trùng tên bảng giá (đúng như file "Xuất Excel" của bảng giá), hoặc "Giá bảng giá", "Giá mới", "Giá".
+// Ô giá trống: bỏ qua dòng (không xóa hàng khỏi bảng). Trả về {sheet, rows: [{__row, sku, price}], errors: [{row, text}]} hoặc {error}.
+export function readPriceBookFile(sheets, bookName) {
+  const bk = hkey(bookName || '');
+  const rules = [
+    ['sku', (k) => k === 'sku' || k.startsWith('ma sku') || k === 'ma sp' || k === 'ma hang' || k === 'ma san pham' || k === 'ma hang hoa' || k === 'ma'],
+    ['price', (k) => (bk && k === bk) || ['gia bang gia', 'gia moi', 'gia', 'don gia', 'gia ban'].includes(k)],
+  ];
+  let pick = null;
+  for (const s of sheets) {
+    const h = findHeader(s.rows, rules);
+    if (h.map.sku !== undefined && h.map.price !== undefined) { pick = { s, h }; break; }
+  }
+  if (!pick) return { error: `Không thấy cột Mã hàng và cột giá. Cột giá cần đặt tên "${bookName}" (giống file Xuất Excel của bảng giá) hoặc "Giá mới".` };
+  const { s, h } = pick;
+  const rows = []; const errors = [];
+  s.rows.slice(h.idx + 1).forEach((r, i) => {
+    const row = s.rowBase + h.idx + i + 2;
+    const sku = textCell(r[h.map.sku]); const raw = r[h.map.price];
+    if (!sku && blank(raw)) return;
+    if (!sku) { errors.push({ row, text: 'Thiếu mã hàng' }); return; }
+    if (blank(raw)) return;
+    const price = parseNum(raw);
+    if (Number.isNaN(price) || price < 0) { errors.push({ row, text: `${sku}: giá "${raw}" không hợp lệ` }); return; }
+    rows.push({ __row: row, sku, price });
+  });
+  const seen = new Map();
+  for (const x of rows) { const k = x.sku.toLowerCase(); if (seen.has(k)) errors.push({ row: x.__row, text: `${x.sku} trùng với dòng ${seen.get(k)}` }); else seen.set(k, x.__row); }
+  return { sheet: s.name, rows, errors };
+}
