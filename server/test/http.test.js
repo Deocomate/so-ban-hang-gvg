@@ -151,6 +151,20 @@ r = await authed(tNv, 'logout-all');
 const tOld = tNv; tNv = r.body.token;
 C('Đăng xuất mọi thiết bị: phiên cũ hết hiệu lực, phiên hiện tại nhận token mới', [(await rpc(tOld, 'my_books')).status, (await rpc(tNv, 'my_books')).status], [401, 200]);
 
+G('8b. Ghi nhớ đăng nhập');
+const life = (t) => { const p = JSON.parse(Buffer.from(t.split('.')[0], 'base64url').toString()); return [p.rem, Math.round((p.exp - Date.now() / 1000) / 3600)]; };
+r = await post('/api/auth/login', { email: 'lan@gomsu.vn', password: 'lanmoi2026', remember: false });
+C('Không ghi nhớ: phiên 12 giờ', [r.body.remember, life(r.body.token)], [false, [0, 12]]);
+r = await authed(r.body.token, 'logout-all');
+C('Phiên mới cấp lại vẫn không ghi nhớ', [r.body.remember, life(r.body.token)], [false, [0, 12]]);
+r = await login('lan@gomsu.vn', 'lanmoi2026');
+C('Mặc định ghi nhớ 30 ngày', [r.body.remember, life(r.body.token)], [true, [1, 720]]);
+tNv = r.body.token;
+
+for (let i = 0; i < 8; i++) await login('chi-thu@gomsu.vn', 'sai');
+C('Sai 8 lần cùng email → tạm chặn', (await login('chi-thu@gomsu.vn', 'sai')).status, 429);
+C('Đăng nhập đúng nhiều lần cùng IP không bị chặn', (await login('lan@gomsu.vn', 'lanmoi2026')).status, 200);
+
 G('9. Nhật ký bảo mật');
 const log = (await rpc(t1, 'admin_security_log', { limit: 500 })).body;
 const events = new Set(log.map((x) => x.event));

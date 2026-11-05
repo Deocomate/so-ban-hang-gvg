@@ -2,7 +2,7 @@
 // bắt đổi mật khẩu, và "Tài khoản của tôi" trong Cài đặt.
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../lib/store.jsx';
-import { Btn, Field, Input, Note, Section, KV, Pill, Loading } from '../components/ui.jsx';
+import { Btn, Field, Input, Note, Section, KV, Pill, Loading, Check } from '../components/ui.jsx';
 
 export const PW_HINT = 'Ít nhất 8 ký tự, có cả chữ và số';
 const pwProblem = (pw, pw2) => (pw.length < 8 ? PW_HINT : !/\p{L}/u.test(pw) || !/\d/.test(pw) ? PW_HINT : pw2 !== undefined && pw !== pw2 ? 'Hai lần nhập mật khẩu không khớp' : '');
@@ -32,12 +32,12 @@ const linkTo = (fn) => (e) => { e.preventDefault(); fn(); };
 export function Login() {
   const { backend, setSession } = useApp();
   const [mode, setMode] = useState('in');
-  const [email, setEmail] = useState(''); const [pw, setPw] = useState('');
+  const [email, setEmail] = useState(''); const [pw, setPw] = useState(''); const [remember, setRemember] = useState(true);
   const [err, setErr] = useState(''); const [sent, setSent] = useState(''); const [busy, setBusy] = useState(false);
   const submit = async () => {
     setErr(''); setBusy(true);
     try {
-      if (mode === 'in') { await backend.signIn(email, pw); setSession(await backend.getSession()); }
+      if (mode === 'in') { await backend.signIn(email, pw, remember); setSession(await backend.getSession()); }
       else { await backend.forgot(email); setSent(email); }
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
@@ -49,6 +49,8 @@ export function Login() {
       {sent ? <Note tone="good">Nếu <b>{sent}</b> có tài khoản, link đặt lại mật khẩu đã được gửi tới hộp thư. Hãy kiểm tra cả mục Thư rác / Quảng cáo.</Note> : <>
         <Field label="Email"><Input id="email" type="email" required value={email} onChange={setEmail} autoComplete="email" /></Field>
         {mode === 'in' && <Field label="Mật khẩu"><Input id="pw" type="password" required value={pw} onChange={setPw} autoComplete="current-password" /></Field>}
+        {mode === 'in' && <Check checked={remember} onChange={setRemember}>Ghi nhớ đăng nhập trên máy này (30 ngày)</Check>}
+        {mode === 'in' && !remember && <div className="muted small">Máy dùng chung: đóng trình duyệt là đăng xuất, phiên tự hết sau 12 giờ.</div>}
         {err && <Note tone="bad">{err}</Note>}
         <Submit busy={busy}>{mode === 'in' ? 'Đăng nhập' : 'Gửi link đặt lại mật khẩu'}</Submit>
       </>}

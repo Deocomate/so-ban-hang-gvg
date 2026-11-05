@@ -3,19 +3,30 @@ const FN_RE = /^[a-z_][a-z0-9_]*$/;
 const TOKEN_KEY = 'gomsu.token';
 const USER_KEY = 'gomsu.user';
 
+// Ghi nhớ đăng nhập → localStorage (còn sau khi đóng trình duyệt); không ghi nhớ → sessionStorage (mất khi đóng)
+const area = (persist) => { try { return persist ? localStorage : sessionStorage; } catch (e) { return null; } };
 const store = {
-  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
-  set(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* bỏ qua */ } },
+  get(k) { try { return sessionStorage.getItem(k) ?? localStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v, persist = true) {
+    try {
+      area(!persist)?.removeItem(k);
+      if (v == null) { area(persist)?.removeItem(k); return; }
+      area(persist)?.setItem(k, v);
+    } catch (e) { /* bỏ qua */ }
+  },
 };
 
 export function createApiBackend(base = '/api') {
   let token = store.get(TOKEN_KEY);
+  let persist = (() => { try { return !sessionStorage.getItem(TOKEN_KEY); } catch (e) { return true; } })();
   let user = null; try { user = JSON.parse(store.get(USER_KEY) || 'null'); } catch (e) { user = null; }
   const listeners = new Set();
   const emit = () => { const s = token ? { user } : null; listeners.forEach((cb) => cb(s)); };
   const setSession = (s) => {
     token = s?.token || null; user = s?.user || null;
-    store.set(TOKEN_KEY, token); store.set(USER_KEY, user ? JSON.stringify(user) : null);
+    if (s && typeof s.remember === 'boolean') persist = s.remember;
+    if (!s) { store.set(TOKEN_KEY, null, true); store.set(USER_KEY, null, true); }
+    store.set(TOKEN_KEY, token, persist); store.set(USER_KEY, user ? JSON.stringify(user) : null, persist);
     emit();
   };
 
@@ -52,7 +63,7 @@ export function createApiBackend(base = '/api') {
     },
     async getSession() { return token ? { user } : null; },
     onAuth(cb) { listeners.add(cb); return { data: { subscription: { unsubscribe: () => listeners.delete(cb) } } }; },
-    async signIn(email, password) { setSession(await request('/auth/login', { email, password }, { auth: false })); },
+    async signIn(email, password, remember = true) { setSession(await request('/auth/login', { email, password, remember }, { auth: false })); },
     // Chưa đăng nhập: quên mật khẩu, xem / dùng link trong email
     forgot(email) { return request('/auth/forgot', { email }, { auth: false }); },
     linkInfo(token) { return request('/auth/link-info', { token }, { auth: false }); },

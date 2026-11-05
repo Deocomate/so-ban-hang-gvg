@@ -55,6 +55,9 @@ function limit(key, max = 10, windowMs = 15 * 60e3) {
   if (!a || a.reset < now) { attempts.set(key, { n: 1, reset: now + windowMs }); return; }
   if (++a.n > max) throw new AppError('Thử quá nhiều lần — vui lòng đợi 15 phút rồi thử lại', 429);
 }
+// Đăng nhập: chỉ đếm lần SAI (cả cửa hàng thường dùng chung 1 IP, đăng nhập đúng nhiều lần không bị chặn)
+const tooMany = (key, max) => { const a = attempts.get(key); if (a && a.reset >= Date.now() && a.n >= max) throw new AppError('Thử quá nhiều lần — vui lòng đợi 15 phút rồi thử lại', 429); };
+const countFail = (key) => { try { limit(key, Infinity); } catch { /* chỉ đếm */ } };
 setInterval(() => { const now = Date.now(); for (const [k, a] of attempts) if (a.reset < now) attempts.delete(k); }, 10 * 60e3).unref();
 
 const clientIp = (req) => (config.trustProxy && String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()) || req.socket.remoteAddress || '';
@@ -65,7 +68,7 @@ const tx = (fn, uid = null) => {
   ctx.uid = uid;
   try { return ctx.db.transaction(fn)(); } finally { ctx.uid = null; flushMailSoon(); }
 };
-const session = (u) => ({ token: auth.issueToken(u, config.jwtSecret), user: auth.publicUser(u) });
+const session = (u, remember = true) => ({ token: auth.issueToken(u, config.jwtSecret, remember), user: auth.publicUser(u), remember });
 // Đường dẫn tài khoản chưa cần đăng nhập: [hàm, trả về phiên đăng nhập?, số lần thử / 15 phút / IP]
 const PUBLIC_AUTH = {
   forgot: [(b) => auth.requestPasswordReset(b), false, 5],
@@ -108,11 +111,11 @@ async function route(req, res) {
 
   if (method === 'POST' && p === '/api/auth/login') {
     const b = parseJson(await readBody(req));
-    limit('login:' + ip);
-    limit('login-email:' + String(b.email ?? '').trim().toLowerCase(), 8);
+    const keys = [['login:' + ip, 20], ['login-email:' + String(b.email ?? '').trim().toLowerCase(), 8]];
+    for (const [k, max] of keys) tooMany(k, max);
     ctx.ip = ip;
-    try { return send(res, 200, session(tx(() => auth.signIn(b)))); }
-    catch (e) { if (e instanceof AppError) tx(() => auth.loginFailed(b.email, e.message)); throw e; }
+    try { return send(res, 200, session(tx(() => auth.signIn(b)), b.remember !== false)); }
+    catch (e) { if (e instanceof AppError) { keys.forEach(([k]) => countFail(k)); tx(() => auth.loginFailed(b.email, e.message)); } throw e; }
     finally { ctx.ip = null; }
   }
   const sub = p.startsWith('/api/auth/') ? p.slice('/api/auth/'.length) : '';
@@ -131,11 +134,11 @@ async function route(req, res) {
   }
   if (method === 'POST' && Object.hasOwn(SELF_AUTH, sub)) {
     const [fn, newSession] = SELF_AUTH[sub];
-    const uid = authUser(req).id;
+    const me = authUser(req); const uid = me.id;
     const b = parseJson(await readBody(req));
     limit(`${sub}:${uid}`);
     ctx.ip = ip;
-    try { const r = tx(() => fn(uid, b), uid); return send(res, 200, newSession ? session(r) : r); } finally { ctx.ip = null; }
+    try { const r = tx(() => fn(uid, b), uid); return send(res, 200, newSession ? session(r, me.remember) : r); } finally { ctx.ip = null; }   // phiên mới giữ lựa chọn ghi nhớ
   }
 
   if (method === 'POST' && p === '/api/hooks/sepay') { const [s, body] = sepayWebhook(req.headers, await readBody(req)); return send(res, s, body); }

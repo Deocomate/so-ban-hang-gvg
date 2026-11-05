@@ -11,7 +11,8 @@ export const SAMPLE_STAFF_EMAIL = 'lan.nhanvien@demo.vn';
 // Tài khoản thử theo từng vai trò mẫu (chỉ có trong dữ liệu mẫu), vd. "Thủ kho" → thu-kho.mau@demo.vn
 export const SAMPLE_ROLE_EMAIL = (roleName) => `${String(roleName).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd')
   .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}.mau@demo.vn`;
-const TOKEN_DAYS = 30;
+// Ghi nhớ đăng nhập: 30 ngày; không ghi nhớ (máy dùng chung): 12 giờ và trình duyệt xóa phiên khi đóng
+const TOKEN_SECONDS = { remember: 30 * 86400, session: 12 * 3600 };
 const HOUR = 3600e3;
 const TTL = { invite: 7 * 24 * HOUR, verify_email: 48 * HOUR, reset_password: HOUR, change_email: 24 * HOUR };
 const NO_PASSWORD = '!';   // tài khoản đã mời, chưa đặt mật khẩu: không khớp mật khẩu nào
@@ -34,8 +35,8 @@ function sign(payload, secret) {
   const body = b64u(JSON.stringify(payload));
   return `${body}.${b64u(crypto.createHmac('sha256', secret).update(body).digest())}`;
 }
-export function issueToken(user, secret) {
-  return sign({ sub: user.id, v: user.token_version, exp: Math.floor(Date.now() / 1000) + TOKEN_DAYS * 86400 }, secret);
+export function issueToken(user, secret, remember = true) {
+  return sign({ sub: user.id, v: user.token_version, rem: remember ? 1 : 0, exp: Math.floor(Date.now() / 1000) + TOKEN_SECONDS[remember ? 'remember' : 'session'] }, secret);
 }
 // Trả về tài khoản (đang hoạt động) nếu token hợp lệ, ngược lại null
 export function verifyToken(token, secret) {
@@ -46,7 +47,7 @@ export function verifyToken(token, secret) {
   let p; try { p = JSON.parse(Buffer.from(body, 'base64url').toString()); } catch { return null; }
   if (!p.exp || p.exp < Date.now() / 1000) return null;
   const u = one(`select id, token_version, status, must_change_password from users where id = ?`, p.sub);
-  return u && u.token_version === p.v && u.status === 'active' ? u : null;
+  return u && u.token_version === p.v && u.status === 'active' ? { ...u, remember: p.rem !== 0 } : null;
 }
 
 export const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name, phone: u.phone ?? null, is_admin: !!u.is_admin,
