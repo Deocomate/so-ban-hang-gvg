@@ -25,12 +25,13 @@ const LEGAL_ENTITIES = [
 // Hóa đơn bán lẻ của Thanh Hải đứng tên Mai Hiếu; các chứng từ còn lại mặc định đứng tên công ty
 export const defaultDocs = (variant) => ({ profiles: LEGAL_ENTITIES, types: variant === 'TH' ? { hoa_don: { profile: 'mai_hieu' } } : {} });
 
-const VARIANTS = {
-  TH: { price_names: ['Giá lẻ', 'Giá đại lý', 'Giá công trình', 'Giá đại lý II'], channels: ['Bán tại cửa hàng'],
+// Hồ sơ sổ theo ngành hàng. packaging: hàng đóng hộp/thùng (in quy cách, tính số hộp). hide_fields: trường hàng hóa sổ không dùng.
+export const VARIANTS = {
+  TH: { price_names: ['Giá lẻ', 'Giá đại lý I', 'Giá công trình', 'Giá đại lý II', 'Giá công trình lẻ'], channels: ['Bán tại cửa hàng'], packaging: true, hide_fields: [],
     categories: ['Ngói', 'Gạch thông gió', 'Lan can - con tiện', 'Đèn vườn', 'Linh vật - phong thủy', 'Phụ kiện mái', 'Khác'] },
-  VG: { price_names: ['Giá lẻ', 'Giá sỉ', 'Giá CTV'], channels: ['Facebook', 'TikTok'],
+  VG: { price_names: ['Giá lẻ', 'Giá sỉ', 'Giá CTV', 'Giá CH'], channels: ['Facebook', 'TikTok'], packaging: false, hide_fields: ['brand', 'material', 'norm_m2', 'norm_m'],
     categories: ['Đồ thờ', 'Bình hút lộc', 'Ấm chén', 'Lọ hoa', 'Mosaic', 'Khác'] },
-  AN: { price_names: ['Giá lẻ', 'Giá đại lý', 'Giá công trình'], channels: ['Bán tại cửa hàng'], categories: ['Tranh mosaic', 'Khác'] },
+  AN: { price_names: ['Giá lẻ', 'Giá đại lý', 'Giá công trình'], channels: ['Bán tại cửa hàng'], packaging: true, hide_fields: [], categories: ['Tranh mosaic', 'Khác'] },
 };
 
 export function defaultSettings(variant) {
@@ -103,8 +104,12 @@ export function update_book_settings(p) {
   const b = p.book_id; const s = p.settings || {};
   requirePerm(b, 'owner');
   if ('vat_rate' in s && (num(s.vat_rate) < 0 || num(s.vat_rate) > 0.2)) fail('Thuế suất GTGT không hợp lệ');
-  if ('price_names' in s && (!Array.isArray(s.price_names) || ![3, 4].includes(s.price_names.length))) fail('Cần 3 hoặc 4 tên mức giá');
-  if ('price_names' in s && s.price_names.length < 4 && one(`select 1 from customers where book_id = ? and price_tier = 4`, b)) fail('Còn khách hàng đang dùng mức giá 4 — hãy đổi mức giá của họ trước');
+  if ('packaging' in s && typeof s.packaging !== 'boolean') fail('Thiết lập đóng gói không hợp lệ');
+  if ('hide_fields' in s && (!Array.isArray(s.hide_fields) || s.hide_fields.some((f) => typeof f !== 'string'))) fail('Danh sách trường ẩn không hợp lệ');
+  if ('price_names' in s && (!Array.isArray(s.price_names) || s.price_names.length < 3 || s.price_names.length > 5)) fail('Cần từ 3 đến 5 tên mức giá');
+  if ('price_names' in s && s.price_names.some((x) => typeof x !== 'string' || !x.trim())) fail('Tên mức giá không được để trống ở giữa');
+  const unused = 'price_names' in s && one(`select max(price_tier) t from customers where book_id = ? and price_tier > ?`, b, s.price_names.length)?.t;
+  if (unused) fail(`Còn khách hàng đang dùng mức giá ${unused} — hãy đổi mức giá của họ trước`);
   const settings = { ...bookSettings(b), ...s };
   run(`update books set settings = ?, name = coalesce(?, name) where id = ?`, settings, nz(p.name), b);
   const r = one(`select settings, name from books where id = ?`, b);

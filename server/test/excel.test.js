@@ -1,11 +1,12 @@
 // Kiểm thử quy trình nhập/xuất Excel từ file có sẵn: đọc file → chọn cột → kiểm tra → ghi sổ — chạy: node test/excel.test.js
 import { createRequire } from 'node:module';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { freshDb, makeApi, suite, finish, rid } from './harness.js';
 import {
   loadSheets, buildWorkbook, importFields, importRules, guessSheet, findHeader, guessColumns, buildRows, columnIssues, rowState,
-  openingSheet, mergeOpening, validateProducts, validateParties, parseDateCell, readPriceBookFile,
+  openingSheet, mergeOpening, validateProducts, validateParties, parseDateCell, readPriceBookFile, productTemplate,
 } from '../../web/src/lib/excel.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -240,5 +241,61 @@ C('Không có cột giá phù hợp thì báo lỗi', !!readPriceBookFile(await 
 const pbi = await api.call('import_price_book_items', { book_id: TH, price_book_id: pbk.id, rows: pbr.rows });
 C('Ghi giá, báo mã không có trong sổ', [pbi.updated, pbi.missing], [1, ['KHONG-CO']]);
 C('Giá vào bảng theo mã hàng', (await api.q('price_book_items', TH, [['price_book_id', 'eq', pbk.id]])).map((x) => [x.sku, x.price]), [['KV-01', 13500]]);
+
+G('Mẫu nhập hàng của khách: Thanh Hải 5 mức giá, Vũ Gia không đóng gói');
+const myBooks = await api.call('bootstrap');
+const setOf = (short) => { const b = myBooks.find((x) => x.short_name === short); return { id: b.id, s: typeof b.settings === 'string' ? JSON.parse(b.settings) : b.settings }; };
+const th = setOf('TH'); const vg = setOf('VG');
+C('Sổ mới: Thanh Hải 5 mức giá', th.s.price_names, ['Giá lẻ', 'Giá đại lý I', 'Giá công trình', 'Giá đại lý II', 'Giá công trình lẻ']);
+C('Sổ mới: Vũ Gia 4 mức, tắt đóng gói', [vg.s.price_names, vg.s.packaging], [['Giá lẻ', 'Giá sỉ', 'Giá CTV', 'Giá CH'], false]);
+// Mở file như hộp thoại nhập của một sổ cụ thể (tên mức giá và hồ sơ sổ của sổ đó)
+async function openFor(file, s) {
+  const sheets = await loadSheets(file); const pn = s.price_names; const rules = importRules('products', pn, s);
+  const sheet = sheets.find((x) => x.name === guessSheet(sheets, rules)); const headerIdx = findHeader(sheet.rows, rules).idx;
+  const columns = guessColumns(sheet, headerIdx, rules);
+  return { columns, rows: validateProducts(buildRows(sheet, headerIdx, columns), [], pn) };
+}
+const blobFile = (blob) => ({ name: 'mau.xlsx', arrayBuffer: async () => blob.arrayBuffer() });
+// Đúng tiêu đề và dòng ví dụ của 2 file khách gửi
+const thHead = ['Mã SKU', 'Tên hàng hóa *', 'Nhóm hàng', 'Chất liệu', 'Kích thước (mm)', 'Màu sắc', 'Định mức', 'Thương hiệu', 'ĐVT', 'Giá vốn', 'Giá đại lý I', 'Giá công trình', 'Giá công trình lẻ', 'Giá đại lý II', 'Giá lẻ', 'Số lượng tồn', 'Tồn tối thiểu', 'Số viên/hộp', 'Đơn vị đóng gói', 'Trọng lượng/thùng (kg)', 'Trọng lượng/viên (kg)', 'Ghi chú'];
+const thRow = ['1AD27-DC01', 'Ngói âm 27 đỏ cờ', 'Ngói âm dương', 'Sứ tráng men', 'L200 x W195', 'Đỏ cờ', '27 viên/m2', 'Thanh Hải', 'Viên', 16500, 16500, 18000, 19000, 20000, 20000, '', '', 40, 'Hộp', 35, 0.88, ''];
+const thOpen = await openFor(xlsxFile({ 'Hàng hóa': [thHead, thRow] }), th.s);
+C('Thanh Hải: nhận hết các cột của file', thOpen.columns.filter((c) => c.header && !c.field).map((c) => c.header), []);
+const t = thOpen.rows[0];
+C('Thanh Hải: đủ 5 mức giá đúng tên cột', [t.price1, t.price2, t.price3, t.price4, t.price5], [20000, 16500, 18000, 20000, 19000]);
+C('Thanh Hải: định mức "27 viên/m2", quy cách hộp, trọng lượng', [t.norm_m2, t.norm_m, t.units_per_pack, t.pack_unit, t.pack_weight, t.unit_weight], [27, null, 40, 'Hộp', 35, 0.88]);
+C('Thanh Hải: không lỗi', t.errors, []);
+const normOf = async (v) => (await openFor(xlsxFile({ S: [['Tên hàng hóa', 'Định mức'], ['Diềm', v]] }), th.s)).rows[0];
+C('Định mức theo mét dài, m², số trơn', [(await normOf('5 viên/m dài')).norm_m, (await normOf('3,5 viên/md')).norm_m, (await normOf('27 viên/m²')).norm_m2, (await normOf(12)).norm_m2], [5, 3.5, 27, 12]);
+C('Định mức không đọc được thì báo lỗi dòng', (await normOf('theo bản vẽ')).errors.length, 1);
+const thRes = await api.call('import_products', { book_id: th.id, request_id: rid(), rows: payload(thOpen.rows) });
+const saved = await api.one('products', th.id, [['sku', 'eq', '1AD27-DC01']]);
+C('Thanh Hải: lưu mức giá 5', [thRes.created, saved.price5], [1, 19000]);
+const ct = (await api.call('save_party', { book_id: th.id, type: 'kh', name: 'Khách công trình lẻ', price_tier: 5 })).id;
+const so = await api.call('save_sales_order', { book_id: th.id, request_id: rid(), customer_id: ct, order_date: '2026-11-05', lines: [{ product_id: saved.id, qty: 10 }] });
+C('Bán cho khách mức 5 lấy giá công trình lẻ', (await api.q('sales_order_lines', th.id, [['order_id', 'eq', so.id]]))[0].unit_price, 19000);
+await E('Không bỏ mức 5 khi còn khách dùng', () => api.call('update_book_settings', { book_id: th.id, settings: { price_names: th.s.price_names.slice(0, 4) } }), 'mức giá 5');
+await E('Không để trống tên mức giá ở giữa', () => api.call('update_book_settings', { book_id: th.id, settings: { price_names: ['Giá lẻ', 'Giá đại lý I', 'Giá công trình', '', 'Giá công trình lẻ'] } }), 'để trống');
+
+const vgHead = ['Mã SKU', 'Tên hàng hóa *', 'Chủng loại', 'Mẫu', 'Kích thước', 'Màu sắc / men', 'ĐVT', 'Giá vốn', 'Giá lẻ', 'Giá sỉ', 'Giá CH', 'Số lượng tồn', 'Tồn tối thiểu', 'Số viên/hộp', 'Đơn vị đóng gói', 'Trọng lượng/thùng (kg)', 'Trọng lượng/viên (kg)', 'Ghi chú'];
+const vgOpen = await openFor(xlsxFile({ 'Hàng hóa': [vgHead, ['TYC001', 'Bộ đỉnh hạc tai rồng H57', 'Bộ đỉnh hạc', 'Phúc Liên Hoa', '', 'Men lam', 'bộ', 1000, 20000, 20000, 200000]] }), vg.s);
+const v = vgOpen.rows[0];
+C('Vũ Gia: Giá CH vào mức 4, Giá CTV để trống', [v.price1, v.price2, v.price3, v.price4], [20000, 20000, null, 200000]);
+C('Vũ Gia: không tự nhận cột đóng gói', vgOpen.columns.filter((c) => ['units_per_pack', 'pack_unit', 'pack_weight'].includes(c.field)).length, 0);
+C('Vũ Gia: không cho chọn trường sổ không dùng', importFields('products', vg.s.price_names, vg.s).filter((f) => ['brand', 'material', 'norm_m2', 'norm_m', 'norm', 'units_per_pack'].includes(f.key)).length, 0);
+C('Vũ Gia: dòng ví dụ của khách được cảnh báo', v.warnings.some((w) => w.includes('dòng ví dụ')), true);
+
+const thFile = fs.readFileSync(path.join(here, '../../mau-excel/hang-hoa-thanh-hai-2026.xlsx'));
+const th2026 = await openFor(fileOf('hang-hoa-thanh-hai-2026.xlsx', thFile.buffer.slice(thFile.byteOffset, thFile.byteOffset + thFile.byteLength)), th.s);
+C('Danh mục Thanh Hải 2026: 186 dòng, không lỗi, 72 mã có quy cách hộp', [th2026.rows.length, th2026.rows.filter((r) => r.errors.length).length, th2026.rows.filter((r) => r.units_per_pack).length], [186, 0, 72]);
+
+const tplHead = async (s) => (await loadSheets(blobFile(productTemplate(s))))[0].rows[0];
+const thTpl = await tplHead(th.s); const vgTpl = await tplHead(vg.s);
+C('File mẫu Thanh Hải có 5 mức giá, định mức, đóng gói', ['Giá công trình lẻ', 'Định mức', 'Chất liệu', 'Số viên/hộp', 'Đơn vị đóng gói'].every((h) => thTpl.includes(h)), true);
+C('File mẫu Vũ Gia có Giá CTV, Giá CH, không có cột đóng gói, định mức', [vgTpl.includes('Giá CH'), vgTpl.includes('Giá CTV'), ['Số viên/hộp', 'Định mức', 'Chất liệu', 'Thương hiệu', 'Trọng lượng/thùng (kg)'].some((h) => vgTpl.includes(h))], [true, true, false]);
+for (const [name, s] of [['Thanh Hải', th.s], ['Vũ Gia', vg.s]]) {
+  const back = await openFor(blobFile(productTemplate(s)), s);
+  C(`File mẫu ${name} nhập lại nhận đủ cột, không dòng lỗi`, [back.columns.filter((c) => c.header && !c.field).map((c) => c.header), back.rows.every((r) => !r.errors.length)], [[], true]);
+}
 
 finish('excel');

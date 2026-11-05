@@ -127,7 +127,7 @@ with base as (
   from bom_items bi join products c on c.id = bi.component_id group by bi.product_id
 )
 select b.id, b.book_id, b.sku, b.name, b.category, b.pattern, b.size, b.color, b.unit, b.image_url,
-  b.price1, b.price2, b.price3, b.price4, b.brand, b.low_stock, b.is_kit, b.active, b.note, b.created_at, b.updated_at,
+  b.price1, b.price2, b.price3, b.price4, b.price5, b.brand, b.low_stock, b.is_kit, b.active, b.note, b.created_at, b.updated_at,
   case when b.is_kit then coalesce(kit.on_hand, 0) else b.on_hand end as on_hand,
   case when b.is_kit then 0 else b.reserved end as reserved,
   case when b.is_kit then coalesce(kit.available, 0) else b.on_hand - b.reserved end as available,

@@ -77,9 +77,10 @@ Cơ sở dữ liệu là **một tệp SQLite** (`/data/gomsu.db` trong Docker v
 
 Làm lần lượt trong **từng sổ** (chọn sổ ở thanh trên cùng trước):
 
-1. **Cài đặt → Thông tin sổ**: kiểm tra tên sổ, thuế, tên các mức giá (3 mức bắt buộc, mức 4 có thể để trống), địa chỉ và điện thoại in trên phiếu.
+1. **Cài đặt → Thông tin sổ**: kiểm tra tên sổ, thuế, tên các mức giá (3 mức bắt buộc, mức 4 và 5 có thể để trống), hàng có đóng gói hay không, địa chỉ và điện thoại in trên phiếu.
 2. **Cài đặt → Quỹ tiền**: nhập số dư đầu kỳ của Tiền mặt và Tài khoản ngân hàng (thêm quỹ nếu cần, ví dụ "Ví TikTok").
-3. **Sản phẩm → Nhập từ Excel**: dùng file có sẵn của cửa hàng, hoặc `mau-excel/mau-hang-hoa_ThanhHai.xlsx` (hoặc `_VuGia`). Các cột gồm: tên hàng hóa, chủng loại, thương hiệu, mẫu, kích thước, màu sắc, ĐVT, giá vốn, các mức giá bán, số lượng tồn.
+3. **Sản phẩm → Nhập từ Excel**: dùng file có sẵn của cửa hàng, hoặc nút **Tải file mẫu** (giống `mau-excel/mau-hang-hoa_ThanhHai.xlsx` và `_VuGia`). File mẫu mỗi sổ chỉ có các cột sổ đó dùng: sổ Thanh Hải có chất liệu, định mức, 5 mức giá và các cột đóng gói; sổ Vũ Gia có 4 mức giá Lẻ / Sỉ / CTV / CH và không có cột đóng gói, định mức.
+   - Cột **Định mức** ghi kiểu "27 viên/m2" (theo m²) hoặc "5 viên/m dài" (theo mét dài).
    - Mỗi dòng là một biến thể và có một mã SKU riêng. Để trống SKU thì hệ thống tự cấp mã.
    - Số lượng × giá vốn được ghi thành **phiếu Tồn đầu kỳ**. Phiếu này không tính vào doanh thu hay công nợ.
    - Sau khi ghi có **bảng đối chiếu** giữa "Theo file" và "Đã ghi vào sổ" (số mã, tổng số lượng, tổng giá trị), mỗi dòng ghi Khớp hoặc Lệch.
@@ -111,9 +112,10 @@ Quy tắc khi nhập:
 
 File tải về từ nút **Xuất Excel** ở trang Hàng hóa, Khách hàng, Nhà cung cấp nhập lại được ngay: sửa giá hoặc thông tin trong Excel rồi nhập lại. Các cột chỉ để xem như Còn phải thu, Quá hạn sẽ được báo là không nhập.
 
-### Mức giá 4 và bán khi chưa có tồn
+### Mức giá 4, 5, đóng gói và bán khi chưa có tồn
 
-- **Mức giá 4:** bật bằng cách đặt tên ở **Cài đặt → Mức giá bán**. Sổ Thanh Hải có sẵn mức "Giá đại lý II". Khi đó sản phẩm, khách hàng, đơn hàng và file Excel đều có thêm mức này. Muốn bỏ thì xóa tên mức 4, sau khi đã đổi mức giá của các khách đang dùng nó.
+- **Mức giá 4 và 5:** bật bằng cách đặt tên ở **Cài đặt → Mức giá bán** (muốn dùng mức 5 thì phải có tên mức 4). Sổ Thanh Hải có sẵn 5 mức: Giá lẻ, Giá đại lý I, Giá công trình, Giá đại lý II, Giá công trình lẻ. Sổ Vũ Gia có 4 mức: Giá lẻ, Giá sỉ, Giá CTV, Giá CH. Khi đó sản phẩm, khách hàng, đơn hàng và file Excel đều có thêm các mức này. Muốn bỏ một mức thì xóa tên của nó, sau khi đã đổi mức giá của các khách đang dùng.
+- **Hàng có đóng gói (hộp, thùng):** tick trong **Cài đặt → Hàng hóa**. Sổ Thanh Hải bật sẵn, mỗi mã tự chọn đóng theo hộp hoặc theo thùng. Sổ Vũ Gia tắt sẵn: form hàng hóa, màn bán hàng và chứng từ không hiện quy cách, số hộp; trọng lượng mỗi cái vẫn dùng để tính tổng kg khi gửi hàng.
 - **Bán khi chưa có tồn:** mặc định bị chặn. Tick **Cho phép giao vượt số tồn kho** trong Cài đặt của từng sổ. Sau đó tài khoản chủ cửa hàng giao ngay được ở màn tạo đơn; ở màn giao hàng thì tick thêm ô cho phép. Tài khoản nhân viên vẫn bị chặn.
 - **Khi bán vượt tồn:** tồn kho bị âm và hiện "âm kho" cho đến khi nhập hàng về. Phần chênh lệch được tính vào giá vốn lúc nhập, nên lãi của các đơn đó có thể chưa chính xác.
 

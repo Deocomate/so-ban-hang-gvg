@@ -11,8 +11,8 @@ const STATE_PILL = { err: ['bad', 'Lỗi'], upd: ['info', 'Cập nhật'], same:
 export function ImportDialog({ kind = 'products', onClose }) {
   const { settings, book } = useApp();
   const pn = settings.price_names || ['Giá 1', 'Giá 2', 'Giá 3'];
-  const fields = useMemo(() => importFields(kind, pn), [kind, pn]);
-  const rules = useMemo(() => importRules(kind, pn), [kind, pn]);
+  const fields = useMemo(() => importFields(kind, pn, settings), [kind, pn, settings]);
+  const rules = useMemo(() => importRules(kind, pn, settings), [kind, pn, settings]);
   const isProducts = kind === 'products';
   const existing = useQ(isProducts ? 'products' : kind === 'kh' ? 'customers' : 'suppliers', [], null, 10000);
   const { run, busy } = useAction();
@@ -129,7 +129,7 @@ export function ImportDialog({ kind = 'products', onClose }) {
   const onCount = columns.filter((c) => c.on && c.field).length;
   const canNext = !!sheet && !blocked && !!existing.data;
   const canImport = !!stats && toSend.length > 0;
-  const saveTemplate = () => saveFile(isProducts ? 'mau-nhap-hang-hoa.xlsx' : kind === 'kh' ? 'mau-nhap-khach-hang.xlsx' : 'mau-nhap-nha-cung-cap.xlsx', isProducts ? productTemplate(pn) : partyTemplate(kind, pn));
+  const saveTemplate = () => saveFile(isProducts ? `mau-nhap-hang-hoa_${book.short_name || 'so'}.xlsx` : kind === 'kh' ? 'mau-nhap-khach-hang.xlsx' : 'mau-nhap-nha-cung-cap.xlsx', isProducts ? productTemplate(settings) : partyTemplate(kind, pn));
 
   return (
     <Modal title={TITLES[kind]} subtitle={`Sổ: ${book.name}`} onClose={onClose} size="xl"

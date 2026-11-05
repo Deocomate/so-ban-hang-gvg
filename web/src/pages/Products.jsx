@@ -3,6 +3,7 @@ import { useApp, useQ, useAction } from '../lib/store.jsx';
 import { money, qty as fq, match, dmy, todayVN } from '../lib/format.js';
 import { useProducts, productLabel, productSub, PRODUCT_TYPES, typeLabel } from '../lib/lookups.js';
 import { exportXlsx } from '../lib/excel.js';
+import { bookProfile } from '../lib/book-profile.js';
 import { Btn, Icon, Pill, Field, Input, TextArea, Select, NumInput, Check, Search, Loading, ErrorBox, Note, Table, Modal, Picker, ListPage, FilterBox, RadioList, Tabs, KV, Section, ConfirmBtn } from '../components/ui.jsx';
 
 const lsGet = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
@@ -29,6 +30,7 @@ export function ProductsPage() {
   const setCols = (c) => { setCols0(c); lsSet('gomsu.product_cols', c); };
   const q = useQ('products', [], 'sku', 5000);
   const pn = settings.price_names || ['Giá 1', 'Giá 2', 'Giá 3'];
+  const prof = bookProfile(settings);
   const cost = can('xem_gia_von');
   const all = q.data || [];
   const since = created ? daysAgoIso(Number(created)) : '';
@@ -42,7 +44,7 @@ export function ProductsPage() {
   const cats = [...new Set([...(settings.categories || []), ...uniq('category')])];
   const opt = (vals, k) => [{ value: '', label: 'Tất cả' }, ...vals.map((v) => ({ value: v, label: v, count: all.filter((p) => p[k] === v).length }))];
   const unitLc = (p) => String(p.unit || 'đv').toLowerCase();
-  const pack = (p) => [p.units_per_pack ? `${fq(p.units_per_pack)} ${unitLc(p)}/${p.pack_unit || 'hộp'}` : '',
+  const pack = (p) => [prof.packaging && p.units_per_pack ? `${fq(p.units_per_pack)} ${unitLc(p)}/${p.pack_unit || 'hộp'}` : '',
     ...(p.units || []).map((u) => `1 ${u.name} = ${fq(u.conv)} ${unitLc(p)}`)].filter(Boolean).join(' · ');
   const show = (k) => cols.includes(k);
   const stockCell = (p, v) => (p.is_service ? <span className="muted">—</span> : v);
@@ -53,7 +55,7 @@ export function ProductsPage() {
         <FilterBox title="Nhóm hàng"><RadioList value={cat} onChange={setCat} options={opt(cats, 'category')} /></FilterBox>
         <FilterBox title="Tồn kho"><RadioList value={stock} onChange={setStock} options={[{ value: '', label: 'Tất cả' }, { value: 'low', label: 'Dưới định mức tồn', count: all.filter((p) => p.is_low).length },
           { value: 'over', label: 'Vượt định mức tồn', count: all.filter((p) => p.max_stock > 0 && p.on_hand > p.max_stock).length }, { value: 'in', label: 'Còn hàng' }, { value: 'out', label: 'Hết hàng' }]} /></FilterBox>
-        {uniq('brand').length > 0 && <FilterBox title="Thương hiệu"><RadioList value={brand} onChange={setBrand} options={opt(uniq('brand'), 'brand')} /></FilterBox>}
+        {prof.has('brand') && uniq('brand').length > 0 && <FilterBox title="Thương hiệu"><RadioList value={brand} onChange={setBrand} options={opt(uniq('brand'), 'brand')} /></FilterBox>}
         {uniq('location').length > 0 && <FilterBox title="Vị trí"><RadioList value={loc} onChange={setLoc} options={opt(uniq('location'), 'location')} /></FilterBox>}
         <FilterBox title="Bán trực tiếp"><RadioList value={direct} onChange={setDirect} options={[{ value: '', label: 'Tất cả' }, { value: 'yes', label: 'Có' }, { value: 'no', label: 'Không' }]} /></FilterBox>
         <FilterBox title="Thời gian tạo"><RadioList value={created} onChange={setCreated} options={CREATED} /></FilterBox>
@@ -63,7 +65,7 @@ export function ProductsPage() {
       actions={<>
         <details className="col-pick">
           <summary className="btn btn-ghost" title="Chọn cột hiển thị"><Icon name="gear" /> Cột</summary>
-          <div className="col-pick-menu">{COLS.filter((c) => c.key !== 'cost' || cost).map((c) => <Check key={c.key} checked={show(c.key)} onChange={(v) => setCols(v ? [...cols, c.key] : cols.filter((x) => x !== c.key))}>{c.label}</Check>)}</div>
+          <div className="col-pick-menu">{COLS.filter((c) => (c.key !== 'cost' || cost) && prof.has(c.key)).map((c) => <Check key={c.key} checked={show(c.key)} onChange={(v) => setCols(v ? [...cols, c.key] : cols.filter((x) => x !== c.key))}>{c.label}</Check>)}</div>
         </details>
         <Btn icon="dl" onClick={() => exportXlsx('san-pham.xlsx', [{ name: 'Sản phẩm', rows: rows.map((p) => ({ ...p, type_label: typeLabel(p.product_type), sell_text: p.sell_direct ? 'Có' : 'Không', units_text: (p.units || []).map((u) => `${u.name}=${u.conv}`).join('; ') })), columns: [
           { key: 'sku', label: 'Mã SKU' }, { key: 'name', label: 'Tên hàng hóa' }, { key: 'type_label', label: 'Loại hàng' }, { key: 'category', label: 'Chủng loại' }, { key: 'brand', label: 'Thương hiệu' }, { key: 'pattern', label: 'Mẫu' }, { key: 'size', label: 'Kích thước' },
@@ -71,7 +73,7 @@ export function ProductsPage() {
           ...pn.map((label, i) => ({ key: `price${i + 1}`, label })), { key: 'on_hand', label: 'Số lượng tồn' }, { key: 'reserved', label: 'Khách đặt' }, { key: 'low_stock', label: 'Tồn tối thiểu' }, { key: 'max_stock', label: 'Tồn tối đa' },
           { key: 'location', label: 'Vị trí' }, { key: 'width', label: 'Rộng' }, { key: 'length', label: 'Dài' }, { key: 'dim_unit', label: 'Đơn vị kích thước' },
           { key: 'material', label: 'Chất liệu' }, { key: 'norm_m2', label: 'Định mức m2' }, { key: 'norm_m', label: 'Định mức m dài' }, { key: 'units_per_pack', label: 'Số viên/hộp' }, { key: 'pack_unit', label: 'Đơn vị đóng gói' }, { key: 'pack_weight', label: 'Trọng lượng/thùng (kg)' }, { key: 'unit_weight', label: 'Trọng lượng/viên (kg)' },
-          { key: 'sell_text', label: 'Bán trực tiếp' }, { key: 'description', label: 'Mô tả' }, { key: 'order_note', label: 'Mẫu ghi chú' }, { key: 'note', label: 'Ghi chú' }] }])}>Xuất Excel</Btn>
+          { key: 'sell_text', label: 'Bán trực tiếp' }, { key: 'description', label: 'Mô tả' }, { key: 'order_note', label: 'Mẫu ghi chú' }, { key: 'note', label: 'Ghi chú' }].filter((c) => prof.has(c.key)) }])}>Xuất Excel</Btn>
         {can('owner') && <Btn icon="up" onClick={() => open('import', { kind: 'products' })}>Nhập từ Excel</Btn>}
         {can('danh_muc') && <Btn kind="primary" icon="plus" onClick={() => open('product', {})}>Thêm hàng hóa</Btn>}
       </>}>
@@ -82,7 +84,7 @@ export function ProductsPage() {
         { key: 'p', label: 'Hàng hóa', render: (p) => <><div className="cell-main">{p.sku} · {p.name} {p.product_type !== 'hang' && <Pill tone="accent">{typeLabel(p.product_type)}</Pill>} {!p.active && <Pill tone="mute">ngừng bán</Pill>} {!p.sell_direct && <Pill tone="mute">không bán trực tiếp</Pill>}</div><div className="cell-sub">{[productSub(p), p.unit, pack(p)].filter(Boolean).join(' · ')}</div></> },
         ...(show('type') ? [{ key: 'type', label: 'Loại hàng', render: (p) => typeLabel(p.product_type) }] : []),
         ...(show('category') ? [{ key: 'category', label: 'Nhóm hàng' }] : []),
-        ...(show('brand') ? [{ key: 'brand', label: 'Thương hiệu' }] : []),
+        ...(show('brand') && prof.has('brand') ? [{ key: 'brand', label: 'Thương hiệu' }] : []),
         ...(show('location') ? [{ key: 'location', label: 'Vị trí' }] : []),
         ...(show('dims') ? [{ key: 'dims', label: 'Kích thước', render: dims }] : []),
         ...(cost && show('cost') ? [{ key: 'c', label: 'Giá vốn', align: 'right', render: (p) => money(p.avg_cost) }] : []),
@@ -109,6 +111,7 @@ export function ProductDetail({ id, onClose }) {
   const [img, setImg] = useState(0);
   const p = q.data?.[0];
   const pn = settings.price_names || [];
+  const prof = bookProfile(settings);
   const cost = can('xem_gia_von');
   if (!p) return <Modal title="Hàng hóa" onClose={onClose}>{q.error ? <ErrorBox error={q.error} /> : q.data ? <Note>Không tìm thấy hàng hóa</Note> : <Loading />}</Modal>;
   const images = p.images?.length ? p.images : p.image_url ? [p.image_url] : [];
@@ -134,15 +137,15 @@ export function ProductDetail({ id, onClose }) {
         </div>
         <div className="grow stack">
           <KV items={[
-            ['Mã hàng', p.sku], ['Nhóm hàng', p.category || '—'], ['Thương hiệu', p.brand || '—'],
+            ['Mã hàng', p.sku], ['Nhóm hàng', p.category || '—'], prof.has('brand') && ['Thương hiệu', p.brand || '—'],
             ...(svc ? [] : [['Tồn kho', `${fq(p.on_hand)} ${p.unit}`], ['Khách đặt', fq(p.reserved)], ['Có thể bán', fq(p.available), p.is_low ? 'warn strong' : ''],
               ['Định mức tồn', `${fq(p.low_stock)} – ${p.max_stock ? fq(p.max_stock) : 'không giới hạn'}`], ['Dự kiến hết hàng', p.days_left == null ? '—' : `${fq(p.days_left)} ngày (bán ${fq(p.sold_30d)} trong 30 ngày)`]]),
             cost && ['Giá vốn', money(p.avg_cost)], cost && p.last_in_cost != null && ['Giá nhập cuối', money(p.last_in_cost)],
             ...pn.map((label, i) => [label, money(p[`price${i + 1}`])]),
             !svc && ['Vị trí', p.location || '—'], ['Kích thước', dims(p) || p.size || '—'],
             ['Trọng lượng', p.weight_per_unit ? `${fq(p.weight_per_unit)} kg/${String(p.unit).toLowerCase()}` : '—'],
-            ['Mẫu / màu men', [p.pattern, p.color].filter(Boolean).join(' · ') || '—'], ['Chất liệu', p.material || '—'],
-            (p.norm_m2 || p.norm_m) && ['Định mức', [p.norm_m2 && `${fq(p.norm_m2)}/m²`, p.norm_m && `${fq(p.norm_m)}/m dài`].filter(Boolean).join(' · ')],
+            ['Mẫu / màu men', [p.pattern, p.color].filter(Boolean).join(' · ') || '—'], prof.has('material') && ['Chất liệu', p.material || '—'],
+            prof.has('norm') && (p.norm_m2 || p.norm_m) && ['Định mức', [p.norm_m2 && `${fq(p.norm_m2)}/m²`, p.norm_m && `${fq(p.norm_m)}/m dài`].filter(Boolean).join(' · ')],
             ['Ngày tạo', dmy(p.created_at?.slice(0, 10))],
           ]} />
           <Section title="Đơn vị tính">
@@ -152,7 +155,7 @@ export function ProductDetail({ id, onClose }) {
               ...pn.map((label, i) => ({ key: `p${i}`, label, align: 'right', render: (u) => money(u.prices?.[i] ?? p[`price${i + 1}`] * u.conv) })),
               { key: 'd', label: 'Bán trực tiếp', render: (u) => (u.sell_direct ? 'Có' : 'Không') },
             ]} />
-            {p.units_per_pack ? <div className="muted small">Quy cách in trên chứng từ: {fq(p.units_per_pack)} {String(p.unit).toLowerCase()}/{p.pack_unit || 'hộp'}</div> : null}
+            {prof.packaging && p.units_per_pack ? <div className="muted small">Quy cách in trên chứng từ: {fq(p.units_per_pack)} {String(p.unit).toLowerCase()}/{p.pack_unit || 'hộp'}</div> : null}
           </Section>
         </div>
       </div>}
@@ -184,7 +187,7 @@ async function resizeImage(file, max = 480) {
 const ATTRS = [{ key: 'pattern', label: 'Mẫu' }, { key: 'size', label: 'Kích thước' }, { key: 'color', label: 'Màu sắc / men' }, { key: 'material', label: 'Chất liệu' }];
 const splitVals = (s) => [...new Set(String(s || '').split(/[,;\n]/).map((x) => x.trim()).filter(Boolean))];
 function cartesian(lists) { return lists.reduce((acc, l) => acc.flatMap((a) => l.map((v) => [...a, v])), [[]]); }
-const EMPTY = { sku: '', name: '', product_type: 'hang', category: '', brand: '', pattern: '', size: '', color: '', material: '', unit: '', price1: null, price2: null, price3: null, price4: null,
+const EMPTY = { sku: '', name: '', product_type: 'hang', category: '', brand: '', pattern: '', size: '', color: '', material: '', unit: '', price1: null, price2: null, price3: null, price4: null, price5: null,
   cost: null, opening_qty: null, low_stock: 0, max_stock: null, location: '', width: null, length: null, dim_unit: 'cm', active: true, sell_direct: true,
   note: '', description: '', order_note: '', images: [], components: [], bom: [], units: [], units_per_pack: null, pack_unit: 'hộp', pack_weight: null, unit_weight: null, norm_m2: null, norm_m: null };
 
@@ -221,6 +224,8 @@ export function ProductForm({ id, copy_of, type: type0, onClose, onSaved }) {
   const [variants, setVariants] = useState(null);   // {attrs: {pattern: 'a, b'}, rows: [...]}
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
   const pn = settings.price_names || ['Giá 1', 'Giá 2', 'Giá 3'];
+  const prof = bookProfile(settings);
+  const shownAttrs = ATTRS.filter((a) => prof.has(a.key));
   const src = id || copy_of;
   useEffect(() => {
     if (!src) return;
@@ -298,7 +303,7 @@ export function ProductForm({ id, copy_of, type: type0, onClose, onSaved }) {
             <Field label="Mã hàng" hint={id ? '' : 'Để trống: hệ thống tự cấp'}><Input value={f.sku} onChange={(v) => set('sku', v)} placeholder="Tự động" disabled={isNew && !!variants?.rows?.length} /></Field>
             <Field label="Tên hàng" required wide><Input value={f.name} onChange={(v) => set('name', v)} placeholder="Bắt buộc" /></Field>
             <Field label="Nhóm hàng"><Input value={f.category} onChange={(v) => set('category', v)} list="cats" /><datalist id="cats">{[...new Set([...(settings.categories || []), ...(all.data || []).map((p) => p.category).filter(Boolean)])].map((c) => <option key={c} value={c} />)}</datalist></Field>
-            <Field label="Thương hiệu"><Input value={f.brand} onChange={(v) => set('brand', v)} list="brands" /><datalist id="brands">{brands.map((c) => <option key={c} value={c} />)}</datalist></Field>
+            {prof.has('brand') && <Field label="Thương hiệu"><Input value={f.brand} onChange={(v) => set('brand', v)} list="brands" /><datalist id="brands">{brands.map((c) => <option key={c} value={c} />)}</datalist></Field>}
           </div>
           <div className="stack" style={{ width: 220, gap: 6 }}>
             <div className="row gap-s" style={{ flexWrap: 'wrap' }}>
@@ -362,12 +367,12 @@ export function ProductForm({ id, copy_of, type: type0, onClose, onSaved }) {
         <Section title="Thuộc tính">
           {isNew && <Check checked={!!variants} onChange={(v) => setVariants(v ? { attrs: {}, rows: [] } : null)}>Tạo nhiều biến thể cùng lúc (mỗi tổ hợp thuộc tính là một mã hàng)</Check>}
           {!variants && <div className="grid">
-            {ATTRS.map((a) => <Field key={a.key} label={a.label}><Input value={f[a.key]} onChange={(v) => set(a.key, v)} placeholder={a.key === 'material' ? 'Gốm, sứ…' : ''} /></Field>)}
-            <Field label="Định mức theo m²" hint="vd. 27 cặp/m². Dùng để tính số lượng khi báo giá"><NumInput money={false} min={0} value={f.norm_m2} onChange={(v) => set('norm_m2', v)} /></Field>
-            <Field label="Định mức theo mét dài" hint="vd. 5 cặp/m diềm"><NumInput money={false} min={0} value={f.norm_m} onChange={(v) => set('norm_m', v)} /></Field>
+            {shownAttrs.map((a) => <Field key={a.key} label={a.label}><Input value={f[a.key]} onChange={(v) => set(a.key, v)} placeholder={a.key === 'material' ? 'Gốm, sứ…' : ''} /></Field>)}
+            {prof.has('norm_m2') && <Field label="Định mức theo m²" hint="vd. 27 cặp/m². Dùng để tính số lượng khi báo giá"><NumInput money={false} min={0} value={f.norm_m2} onChange={(v) => set('norm_m2', v)} /></Field>}
+            {prof.has('norm_m') && <Field label="Định mức theo mét dài" hint="vd. 5 cặp/m diềm"><NumInput money={false} min={0} value={f.norm_m} onChange={(v) => set('norm_m', v)} /></Field>}
           </div>}
           {variants && <div className="stack">
-            <div className="grid">{ATTRS.map((a) => <Field key={a.key} label={a.label} hint="Nhiều giá trị cách nhau dấu phẩy"><Input value={variants.attrs[a.key] || ''} onChange={(v) => setAttr(a.key, v)} placeholder="vd. Đỏ, Nâu, Xanh" /></Field>)}</div>
+            <div className="grid">{shownAttrs.map((a) => <Field key={a.key} label={a.label} hint="Nhiều giá trị cách nhau dấu phẩy"><Input value={variants.attrs[a.key] || ''} onChange={(v) => setAttr(a.key, v)} placeholder="vd. Đỏ, Nâu, Xanh" /></Field>)}</div>
             {variants.rows.length > 0 && <Table dense rowKey="name" rows={variants.rows} columns={[
               { key: 'n', label: 'Tên hàng', render: (r, i) => <Input value={r.name} onChange={(v) => setVar(i, { name: v })} /> },
               { key: 's', label: 'Mã hàng', render: (r, i) => <Input value={r.sku} onChange={(v) => setVar(i, { sku: v })} placeholder="Tự động" style={{ maxWidth: 130 }} /> },
@@ -384,9 +389,9 @@ export function ProductForm({ id, copy_of, type: type0, onClose, onSaved }) {
           <div className="muted small">Thêm đơn vị bán hoặc nhập như hộp, thùng, pallet. Ví dụ: 1 hộp = 140 viên. Kho luôn tính theo đơn vị cơ bản.</div>
           <div className="grid">
             <Field label="Đơn vị cơ bản"><Input value={f.unit} onChange={(v) => set('unit', v)} list="units" /><datalist id="units">{(settings.units || []).map((c) => <option key={c} value={c} />)}</datalist></Field>
-            {stocked && <Field label={`Quy cách in: số ${unitLc} / ${f.pack_unit || 'hộp'}`} hint="Để in “4 hộp x 140 viên + 40 viên” trên hóa đơn, biên bản"><NumInput money={false} min={1} value={f.units_per_pack} onChange={(v) => set('units_per_pack', v)} placeholder="vd. 140" /></Field>}
-            {stocked && <Field label="Đơn vị đóng gói"><Input value={f.pack_unit} onChange={(v) => set('pack_unit', v)} list="packs" /><datalist id="packs">{['hộp', 'thùng', 'kiện', 'bao', 'pallet'].map((c) => <option key={c} value={c} />)}</datalist></Field>}
-            {stocked && <Field label={`Trọng lượng 1 ${f.pack_unit || 'hộp'} (kg)`}><NumInput money={false} min={0} step={0.5} suffix="kg" value={f.pack_weight} onChange={(v) => set('pack_weight', v)} placeholder="vd. 28" /></Field>}
+            {stocked && prof.packaging && <Field label={`Quy cách in: số ${unitLc} / ${f.pack_unit || 'hộp'}`} hint="Để in “4 hộp x 140 viên + 40 viên” trên hóa đơn, biên bản"><NumInput money={false} min={1} value={f.units_per_pack} onChange={(v) => set('units_per_pack', v)} placeholder="vd. 140" /></Field>}
+            {stocked && prof.packaging && <Field label="Đơn vị đóng gói"><Input value={f.pack_unit} onChange={(v) => set('pack_unit', v)} list="packs" /><datalist id="packs">{['hộp', 'thùng', 'kiện', 'bao', 'pallet'].map((c) => <option key={c} value={c} />)}</datalist></Field>}
+            {stocked && prof.packaging && <Field label={`Trọng lượng 1 ${f.pack_unit || 'hộp'} (kg)`}><NumInput money={false} min={0} step={0.5} suffix="kg" value={f.pack_weight} onChange={(v) => set('pack_weight', v)} placeholder="vd. 28" /></Field>}
           </div>
           {f.units.map((u, i) => {
             const setU = (patch) => set('units', f.units.map((x, j) => (j === i ? { ...x, ...patch } : x)));

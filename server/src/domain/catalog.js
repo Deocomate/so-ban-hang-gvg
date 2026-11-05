@@ -1,5 +1,5 @@
 // Danh mục: sản phẩm (kể cả bộ), khách hàng, nhà cung cấp, quỹ tiền, nợ đầu kỳ, nhập danh sách từ Excel.
-import { ctx, fail, one, run, insert, uuid, nowIso, num, int, bool, nz, trimNz, rnd, asDate, today, coalesce } from '../lib/context.js';
+import { ctx, fail, one, run, insert, uuid, nowIso, num, int, bool, nz, trimNz, rnd, asDate, today, coalesce, PRICE_KEYS } from '../lib/context.js';
 import { requirePerm, newMasterCode, nextCode, once } from './access.js';
 import { doAdjust, saveUnits } from './stock.js';
 
@@ -15,7 +15,7 @@ export function save_product(p) {
   if ((num(p.pack_weight) ?? 0) < 0 || (num(p.unit_weight) ?? 0) < 0) fail('Trọng lượng không được âm');
   if ((num(p.norm_m2) ?? 0) < 0 || (num(p.norm_m) ?? 0) < 0) fail('Định mức không được âm');
   if (!trimNz(p.name)) fail('Thiếu tên sản phẩm');
-  if ((num(p.price1) ?? 0) < 0 || (num(p.price2) ?? 0) < 0 || (num(p.price3) ?? 0) < 0 || (num(p.price4) ?? 0) < 0) fail('Giá bán không được âm');
+  if (PRICE_KEYS.some((k) => (num(p[k]) ?? 0) < 0)) fail('Giá bán không được âm');
   const type = nz(p.product_type) || ((bool(p.is_kit) ?? false) ? 'combo' : 'hang');
   if (!PRODUCT_TYPES[type]) fail('Loại hàng không hợp lệ');
   const kit = type === 'combo'; const svc = type === 'dich_vu';
@@ -32,7 +32,7 @@ export function save_product(p) {
   const fields = {
     name: trimNz(p.name), category: p.category ?? null, brand: p.brand ?? null, pattern: p.pattern ?? null, size: p.size ?? null, color: p.color ?? null,
     unit: nz(p.unit) || 'Cái', image_url: images[0] ?? (Array.isArray(p.images) ? null : p.image_url ?? null),
-    price1: num(p.price1) ?? 0, price2: num(p.price2) ?? 0, price3: num(p.price3) ?? 0, price4: num(p.price4) ?? 0,
+    ...Object.fromEntries(PRICE_KEYS.map((k) => [k, num(p[k]) ?? 0])),
     low_stock: svc ? 0 : low, is_kit: kit ? 1 : 0, active: (bool(p.active) ?? true) ? 1 : 0, note: p.note ?? null,
     pack_unit: trimNz(p.pack_unit) || 'hộp', units_per_pack: num(p.units_per_pack),
     pack_weight: num(p.pack_weight), unit_weight: num(p.unit_weight), material: p.material ?? null, norm_m2: num(p.norm_m2), norm_m: num(p.norm_m),
@@ -196,15 +196,15 @@ export function delete_opening_debt(p) {
   return { ok: true };
 }
 
-// Sửa nhanh nhiều giá bán trên màn Bảng giá. p.rows = [{id, price1…price4}]
+// Sửa nhanh nhiều giá bán trên màn Bảng giá. p.rows = [{id, price1…price5}]
 export function save_prices(p) {
   const b = p.book_id;
   requirePerm(b, 'danh_muc');
   let n = 0;
   for (const r of p.rows || []) {
-    const ps = [1, 2, 3, 4].map((i) => num(r[`price${i}`]));
+    const ps = PRICE_KEYS.map((k) => num(r[k]));
     if (ps.some((v) => (v ?? 0) < 0)) fail('Giá bán không được âm');
-    n += run(`update products set price1 = coalesce(?, price1), price2 = coalesce(?, price2), price3 = coalesce(?, price3), price4 = coalesce(?, price4), updated_at = ?
+    n += run(`update products set ${PRICE_KEYS.map((k) => `${k} = coalesce(?, ${k})`).join(', ')}, updated_at = ?
       where id = ? and book_id = ?`, ...ps, nowIso(), r.id, b).changes;
   }
   return { updated: n };

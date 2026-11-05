@@ -2,7 +2,7 @@
 import { ctx, fail, one, all, run, insert, uuid, nowIso, num, bool, nz, trimNz, rnd, asDate } from '../lib/context.js';
 import { requirePerm } from './access.js';
 
-const BASES = ['cost', 'last_in', 'tier1', 'tier2', 'tier3', 'tier4'];
+const BASES = ['cost', 'last_in', 'tier1', 'tier2', 'tier3', 'tier4', 'tier5'];
 const list = (v) => (v == null ? null : (Array.isArray(v) ? v : []).map((x) => trimNz(x)).filter(Boolean));
 
 function getBook(id, b) {

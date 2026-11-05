@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { norm, parseNum } from './format.js';
+import { bookProfile } from './book-profile.js';
 
 export async function saveFile(filename, blob) {
   // Trong trang xem thử của Claude: dùng hộp thoại lưu tệp của nền tảng.
@@ -180,6 +181,7 @@ export function productRules(priceNames = []) {
     ['material', starts('chat lieu')],
     ['norm_m2', (k) => k.startsWith('dinh muc m2') || k.startsWith('dinh muc theo m2')],
     ['norm_m', (k) => k.startsWith('dinh muc m dai') || k.startsWith('dinh muc theo m')],
+    ['norm', (k) => k === 'dinh muc' || k === 'dinh muc su dung'],
     ['color', (k, raw) => raw.startsWith('màu') || k.startsWith('mau sac') || k.startsWith('mau men') || k === 'color'],
     ['pattern', (k, raw) => raw.startsWith('mẫu') || k === 'mau ma' || k === 'kieu dang' || k === 'kieu'],
     ['units_per_pack', (k) => /^so (vien|cai|tam|chiec|luong) ?(\/|tren|moi|1) ?(hop|thung|kien|bao)/.test(k) || k.startsWith('so luong moi hop') || k === 'quy cach dong goi' || k.startsWith('dong goi')],
@@ -193,6 +195,7 @@ export function productRules(priceNames = []) {
     ['price2', (k) => k === pn[1] || ['gia si', 'gia ban si', 'gia dai ly', 'gia dai ly i', 'gia dai ly 1', 'gia ban 2', 'gia 2'].includes(k)],
     ['price3', (k) => k === pn[2] || ['gia cong trinh', 'gia ctv', 'gia ban 3', 'gia 3', 'gia du an'].includes(k)],
     ['price4', (k) => k === pn[3] || ['gia dai ly ii', 'gia dai ly 2', 'gia ban 4', 'gia 4'].includes(k)],
+    ['price5', (k) => k === pn[4] || ['gia cong trinh le', 'gia ban 5', 'gia 5'].includes(k)],
     ['qty', (k) => ['so luong', 'sl', 'ton', 'so luong ton', 'sl ton', 'ton dau ky', 'so luong ton dau', 'ton kho', 'sl ton dau'].includes(k) || k.startsWith('so luong ton')],
     ['low_stock', starts('ton toi thieu', 'canh bao ton', 'nguong', 'ton it nhat', 'dinh muc ton thap', 'dinh muc ton it')],
     ['note', starts('ghi chu')],
@@ -216,9 +219,11 @@ export function partyRules(type) {
   ];
 }
 
-// Các trường có thể nhập, theo đúng thứ tự trên file mẫu. type: text, num, pack (số kèm chữ), date, tier
-export function importFields(kind, pn = []) {
+// Các trường có thể nhập, theo đúng thứ tự trên file mẫu. type: text, num, pack (số kèm chữ), date, tier.
+// settings: thiết lập của sổ; trường sổ không dùng (hồ sơ sổ) không hiện để chọn và không tự nhận cột.
+export function importFields(kind, pn = [], settings) {
   if (kind === 'products') {
+    const prof = bookProfile(settings);
     return [
       ['sku', 'Mã SKU'], ['name', 'Tên hàng hóa'], ['category', 'Chủng loại'], ['brand', 'Thương hiệu'], ['pattern', 'Mẫu'], ['size', 'Kích thước'], ['color', 'Màu sắc / men'], ['unit', 'ĐVT'],
       ['cost', 'Giá vốn', 'num'], ...(pn.length ? pn : ['Giá 1', 'Giá 2', 'Giá 3']).map((label, i) => [`price${i + 1}`, label, 'num']),
@@ -226,9 +231,9 @@ export function importFields(kind, pn = []) {
       ['pack_weight', 'Trọng lượng/thùng (kg)', 'pack'], ['unit_weight', 'Trọng lượng/viên (kg)', 'pack'],
       ['product_type', 'Loại hàng'], ['units', 'Đơn vị quy đổi'], ['max_stock', 'Tồn tối đa', 'num'], ['location', 'Vị trí'],
       ['width', 'Rộng', 'num'], ['length', 'Dài', 'num'], ['dim_unit', 'Đơn vị kích thước'], ['sell_direct', 'Bán trực tiếp'],
-      ['material', 'Chất liệu'], ['norm_m2', 'Định mức m2', 'num'], ['norm_m', 'Định mức m dài', 'num'],
+      ['material', 'Chất liệu'], ['norm_m2', 'Định mức m2', 'num'], ['norm_m', 'Định mức m dài', 'num'], ['norm', 'Định mức (vd. 27 viên/m2)'],
       ['description', 'Mô tả'], ['order_note', 'Mẫu ghi chú'], ['note', 'Ghi chú'],
-    ].map(([key, label, type = 'text']) => ({ key, label, type }));
+    ].filter(([key]) => prof.has(key)).map(([key, label, type = 'text']) => ({ key, label, type }));
   }
   const kh = kind === 'kh';
   return [
@@ -238,8 +243,8 @@ export function importFields(kind, pn = []) {
   ].map(([key, label, type = 'text']) => ({ key, label, type }));
 }
 
-export function importRules(kind, pn = []) {
-  const keys = new Set(importFields(kind, pn).map((f) => f.key));
+export function importRules(kind, pn = [], settings) {
+  const keys = new Set(importFields(kind, pn, settings).map((f) => f.key));
   return (kind === 'products' ? productRules(pn) : partyRules(kind)).filter(([f]) => keys.has(f));
 }
 
@@ -247,6 +252,14 @@ export function importRules(kind, pn = []) {
 const leadNum = (v) => { if (typeof v === 'number') return v; const m = String(v ?? '').match(/\d+(?:[.,]\d+)?/); return m ? Number(m[0].replace(',', '.')) : NaN; };
 const packWord = (v) => { const m = norm(String(v ?? '')).match(/\/\s*(thung|hop|kien|bao|pallet)\b/); return m ? { thung: 'thùng', hop: 'hộp', kien: 'kiện', bao: 'bao', pallet: 'pallet' }[m[1]] : ''; };
 const numField = (v) => (blank(v) ? null : parseNum(v));
+// Cột "Định mức" chung: "27 viên/m2", "27 viên/m²", "3,5 viên/m dài" (hoặc /md), số trơn hiểu là theo m²
+export function parseNorm(v) {
+  if (blank(v)) return {};
+  const n = leadNum(v);
+  if (Number.isNaN(n)) return { bad: true };
+  const t = norm(String(v));
+  return /\/\s*(m\s*dai|md)\b/.test(t) ? { norm_m: n } : { norm_m2: n };
+}
 const parseTier = (v, pn) => { const t = norm(v); const idx = pn.findIndex((n) => norm(n) === t); return idx >= 0 ? idx + 1 : Number(v); };
 const validTier = (t, pn) => Number.isInteger(t) && t >= 1 && t <= pn.length;
 const dmyText = (v) => { const [y, m, d] = parseDateCell(v).split('-'); return `${d}/${m}/${y}`; };
@@ -330,7 +343,7 @@ export function mergeOpening(rows, sheet) {
   });
 }
 
-const SAMPLE_ROWS = new Set(['nad-l-do|ngoi am duong co l', '|binh hut loc men lam 30cm', 'nghe-40-vhg|nghe phong thuy 40cm', '|dai ly minh phat', '|xuong gom hung thinh']);
+const SAMPLE_ROWS = new Set(['nad-l-do|ngoi am duong co l', 'tyc001|bo dinh hac tai rong h57', '|binh hut loc men lam 30cm', 'nghe-40-vhg|nghe phong thuy 40cm', '|dai ly minh phat', '|xuong gom hung thinh']);
 const isSample = (code, name) => SAMPLE_ROWS.has(`${code.toLowerCase()}|${norm(name)}`);
 
 const TYPE_WORDS = { 'hang hoa': 'hang', 'hang': 'hang', 'dich vu': 'dich_vu', 'combo': 'combo', 'combo - dong goi': 'combo', 'combo dong goi': 'combo', 'dong goi': 'combo',
@@ -363,7 +376,7 @@ export function validateProducts(rows, existing, pn = []) {
       __row: r.__row, sku: textCell(r.sku), name: textCell(r.name), category: textCell(r.category), brand: textCell(r.brand),
       pattern: textCell(r.pattern), size: textCell(r.size), color: textCell(r.color),
       unit: textCell(r.unit), note: textCell(r.note),
-      cost: numField(r.cost), price1: numField(r.price1), price2: numField(r.price2), price3: numField(r.price3), price4: numField(r.price4),
+      cost: numField(r.cost), price1: numField(r.price1), price2: numField(r.price2), price3: numField(r.price3), price4: numField(r.price4), price5: numField(r.price5),
       qty: numField(r.qty), low_stock: numField(r.low_stock), max_stock: numField(r.max_stock), width: numField(r.width), length: numField(r.length),
       location: textCell(r.location), material: textCell(r.material), norm_m2: numField(r.norm_m2), norm_m: numField(r.norm_m),
       description: textCell(r.description), order_note: textCell(r.order_note), errors: [], warnings: [], changes: [],
@@ -394,7 +407,12 @@ export function validateProducts(rows, existing, pn = []) {
     if (o.units_per_pack !== undefined && (Number.isNaN(o.units_per_pack) || !(o.units_per_pack > 0))) o.errors.push('Số viên/hộp phải là số lớn hơn 0');
     for (const [k, lb] of [['pack_weight', 'Trọng lượng/thùng'], ['unit_weight', 'Trọng lượng/viên']]) if (o[k] !== undefined && (Number.isNaN(o[k]) || o[k] < 0)) o.errors.push(`${lb} không phải số hợp lệ`);
     if (o.max_stock > 0 && o.low_stock !== null && o.max_stock < o.low_stock) o.errors.push('Tồn tối đa nhỏ hơn tồn tối thiểu');
-    for (const f of ['cost', 'price1', 'price2', 'price3', 'price4', 'qty', 'low_stock', 'max_stock', 'width', 'length', 'norm_m2', 'norm_m']) {
+    if (!blank(r.norm)) {
+      const nm = parseNorm(r.norm);
+      if (nm.bad) o.errors.push(`Định mức "${textCell(r.norm)}" không đọc được (ghi dạng 27 viên/m2 hoặc 5 viên/m dài)`);
+      else for (const [k, v] of Object.entries(nm)) if (o[k] === null) o[k] = v;
+    }
+    for (const f of ['cost', 'price1', 'price2', 'price3', 'price4', 'price5', 'qty', 'low_stock', 'max_stock', 'width', 'length', 'norm_m2', 'norm_m']) {
       if (Number.isNaN(o[f])) o.errors.push(`Cột ${f === 'qty' ? 'số lượng' : f === 'cost' ? 'giá vốn' : f === 'low_stock' ? 'tồn tối thiểu' : 'giá bán'} không phải số`);
       else if (o[f] !== null && o[f] < 0) o.errors.push('Số âm không hợp lệ');
     }
@@ -467,15 +485,36 @@ export function validateParties(rows, existing, priceNames, kind = 'kh') {
   });
 }
 
-export function productTemplate(priceNames) {
-  const cols = ['Mã SKU (để trống = tự cấp)', 'Tên hàng hóa *', 'Chủng loại', 'Thương hiệu', 'Mẫu', 'Kích thước', 'Màu sắc / men', 'ĐVT', 'Giá vốn',
-    ...priceNames, 'Số lượng tồn', 'Tồn tối thiểu', 'Số viên/hộp', 'Đơn vị đóng gói', 'Trọng lượng/thùng (kg)', 'Trọng lượng/viên (kg)', 'Ghi chú'];
-  const px = (...p) => p.concat(p[1]).slice(0, priceNames.length);
-  const ex = [
-    ['NAD-L-DO', 'Ngói âm dương cỡ L', 'Ngói', '', 'Âm dương', 'L', 'Đỏ gốm', 'Viên', 10000, ...px(18000, 16000, 15000), 5000, 1000, 140, 'thùng', 28, 0.2, ''],
-    ['', 'Bình hút lộc men lam 30cm', 'Bình hút lộc', '', 'Hũ tròn', '30cm', 'Men lam', 'Cái', 320000, ...px(650000, 590000, 550000), 12, 3, '', '', 4.5, '', 'Ví dụ SKU để trống'],
-    ['NGHE-40-VHG', 'Nghê phong thủy 40cm', 'Linh vật - phong thủy', '', 'Nghê', '40cm', 'Vàng hoàng gia', 'Đôi', 2000000, ...px(3500000, 3000000, 2800000), 4, 2, '', '', '', '', ''],
-  ];
+// Cột của file mẫu hàng hóa, lọc theo hồ sơ sổ. Mỗi cột ứng với một trường nhập; '$prices' là các mức giá của sổ.
+const TEMPLATE_COLS = [
+  ['sku', 'Mã SKU (để trống = tự cấp)'], ['name', 'Tên hàng hóa *'], ['category', 'Chủng loại'], ['brand', 'Thương hiệu'], ['pattern', 'Mẫu'],
+  ['material', 'Chất liệu'], ['size', 'Kích thước'], ['color', 'Màu sắc / men'], ['norm', 'Định mức'], ['unit', 'ĐVT'], ['cost', 'Giá vốn'], ['$prices'],
+  ['qty', 'Số lượng tồn'], ['low_stock', 'Tồn tối thiểu'], ['units_per_pack', 'Số viên/hộp'], ['pack_unit', 'Đơn vị đóng gói'],
+  ['pack_weight', 'Trọng lượng/thùng (kg)'], ['unit_weight', 'Trọng lượng/viên (kg)'], ['note', 'Ghi chú'],
+];
+// Dòng ví dụ theo ngành: sổ có đóng gói lấy ngói, sổ không đóng gói (đồ thờ) lấy bộ đỉnh hạc
+const TEMPLATE_EXAMPLES = {
+  pack: [
+    { sku: 'NAD-L-DO', name: 'Ngói âm dương cỡ L', category: 'Ngói', pattern: 'Âm dương', material: 'Sứ', size: 'L', color: 'Đỏ gốm', norm: '27 viên/m2', unit: 'Viên', cost: 10000, prices: [18000, 16000, 15000], qty: 5000, low_stock: 1000, units_per_pack: 140, pack_unit: 'thùng', pack_weight: 28, unit_weight: 0.2 },
+    { name: 'Bình hút lộc men lam 30cm', category: 'Bình hút lộc', pattern: 'Hũ tròn', size: '30cm', color: 'Men lam', unit: 'Cái', cost: 320000, prices: [650000, 590000, 550000], qty: 12, low_stock: 3, unit_weight: 4.5, note: 'Ví dụ SKU để trống' },
+    { sku: 'NGHE-40-VHG', name: 'Nghê phong thủy 40cm', category: 'Linh vật - phong thủy', pattern: 'Nghê', size: '40cm', color: 'Vàng hoàng gia', unit: 'Đôi', cost: 2000000, prices: [3500000, 3000000, 2800000], qty: 4, low_stock: 2 },
+  ],
+  plain: [
+    { sku: 'TYC001', name: 'Bộ đỉnh hạc tai rồng H57', category: 'Bộ đỉnh hạc', pattern: 'Phúc Liên Hoa', size: 'H57', color: 'Men lam', unit: 'Bộ', cost: 1200000, prices: [2500000, 2200000, 2000000], qty: 3, low_stock: 1, unit_weight: 12 },
+    { name: 'Bình hút lộc men lam 30cm', category: 'Bình hút lộc', pattern: 'Hũ tròn', size: '30cm', color: 'Men lam', unit: 'Cái', cost: 320000, prices: [650000, 590000, 550000], qty: 12, low_stock: 3, unit_weight: 4.5, note: 'Ví dụ SKU để trống' },
+    { sku: 'NGHE-40-VHG', name: 'Nghê phong thủy 40cm', category: 'Linh vật - phong thủy', pattern: 'Nghê', size: '40cm', color: 'Vàng hoàng gia', unit: 'Đôi', cost: 2000000, prices: [3500000, 3000000, 2800000], qty: 4, low_stock: 2 },
+  ],
+};
+
+export function productTemplate(settings = {}) {
+  const priceNames = settings.price_names || ['Giá 1', 'Giá 2', 'Giá 3'];
+  const prof = bookProfile(settings);
+  const unitWeight = prof.packaging ? 'Trọng lượng/viên (kg)' : 'Trọng lượng/cái (kg)';
+  const cols = TEMPLATE_COLS.filter(([k]) => k === '$prices' || prof.has(k))
+    .flatMap(([k, label]) => (k === '$prices' ? priceNames.map((n) => [k, n]) : [[k, k === 'unit_weight' ? unitWeight : label]]));
+  // Mức giá thứ 4, 5 của ví dụ lặp lại mức 2 để file mẫu không có ô trống khó hiểu
+  const rowOf = (ex) => { let pi = 0; return cols.map(([k]) => { if (k !== '$prices') return ex[k] ?? ''; const i = pi++; return ex.prices[i] ?? ex.prices[1]; }); };
+  const ex = TEMPLATE_EXAMPLES[prof.packaging ? 'pack' : 'plain'];
   const guide = [
     ['HƯỚNG DẪN NHẬP HÀNG HÓA'],
     ['• Mỗi dòng là 1 biến thể (mẫu + kích thước + màu + ĐVT) và có 1 mã SKU riêng. Để trống SKU thì hệ thống tự cấp SP00001, SP00002…'],
@@ -484,13 +523,16 @@ export function productTemplate(priceNames) {
     ['• "Số lượng tồn" + "Giá vốn" được ghi thành phiếu TỒN ĐẦU KỲ (1 lần). Đây không phải giao dịch mua/bán nên không làm tăng doanh thu hay công nợ.'],
     ['• Nếu SKU đã có trong phần mềm: chỉ cập nhật tên, loại, giá… KHÔNG đổi tồn kho (tồn chỉ đổi qua phiếu nhập/xuất/điều chỉnh).'],
     ['• Số tiền ghi số thường (vd 1500000), không cần ký hiệu đ. Xóa 3 dòng ví dụ trước khi nhập.'],
-    ['• "Số viên/hộp" + "Đơn vị đóng gói" (hộp, thùng, kiện…): dùng để in quy cách “4 hộp x 140 viên + 40 viên” trên hóa đơn và biên bản bàn giao. Để trống nếu không đóng hộp.'],
-    ['• "Trọng lượng/thùng (kg)" và/hoặc "Trọng lượng/viên (kg)": dùng để tính tổng trọng lượng đơn hàng (báo xe, ship). Chỉ cần điền 1 trong 2 cột; có cả 2 thì ưu tiên kg/viên. Ghi kiểu "28kg/ thùng", "140 viên/ thùng", "0,20" cũng được.'],
+    ...(prof.has('norm') ? [['• "Định mức": ghi kiểu "27 viên/m2" (theo m²) hoặc "5 viên/m dài" (theo mét dài). Dùng để tính số lượng khi báo giá.']] : []),
+    ...(prof.packaging ? [
+      ['• "Số viên/hộp" + "Đơn vị đóng gói" (hộp hoặc thùng, ghi riêng từng mã): dùng để in quy cách “4 hộp x 140 viên + 40 viên” trên hóa đơn và biên bản bàn giao. Để trống nếu không đóng gói.'],
+      ['• "Trọng lượng/thùng (kg)" là kg của 1 đơn vị đóng gói (1 hộp hoặc 1 thùng). Có thể điền cột này và/hoặc "Trọng lượng/viên (kg)" để tính tổng trọng lượng đơn hàng; có cả 2 thì ưu tiên kg/viên.'],
+    ] : [['• "Trọng lượng/cái (kg)": dùng để tính tổng trọng lượng đơn hàng khi gửi xe, ship. Để trống nếu không cần.']]),
     [`• Các cột giá: ${priceNames.join(' / ')} — tương ứng mức giá gán cho từng khách hàng.`],
   ];
   const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet([cols, ...ex]);
-  ws['!cols'] = cols.map((c) => ({ wch: Math.max(12, c.length + 2) }));
+  const ws = XLSX.utils.aoa_to_sheet([cols.map(([, label]) => label), ...ex.map(rowOf)]);
+  ws['!cols'] = cols.map(([, c]) => ({ wch: Math.max(12, c.length + 2) }));
   XLSX.utils.book_append_sheet(wb, ws, 'Hàng hóa');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(guide), 'Hướng dẫn');
   return new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })]);

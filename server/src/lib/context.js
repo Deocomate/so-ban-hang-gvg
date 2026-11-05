@@ -4,6 +4,8 @@
 import crypto from 'node:crypto';
 
 export const ctx = { db: null, uid: null, members: new Map() };
+// Các cột giá bán của hàng hóa, ứng với mức giá 1..5 của sổ
+export const PRICE_KEYS = ['price1', 'price2', 'price3', 'price4', 'price5'];
 
 export class AppError extends Error {
   constructor(message, status = 400) { super(message); this.status = status; }

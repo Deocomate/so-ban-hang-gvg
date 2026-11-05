@@ -8,6 +8,7 @@ import { useProducts, useCustomers, useFunds, productSub, priceOf, unitsOf, find
 import { packing, weightOf, fmtKg } from '../lib/docs/model.js';
 import { Btn, Icon, Input, Select, DateInput, NumInput, Loading, Picker } from '../components/ui.jsx';
 import { ChargesDialog } from './Charges.jsx';
+import { packView } from '../lib/book-profile.js';
 
 let seq = 0;
 const METHODS = ['Tiền mặt', 'Chuyển khoản', 'Thẻ / POS', 'TikTok Shop', 'COD'];
@@ -126,7 +127,7 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
     setF((s) => ({ ...s, discount: grpInfo?.discount_type === 'vnd' ? Number(grpInfo.discount) || 0 : 0,
       lines: s.lines.map((l) => (l.manual ? l : { ...l, discount_pct: grpPct })) }));
   }, [cust?.id, cust?.kind]);
-  const pmap = useMemo(() => Object.fromEntries((products.data || []).map((p) => [p.id, p])), [products.data]);
+  const pmap = useMemo(() => Object.fromEntries((products.data || []).map((p) => [p.id, packView(p, settings)])), [products.data, settings]);
   // Bảng giá có tên: chỉ hiện bảng đang hiệu lực, đúng nhóm khách và người tạo
   const myBooks = booksFor(priceBooks.data, cust, session?.user?.id);
   const pbook = (priceBooks.data || []).find((b) => b.id === f.price_book_id) || null;

@@ -6,10 +6,10 @@ import Database from './sqlite.js';
 import { ctx, today, vnDate, daysBetween, nowIso } from '../lib/context.js';
 import { shipStatusLabel, codStatusLabel, carrierName } from '../lib/labels.js';
 import { can } from '../domain/access.js';
-import { addAnamtileBook, defaultDocs } from '../domain/books.js';
+import { addAnamtileBook, defaultDocs, VARIANTS } from '../domain/books.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 // Bảng ghi nhật ký chỉnh sửa; cột bỏ qua khi so sánh UPDATE (do hệ thống tự cập nhật)
 const AUDIT_TABLES = {
@@ -66,6 +66,7 @@ const ADDED_COLUMNS = [
   ['products', 'pack_weight', 'real check (pack_weight is null or pack_weight >= 0)'],
   ['products', 'unit_weight', 'real check (unit_weight is null or unit_weight >= 0)'],
   ['products', 'price4', 'real not null default 0'],
+  ['products', 'price5', 'real not null default 0'],
   ['products', 'brand', 'text'],
   ['products', 'material', 'text'],
   ['products', 'norm_m2', 'real check (norm_m2 is null or norm_m2 >= 0)'],
@@ -93,15 +94,16 @@ const ADDED_COLUMNS = [
   ['purchase_order_lines', 'unit_conv', 'real not null default 1'],
 ];
 
-// SQLite không sửa được CHECK của bảng đã có nên phải dựng lại bảng khách hàng để nhận mức giá 4
+// SQLite không sửa được CHECK của bảng đã có nên phải dựng lại bảng khách hàng để nhận đủ 5 mức giá
 function widenPriceTier(db) {
   const table = db.prepare(`select sql from sqlite_master where type = 'table' and name = 'customers'`).get();
-  if (!table.sql.includes('between 1 and 3')) return;
+  const old = ['between 1 and 3', 'between 1 and 4'].find((x) => table.sql.includes(x));
+  if (!old) return;
   const indexes = db.prepare(`select sql from sqlite_master where type = 'index' and tbl_name = 'customers' and sql is not null`).all();
   db.pragma('foreign_keys = OFF');
   db.pragma('legacy_alter_table = ON');
   db.transaction(() => {
-    db.exec(table.sql.replace('customers', 'customers_new').replace('between 1 and 3', 'between 1 and 4'));
+    db.exec(table.sql.replace('customers', 'customers_new').replace(old, 'between 1 and 5'));
     db.exec(`insert into customers_new select * from customers; drop table customers; alter table customers_new rename to customers;`);
     for (const i of indexes) db.exec(i.sql);
     const broken = db.pragma('foreign_key_check');
@@ -116,6 +118,20 @@ function addFourthPriceName(db) {
   for (const b of db.prepare(`select id, settings from books where short_name = 'TH'`).all()) {
     const s = JSON.parse(b.settings);
     if (s.price_names?.length === 3) db.prepare(`update books set settings = ? where id = ?`).run(JSON.stringify({ ...s, price_names: [...s.price_names, 'Giá đại lý II'] }), b.id);
+  }
+}
+
+// Sổ đang chạy nhận hồ sơ ngành hàng mới: thêm mức giá (Thanh Hải: đại lý I + công trình lẻ, Vũ Gia: giá CH) và thiết lập đóng gói.
+// Chỉ đổi tên mức giá khi sổ còn đúng tên mặc định cũ, để không ghi đè tên chủ sổ đã tự đặt.
+const OLD_PRICE_NAMES = { TH: ['Giá lẻ', 'Giá đại lý', 'Giá công trình', 'Giá đại lý II'], VG: ['Giá lẻ', 'Giá sỉ', 'Giá CTV'] };
+function applyBookProfiles(db) {
+  for (const b of db.prepare(`select id, short_name, settings from books`).all()) {
+    const v = VARIANTS[b.short_name]; if (!v) continue;
+    const s = JSON.parse(b.settings); const next = { ...s };
+    if (OLD_PRICE_NAMES[b.short_name] && JSON.stringify(s.price_names) === JSON.stringify(OLD_PRICE_NAMES[b.short_name])) next.price_names = v.price_names;
+    if (!('packaging' in s)) next.packaging = v.packaging;
+    if (!('hide_fields' in s)) next.hide_fields = v.hide_fields;
+    db.prepare(`update books set settings = ? where id = ?`).run(JSON.stringify(next), b.id);
   }
 }
 
@@ -164,6 +180,7 @@ function migrate(db, from) {
   if (from === 1) addFourthPriceName(db);
   if (from > 0 && from < 3) addLegalEntities(db);
   if (from > 0 && from < 6) setProductTypes(db);
+  if (from > 0 && from < 7) applyBookProfiles(db);
 }
 
 // Loại hàng mới: bộ cũ thành combo, hàng đã có định mức sản xuất thành hàng sản xuất; ảnh cũ thành ảnh đầu tiên

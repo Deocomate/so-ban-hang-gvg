@@ -8,6 +8,7 @@ import { money, moneyD, qty as fq, dmy, todayVN, match, pct } from '../lib/forma
 import { useProducts, useCustomers, useFunds, tierPrice, productLabel, productSub, KIND_LABEL } from '../lib/lookups.js';
 import { exportXlsx } from '../lib/excel.js';
 import { packing, weightOf, fmtKg } from '../lib/docs/model.js';
+import { packView } from '../lib/book-profile.js';
 import {
   Btn, Icon, Pill, StatusPill, DELIVERY, PAYMENT, Field, Input, TextArea, Select, DateInput, NumInput, Check, Tabs, Search, Loading,
   ErrorBox, Note, Table, Modal, ConfirmBtn, Picker, KV, Section, Empty, ListPage, FilterBox, RadioList,
@@ -127,8 +128,9 @@ export function SpecialPage() {
 // Tổng số thùng / trọng lượng của các dòng hàng (theo quy cách khai trong sản phẩm)
 function OrderWeight({ lines }) {
   const products = useProducts();
+  const { settings } = useApp();
   if (!lines?.length || !products.data) return null;
-  const pm = Object.fromEntries(products.data.map((p) => [p.id, p]));
+  const pm = Object.fromEntries(products.data.map((p) => [p.id, packView(p, settings)]));
   let kg = 0; let miss = 0; let boxes = 0; const units = new Set();
   for (const l of lines) {
     const p = pm[l.product_id]; const q = Number(l.eff_qty) || 0; if (!q) continue;

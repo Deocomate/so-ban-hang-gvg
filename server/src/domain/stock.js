@@ -1,5 +1,5 @@
 // Kho: ghi sổ kho (giá vốn bình quân gia quyền di động), phiếu điều chỉnh / xuất hủy / xuất dùng nội bộ, phiếu sản xuất, nhập hàng hóa từ Excel kèm tồn đầu kỳ.
-import { ctx, fail, one, run, insert, uuid, nowIso, rnd, num, bool, nz, trimNz, coalesce, asDate, today } from '../lib/context.js';
+import { ctx, fail, one, run, insert, uuid, nowIso, rnd, num, bool, nz, trimNz, coalesce, asDate, today, PRICE_KEYS } from '../lib/context.js';
 import { requirePerm, checkDate, nextCode, newMasterCode, once } from './access.js';
 
 const qty6 = (x) => rnd(x, 6);
@@ -179,7 +179,7 @@ export function import_products(p) {
       const cst = num(row.cost);
       if ((num(row.pack_weight) ?? 0) < 0 || (num(row.unit_weight) ?? 0) < 0) fail(`Dòng ${i}: trọng lượng không được âm`);
       if (q < 0) fail(`Dòng ${i}: số lượng không được âm`);
-      if ((cst ?? 0) < 0 || (num(row.price1) ?? 0) < 0 || (num(row.price2) ?? 0) < 0 || (num(row.price3) ?? 0) < 0 || (num(row.price4) ?? 0) < 0) fail(`Dòng ${i}: giá không được âm`);
+      if ((cst ?? 0) < 0 || PRICE_KEYS.some((k) => (num(row[k]) ?? 0) < 0)) fail(`Dòng ${i}: giá không được âm`);
       let s = trimNz(row.sku); let ex = null;
       if (s) {
         if (seen.has(s.toLowerCase())) fail(`Dòng ${i}: SKU "${s}" bị lặp trong file`);
@@ -199,11 +199,11 @@ export function import_products(p) {
         run(`update products set name = coalesce(?, name), category = coalesce(?, category), brand = coalesce(?, brand), pattern = coalesce(?, pattern), size = coalesce(?, size),
             color = coalesce(?, color), unit = coalesce(?, unit), units_per_pack = coalesce(?, units_per_pack), pack_unit = coalesce(?, pack_unit),
             pack_weight = coalesce(?, pack_weight), unit_weight = coalesce(?, unit_weight), material = coalesce(?, material), norm_m2 = coalesce(?, norm_m2), norm_m = coalesce(?, norm_m),
-            price1 = coalesce(?, price1), price2 = coalesce(?, price2), price3 = coalesce(?, price3), price4 = coalesce(?, price4), low_stock = coalesce(?, low_stock),
+            price1 = coalesce(?, price1), price2 = coalesce(?, price2), price3 = coalesce(?, price3), price4 = coalesce(?, price4), price5 = coalesce(?, price5), low_stock = coalesce(?, low_stock),
             note = coalesce(?, note), max_stock = coalesce(?, max_stock), location = coalesce(?, location), width = coalesce(?, width), length = coalesce(?, length),
             dim_unit = coalesce(?, dim_unit), sell_direct = coalesce(?, sell_direct), description = coalesce(?, description), order_note = coalesce(?, order_note), updated_at = ? where id = ?`,
           trimNz(row.name), nz(row.category), nz(row.brand), nz(row.pattern), nz(row.size), nz(row.color), nz(row.unit), num(row.units_per_pack), trimNz(row.pack_unit),
-          num(row.pack_weight), num(row.unit_weight), nz(row.material), num(row.norm_m2), num(row.norm_m), num(row.price1), num(row.price2), num(row.price3), num(row.price4), num(row.low_stock), nz(row.note),
+          num(row.pack_weight), num(row.unit_weight), nz(row.material), num(row.norm_m2), num(row.norm_m), ...PRICE_KEYS.map((k) => num(row[k])), num(row.low_stock), nz(row.note),
           num(row.max_stock), trimNz(row.location), num(row.width), num(row.length), dimUnit, sd, nz(row.description), trimNz(row.order_note), nowIso(), ex.id);
         if (Array.isArray(row.units)) saveUnits(b, ex.id, nz(row.unit) || ex.unit, row.units);
         updated++;
@@ -212,7 +212,7 @@ export function import_products(p) {
         if (!s) s = newMasterCode(b, 'SP', 'products');
         const id = uuid();
         insert('products', { id, book_id: b, sku: s, name: trimNz(row.name), material: nz(row.material), norm_m2: num(row.norm_m2), norm_m: num(row.norm_m), category: nz(row.category), brand: nz(row.brand), pattern: nz(row.pattern), size: nz(row.size),
-          color: nz(row.color), unit: nz(row.unit) || 'Cái', price1: num(row.price1) ?? 0, price2: num(row.price2) ?? 0, price3: num(row.price3) ?? 0, price4: num(row.price4) ?? 0,
+          color: nz(row.color), unit: nz(row.unit) || 'Cái', ...Object.fromEntries(PRICE_KEYS.map((k) => [k, num(row[k]) ?? 0])),
           low_stock: num(row.low_stock) ?? 0, note: nz(row.note), last_cost: cst ?? 0, units_per_pack: num(row.units_per_pack),
           pack_unit: trimNz(row.pack_unit) || 'hộp', pack_weight: num(row.pack_weight), unit_weight: num(row.unit_weight),
           product_type: type || 'hang', max_stock: type === 'dich_vu' ? null : num(row.max_stock), location: type === 'dich_vu' ? null : trimNz(row.location),

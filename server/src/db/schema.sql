@@ -65,6 +65,7 @@ create table if not exists products (
   price2 real not null default 0,
   price3 real not null default 0,
   price4 real not null default 0,
+  price5 real not null default 0,
   low_stock real not null default 0,
   is_kit integer not null default 0,
   active integer not null default 1,
@@ -122,7 +123,7 @@ create table if not exists price_books (
   valid_from text,
   valid_to text,
   active integer not null default 1,
-  formula text not null default '{}',          -- {base: cost|last_in|tier1..4|book:<id>, op: + | -, value, pct}
+  formula text not null default '{}',          -- {base: cost|last_in|tier1..5|book:<id>, op: + | -, value, pct}
   allow_others integer not null default 1,     -- cho thêm hàng không có trong bảng (lấy giá chung)
   warn_others integer not null default 0,
   cust_groups text,                            -- null = tất cả nhóm khách; ngược lại mảng tên nhóm
@@ -145,7 +146,7 @@ create table if not exists customers (
   code text not null,
   name text not null,
   phone text, address text, contact text, kind text,
-  price_tier integer not null default 1 check (price_tier between 1 and 4),
+  price_tier integer not null default 1 check (price_tier between 1 and 5),
   credit_days integer not null default 0,
   credit_limit real not null default 0,
   note text,

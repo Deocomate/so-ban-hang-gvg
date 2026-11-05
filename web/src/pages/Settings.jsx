@@ -52,11 +52,14 @@ function useSaveSettings() {
   return { save, busy };
 }
 
+// Bỏ các ô tên mức giá trống ở cuối; ô trống ở giữa thì báo lỗi phía máy chủ thay vì âm thầm dồn mức giá
+const priceNamesToSave = (names) => { const t = names.map((x) => x.trim()); while (t.length > 3 && !t[t.length - 1]) t.pop(); return t; };
+
 function BookSettings() {
   const { book, settings } = useApp();
   const { save, busy } = useSaveSettings();
   const [f, setF] = useState(null);
-  useEffect(() => { setF({ name: book.name, vat: (settings.vat_rate || 0) * 100, pit: (settings.pit_rate || 0) * 100, price_names: [...(settings.price_names || []), '', '', '', ''].slice(0, 4),
+  useEffect(() => { setF({ name: book.name, vat: (settings.vat_rate || 0) * 100, pit: (settings.pit_rate || 0) * 100, price_names: [...(settings.price_names || []), '', '', '', '', ''].slice(0, 5), packaging: settings.packaging !== false,
     allow_oversell: !!settings.allow_oversell, lock_date: settings.lock_date || '', due_warn_days: settings.due_warn_days ?? 3, fee_category: settings.fee_category || 'Phí sàn TMĐT', shop_phone: settings.shop_phone || '', shop_address: settings.shop_address || '', slip_note: settings.slip_note || '' }); }, [book.id]);
   if (!f) return <Loading />;
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
@@ -79,8 +82,11 @@ function BookSettings() {
         </div>
       </Section>
       <Section title="Mức giá bán">
-        <div className="grid">{[0, 1, 2, 3].map((i) => <Field key={i} label={`Mức giá ${i + 1}${i === 3 ? ' (không bắt buộc)' : ''}`}><Input value={f.price_names[i]} onChange={(v) => set('price_names', f.price_names.map((x, j) => (j === i ? v : x)))} /></Field>)}</div>
-        <div className="muted small">Mỗi khách hàng gắn với 1 mức giá; khi tạo đơn, giá tự điền theo mức của khách (vẫn sửa được từng dòng).</div>
+        <div className="grid">{[0, 1, 2, 3, 4].map((i) => <Field key={i} label={`Mức giá ${i + 1}${i >= 3 ? ' (không bắt buộc)' : ''}`}><Input value={f.price_names[i]} onChange={(v) => set('price_names', f.price_names.map((x, j) => (j === i ? v : x)))} /></Field>)}</div>
+        <div className="muted small">Mỗi khách hàng gắn với 1 mức giá; khi tạo đơn, giá tự điền theo mức của khách (vẫn sửa được từng dòng). Muốn dùng mức 5 thì phải đặt tên cả mức 4.</div>
+      </Section>
+      <Section title="Hàng hóa">
+        <Check checked={f.packaging} onChange={(v) => set('packaging', v)}>Hàng có đóng gói (hộp, thùng): hiện quy cách đóng gói, in “x hộp x y viên” trên chứng từ</Check>
       </Section>
       <Section title="Quy tắc">
         <Check checked={f.allow_oversell} onChange={(v) => set('allow_oversell', v)}>Cho phép giao vượt số tồn kho (mặc định: chặn)</Check>
@@ -90,7 +96,7 @@ function BookSettings() {
           <Field label="Nhóm chi phí cho phí sàn"><Input value={f.fee_category} onChange={(v) => set('fee_category', v)} /></Field>
         </div>
       </Section>
-      <div><Btn kind="primary" busy={busy} onClick={() => save({ vat_rate: Number(f.vat || 0) / 100, pit_rate: Number(f.pit || 0) / 100, price_names: f.price_names.map((x) => x.trim()).filter((x, i) => i < 3 || x),
+      <div><Btn kind="primary" busy={busy} onClick={() => save({ vat_rate: Number(f.vat || 0) / 100, pit_rate: Number(f.pit || 0) / 100, price_names: priceNamesToSave(f.price_names), packaging: f.packaging,
         allow_oversell: f.allow_oversell, lock_date: f.lock_date || null, due_warn_days: Number(f.due_warn_days || 0), fee_category: f.fee_category, shop_phone: f.shop_phone, shop_address: f.shop_address, slip_note: f.slip_note }, f.name)}>Lưu cài đặt</Btn></div>
     </div>
   );

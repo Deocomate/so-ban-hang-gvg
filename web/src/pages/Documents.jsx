@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../lib/store.jsx';
+import { packView } from '../lib/book-profile.js';
 import { dmy } from '../lib/format.js';
 import { saveFile } from '../lib/excel.js';
 import { Btn, Loading, ErrorBox, Note, Modal, Field, Input, TextArea, Select, DateInput, NumInput, Check, Section, Tabs, ConfirmBtn } from '../components/ui.jsx';
@@ -96,7 +97,7 @@ export function DocDialog({ kind, id, type: type0, onClose }) {
   const [showForm, setShowForm] = useState(true);
   useEffect(() => {
     let alive = true; setErr(null);
-    loadDocData(q, rpc, src).then((d) => alive && setData(d)).catch((e) => alive && setErr(e.message));
+    loadDocData(q, rpc, src).then((d) => alive && setData({ ...d, prods: Object.fromEntries(Object.entries(d.prods).map(([id, p]) => [id, packView(p, settings)])) })).catch((e) => alive && setErr(e.message));
     return () => { alive = false; };
   }, [src.kind, src.id, reload]);
   // Biên bản / phiếu xuất kho theo từng lần giao; hóa đơn / đơn đặt hàng theo cả đơn
