@@ -1,5 +1,5 @@
 // Ngữ cảnh dùng chung cho mọi hàm nghiệp vụ: kết nối CSDL, người đang gọi, tiện ích SQL / ngày / số.
-// better-sqlite3 chạy đồng bộ nên mỗi lời gọi RPC chạy trọn vẹn trước lời gọi kế tiếp
+// SQLite (node:sqlite) chạy đồng bộ nên mỗi lời gọi RPC chạy trọn vẹn trước lời gọi kế tiếp
 // → giữ "người đang gọi" trong biến chung là an toàn.
 import crypto from 'node:crypto';
 

@@ -8,7 +8,7 @@ RUN npm ci
 COPY web/ ./
 RUN npm run build
 
-# 2) Máy chủ API (better-sqlite3 có sẵn bản dựng cho Linux glibc, không cần biên dịch)
+# 2) Máy chủ API (SQLite có sẵn trong Node — node:sqlite, không cần biên dịch)
 FROM node:22-bookworm-slim
 ENV NODE_ENV=production \
     PORT=3000 \

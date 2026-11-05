@@ -17,7 +17,7 @@ function run(command, cwd) {
 
 // Không gọi process.exit: trên Windows thoát ngay sau fetch làm Node báo lỗi libuv
 async function main() {
-  if (Number(process.versions.node.split('.')[0]) < 20) throw new Error(`Cần Node.js 20 trở lên, máy đang có ${process.version}. Hãy cài bản LTS ở https://nodejs.org rồi mở lại.`);
+  if (Number(process.versions.node.split('.')[0]) < 22) throw new Error(`Cần Node.js 22 trở lên, máy đang có ${process.version}. Hãy cài bản LTS ở https://nodejs.org rồi mở lại.`);
 
   if (await appUp()) {
     console.log(`Ứng dụng đang chạy sẵn: ${WEB_URL}`);

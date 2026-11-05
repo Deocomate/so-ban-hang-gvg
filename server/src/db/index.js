@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import Database from 'better-sqlite3';
+import Database from './sqlite.js';
 import { ctx, today, vnDate, daysBetween, nowIso } from '../lib/context.js';
 import { shipStatusLabel, codStatusLabel, carrierName } from '../lib/labels.js';
 import { can } from '../domain/access.js';

@@ -3,7 +3,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, renameSync } from 'node:fs';
 import http from 'node:http';
-import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { root, WEB_URL, loadSettings, saveSettings, dataDirOf, dbFileOf, appEnv, sampleAccount, needsInstall, appUp, busyPort, openUrl } from './app-control.js';
 
@@ -135,7 +135,7 @@ const ACTIONS = {
   }],
   backup: ['Đang sao lưu…', async () => {
     if (!existsSync(dbFileOf(settings))) throw new Error('Chưa có dữ liệu để sao lưu, hãy bật ứng dụng trước.');
-    const Database = createRequire(path.join(root, 'server', 'package.json'))('better-sqlite3');
+    const { default: Database } = await import(pathToFileURL(path.join(root, 'server', 'src', 'db', 'sqlite.js')).href);
     const dir = path.join(dataDirOf(settings), 'backups');
     mkdirSync(dir, { recursive: true });
     const file = path.join(dir, `gomsu-thu-cong-${stamp()}.db`);
