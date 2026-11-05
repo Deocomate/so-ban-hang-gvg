@@ -32,8 +32,9 @@ export const config = {
   // Địa chỉ trang web, dùng để tạo link trong email (mời, quên mật khẩu, xác thực). Bản chạy thật bắt buộc khai.
   appUrl: String(env.APP_URL || (production ? '' : 'http://localhost:5173')).replace(/\/+$/, ''),
   // Gửi email qua Gmail: SMTP_USER = địa chỉ Gmail, SMTP_PASS = mật khẩu ứng dụng 16 ký tự (không phải mật khẩu Gmail)
-  smtp: { host: env.SMTP_HOST || 'smtp.gmail.com', port: Number(env.SMTP_PORT || 465), user: env.SMTP_USER || '', pass: env.SMTP_PASS || '',
-    from: env.SMTP_FROM || (env.SMTP_USER ? `Sổ bán hàng <${env.SMTP_USER}>` : '') },
+  // Mật khẩu ứng dụng Gmail hiện theo nhóm 4 ký tự có dấu cách: bỏ dấu cách. SMTP_FROM chỉ có tên → ghép với địa chỉ SMTP_USER.
+  smtp: { host: env.SMTP_HOST || 'smtp.gmail.com', port: Number(env.SMTP_PORT || 465), user: env.SMTP_USER || '', pass: String(env.SMTP_PASS || '').replace(/\s+/g, ''),
+    from: env.SMTP_FROM?.includes('@') ? env.SMTP_FROM : env.SMTP_USER ? `"${(env.SMTP_FROM || 'Sổ bán hàng').replace(/"/g, '')}" <${env.SMTP_USER}>` : '' },
   dataDir,
   dbPath: env.DB_PATH || path.join(dataDir, 'gomsu.db'),
   webDir: path.resolve(env.WEB_DIR || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'web', 'dist')),
