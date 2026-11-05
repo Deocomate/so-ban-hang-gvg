@@ -315,7 +315,8 @@ function Shell() {
           {byId['cai-dat'] && <button className={`icon-btn hdr-gear${cur.id === 'cai-dat' ? ' on' : ''}`} onClick={() => go('cai-dat')} aria-label="Cài đặt" title="Cài đặt"><Icon name="gear" size={20} /></button>}
           <Dropdown className="hdr-user" btnClass="user-btn" align="right" icon="users" label={<span className="user-name">{userName}</span>}>
             <div className="dd-info"><b>{userName}</b>{session?.user?.email && <span className="muted small">{session.user.email}</span>}</div>
-            <button className="dd-item" role="menuitem" onClick={() => go('cai-dat')}><Icon name="gear" size={16} />Cài đặt &amp; tài khoản</button>
+            <button className="dd-item" role="menuitem" onClick={() => go('cai-dat', 'me')}><Icon name="users" size={16} />Tài khoản của tôi (đổi mật khẩu)</button>
+            <button className="dd-item" role="menuitem" onClick={() => go('cai-dat')}><Icon name="gear" size={16} />Cài đặt</button>
             <button className="dd-item" role="menuitem" onClick={signOut}><Icon name="logout" size={16} />Đăng xuất</button>
           </Dropdown>
         </div>

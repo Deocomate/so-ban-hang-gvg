@@ -22,8 +22,8 @@ export function SettingsPage(nav) {
       <Tabs value={tab} onChange={setTab} tabs={owner ? [
         { value: 'book', label: 'Thông tin sổ' }, { value: 'lists', label: 'Danh sách chọn' }, { value: 'funds', label: 'Quỹ tiền' }, ...adminTabs,
         { value: 'bank', label: 'Tài khoản nhận tiền' }, { value: 'docs', label: 'Mẫu chứng từ' }, { value: 'carriers', label: 'Đơn vị vận chuyển' }, { value: 'notify', label: 'Thông báo điện thoại' },
-        { value: 'data', label: 'Nhập / sao lưu dữ liệu' }, { value: 'audit', label: 'Nhật ký thay đổi' }, { value: 'me', label: 'Tài khoản' },
-      ] : [{ value: 'notify', label: 'Thông báo điện thoại' }, { value: 'me', label: 'Tài khoản' }]} />
+        { value: 'data', label: 'Nhập / sao lưu dữ liệu' }, { value: 'audit', label: 'Nhật ký thay đổi' }, { value: 'me', label: 'Tài khoản của tôi' },
+      ] : [{ value: 'notify', label: 'Thông báo điện thoại' }, { value: 'me', label: 'Tài khoản của tôi' }]} />
       {tab === 'bank' && <BankSettings />}
       {tab === 'docs' && <DocTemplateSettings />}
       {tab === 'notify' && <NotifySettings />}

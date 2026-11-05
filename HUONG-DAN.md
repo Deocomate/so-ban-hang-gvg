@@ -49,7 +49,7 @@ Cơ sở dữ liệu là **một tệp SQLite** (`/data/gomsu.db` trong Docker v
 1. Khai `ADMIN_EMAIL`, `ADMIN_PASSWORD` (ít nhất 8 ký tự, có chữ và số), `APP_URL` (địa chỉ trang web) và Gmail gửi thư `SMTP_USER`, `SMTP_PASS` (xem `.env.example`), rồi khởi động máy chủ.
 2. Máy chủ tạo tài khoản **Tổng quản trị** và 3 sổ (Thanh Hải, Vũ Gia, Anamtile). Việc này chỉ xảy ra khi hệ thống **chưa có Tổng quản trị nào**.
 3. Đăng nhập lần đầu, phần mềm **bắt đổi mật khẩu**. Sau đó mật khẩu chỉ chủ tài khoản biết: sửa `.env` hay khởi động lại cũng không đặt lại được. Nên xóa `ADMIN_PASSWORD` khỏi tệp môi trường sau bước này.
-4. Vào **Cài đặt → Tài khoản** bấm **Gửi link xác thực email** để xác nhận email quản trị.
+4. Bấm tên tài khoản ở góc phải trên → **Tài khoản của tôi**, bấm **Gửi link xác thực email** để xác nhận email quản trị.
 
 Không còn tự đăng ký tài khoản: mọi người dùng đều do Tổng quản trị mời.
 
@@ -65,7 +65,7 @@ Không còn tự đăng ký tài khoản: mọi người dùng đều do Tổng 
 5. **Cài đặt → Vai trò**: sửa quyền của một vai trò thì mọi người đang dùng vai trò đó đổi theo ngay; thêm vai trò mới khi có khâu mới.
 6. Trong hộp thoại của từng người: gửi lại lời mời, gửi email đặt lại mật khẩu, đăng xuất người đó khỏi mọi thiết bị, **khóa tài khoản** (người nghỉ việc: khóa là mất quyền ngay, lịch sử chứng từ vẫn giữ tên họ).
 
-### Tài khoản của mỗi người (Cài đặt → Tài khoản)
+### Tài khoản của mỗi người (bấm tên ở góc phải trên → Tài khoản của tôi)
 - Sửa tên, số điện thoại; đổi mật khẩu; đổi email đăng nhập (link xác nhận gửi tới email mới, email cũ nhận thư báo).
 - **Đăng xuất mọi thiết bị khác** khi quên đăng xuất ở máy khác hoặc nghi lộ mật khẩu.
 - Mỗi lần đổi / đặt lại mật khẩu, đổi email, chủ tài khoản đều nhận thư báo.
