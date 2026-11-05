@@ -1,11 +1,13 @@
 ---
 phase: 4
 title: "Deploy và nạp dữ liệu lên máy chủ"
-status: pending
+status: completed
 dependsOn: [3]
 ---
 
 # Giai đoạn 4: Deploy và nạp dữ liệu lên máy chủ
+
+> **Kết quả 05/11/2026:** đã deploy bản mới (CSDL phiên bản 7, `/api/health` đạt). Phần nạp dữ liệu bỏ theo yêu cầu của khách: khách tự tạo file và tự nhập, giá KiotViet là giá cũ. 750 mã KiotViet đã nạp thử vào sổ Thanh Hải lúc 15:30 đã xóa lúc 15:33; sao lưu ở `/var/lib/so-ban-hang-gom/backups/` (`truoc-ho-so-so-*`, `truoc-nap-hang-th-*`, `truoc-xoa-hang-kiotviet-*`). Các bước dựng file nhập bên dưới không dùng nữa.
 
 ## Bối cảnh
 

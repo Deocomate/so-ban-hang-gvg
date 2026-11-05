@@ -20,7 +20,7 @@ Theo phương án A trong [báo cáo brainstorm](../reports/brainstorm-261105-14
 - Sổ Thanh Hải (gốm xây dựng) nhập được nguyên file `01. MẪU NHẬP HÀNG HÓA - SỔ BÁN HÀNG TH CERAMICS.xlsx`: đủ 5 mức giá, định mức dạng “27 viên/m2”, đóng gói theo hộp hoặc thùng từng mã.
 - Sổ Vũ Gia (đồ thờ) nhập được nguyên file `MẪU NHẬP HÀNG HÓA - SỔ BÁN HÀNG GVG (1).xlsx`: 3 mức Lẻ / Sỉ / CH, không hiện các ô đóng gói, định mức, chất liệu.
 - File mẫu tải từ phần mềm của mỗi sổ có đúng các cột khách gửi.
-- Bản mới chạy trên máy chủ, dữ liệu cũ còn nguyên, hàng hóa thật nạp được vào từng sổ.
+- Bản mới chạy trên máy chủ, dữ liệu cũ còn nguyên; khách tự nhập hàng hóa thật vào từng sổ bằng file mẫu.
 
 ## Ngoài phạm vi
 
@@ -30,10 +30,8 @@ Theo phương án A trong [báo cáo brainstorm](../reports/brainstorm-261105-14
 
 ## Quyết định đã chốt (05/11/2026)
 
-- Danh mục Thanh Hải lấy **KiotViet làm gốc**: 750 mã với mã thật kiểu `1AD27-DC01` ([khảo sát](../reports/khao-sat-261105-1448-kiotviet-thanh-hai.md)). File `mau-excel/hang-hoa-thanh-hai-2026.xlsx` (186 mã) dùng để bổ sung định mức, số viên/hộp, trọng lượng.
-- Lệch giá thì **giá Excel được ưu tiên**: mã nào ghép được với Excel thì Giá lẻ và Giá đại lý I lấy theo Excel; các mức còn lại và mã không ghép được thì lấy KiotViet.
-- Ghép mức giá với KiotViet và nhóm khách: 1 Giá lẻ = Bảng giá chung (Khách lẻ); 2 Giá đại lý I = Đại lý MẸ (Đại lý cấp 1); 3 Giá công trình = Công trình (Công trình); 4 Giá đại lý II = Đại lý MAI (Khách buôn); 5 Giá công trình lẻ để trống (bảng “Giá công trình” trên KiotViet chưa có giá).
-- Sổ Vũ Gia: cửa hàng KiotViet Thanh Hải không có hàng đồ thờ, nên cần địa chỉ KiotViet riêng của Vũ Gia.
+- **Cập nhật 05/11 15:30, theo khách:** 2 file khách gửi chỉ là mẫu để làm cho đúng cột. Khách đang làm lại bảng giá, sẽ tự tạo file và tự nhập lên phần mềm; giá trên KiotViet là giá cũ, không dùng. Vì vậy **không nạp danh mục từ KiotViet hay từ `hang-hoa-thanh-hai-2026.xlsx`**. 750 mã KiotViet đã nạp thử lên sổ Thanh Hải đã được xóa (có bản sao lưu trước khi xóa).
+- Nhóm khách sổ Thanh Hải đặt theo KiotViet và giữ lại: Khách lẻ (mức 1), Đại lý cấp 1 (mức 2), Công trình (mức 3), Khách buôn (mức 4); mức giá mặc định ghi trong ghi chú từng nhóm.
 - Mỗi mã hàng đóng theo hộp hoặc theo thùng, không có hai tầng. Hệ thống đã có `pack_unit` từng mã nên chỉ cần đọc đúng file.
 - Vũ Gia dùng đủ 4 mức: 1 Giá lẻ, 2 Giá sỉ, 3 Giá CTV, 4 Giá CH (mới).
 - Thanh Hải giữ thứ tự mức giá cũ để khách hàng đã gán mức giá không bị lệch: 1 Giá lẻ, 2 Giá đại lý I (đổi tên từ “Giá đại lý”), 3 Giá công trình, 4 Giá đại lý II, 5 Giá công trình lẻ (mới). Trình nhập ghép cột theo tên nên thứ tự cột trong file không quan trọng.
@@ -45,7 +43,7 @@ Theo phương án A trong [báo cáo brainstorm](../reports/brainstorm-261105-14
 | 1 | [Mức giá thứ 5](phase-01-muc-gia-thu-5.md) | | Xong |
 | 2 | [Hồ sơ sổ: đóng gói và cột hàng hóa theo sổ](phase-02-ho-so-so.md) | 1 | Xong |
 | 3 | [Trình nhập Excel và file mẫu theo sổ](phase-03-nhap-excel-file-mau.md) | 1, 2 | Xong |
-| 4 | [Deploy và nạp dữ liệu lên máy chủ](phase-04-deploy-nap-du-lieu.md) | 3, file đủ dữ liệu của khách | Chưa làm |
+| 4 | [Deploy và nạp dữ liệu lên máy chủ](phase-04-deploy-nap-du-lieu.md) | 3 | Đã deploy 05/11; không nạp dữ liệu, khách tự nhập |
 
 Giai đoạn 1 đến 3 làm tuần tự vì cùng sửa `books.js`, `db/index.js`, `web/src/lib/excel.js` và `Products.jsx`. Lần nâng cấp CSDL (phiên bản 6 lên 7) gộp các thay đổi của giai đoạn 1 và 2 vào một lần.
 
@@ -58,12 +56,9 @@ Giai đoạn 1 đến 3 làm tuần tự vì cùng sửa `books.js`, `db/index.j
 ## Rủi ro
 
 - Đổi tên mức giá của sổ đang chạy: nếu chủ sổ đã tự đổi tên trong Cài đặt thì lần nâng cấp không được ghi đè. Chỉ đổi khi tên đang đúng giá trị mặc định cũ.
-- Tên Excel và KiotViet không giống hẳn nhau (KiotViet thêm kích thước, trọng lượng vào tên), nên ghép giá Excel phải bỏ phần đuôi “ - L180 x …” và đơn vị trong ngoặc rồi so tên. Mã không ghép được giữ giá KiotViet và được liệt kê để khách xem.
-- Bảng giá KiotViet đã hết hạn từ 13/02/2026, có thể không còn là giá đang bán.
-- 26 mã `SP0000xx` trên KiotViet là hàng tạo nhanh, nhiều mã giá vốn bằng 0; vẫn nạp nhưng đánh dấu trong danh sách để khách xem.
-- Chưa có nguồn danh mục cho Vũ Gia.
+- Khách tự nhập: file của khách cần theo đúng file mẫu của từng sổ (nút Tải file mẫu); trình nhập sẽ báo dòng lỗi trước khi ghi.
 - Dòng ví dụ của khách (`1AD27-DC01`, `TYC001`) sẽ được nhận là hàng thật nếu khách quên xóa; thêm vào danh sách cảnh báo dòng mẫu.
 
 ## Câu hỏi còn mở
 
-1. Địa chỉ KiotViet của Vũ Gia là gì (hoặc Vũ Gia lấy danh mục từ đâu)?
+Không còn câu hỏi mở cho phần mềm; chờ khách tự nhập dữ liệu.
