@@ -1,6 +1,6 @@
 // Sổ, thiết lập, thành viên & quyền, tài khoản nhận tiền, xuất dữ liệu sao lưu.
 import { ctx, fail, one, all, run, insert, uuid, nowIso, json, num, nz, outRows } from '../lib/context.js';
-import { requirePerm, loadMembers, bookSettings } from './access.js';
+import { requirePerm, requireAdmin, loadMembers, bookSettings, effectivePerms } from './access.js';
 
 export const DEFAULT_EXPENSE_CATS = [
   { group: 'Mặt bằng', items: ['Thuê nhà / cửa hàng', 'Thuê kho', 'Phí dịch vụ, an ninh, vệ sinh'] },
@@ -68,15 +68,16 @@ export function createBook(name, short, owner) {
   return id;
 }
 
-// Lần đầu đăng nhập: nếu hệ thống chưa có sổ nào, người đầu tiên thành chủ cửa hàng của cả 3 sổ.
+// Lần đầu đăng nhập: nếu hệ thống chưa có sổ nào, người đầu tiên thành Tổng quản trị, Quản lý cả 3 sổ.
 // Chế độ chạy thử: sổ mẫu cũng tính là đã có sổ, để người đăng ký sau không tạo thêm bộ sổ trùng tên.
 export function bootstrap() {
   if (!ctx.uid) fail('Bạn chưa đăng nhập', 401);
   if (!one(`select 1 from book_members where user_id = ?`, ctx.uid)) {
     if (one(`select 1 from books ${demoFlag.on ? '' : 'where is_demo = 0'}`)) {
-      fail('Tài khoản này chưa được cấp quyền vào sổ nào. Hãy nhờ chủ cửa hàng thêm email của bạn trong Cài đặt → Người dùng.', 403);
+      fail('Tài khoản này chưa được cấp quyền vào sổ nào. Hãy nhờ Tổng quản trị cấp quyền trong Cài đặt → Người dùng & quyền.', 403);
     }
     createDefaultBooks(ctx.uid);
+    run(`update users set is_admin = 1 where id = ?`, ctx.uid);
     loadMembers();
   }
   return my_books();
@@ -95,9 +96,11 @@ export function addAnamtileBook() {
   run(`update books set is_demo = ? where id = ?`, th.is_demo, createBook('Anamtile', 'AN', th.user_id));
 }
 
+// Sổ của người đang đăng nhập; perms là quyền hiệu lực (đã gộp vai trò mẫu và phần chỉnh riêng)
 export function my_books() {
-  return outRows(all(`select b.id, b.name, b.short_name, b.is_demo, b.settings, m.role, m.perms, m.display_name
-    from books b join book_members m on m.book_id = b.id and m.user_id = ? order by b.created_at, b.rowid`, ctx.uid));
+  return outRows(all(`select b.id, b.name, b.short_name, b.is_demo, b.settings, m.role, m.role_id, r.name as role_name, m.perms, m.display_name
+    from books b join book_members m on m.book_id = b.id and m.user_id = ? left join roles r on r.id = m.role_id order by b.created_at, b.rowid`, ctx.uid))
+    .map((b) => ({ ...b, perms: effectivePerms(b.role, b.role_id, b.perms) }));
 }
 
 export function update_book_settings(p) {
@@ -116,26 +119,36 @@ export function update_book_settings(p) {
   return { settings: json(r.settings), name: r.name };
 }
 
-export function upsert_member(p) {
-  const b = p.book_id; const role = p.role || 'staff';
-  requirePerm(b, 'owner');
+// Cấp quyền 1 người ở 1 sổ (chỉ Tổng quản trị). role_id: vai trò mẫu; perms: phần chỉnh riêng từng ô (true/false) so với vai trò.
+// Không có vai trò và không gửi perms → quyền mặc định của sổ.
+export function setMembership(b, userId, { role = 'staff', role_id: roleId = null, perms, display_name: displayName } = {}) {
   if (!['owner', 'staff'].includes(role)) fail('Vai trò không hợp lệ');
+  if (!one(`select 1 from books where id = ?`, b)) fail('Không tìm thấy sổ');
+  const rid = role === 'staff' ? nz(roleId) : null;
+  if (rid && !one(`select 1 from roles where id = ?`, rid)) fail('Không tìm thấy vai trò');
+  if (role !== 'owner' && one(`select 1 from users where id = ? and is_admin = 1`, userId)) fail('Tổng quản trị luôn là Quản lý sổ — hãy bỏ quyền Tổng quản trị trước');
+  const ov = role === 'owner' ? {} : perms ?? (rid ? {} : bookSettings(b).staff_default_perms ?? {});
+  run(`insert into book_members (book_id, user_id, role, role_id, perms, display_name, created_at) values (?, ?, ?, ?, ?, ?, ?)
+    on conflict (book_id, user_id) do update set role = excluded.role, role_id = excluded.role_id, perms = excluded.perms,
+      display_name = coalesce(excluded.display_name, book_members.display_name)`, b, userId, role, rid, cleanPerms(ov), nz(displayName), nowIso());
+}
+const cleanPerms = (o) => Object.fromEntries(Object.entries(o || {}).filter(([, v]) => typeof v === 'boolean' || v === 'true' || v === 'false').map(([k, v]) => [k, v === true || v === 'true']));
+
+export function upsert_member(p) {
+  requireAdmin();
   const u = one(`select id from users where lower(email) = lower(?)`, String(p.email ?? '').trim());
-  if (!u) fail(`Chưa có tài khoản nào đăng ký bằng email "${p.email ?? ''}". Hãy nhờ người này đăng ký trước, rồi thêm lại.`);
-  const perms = p.perms ?? bookSettings(b).staff_default_perms ?? {};
-  if (u.id === ctx.uid && role !== 'owner') fail('Không thể tự hạ quyền của chính mình');
-  run(`insert into book_members (book_id, user_id, role, perms, display_name, created_at) values (?, ?, ?, ?, ?, ?)
-    on conflict (book_id, user_id) do update set role = excluded.role, perms = excluded.perms,
-      display_name = coalesce(excluded.display_name, book_members.display_name)`, b, u.id, role, perms, nz(p.display_name), nowIso());
+  if (!u) fail(`Chưa có tài khoản nào dùng email "${p.email ?? ''}". Hãy mời người này trong Cài đặt → Người dùng & quyền.`);
+  if (u.id === ctx.uid && (p.role || 'staff') !== 'owner') fail('Không thể tự hạ quyền của chính mình');
+  setMembership(p.book_id, u.id, p);
   loadMembers();
   return { user_id: u.id };
 }
 
 export function remove_member(p) {
-  const b = p.book_id;
-  requirePerm(b, 'owner');
+  requireAdmin();
   if (p.user_id === ctx.uid) fail('Không thể tự xóa chính mình khỏi sổ');
-  run(`delete from book_members where book_id = ? and user_id = ?`, b, p.user_id);
+  if (one(`select 1 from users where id = ? and is_admin = 1`, p.user_id)) fail('Tổng quản trị luôn có quyền ở mọi sổ — hãy bỏ quyền Tổng quản trị trước');
+  run(`delete from book_members where book_id = ? and user_id = ?`, p.book_id, p.user_id);
   loadMembers();
   return { ok: true };
 }

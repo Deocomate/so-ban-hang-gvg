@@ -1,5 +1,6 @@
 // Máy chủ HTTP (node:http, không cần framework): API dưới /api, các đường dẫn còn lại trả giao diện đã build (web/dist).
-//   POST /api/auth/signup | /api/auth/login | /api/auth/password    GET /api/auth/me
+//   POST /api/auth/login | forgot | reset | accept-invite | verify-email | link-info        (chưa đăng nhập)
+//   GET  /api/auth/me    POST /api/auth/password | profile | email | resend-verify | logout-all   (đã đăng nhập)
 //   POST /api/rpc/:fn   (Authorization: Bearer <token>, thân = tham số p)
 //   POST /api/hooks/sepay | /api/hooks/tracking                     GET /api/config | /api/health
 import http from 'node:http';
@@ -9,7 +10,9 @@ import zlib from 'node:zlib';
 import { config } from './config.js';
 import { ctx, AppError } from './lib/context.js';
 import { callRpc } from './domain/rpc.js';
-import { signUp, signIn, changePassword, issueToken, verifyToken, me, publicUser } from './lib/auth.js';
+import * as auth from './lib/auth.js';
+import { flushMailSoon } from './lib/mail.js';
+import { PERM_GROUPS } from './lib/labels.js';
 import { sepayWebhook, trackingWebhook } from './services/webhooks.js';
 import { flushPushSoon } from './services/push.js';
 import { backupNow } from './services/scheduler.js';
@@ -56,9 +59,29 @@ setInterval(() => { const now = Date.now(); for (const [k, a] of attempts) if (a
 
 const clientIp = (req) => (config.trustProxy && String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()) || req.socket.remoteAddress || '';
 const bearer = (req) => (String(req.headers.authorization || '').match(/^Bearer\s+(.+)$/i) || [])[1];
-const authUser = (req) => { const uid = verifyToken(bearer(req), config.jwtSecret); if (!uid) throw new AppError('Phiên đăng nhập đã hết hạn — hãy đăng nhập lại', 401); return uid; };
-const tx = (fn) => ctx.db.transaction(fn)();
-const session = (u) => ({ token: issueToken(u, config.jwtSecret), user: publicUser(u) });
+const authUser = (req) => { const u = auth.verifyToken(bearer(req), config.jwtSecret); if (!u) throw new AppError('Phiên đăng nhập đã hết hạn — hãy đăng nhập lại', 401); return u; };
+// Thao tác tài khoản: chạy trong 1 giao dịch, biết người gọi và IP (để ghi nhật ký bảo mật), gửi thư ngay sau đó
+const tx = (fn, uid = null) => {
+  ctx.uid = uid;
+  try { return ctx.db.transaction(fn)(); } finally { ctx.uid = null; flushMailSoon(); }
+};
+const session = (u) => ({ token: auth.issueToken(u, config.jwtSecret), user: auth.publicUser(u) });
+// Đường dẫn tài khoản chưa cần đăng nhập: [hàm, trả về phiên đăng nhập?, số lần thử / 15 phút / IP]
+const PUBLIC_AUTH = {
+  forgot: [(b) => auth.requestPasswordReset(b), false, 5],
+  reset: [(b) => auth.resetPassword(b), true, 10],
+  'accept-invite': [(b) => auth.acceptInvite(b), true, 10],
+  'verify-email': [(b) => auth.verifyEmail(b), false, 10],
+  'link-info': [(b) => auth.linkInfo(b), false, 30],
+};
+// Đường dẫn tài khoản của người đang đăng nhập: [hàm, trả về phiên mới?]
+const SELF_AUTH = {
+  password: [(uid, b) => auth.changePassword(uid, b), true],
+  profile: [(uid, b) => ({ user: auth.publicUser(auth.updateProfile(uid, b)) }), false],
+  email: [(uid, b) => auth.requestEmailChange(uid, b), false],
+  'resend-verify': [(uid) => auth.resendVerification(uid), false],
+  'logout-all': [(uid) => auth.logoutAll(uid), true],
+};
 
 async function route(req, res) {
   const url = new URL(req.url, 'http://localhost');
@@ -66,39 +89,53 @@ async function route(req, res) {
   const method = req.method;
 
   if (method === 'GET' && p === '/api/health') return send(res, 200, { ok: true });
-  if (method === 'GET' && p === '/api/config') return send(res, 200, { vapid_public_key: config.vapid.publicKey, allow_signup: config.allowSignup, demo: config.demoMode });
+  if (method === 'GET' && p === '/api/config') return send(res, 200, { vapid_public_key: config.vapid.publicKey, demo: config.demoMode, perm_groups: PERM_GROUPS });
+  const ip = clientIp(req);
 
   if (method === 'POST' && p.startsWith('/api/rpc/')) {
     const fn = decodeURIComponent(p.slice('/api/rpc/'.length));
-    const uid = authUser(req);
+    const u = authUser(req);
+    if (u.must_change_password) throw new AppError('Bạn cần đổi mật khẩu trước khi tiếp tục', 403);
     const body = parseJson(await readBody(req));
     if (fn === 'import_book' && config.dbPath !== ':memory:') await backupNow('truoc-nhap');   // luôn có bản để quay lại
-    const result = callRpc(uid, fn, body);
-    if (!READ_ONLY.has(fn)) flushPushSoon();
-    return send(res, 200, result);
+    ctx.ip = ip;
+    try {
+      const result = callRpc(u.id, fn, body);
+      if (!READ_ONLY.has(fn)) { flushPushSoon(); flushMailSoon(); }
+      return send(res, 200, result);
+    } finally { ctx.ip = null; }
   }
 
   if (method === 'POST' && p === '/api/auth/login') {
     const b = parseJson(await readBody(req));
-    limit('login:' + clientIp(req));
-    return send(res, 200, session(signIn(b)));
+    limit('login:' + ip);
+    limit('login-email:' + String(b.email ?? '').trim().toLowerCase(), 8);
+    ctx.ip = ip;
+    try { return send(res, 200, session(tx(() => auth.signIn(b)))); }
+    catch (e) { if (e instanceof AppError) tx(() => auth.loginFailed(b.email, e.message)); throw e; }
+    finally { ctx.ip = null; }
   }
-  if (method === 'POST' && p === '/api/auth/signup') {
-    if (!config.allowSignup) throw new AppError('Đăng ký tài khoản mới đang tắt — liên hệ chủ cửa hàng', 403);
+  const sub = p.startsWith('/api/auth/') ? p.slice('/api/auth/'.length) : '';
+  if (method === 'POST' && Object.hasOwn(PUBLIC_AUTH, sub)) {
+    const [fn, signsIn, max] = PUBLIC_AUTH[sub];
     const b = parseJson(await readBody(req));
-    limit('signup:' + clientIp(req), 20, 60 * 60e3);
-    return send(res, 200, session(tx(() => signUp(b))));
+    limit(`${sub}:${ip}`, max);
+    if (sub === 'forgot') limit('forgot-email:' + String(b.email ?? '').trim().toLowerCase(), 3, 60 * 60e3);
+    ctx.ip = ip;
+    try { const r = tx(() => fn(b)); return send(res, 200, signsIn ? session(r) : r); } finally { ctx.ip = null; }
   }
   if (method === 'GET' && p === '/api/auth/me') {
-    const u = me(authUser(req));
+    const u = auth.me(authUser(req).id);
     if (!u) throw new AppError('Phiên đăng nhập đã hết hạn — hãy đăng nhập lại', 401);
     return send(res, 200, { user: u });
   }
-  if (method === 'POST' && p === '/api/auth/password') {
-    const uid = authUser(req);
+  if (method === 'POST' && Object.hasOwn(SELF_AUTH, sub)) {
+    const [fn, newSession] = SELF_AUTH[sub];
+    const uid = authUser(req).id;
     const b = parseJson(await readBody(req));
-    limit('password:' + uid);
-    return send(res, 200, session(tx(() => changePassword(uid, b))));
+    limit(`${sub}:${uid}`);
+    ctx.ip = ip;
+    try { const r = tx(() => fn(uid, b), uid); return send(res, 200, newSession ? session(r) : r); } finally { ctx.ip = null; }
   }
 
   if (method === 'POST' && p === '/api/hooks/sepay') { const [s, body] = sepayWebhook(req.headers, await readBody(req)); return send(res, s, body); }

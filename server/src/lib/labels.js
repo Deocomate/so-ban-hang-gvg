@@ -1,17 +1,32 @@
 // Nhãn tiếng Việt dùng chung (cho cả SQL qua hàm tự định nghĩa và mã JS)
 
+// Danh mục quyền theo nhóm (giao diện dựng ô tick từ đây). Quyền sửa kéo theo quyền xem cùng nhóm (PERM_IMPLIES).
+export const PERM_GROUPS = [
+  { group: 'Bán hàng', perms: [['xem_ban_hang', 'Xem đơn bán, báo giá, hợp đồng, vận chuyển'], ['ban_hang', 'Tạo / sửa đơn bán, giao hàng, trả hàng']] },
+  { group: 'Mua hàng', perms: [['xem_nhap_hang', 'Xem đơn nhập, phiếu nhập, trả hàng nhập'], ['nhap_hang', 'Tạo / sửa đơn nhập, đặt xưởng, nhận hàng']] },
+  { group: 'Sổ quỹ', perms: [['xem_thu_chi', 'Xem phiếu thu chi, tiền về tài khoản'], ['thu_chi', 'Lập / hủy phiếu thu chi'],
+    ['xem_chi_phi', 'Xem chi phí vận hành'], ['chi_phi', 'Ghi chi phí']] },
+  { group: 'Hàng hóa & kho', perms: [['danh_muc', 'Sửa hàng hóa, khách hàng, nhà cung cấp'], ['kho', 'Điều chỉnh kho (vỡ, kiểm kê, xuất hủy)']] },
+  { group: 'Nhân sự', perms: [['cham_cong', 'Chấm công và lịch làm việc']] },
+  { group: 'Báo cáo', perms: [['xem_bao_cao', 'Xem tổng quan, báo cáo, thuế'], ['xem_gia_von', 'Xem giá vốn, lợi nhuận, giá trị tồn kho']] },
+];
+export const PERM_KEYS = PERM_GROUPS.flatMap((g) => g.perms.map(([k]) => k));
+export const PERM_IMPLIES = { ban_hang: ['xem_ban_hang'], nhap_hang: ['xem_nhap_hang'], thu_chi: ['xem_thu_chi'], chi_phi: ['xem_chi_phi'] };
+
 export const PERM_LABELS = {
-  ban_hang: 'Bán hàng (tạo đơn, giao hàng, trả hàng)',
-  nhap_hang: 'Nhập hàng / đặt xưởng',
-  thu_chi: 'Thu chi tiền',
-  kho: 'Điều chỉnh kho',
-  danh_muc: 'Sửa sản phẩm, khách hàng, nhà cung cấp',
-  chi_phi: 'Ghi chi phí',
-  xem_gia_von: 'Xem giá vốn, lợi nhuận, giá trị tồn kho',
-  xem_bao_cao: 'Xem tổng quan và báo cáo',
-  cham_cong: 'Chấm công và lịch làm việc',
-  owner: 'Chủ cửa hàng',
+  ...Object.fromEntries(PERM_GROUPS.flatMap((g) => g.perms)),
+  owner: 'Quản lý sổ',
+  admin: 'Tổng quản trị',
 };
+
+// Vai trò mẫu tạo sẵn khi nâng cấp; Tổng quản trị sửa, xóa, thêm được
+export const DEFAULT_ROLES = [
+  { name: 'Nhân viên bán hàng', description: 'Lên đơn, giao hàng, thu tiền khách', perms: ['ban_hang', 'thu_chi'] },
+  { name: 'Thủ kho', description: 'Nhập hàng, nhận hàng, kiểm kho; xem đơn bán để soạn hàng', perms: ['xem_ban_hang', 'nhap_hang', 'kho'] },
+  { name: 'Kế toán', description: 'Thu chi, chi phí, báo cáo, giá vốn; xem đơn bán và đơn nhập', perms: ['xem_ban_hang', 'xem_nhap_hang', 'thu_chi', 'chi_phi', 'xem_bao_cao', 'xem_gia_von'] },
+  { name: 'Nhân sự', description: 'Chấm công, lịch làm việc', perms: ['cham_cong'] },
+  { name: 'Chỉ xem', description: 'Xem đơn, phiếu, báo cáo; không sửa được gì', perms: ['xem_ban_hang', 'xem_nhap_hang', 'xem_thu_chi', 'xem_chi_phi', 'xem_bao_cao'] },
+];
 export const permLabel = (p) => PERM_LABELS[p] || p;
 
 export const SHIP_STATUS_LABELS = {

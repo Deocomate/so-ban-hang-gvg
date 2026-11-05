@@ -1,4 +1,4 @@
-// Lịch tự động (giờ Việt Nam): báo cáo cuối ngày 21:00, nhắc công nợ 08:00, sao lưu CSDL 03:00, gửi thông báo đẩy mỗi phút.
+// Lịch tự động (giờ Việt Nam): báo cáo cuối ngày 21:00, nhắc công nợ 08:00, sao lưu CSDL 03:00, gửi thông báo đẩy và email còn chờ mỗi phút.
 // Thông báo có khóa chống trùng theo ngày nên khởi động lại máy chủ không gửi lặp.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -7,6 +7,7 @@ import { ctx, today } from '../lib/context.js';
 import { callService } from '../domain/rpc.js';
 import { runScheduled } from '../domain/notify.js';
 import { flushPush } from './push.js';
+import { flushMail } from '../lib/mail.js';
 
 const vnHour = () => new Date(Date.now() + 7 * 3600e3).getUTCHours();
 const done = new Map();   // việc → ngày đã chạy
@@ -36,6 +37,7 @@ async function tick() {
     try { await j.run(); } catch (e) { console.error(`lịch ${j.name} lỗi`, e); }
   }
   try { await flushPush(); } catch (e) { console.error('push', e); }
+  try { await flushMail(); } catch (e) { console.error('email', e); }
 }
 
 export function startScheduler() {

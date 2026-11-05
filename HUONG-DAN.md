@@ -29,7 +29,7 @@ Cơ sở dữ liệu là **một tệp SQLite** (`/data/gomsu.db` trong Docker v
 >
 > **Chạy trên máy Windows, không cần biết code:** bấm đúp tệp `Mo-Ung-Dung.bat` ở thư mục gốc. Một cửa sổ **Bảng điều khiển** hiện ra (mở bằng Edge hoặc Chrome có sẵn trên máy), mọi thao tác đều bấm nút trong đó:
 > - **Bật / Tắt / Khởi động lại ứng dụng**, nút **Mở trang bán hàng** (http://localhost:5173). Lần đầu mất khoảng 1 phút: tự cài Node.js nếu máy chưa có, tự cài thư viện, nạp dữ liệu mẫu.
-> - **Dữ liệu mẫu (bật/tắt):** bật thì dùng kho mẫu `server/data`, tài khoản chủ lấy theo `ADMIN_EMAIL`, `ADMIN_PASSWORD` trong `.env` (sửa `.env` rồi bấm Khởi động lại là cập nhật), có nút giả lập tiền về, vận đơn. Tắt thì dùng kho sổ riêng `server/data-rieng`, trống, người đăng ký đầu tiên thành chủ. Hai kho không lẫn nhau, đổi qua lại không mất dữ liệu.
+> - **Dữ liệu mẫu (bật/tắt):** bật thì dùng kho mẫu `server/data`, tài khoản chủ lấy theo `ADMIN_EMAIL`, `ADMIN_PASSWORD` trong `.env` (sửa `.env` rồi bấm Khởi động lại là cập nhật), có nút giả lập tiền về, vận đơn. Tắt thì dùng kho sổ riêng `server/data-rieng`, trống; Tổng quản trị lấy theo `ADMIN_EMAIL`, `ADMIN_PASSWORD` trong `.env`. Hai kho không lẫn nhau, đổi qua lại không mất dữ liệu.
 > - **Nạp lại dữ liệu mẫu:** làm lại từ đầu. Dữ liệu cũ được cất vào `server/data/truoc-nap-lai`.
 > - **Sao lưu ngay**, **Mở thư mục sao lưu**, **Nhật ký** (có nút sao chép để gửi người phụ trách).
 > - **Tùy chọn:** tự bật ứng dụng khi mở bảng điều khiển, tự mở trang bán hàng sau khi bật xong.
@@ -45,33 +45,44 @@ Cơ sở dữ liệu là **một tệp SQLite** (`/data/gomsu.db` trong Docker v
 >
 > **Bản chạy thử có dữ liệu mẫu**: triển khai một bản riêng với `DEMO_MODE=true`, rồi chạy một lần `docker compose exec app npm run seed:demo` (chỉ chạy trên cơ sở dữ liệu trống). Đăng nhập `chu.cuahang@demo.vn` / `demo1234`.
 
-### Bước 2 — Tạo tài khoản chủ (làm NGAY sau khi đưa lên)
-1. Mở địa chỉ web → **Tạo tài khoản mới** bằng email của anh.
-2. **Người đăng ký đầu tiên tự động thành chủ** của cả 3 sổ (Thanh Hải, Vũ Gia và Anamtile, đã cài sẵn thuế 1% GTGT + 17% TNCN, các mức giá, kênh bán, các bước sản xuất).
-3. Từ người thứ hai trở đi, đăng ký xong sẽ **không thấy sổ nào** cho tới khi chủ thêm email đó trong **Cài đặt → Người dùng & quyền**. Vì vậy người lạ có đăng ký cũng không xem được gì. Khi đã đủ tài khoản, có thể đặt `ALLOW_SIGNUP=false` để tắt hẳn việc đăng ký.
+### Bước 2 — Tổng quản trị đầu tiên (làm NGAY sau khi đưa lên)
+1. Khai `ADMIN_EMAIL`, `ADMIN_PASSWORD` (ít nhất 8 ký tự, có chữ và số), `APP_URL` (địa chỉ trang web) và Gmail gửi thư `SMTP_USER`, `SMTP_PASS` (xem `.env.example`), rồi khởi động máy chủ.
+2. Máy chủ tạo tài khoản **Tổng quản trị** và 3 sổ (Thanh Hải, Vũ Gia, Anamtile). Việc này chỉ xảy ra khi hệ thống **chưa có Tổng quản trị nào**.
+3. Đăng nhập lần đầu, phần mềm **bắt đổi mật khẩu**. Sau đó mật khẩu chỉ chủ tài khoản biết: sửa `.env` hay khởi động lại cũng không đặt lại được. Nên xóa `ADMIN_PASSWORD` khỏi tệp môi trường sau bước này.
+4. Vào **Cài đặt → Tài khoản** bấm **Gửi link xác thực email** để xác nhận email quản trị.
 
-### Bước 3 — Thêm nhân viên
-1. Nhân viên tự đăng ký bằng email của họ.
-2. Chủ vào **Cài đặt → Người dùng & quyền → Thêm người dùng**, nhập email, chọn quyền. Quyền đặt **riêng cho từng sổ**.
-3. Bỏ tick **"Xem giá vốn và lợi nhuận"** thì nhân viên không thấy giá vốn, lợi nhuận, giá trị tồn kho ở bất kỳ màn hình nào. Phần ẩn này do máy chủ chặn, không chỉ ẩn trên giao diện.
+Không còn tự đăng ký tài khoản: mọi người dùng đều do Tổng quản trị mời.
 
-### Tài khoản quản trị đặt trong `.env` (khuyên dùng, đỡ quên)
-- Điền `ADMIN_EMAIL` và `ADMIN_PASSWORD` (ít nhất 6 ký tự) trong tệp `.env` khi chạy trên máy, hoặc trong Environment Variables trên Coolify, rồi khởi động lại.
-- Mỗi lần khởi động, máy chủ sẽ:
-  - tạo tài khoản này nếu chưa có;
-  - cho tài khoản này làm **chủ của mọi sổ**;
-  - tạo luôn 3 sổ nếu hệ thống chưa có sổ nào, nên người khác đăng ký trước cũng không chiếm được quyền chủ.
-- Muốn đổi mật khẩu thì sửa `ADMIN_PASSWORD` rồi khởi động lại. Các máy đang đăng nhập tài khoản này sẽ phải đăng nhập lại.
-- Nếu anh đổi mật khẩu trong **Cài đặt → Tài khoản của tôi**, lần khởi động sau mật khẩu sẽ quay về giá trị trong `.env`. Vì vậy hãy luôn đổi ở `.env`.
-- Dòng log khi khởi động cho biết tài khoản đã được tạo, đã đặt lại mật khẩu, hay giữ nguyên.
+### Bước 3 — Mời nhân viên, cấp quyền
+1. Tổng quản trị vào **Cài đặt → Người dùng & quyền → Mời người dùng**, nhập email, chọn quyền ở từng sổ:
+   - **Không truy cập**: không thấy sổ đó.
+   - **Nhân viên (theo quyền)**: chọn một **vai trò mẫu** (Nhân viên bán hàng, Thủ kho, Kế toán, Nhân sự, Chỉ xem), rồi tick thêm / bỏ từng ô nếu người này cần khác vai trò.
+   - **Quản lý sổ**: toàn quyền nghiệp vụ trong sổ đó (cài đặt sổ, lương…), nhưng không quản lý người dùng.
+   - Ô **Tổng quản trị**: quản lý người dùng, vai trò, nhật ký bảo mật, toàn quyền cả 3 sổ.
+2. Nhân viên nhận thư mời, bấm link (hạn 7 ngày) để tự đặt mật khẩu. Bấm link xong là email đã được xác thực. Không ai khác biết mật khẩu của nhân viên.
+3. Quyền **xem** tách khỏi quyền **sửa**: ví dụ "Xem đơn bán" mà không có "Tạo / sửa đơn bán" thì chỉ xem. Có quyền sửa thì tự có quyền xem cùng nhóm.
+4. Bỏ tick **"Xem giá vốn, lợi nhuận"** thì nhân viên không thấy giá vốn, lợi nhuận, giá trị tồn kho ở bất kỳ màn hình nào. Mọi quyền đều do máy chủ chặn, không chỉ ẩn trên giao diện.
+5. **Cài đặt → Vai trò**: sửa quyền của một vai trò thì mọi người đang dùng vai trò đó đổi theo ngay; thêm vai trò mới khi có khâu mới.
+6. Trong hộp thoại của từng người: gửi lại lời mời, gửi email đặt lại mật khẩu, đăng xuất người đó khỏi mọi thiết bị, **khóa tài khoản** (người nghỉ việc: khóa là mất quyền ngay, lịch sử chứng từ vẫn giữ tên họ).
+
+### Tài khoản của mỗi người (Cài đặt → Tài khoản)
+- Sửa tên, số điện thoại; đổi mật khẩu; đổi email đăng nhập (link xác nhận gửi tới email mới, email cũ nhận thư báo).
+- **Đăng xuất mọi thiết bị khác** khi quên đăng xuất ở máy khác hoặc nghi lộ mật khẩu.
+- Mỗi lần đổi / đặt lại mật khẩu, đổi email, chủ tài khoản đều nhận thư báo.
 
 ### Quên mật khẩu
-- **Nhân viên:** chủ mở **Cài đặt → Người dùng & quyền → (tên nhân viên) → Đặt mật khẩu mới**, rồi báo lại cho nhân viên.
-- **Chủ cửa hàng:** người quản trị máy chủ chạy lệnh (Coolify → dịch vụ app → Terminal, hoặc `docker compose exec app …`):
-  ```
-  npm run reset-password -- email-cua-anh@gmail.com MatKhauMoi123
-  ```
-- Ai cũng tự đổi mật khẩu được ở **Cài đặt → Tài khoản của tôi**. Đổi mật khẩu thì các máy khác đang đăng nhập tài khoản đó phải đăng nhập lại.
+- Ở trang đăng nhập bấm **Quên mật khẩu?**, nhập email → nhận link đặt mật khẩu mới (hạn 60 phút, dùng 1 lần).
+- Tổng quản trị cũng gửi được email đặt lại mật khẩu cho nhân viên trong **Người dùng & quyền**.
+- Khẩn cấp (máy chủ chưa gửi được thư): người quản trị máy chủ chạy `npm run reset-password -- email@gmail.com MatKhauTam123`. Lần đăng nhập tới phải đổi mật khẩu, việc này được ghi vào **Nhật ký bảo mật** và báo qua email cho chủ tài khoản.
+
+### Nhật ký bảo mật (Cài đặt → Nhật ký bảo mật, chỉ Tổng quản trị)
+Ghi mọi lần đăng nhập (kể cả sai), đổi / đặt lại mật khẩu, đổi email, cấp quyền, khóa tài khoản, kèm thời điểm và IP.
+
+### Dev kiểm thử mà không thấy dữ liệu thật
+- Dev **không có tài khoản** trên bản chạy thật. Dev test toàn bộ trên máy mình bằng dữ liệu mẫu (`npm run seed:sample` hoặc bật Dữ liệu mẫu ở Bảng điều khiển): có sẵn tài khoản quản trị mẫu, `lan.nhanvien@demo.vn` và một tài khoản cho mỗi vai trò mẫu (`nhan-vien-ban-hang.mau@demo.vn`, `thu-kho.mau@demo.vn`, `ke-toan.mau@demo.vn`, `nhan-su.mau@demo.vn`, `chi-xem.mau@demo.vn`), cùng mật khẩu với quản trị mẫu.
+- Máy dev chưa khai SMTP thì thư (link mời, quên mật khẩu) in ra cửa sổ nhật ký của máy chủ để test. Bản chạy thật không bao giờ in link ra log.
+- Mật khẩu quản trị thật chỉ chủ doanh nghiệp biết (xem Bước 2). Dev giữ `.env` cũng không đăng nhập được.
+- Giới hạn cần biết: ai có quyền **root trên máy chủ** vẫn đọc được tệp CSDL và bản sao lưu. Phần mềm không chặn được điều đó, chỉ làm cho mọi can thiệp qua ứng dụng đều để lại dấu vết. Muốn kín hoàn toàn thì sau khi bàn giao, chủ doanh nghiệp giữ mật khẩu root / SSH và chỉ cấp cho dev khi cần cập nhật bản mới.
 
 ## 3. Nhập dữ liệu ban đầu (một lần, ngày 01/10/2026)
 

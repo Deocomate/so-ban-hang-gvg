@@ -4,9 +4,9 @@ import { requirePerm } from './access.js';
 
 // view → quyền cần có ('' = chỉ cần là thành viên sổ)
 const VIEWS = {
-  products: '', price_books: '', price_book_items: '', customers: '', suppliers: '', sales_orders: '', sales_order_lines: '', deliveries: '', delivery_lines: '', sales_returns: '',
-  stock_moves: '', adjustments: '', productions: '', bom_items: '', employees: '', shifts: '', work_schedules: '', timesheets: 'cham_cong', commission_tables: 'owner', paysheets: 'owner', paysheet_lines: 'owner', opening_debts: '', doc_payments: '', purchase_orders: '', purchase_order_lines: '', receipts: '',
-  supplier_returns: '', funds: '', drivers: '', driver_trips: '', quotes: '', contracts: '', attachments: '', tax_invoices: 'xem_bao_cao', payments: 'thu_chi', open_docs: '', expenses: 'chi_phi', members: 'owner', audit: 'owner', shipments: '', bank_txns: 'thu_chi',
+  products: '', price_books: '', price_book_items: '', customers: '', suppliers: '', sales_orders: 'xem_ban_hang', sales_order_lines: 'xem_ban_hang', deliveries: 'xem_ban_hang', delivery_lines: 'xem_ban_hang', sales_returns: 'xem_ban_hang',
+  stock_moves: '', adjustments: '', productions: '', bom_items: '', employees: '', shifts: '', work_schedules: '', timesheets: 'cham_cong', commission_tables: 'owner', paysheets: 'owner', paysheet_lines: 'owner', opening_debts: '', doc_payments: '', purchase_orders: 'xem_nhap_hang', purchase_order_lines: 'xem_nhap_hang', receipts: 'xem_nhap_hang',
+  supplier_returns: 'xem_nhap_hang', funds: '', drivers: '', driver_trips: 'xem_ban_hang', quotes: 'xem_ban_hang', contracts: 'xem_ban_hang', attachments: '', tax_invoices: 'xem_bao_cao', payments: 'xem_thu_chi', open_docs: '', expenses: 'xem_chi_phi', members: 'owner', audit: 'owner', shipments: 'xem_ban_hang', bank_txns: 'xem_thu_chi',
 };
 const BOOL_COLS = new Set(['is_kit', 'active', 'is_low', 'voided', 'restock', 'is_late', 'is_final', 'has_problem', 'assigned', 'order_cancelled', 'sell_direct', 'in_effect']);
 const IDENT = /^[a-z_][a-z0-9_]*$/;

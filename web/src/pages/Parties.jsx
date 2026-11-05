@@ -89,8 +89,8 @@ export function PartyDetail({ type, id, onClose }) {
   const { open, can, settings } = useApp();
   const isKh = type === 'kh';
   const q = useQ(isKh ? 'customers' : 'suppliers', [['id', 'eq', id]]);
-  const orders = useQ(isKh ? 'sales_orders' : 'purchase_orders', [[isKh ? 'customer_id' : 'supplier_id', 'eq', id]], 'order_date desc', 500, isKh || can('nhap_hang'));
-  const pays = useQ('payments', [['party_id', 'eq', id]], 'pay_date desc', 500, can('thu_chi'));
+  const orders = useQ(isKh ? 'sales_orders' : 'purchase_orders', [[isKh ? 'customer_id' : 'supplier_id', 'eq', id]], 'order_date desc', 500, can(isKh ? 'xem_ban_hang' : 'xem_nhap_hang'));
+  const pays = useQ('payments', [['party_id', 'eq', id]], 'pay_date desc', 500, can('xem_thu_chi'));
   const debts = useQ('opening_debts', [['party_id', 'eq', id]], 'debt_date');
   const [tab, setTab] = useState('orders');
   const [addDebt, setAddDebt] = useState(false);

@@ -53,8 +53,20 @@ export function createApiBackend(base = '/api') {
     async getSession() { return token ? { user } : null; },
     onAuth(cb) { listeners.add(cb); return { data: { subscription: { unsubscribe: () => listeners.delete(cb) } } }; },
     async signIn(email, password) { setSession(await request('/auth/login', { email, password }, { auth: false })); },
-    async signUp(email, password, name) { const s = await request('/auth/signup', { email, password, name }, { auth: false }); setSession(s); return { session: { user: s.user } }; },
+    // Chưa đăng nhập: quên mật khẩu, xem / dùng link trong email
+    forgot(email) { return request('/auth/forgot', { email }, { auth: false }); },
+    linkInfo(token) { return request('/auth/link-info', { token }, { auth: false }); },
+    async resetPassword(token, password) { setSession(await request('/auth/reset', { token, password }, { auth: false })); },
+    async acceptInvite(token, password, name) { setSession(await request('/auth/accept-invite', { token, password, name }, { auth: false })); },
+    verifyEmail(token) { return request('/auth/verify-email', { token }, { auth: false }); },
+    // Tài khoản đang đăng nhập
     async changePassword(oldPassword, password) { setSession(await request('/auth/password', { old_password: oldPassword, password })); },
+    async updateProfile(name, phone) { const r = await request('/auth/profile', { name, phone }); setSession({ token, user: r.user }); },
+    requestEmailChange(newEmail, password) { return request('/auth/email', { new_email: newEmail, password }); },
+    resendVerify() { return request('/auth/resend-verify', {}); },
+    async logoutAll() { setSession(await request('/auth/logout-all', {})); },
+    // Lấy lại thông tin tài khoản mới nhất (quyền Tổng quản trị, phải đổi mật khẩu…)
+    async refreshMe() { if (!token) return; const r = await request('/auth/me', null, { method: 'GET' }); if (JSON.stringify(r.user) !== JSON.stringify(user)) setSession({ token, user: r.user }); },
     async signOut() { setSession(null); },
   };
 }

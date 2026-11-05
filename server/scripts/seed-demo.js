@@ -5,7 +5,7 @@ import { config } from '../src/config.js';
 import { ctx, today } from '../src/lib/context.js';
 import { callRpc } from '../src/domain/rpc.js';
 import { demoFlag } from '../src/domain/books.js';
-import { signUp } from '../src/lib/auth.js';
+import { createUser } from '../src/lib/auth.js';
 import { seedDemo } from './demo-seed-data.js';
 import logo from './demo-logo.js';
 
@@ -25,7 +25,7 @@ const r = await seedDemo({
     const ex = ctx.db.prepare('select id from users where email = ?').get(email);
     if (ex) return ex.id;
     users.push(email);
-    return ctx.db.transaction(() => signUp({ email, password: PASSWORD, name }))().id;
+    return ctx.db.transaction(() => createUser({ email, password: PASSWORD, name }))().id;
   },
   setUser: (u) => { uid = u; },
   today: today(),

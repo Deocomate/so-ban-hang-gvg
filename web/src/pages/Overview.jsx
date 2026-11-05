@@ -71,12 +71,12 @@ export default function Overview({ go }) {
   const { data, error } = useRpcData('rpt_overview', { from: period.from, to: period.to });
   const t = todayVN();
   const months = useRpcData('rpt_monthly', { from: addMonths(t, -5), to: monthEnd(t) });
-  const late = useQ('sales_orders', [['is_late', 'eq', 'true']], 'due_date', 20);
+  const late = useQ('sales_orders', [['is_late', 'eq', 'true']], 'due_date', 20, can('xem_ban_hang'));
   const overdue = useQ('customers', [['overdue', 'gt', 0]], 'overdue desc', 20);
   const low = useQ('products', [['is_low', 'eq', 'true']], 'available', 20);
-  const latePo = useQ('purchase_orders', [['is_late', 'eq', 'true']], 'expected_date', 20, can('nhap_hang'));
-  const shipProb = useQ('shipments', [['status', 'in', ['giao_that_bai', 'dang_hoan', 'su_co']]], 'status_at', 20);
-  const bankWait = useQ('bank_txns', [['status', 'eq', 'cho_xu_ly'], ['direction', 'eq', 'in']], 'txn_at desc', 20, can('thu_chi'));
+  const latePo = useQ('purchase_orders', [['is_late', 'eq', 'true']], 'expected_date', 20, can('xem_nhap_hang'));
+  const shipProb = useQ('shipments', [['status', 'in', ['giao_that_bai', 'dang_hoan', 'su_co']]], 'status_at', 20, can('xem_ban_hang'));
+  const bankWait = useQ('bank_txns', [['status', 'eq', 'cho_xu_ly'], ['direction', 'eq', 'in']], 'txn_at desc', 20, can('xem_thu_chi'));
   const drill = (k) => open('drill', { metric: METRICS[k].metric || k, label: METRICS[k].label, how: METRICS[k].how, from: period.from, to: period.to });
   const cost = data?.can_cost;
   return (

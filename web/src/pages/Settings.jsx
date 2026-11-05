@@ -7,22 +7,20 @@ import { exportXlsx, saveFile } from '../lib/excel.js';
 import { BankSettings, NotifySettings, CarrierSettings } from './SettingsExtra.jsx';
 import { cats as expCats } from '../lib/expenseCats.js';
 import { Btn, Icon, Pill, Field, Input, Select, DateInput, NumInput, Check, Tabs, usePageTab, Loading, ErrorBox, Note, Table, Modal, ConfirmBtn, Section, KV } from '../components/ui.jsx';
-
-export const PERMS = [
-  ['ban_hang', 'Bán hàng (tạo đơn, giao hàng, trả hàng)'], ['thu_chi', 'Thu chi tiền'], ['nhap_hang', 'Nhập hàng / đặt xưởng'], ['kho', 'Điều chỉnh kho (vỡ, kiểm kê)'],
-  ['danh_muc', 'Sửa sản phẩm, khách hàng, NCC'], ['chi_phi', 'Ghi chi phí'], ['xem_gia_von', 'Xem giá vốn và lợi nhuận'], ['xem_bao_cao', 'Xem tổng quan và báo cáo'], ['cham_cong', 'Chấm công và lịch làm việc'],
-];
+import { MyAccount } from './Account.jsx';
+import { AdminUsers, AdminRoles, SecurityLog } from './Admin.jsx';
 
 export function SettingsPage(nav) {
-  const { can, book } = useApp();
-  const owner = can('owner');
+  const { can, book, session } = useApp();
+  const owner = can('owner'); const admin = !!session?.user?.is_admin;
+  const adminTabs = admin ? [{ value: 'users', label: 'Người dùng & quyền' }, { value: 'roles', label: 'Vai trò' }, { value: 'security', label: 'Nhật ký bảo mật' }] : [];
   const [tab, setTab] = usePageTab(nav, owner ? 'book' : 'notify', owner ? undefined : ['notify', 'me']);
   useEffect(() => { const h = (e) => setTab(e.detail); window.addEventListener('settings-tab', h); return () => window.removeEventListener('settings-tab', h); }, []);
   return (
     <>
       <div className="page-head"><div className="grow"><h1 className="page-title">Cài đặt</h1><div className="page-sub">Sổ đang mở: <b>{book?.name}</b>. Mỗi thương hiệu là một sổ riêng: hàng hóa, khách, quỹ tiền và báo cáo không lẫn vào nhau.</div></div></div>
       <Tabs value={tab} onChange={setTab} tabs={owner ? [
-        { value: 'book', label: 'Thông tin sổ' }, { value: 'lists', label: 'Danh sách chọn' }, { value: 'funds', label: 'Quỹ tiền' }, { value: 'users', label: 'Người dùng & quyền' },
+        { value: 'book', label: 'Thông tin sổ' }, { value: 'lists', label: 'Danh sách chọn' }, { value: 'funds', label: 'Quỹ tiền' }, ...adminTabs,
         { value: 'bank', label: 'Tài khoản nhận tiền' }, { value: 'docs', label: 'Mẫu chứng từ' }, { value: 'carriers', label: 'Đơn vị vận chuyển' }, { value: 'notify', label: 'Thông báo điện thoại' },
         { value: 'data', label: 'Nhập / sao lưu dữ liệu' }, { value: 'audit', label: 'Nhật ký thay đổi' }, { value: 'me', label: 'Tài khoản' },
       ] : [{ value: 'notify', label: 'Thông báo điện thoại' }, { value: 'me', label: 'Tài khoản' }]} />
@@ -33,10 +31,12 @@ export function SettingsPage(nav) {
       {tab === 'book' && <BookSettings />}
       {tab === 'lists' && <ListSettings />}
       {tab === 'funds' && <Funds />}
-      {tab === 'users' && <Members />}
+      {tab === 'users' && admin && <AdminUsers />}
+      {tab === 'roles' && admin && <AdminRoles />}
+      {tab === 'security' && admin && <SecurityLog />}
       {tab === 'data' && <DataTools />}
       {tab === 'audit' && <AuditLog />}
-      {tab === 'me' && <Me />}
+      {tab === 'me' && <MyAccount />}
     </>
   );
 }
@@ -194,64 +194,6 @@ function FundForm({ fund, onClose }) {
   );
 }
 
-function Members() {
-  const { session } = useApp();
-  const q = useQ('members', [], 'created_at', 100);
-  const [edit, setEdit] = useState(null);
-  return (
-    <div className="stack" style={{ maxWidth: 900 }}>
-      <Note>Nhân viên cần tự đăng ký tài khoản bằng email trước, sau đó chủ cửa hàng thêm email đó vào đây và chọn quyền. Quyền đặt riêng cho từng sổ. Không có quyền “Xem giá vốn” thì không thấy giá vốn, lợi nhuận, giá trị tồn kho.</Note>
-      <ErrorBox error={q.error} />
-      <Table rowKey="user_id" rows={q.data} onRow={(m) => setEdit(m)} columns={[
-        { key: 'n', label: 'Người dùng', render: (m) => <><b>{m.display_name || m.email}</b><div className="cell-sub">{m.email}</div></> },
-        { key: 'r', label: 'Vai trò', render: (m) => <Pill tone={m.role === 'owner' ? 'accent' : 'neutral'}>{m.role === 'owner' ? 'Chủ (toàn quyền)' : 'Nhân viên'}</Pill> },
-        { key: 'p', label: 'Quyền', render: (m) => (m.role === 'owner' ? <span className="muted small">Tất cả</span> : <span className="small">{PERMS.filter(([k]) => m.perms?.[k]).map(([, l]) => l.split(' (')[0]).join(', ') || '—'}</span>) },
-      ]} />
-      <div><Btn icon="plus" onClick={() => setEdit({ role: 'staff', perms: null })}>Thêm người dùng</Btn></div>
-      {edit && <MemberForm m={edit} self={edit.user_id && edit.user_id === session?.user?.id} onClose={() => setEdit(null)} />}
-    </div>
-  );
-}
-
-function MemberForm({ m, self, onClose }) {
-  const { settings, rpc, refresh, toast } = useApp();
-  const { run, busy } = useAction();
-  const [f, setF] = useState({ email: m.email || '', display_name: m.display_name || '', role: m.role || 'staff', perms: m.perms || settings.staff_default_perms || {} });
-  return (
-    <Modal title={m.user_id ? `Quyền của ${m.display_name || m.email}` : 'Thêm người dùng'} onClose={onClose} size="md"
-      footer={<>{m.user_id && !self && <ConfirmBtn kind="danger" icon="x" onConfirm={async () => { try { await rpc('remove_member', { user_id: m.user_id }); refresh(); toast('Đã gỡ khỏi sổ'); onClose(); } catch (e) { toast(e.message, 'err'); } }}>Gỡ khỏi sổ</ConfirmBtn>}
-        <span className="grow" /><Btn onClick={onClose}>Thôi</Btn>
-        <Btn kind="primary" busy={busy} onClick={async () => { if (await run('upsert_member', f, 'Đã lưu quyền')) onClose(); }}>Lưu</Btn></>}>
-      <div className="grid">
-        <Field label="Email đăng nhập" wide><Input value={f.email} onChange={(v) => setF((s) => ({ ...s, email: v }))} disabled={!!m.user_id} type="email" /></Field>
-        <Field label="Tên hiển thị"><Input value={f.display_name} onChange={(v) => setF((s) => ({ ...s, display_name: v }))} /></Field>
-        <Field label="Vai trò"><Select value={f.role} onChange={(v) => setF((s) => ({ ...s, role: v }))} disabled={self} options={[{ value: 'staff', label: 'Nhân viên' }, { value: 'owner', label: 'Chủ (toàn quyền)' }]} /></Field>
-      </div>
-      {f.role === 'staff' && <div className="perm-grid">{PERMS.map(([k, l]) => <Check key={k} checked={!!f.perms[k]} onChange={(v) => setF((s) => ({ ...s, perms: { ...s.perms, [k]: v } }))}>{l}</Check>)}</div>}
-      {m.user_id && m.role === 'staff' && !self && <ResetMemberPassword userId={m.user_id} />}
-    </Modal>
-  );
-}
-
-// Nhân viên quên mật khẩu: chủ sổ đặt mật khẩu mới rồi báo lại cho nhân viên
-function ResetMemberPassword({ userId }) {
-  const { rpc, toast } = useApp();
-  const [pw, setPw] = useState(''); const [busy, setBusy] = useState(false);
-  const save = async () => {
-    setBusy(true);
-    try { await rpc('set_member_password', { user_id: userId, password: pw }); setPw(''); toast('Đã đặt mật khẩu mới — báo lại cho nhân viên'); }
-    catch (e) { toast(e.message, 'err'); } finally { setBusy(false); }
-  };
-  return (
-    <Section title="Nhân viên quên mật khẩu">
-      <div className="row gap">
-        <Input type="text" value={pw} onChange={setPw} placeholder="Mật khẩu mới (ít nhất 6 ký tự)" autoComplete="off" style={{ maxWidth: 280 }} />
-        <Btn busy={busy} disabled={pw.length < 6} onClick={save}>Đặt mật khẩu mới</Btn>
-      </div>
-    </Section>
-  );
-}
-
 // Nhập bản sao lưu JSON (từ bản Supabase cũ hoặc máy chủ khác) vào sổ đang mở — chỉ cho sổ chưa có chứng từ
 function RestoreBackup() {
   const { rpc, book, toast, loadBooks, refresh } = useApp();
@@ -374,26 +316,3 @@ function changedKeys(a) {
 }
 function fmtVal(v) { if (v === null || v === undefined) return '∅'; if (typeof v === 'object') return JSON.stringify(v); const s = String(v); return s.length > 120 ? s.slice(0, 120) + '…' : s; }
 
-function Me() {
-  const { session, book, backend, toast } = useApp();
-  const [oldPw, setOldPw] = useState(''); const [pw, setPw] = useState(''); const [busy, setBusy] = useState(false);
-  const changePw = async () => {
-    setBusy(true);
-    try { await backend.changePassword(oldPw, pw); setOldPw(''); setPw(''); toast('Đã đổi mật khẩu. Các máy khác đang đăng nhập tài khoản này sẽ phải đăng nhập lại.'); }
-    catch (e) { toast(e.message, 'err'); } finally { setBusy(false); }
-  };
-  return (
-    <div className="stack" style={{ maxWidth: 640 }}>
-      <KV items={[['Email', session?.user?.email || '—'], ['Tên', book?.display_name || '—'], ['Vai trò trong sổ này', book?.role === 'owner' ? 'Chủ (toàn quyền)' : 'Nhân viên'],
-        book?.role !== 'owner' && ['Quyền được cấp', PERMS.filter(([k]) => book?.perms?.[k]).map(([, l]) => l).join('; ') || '—']]} />
-      <Section title="Đổi mật khẩu">
-        <div className="grid">
-          <Field label="Mật khẩu hiện tại"><Input type="password" value={oldPw} onChange={setOldPw} autoComplete="current-password" /></Field>
-          <Field label="Mật khẩu mới"><Input type="password" value={pw} onChange={setPw} autoComplete="new-password" placeholder="Ít nhất 6 ký tự" /></Field>
-        </div>
-        <div><Btn busy={busy} disabled={!oldPw || pw.length < 6} onClick={changePw}>Đổi mật khẩu</Btn></div>
-      </Section>
-      <div><Btn icon="out" onClick={() => backend.signOut()}>Đăng xuất</Btn></div>
-    </div>
-  );
-}

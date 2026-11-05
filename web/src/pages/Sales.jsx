@@ -149,7 +149,7 @@ export function OrderDetail({ id, onClose }) {
   const dels = useQ('deliveries', [['order_id', 'eq', id]], 'created_at');
   const rets = useQ('sales_returns', [['order_id', 'eq', id]], 'created_at');
   const pays = useQ('doc_payments', [['doc_id', 'eq', id]], 'pay_date');
-  const pos = useQ('purchase_orders', [['sales_order_id', 'eq', id]], 'created_at', 50, can('nhap_hang'));
+  const pos = useQ('purchase_orders', [['sales_order_id', 'eq', id]], 'created_at', 50, can('xem_nhap_hang'));
   const audit = useQ('audit', [['row_id', 'eq', id]], 'at desc', 50, can('owner'));
   const contract = useQ('contracts', [['order_id', 'eq', id]]);
   const { run, busy } = useAction();

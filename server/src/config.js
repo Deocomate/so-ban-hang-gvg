@@ -24,14 +24,21 @@ function jwtSecret() {
   return s;
 }
 
+const production = env.NODE_ENV === 'production';
+
 export const config = {
+  production,
   port: Number(env.PORT || 3000),
+  // Địa chỉ trang web, dùng để tạo link trong email (mời, quên mật khẩu, xác thực). Bản chạy thật bắt buộc khai.
+  appUrl: String(env.APP_URL || (production ? '' : 'http://localhost:5173')).replace(/\/+$/, ''),
+  // Gửi email qua Gmail: SMTP_USER = địa chỉ Gmail, SMTP_PASS = mật khẩu ứng dụng 16 ký tự (không phải mật khẩu Gmail)
+  smtp: { host: env.SMTP_HOST || 'smtp.gmail.com', port: Number(env.SMTP_PORT || 465), user: env.SMTP_USER || '', pass: env.SMTP_PASS || '',
+    from: env.SMTP_FROM || (env.SMTP_USER ? `Sổ bán hàng <${env.SMTP_USER}>` : '') },
   dataDir,
   dbPath: env.DB_PATH || path.join(dataDir, 'gomsu.db'),
   webDir: path.resolve(env.WEB_DIR || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'web', 'dist')),
   backupDir: env.BACKUP_DIR || path.join(dataDir, 'backups'),
   backupKeep: Number(env.BACKUP_KEEP_DAYS || 14),
-  allowSignup: flag(env.ALLOW_SIGNUP, true),
   demoMode: flag(env.DEMO_MODE, false),
   trustProxy: flag(env.TRUST_PROXY, true),
   admin: { email: env.ADMIN_EMAIL || '', password: env.ADMIN_PASSWORD || '' },

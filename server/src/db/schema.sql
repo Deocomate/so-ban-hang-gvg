@@ -12,8 +12,64 @@ create table if not exists users (
   name text,
   password_hash text not null,
   token_version integer not null default 0,
+  created_at text not null,
+  phone text,
+  -- invited: đã mời, chưa đặt mật khẩu · active: đang dùng · disabled: bị khóa
+  status text not null default 'active' check (status in ('invited','active','disabled')),
+  is_admin integer not null default 0,           -- Tổng quản trị
+  email_verified_at text,
+  must_change_password integer not null default 0,
+  last_login_at text,
+  updated_at text
+);
+
+-- Vai trò mẫu: bộ quyền đặt tên sẵn, Tổng quản trị gán cho nhân viên ở từng sổ
+create table if not exists roles (
+  id text primary key,
+  name text not null unique collate nocase,
+  description text,
+  perms text not null default '{}',
   created_at text not null
 );
+
+-- Link trong email (mời, xác thực email, quên mật khẩu, đổi email): chỉ lưu bản băm SHA-256 của mã, dùng 1 lần
+create table if not exists auth_tokens (
+  id text primary key,
+  user_id text not null references users(id) on delete cascade,
+  kind text not null check (kind in ('invite','verify_email','reset_password','change_email')),
+  token_hash text not null unique,
+  new_email text,
+  expires_at text not null,
+  used_at text,
+  created_at text not null
+);
+create index if not exists auth_tokens_user_idx on auth_tokens (user_id, kind);
+
+-- Thư chờ gửi: ghi trong cùng giao dịch với thao tác, gửi ngay sau đó; gửi xong thì xóa nội dung
+create table if not exists mail_outbox (
+  id integer primary key autoincrement,
+  to_email text not null,
+  subject text not null,
+  body text,
+  html text,
+  status text not null default 'cho' check (status in ('cho','da_gui','loi')),
+  tries integer not null default 0,
+  error text,
+  created_at text not null,
+  sent_at text
+);
+
+-- Nhật ký bảo mật: đăng nhập, mật khẩu, email, cấp quyền — chỉ Tổng quản trị xem
+create table if not exists security_log (
+  id integer primary key autoincrement,
+  at text not null,
+  user_id text,
+  actor_id text,
+  event text not null,
+  ip text,
+  detail text not null default '{}'
+);
+create index if not exists security_log_at_idx on security_log (at desc);
 
 -- ---------- SỔ (mỗi thương hiệu một sổ riêng) ----------
 create table if not exists books (
@@ -29,6 +85,7 @@ create table if not exists book_members (
   book_id text not null references books(id) on delete cascade,
   user_id text not null references users(id) on delete cascade,
   role text not null check (role in ('owner','staff')),
+  role_id text references roles(id) on delete set null,
   perms text not null default '{}',
   display_name text,
   notify text not null default '{}',

@@ -26,6 +26,8 @@ const settings = (names) => JSON.stringify({ price_names: names });
 old.prepare(`insert into books (id, name, short_name, settings, created_at) values ('th', 'Thanh Hải', 'TH', ?, ?), ('vg', 'Vũ Gia', 'VG', ?, ?)`)
   .run(settings(['Giá lẻ', 'Giá sỉ riêng', 'Giá công trình']), now, settings(['Giá lẻ', 'Giá sỉ', 'Giá CTV']), now);
 old.prepare(`insert into book_members (book_id, user_id, role, created_at) values ('th', 'u1', 'owner', ?)`).run(now);
+old.prepare(`insert into users (id, email, password_hash, created_at) values ('u2', 'nv@gomsu.vn', 'x', ?)`).run(now);
+old.prepare(`insert into book_members (book_id, user_id, role, perms, created_at) values ('th', 'u2', 'staff', '{"ban_hang":true,"thu_chi":true}', ?)`).run(now);
 old.prepare(`insert into customers (id, book_id, code, name, price_tier, credit_days, created_at) values ('c1', 'th', 'KH1', 'Khách cũ', 3, 30, ?)`).run(now);
 old.prepare(`insert into products (id, book_id, sku, name, price1, price3, created_at, updated_at) values ('p1', 'th', 'SP1', 'Hàng cũ', 100, 300, ?, ?)`).run(now, now);
 old.prepare(`insert into products (id, book_id, sku, name, is_kit, image_url, created_at, updated_at) values ('p2', 'th', 'BO1', 'Bộ cũ', 1, 'anh.jpg', ?, ?)`).run(now, now);
@@ -41,7 +43,12 @@ C('Đã sao lưu trước khi nâng cấp', fs.existsSync(`${file}.truoc-nang-ca
 const bak = new Database(`${file}.truoc-nang-cap-v1.bak`, { readonly: true });
 C('Bản sao lưu còn cấu trúc cũ', bak.prepare(`select 1 from pragma_table_info('products') where name = 'price4'`).get(), undefined);
 bak.close();
-C('Lên phiên bản mới', db.pragma('user_version', { simple: true }), 7);
+C('Lên phiên bản mới', db.pragma('user_version', { simple: true }), 8);
+C('Chủ sổ cũ thành Tổng quản trị, tài khoản cũ coi như đã xác thực email', db.prepare(`select id, is_admin, status, email_verified_at is not null v from users order by id`).all(),
+  [{ id: 'u1', is_admin: 1, status: 'active', v: 1 }, { id: 'u2', is_admin: 0, status: 'active', v: 1 }]);
+C('Nhân viên cũ vẫn xem được đơn bán, đơn nhập; xem thu chi theo quyền ghi thu chi', JSON.parse(db.prepare(`select perms from book_members where user_id = 'u2'`).get().perms),
+  { ban_hang: true, thu_chi: true, xem_ban_hang: true, xem_nhap_hang: true, xem_thu_chi: true, xem_chi_phi: false });
+C('Có sẵn 5 vai trò mẫu', db.prepare(`select count(*) n from roles`).get().n, 5);
 C('Phiếu kho cũ và dòng phiếu giữ nguyên', db.prepare(`select a.code, l.qty_delta from stock_adjustments a join stock_adjustment_lines l on l.adjustment_id = a.id`).get(), { code: 'DC00001', qty_delta: -1 });
 db.prepare(`insert into stock_adjustments (id, book_id, code, adj_date, reason, purpose, created_at) values ('a2', 'th', 'XNB00001', '2026-10-02', 'noi_bo', 'Khác', ?)`).run(now);
 C('Phiếu kho nhận lý do xuất dùng nội bộ', db.prepare(`select reason_label from v_adjustments where id = 'a2'`).get().reason_label, 'Xuất dùng nội bộ');

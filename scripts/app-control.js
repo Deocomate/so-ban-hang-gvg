@@ -35,9 +35,9 @@ export function sampleAccount() {
 
 export function appEnv(s) {
   const env = { ...process.env, PORT: String(API_PORT), API_URL: `http://localhost:${API_PORT}`, DATA_DIR: dataDirOf(s), DEMO_MODE: s.sample ? 'true' : 'false', VITE_SAMPLE_LOGIN: '' };
-  if (!s.sample) return env;
+  // Không còn tự đăng ký: cả kho sổ riêng cũng nhận Tổng quản trị đầu tiên từ .env (hoặc tài khoản mẫu mặc định)
   const a = sampleAccount();
-  return { ...env, ADMIN_EMAIL: a.email, ADMIN_PASSWORD: a.password, VITE_SAMPLE_LOGIN: a.email };
+  return { ...env, ADMIN_EMAIL: a.email, ADMIN_PASSWORD: a.password, VITE_SAMPLE_LOGIN: s.sample ? a.email : '' };
 }
 
 // Thư viện chưa cài, hoặc package-lock.json mới hơn lần cài trước (vừa cập nhật mã)

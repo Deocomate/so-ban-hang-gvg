@@ -48,7 +48,7 @@ export function BankPage() {
 
 export function BankTxnDialog({ txn, onClose }) {
   const { open, can, book } = useApp();
-  const orders = useQ('sales_orders', [['status', 'eq', 'xac_nhan']], 'order_date desc', 1000);
+  const orders = useQ('sales_orders', [['status', 'eq', 'xac_nhan']], 'order_date desc', 1000, can('xem_ban_hang'));
   const customers = useCustomers();
   const { run, busy } = useAction();
   const [mode, setMode] = useState(null); const [orderId, setOrderId] = useState(''); const [cust, setCust] = useState(''); const [reason, setReason] = useState('');

@@ -16,7 +16,12 @@ services:
       JWT_SECRET: ${JWT_SECRET:-}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
-      ALLOW_SIGNUP: ${ALLOW_SIGNUP:-true}
+      APP_URL: ${APP_URL:-}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
       DEMO_MODE: ${DEMO_MODE:-false}
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
       SEPAY_API_KEY: ${SEPAY_API_KEY:-}

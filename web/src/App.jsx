@@ -23,6 +23,7 @@ import { PriceBookPage, DriversPage, SalesReturnsPage, SupplierReturnsPage } fro
 import { QuotesPage } from './pages/Quotes.jsx';
 import { ContractsPage } from './pages/Contracts.jsx';
 import { TaxPage, InputInvoicesPage } from './pages/Tax.jsx';
+import { Login, LinkPage, ForcePassword, isLinkPage } from './pages/Account.jsx';
 
 const PAGES = [
   { id: 'tong-quan', label: 'Tổng quan', icon: 'home', perm: 'xem_bao_cao', comp: Overview },
@@ -32,23 +33,23 @@ const PAGES = [
   { id: 'san-xuat', label: 'Sản xuất', icon: 'hammer', comp: ProductionPage },
   { id: 'xuat-huy', label: 'Xuất hủy', icon: 'trash', comp: DamagePage },
   { id: 'xuat-noi-bo', label: 'Xuất dùng nội bộ', icon: 'gift', comp: InternalUsePage },
-  { id: 'bao-gia', label: 'Báo giá', icon: 'quote', comp: QuotesPage },
-  { id: 'hop-dong', label: 'Hợp đồng', icon: 'contract', comp: ContractsPage },
-  { id: 'dat-rieng', label: 'Đặt hàng', icon: 'order', comp: SpecialPage },
-  { id: 'ban-hang', label: 'Hóa đơn', icon: 'invoice', comp: SalesPage },
-  { id: 'tra-hang', label: 'Trả hàng', icon: 'return', comp: SalesReturnsPage },
-  { id: 'van-chuyen', label: 'Vận chuyển', icon: 'route', comp: ShippingPage },
-  { id: 'lai-xe', label: 'Lái xe & công nợ', icon: 'truck', comp: DriversPage },
-  { id: 'nhap-hang', label: 'Nhập hàng / đặt xưởng', icon: 'import', perm: 'nhap_hang', comp: PurchasesPage },
+  { id: 'bao-gia', label: 'Báo giá', icon: 'quote', perm: 'xem_ban_hang', comp: QuotesPage },
+  { id: 'hop-dong', label: 'Hợp đồng', icon: 'contract', perm: 'xem_ban_hang', comp: ContractsPage },
+  { id: 'dat-rieng', label: 'Đặt hàng', icon: 'order', perm: 'xem_ban_hang', comp: SpecialPage },
+  { id: 'ban-hang', label: 'Hóa đơn', icon: 'invoice', perm: 'xem_ban_hang', comp: SalesPage },
+  { id: 'tra-hang', label: 'Trả hàng', icon: 'return', perm: 'xem_ban_hang', comp: SalesReturnsPage },
+  { id: 'van-chuyen', label: 'Vận chuyển', icon: 'route', perm: 'xem_ban_hang', comp: ShippingPage },
+  { id: 'lai-xe', label: 'Lái xe & công nợ', icon: 'truck', perm: 'xem_ban_hang', comp: DriversPage },
+  { id: 'nhap-hang', label: 'Nhập hàng / đặt xưởng', icon: 'import', perm: 'xem_nhap_hang', comp: PurchasesPage },
   { id: 'hoa-don-vao', label: 'Hóa đơn đầu vào', icon: 'receipt', perm: 'xem_bao_cao', comp: InputInvoicesPage },
-  { id: 'tra-nhap', label: 'Trả hàng nhập', icon: 'return', comp: SupplierReturnsPage },
-  { id: 'mua-dich-vu', label: 'Mua dịch vụ', icon: 'wrench', perm: 'chi_phi', comp: ServicePurchasesPage },
+  { id: 'tra-nhap', label: 'Trả hàng nhập', icon: 'return', perm: 'xem_nhap_hang', comp: SupplierReturnsPage },
+  { id: 'mua-dich-vu', label: 'Mua dịch vụ', icon: 'wrench', perm: 'xem_chi_phi', comp: ServicePurchasesPage },
   { id: 'khach-hang', label: 'Khách hàng', icon: 'users', comp: (p) => <PartiesPage type="kh" {...p} /> },
   { id: 'nha-cung-cap', label: 'Nhà cung cấp', icon: 'kiln', comp: (p) => <PartiesPage type="ncc" {...p} /> },
   { id: 'nhom-khach', label: 'Nhóm khách hàng', icon: 'group', comp: CustomerGroupsPage },
-  { id: 'thu-chi', label: 'Phiếu thu chi', icon: 'cash', perm: 'thu_chi', comp: CashPage },
-  { id: 'tien-ve', label: 'Tiền về tài khoản', icon: 'bank', perm: 'thu_chi', comp: BankPage },
-  { id: 'chi-phi', label: 'Chi phí vận hành', icon: 'receipt', perm: 'chi_phi', comp: ExpensesPage },
+  { id: 'thu-chi', label: 'Phiếu thu chi', icon: 'cash', perm: 'xem_thu_chi', comp: CashPage },
+  { id: 'tien-ve', label: 'Tiền về tài khoản', icon: 'bank', perm: 'xem_thu_chi', comp: BankPage },
+  { id: 'chi-phi', label: 'Chi phí vận hành', icon: 'receipt', perm: 'xem_chi_phi', comp: ExpensesPage },
   { id: 'nhan-vien', label: 'Danh sách nhân viên', icon: 'users', perm: 'owner', comp: EmployeesPage },
   { id: 'lich-lam-viec', label: 'Lịch làm việc', icon: 'calendar', perm: 'cham_cong', comp: SchedulePage },
   { id: 'cham-cong', label: 'Bảng chấm công', icon: 'check', perm: 'cham_cong', comp: TimesheetPage },
@@ -301,7 +302,7 @@ function Shell() {
     <div className="app">
       <header className="hdr">
         <div className={`hdr-in${books.length > 1 ? ' multi' : ''}`}>
-          <div className="brand"><BrandMark book={book} /><div className="brand-text"><div className="brand-name">{book.name}</div><div className="brand-sub">{book.role === 'owner' ? 'Chủ cửa hàng' : (book.display_name || 'Nhân viên')}</div></div></div>
+          <div className="brand"><BrandMark book={book} /><div className="brand-text"><div className="brand-name">{book.name}</div><div className="brand-sub">{session?.user?.is_admin ? 'Tổng quản trị' : book.role === 'owner' ? 'Quản lý sổ' : (book.role_name || book.display_name || 'Nhân viên')}</div></div></div>
           {bookSwitch()}
           <span className="grow" />
           {quick.length > 1 && (
@@ -355,48 +356,16 @@ function Shell() {
   );
 }
 
-function Login() {
-  const { backend, setSession } = useApp();
-  const [mode, setMode] = useState('in');
-  const [allowSignup, setAllowSignup] = useState(true);
-  const [email, setEmail] = useState(''); const [pw, setPw] = useState(''); const [name, setName] = useState('');
-  const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
-  useEffect(() => { backend.config().then((c) => setAllowSignup(c.allow_signup !== false)); }, [backend]);
-  const submit = async (e) => {
-    e.preventDefault(); setErr(''); setBusy(true);
-    try {
-      if (mode === 'in') await backend.signIn(email, pw);
-      else await backend.signUp(email, pw, name);
-      setSession(await backend.getSession());
-    } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
-  };
-  return (
-    <div className="center-screen login-screen">
-      <form className="login card" onSubmit={submit}>
-        <div className="brand"><div className="seal">G</div><div><div className="brand-name">Sổ bán hàng gốm</div><div className="brand-sub">Thanh Hải · Vũ Gia · Anamtile</div></div></div>
-        <h1 className="login-title">{mode === 'in' ? 'Đăng nhập' : mode === 'up' ? 'Tạo tài khoản' : 'Quên mật khẩu'}</h1>
-        {import.meta.env.VITE_SAMPLE_LOGIN && mode === 'in' && <Note>Dữ liệu mẫu: đăng nhập bằng <b>{import.meta.env.VITE_SAMPLE_LOGIN}</b>, mật khẩu xem ở Bảng điều khiển.</Note>}
-        {mode === 'up' && <Field label="Tên hiển thị"><Input id="name" value={name} onChange={setName} placeholder="vd. Chị Lan" /></Field>}
-        <Field label="Email"><Input id="email" type="email" required value={email} onChange={setEmail} autoComplete="email" /></Field>
-        {mode !== 'forgot' && <Field label="Mật khẩu"><Input id="pw" type="password" required minLength={6} value={pw} onChange={setPw} autoComplete={mode === 'in' ? 'current-password' : 'new-password'} /></Field>}
-        {err && <Note tone="bad">{err}</Note>}
-        {mode === 'forgot'
-          ? <Note>Nhân viên quên mật khẩu: nhờ chủ cửa hàng vào <b>Cài đặt → Người dùng &amp; quyền</b> đặt mật khẩu mới. Chủ cửa hàng quên mật khẩu: người quản trị máy chủ chạy lệnh đặt lại (xem HUONG-DAN.md).</Note>
-          : <button className="btn btn-primary btn-block" type="submit" disabled={busy}>{busy ? <span className="spin" /> : null}{mode === 'in' ? 'Đăng nhập' : 'Tạo tài khoản'}</button>}
-        <div className="row gap small">
-          {mode !== 'in' && <a href="#" onClick={(e) => { e.preventDefault(); setMode('in'); }}>Đăng nhập</a>}
-          {mode !== 'up' && allowSignup && <a href="#" onClick={(e) => { e.preventDefault(); setMode('up'); }}>Tạo tài khoản mới</a>}
-          {mode !== 'forgot' && <a href="#" onClick={(e) => { e.preventDefault(); setMode('forgot'); }}>Quên mật khẩu</a>}
-        </div>
-        <div className="muted small">Người đăng ký đầu tiên trở thành chủ cửa hàng. Nhân viên đăng ký xong, nhờ chủ cửa hàng thêm email vào sổ.</div>
-      </form>
-    </div>
-  );
-}
-
 function Gate() {
-  const { session } = useApp();
+  const { session, backend } = useApp();
+  // Lấy lại quyền Tổng quản trị / yêu cầu đổi mật khẩu mới nhất mỗi lần mở ứng dụng
+  useEffect(() => { if (session) backend.refreshMe().catch(() => {}); }, [!!session]);
+  // Link trong email mở khi ứng dụng đang mở sẵn ở tab này: chỉ phần sau # đổi
+  const [linkKey, setLinkKey] = useState(() => (isLinkPage() ? location.hash : ''));
+  useEffect(() => { const h = () => setLinkKey(isLinkPage() ? location.hash : ''); window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h); }, []);
+  if (linkKey) return <LinkPage key={linkKey} />;
   if (!session) return <Login />;
+  if (session.user?.must_change_password) return <ForcePassword />;
   return <Shell />;
 }
 

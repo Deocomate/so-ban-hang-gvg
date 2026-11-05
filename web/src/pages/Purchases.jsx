@@ -66,7 +66,7 @@ export function PoForm({ id, kind: kind0, sales_order_id, supplier_id: sup0, lin
   const products = useProducts();
   const suppliers = useSuppliers();
   const funds = useFunds(can('thu_chi'));
-  const so = useQ('sales_orders', [['status', 'eq', 'xac_nhan']], 'created_at desc', 500);
+  const so = useQ('sales_orders', [['status', 'eq', 'xac_nhan']], 'created_at desc', 500, can('xem_ban_hang'));
   const { run, busy } = useAction();
   const [loaded, setLoaded] = useState(!id);
   const [f, setF] = useState({

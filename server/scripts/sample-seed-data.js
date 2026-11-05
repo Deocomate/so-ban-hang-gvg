@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadSheets, productRules, importRules, guessSheet, findHeader, guessColumns, buildRows, validateProducts, validateParties } from '../../web/src/lib/excel.js';
 import { DEFAULT_TEXTS } from '../../web/src/lib/docs/model.js';
-import { SAMPLE_STAFF_EMAIL } from '../src/lib/auth.js';
+import { SAMPLE_STAFF_EMAIL, SAMPLE_ROLE_EMAIL } from '../src/lib/auth.js';
 import { VG_PRODUCTS } from './demo-seed-data.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -83,6 +83,13 @@ export async function seedSample({ call, svc, ensureUser, setUser, owner, today,
   for (const b of [TH, VG, AN]) {
     await call('upsert_member', { book_id: b, email: SAMPLE_STAFF_EMAIL, role: 'staff', display_name: 'Nhân viên Lan',
       perms: { ban_hang: true, thu_chi: true, nhap_hang: true, kho: false, danh_muc: false, chi_phi: false, xem_gia_von: false, xem_bao_cao: false } });
+  }
+  // Mỗi vai trò mẫu một tài khoản thử (cùng mật khẩu với tài khoản quản trị mẫu) để dev kiểm tra từng màn hình theo quyền
+  const roles = (await call('admin_overview', {})).roles;
+  for (const r of roles) {
+    const email = SAMPLE_ROLE_EMAIL(r.name);
+    const id = await ensureUser(email, `${r.name} (mẫu)`);
+    await call('admin_save_user', { id, books: Object.fromEntries([TH, VG, AN].map((b) => [b, { access: 'staff', role_id: r.id, display_name: r.name }])) });
   }
 
   const setupFunds = async (b, cash, bank) => {

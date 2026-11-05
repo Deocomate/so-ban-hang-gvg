@@ -1,5 +1,6 @@
 // Mở CSDL SQLite: tạo bảng, đăng ký hàm tự định nghĩa (dùng trong view), dựng lại view và trigger nhật ký.
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Database from './sqlite.js';
@@ -7,9 +8,10 @@ import { ctx, today, vnDate, daysBetween, nowIso } from '../lib/context.js';
 import { shipStatusLabel, codStatusLabel, carrierName } from '../lib/labels.js';
 import { can } from '../domain/access.js';
 import { addAnamtileBook, defaultDocs, VARIANTS } from '../domain/books.js';
+import { DEFAULT_ROLES } from '../lib/labels.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 
 // Bảng ghi nhật ký chỉnh sửa; cột bỏ qua khi so sánh UPDATE (do hệ thống tự cập nhật)
 const AUDIT_TABLES = {
@@ -92,6 +94,14 @@ const ADDED_COLUMNS = [
   ['sales_order_lines', 'unit_conv', 'real not null default 1'],
   ['purchase_order_lines', 'unit_name', 'text'],
   ['purchase_order_lines', 'unit_conv', 'real not null default 1'],
+  ['users', 'phone', 'text'],
+  ['users', 'status', "text not null default 'active' check (status in ('invited','active','disabled'))"],
+  ['users', 'is_admin', 'integer not null default 0'],
+  ['users', 'email_verified_at', 'text'],
+  ['users', 'must_change_password', 'integer not null default 0'],
+  ['users', 'last_login_at', 'text'],
+  ['users', 'updated_at', 'text'],
+  ['book_members', 'role_id', 'text references roles(id) on delete set null'],
 ];
 
 // SQLite không sửa được CHECK của bảng đã có nên phải dựng lại bảng khách hàng để nhận đủ 5 mức giá
@@ -181,6 +191,26 @@ function migrate(db, from) {
   if (from > 0 && from < 3) addLegalEntities(db);
   if (from > 0 && from < 6) setProductTypes(db);
   if (from > 0 && from < 7) applyBookProfiles(db);
+  if (from > 0 && from < 8) upgradeAccounts(db);
+  if (from < 8) seedRoles(db);
+}
+
+// Tài khoản có trước khi có phân quyền mới: coi như đã xác thực email; chủ sổ thành Tổng quản trị;
+// nhân viên giữ nguyên những gì đang thấy (trước đây mọi thành viên xem được đơn bán, đơn nhập; xem thu chi / chi phí đi kèm quyền ghi).
+function upgradeAccounts(db) {
+  db.exec(`update users set email_verified_at = coalesce(email_verified_at, created_at);
+    update users set is_admin = 1 where id in (select user_id from book_members where role = 'owner');`);
+  const on = (v) => v === true || v === 'true';
+  for (const m of db.prepare(`select book_id, user_id, perms from book_members where role = 'staff'`).all()) {
+    const p = JSON.parse(m.perms || '{}');
+    const next = { ...p, xem_ban_hang: true, xem_nhap_hang: true, xem_thu_chi: on(p.thu_chi), xem_chi_phi: on(p.chi_phi) };
+    db.prepare(`update book_members set perms = ? where book_id = ? and user_id = ?`).run(JSON.stringify(next), m.book_id, m.user_id);
+  }
+}
+
+function seedRoles(db) {
+  const ins = db.prepare(`insert or ignore into roles (id, name, description, perms, created_at) values (?, ?, ?, ?, ?)`);
+  for (const r of DEFAULT_ROLES) ins.run(crypto.randomUUID(), r.name, r.description, JSON.stringify(Object.fromEntries(r.perms.map((k) => [k, true]))), nowIso());
 }
 
 // Loại hàng mới: bộ cũ thành combo, hàng đã có định mức sản xuất thành hàng sản xuất; ảnh cũ thành ảnh đầu tiên

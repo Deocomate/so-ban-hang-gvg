@@ -21,7 +21,7 @@ import * as tax from './tax.js';
 import * as groups from './customer-groups.js';
 import * as staff from './staff.js';
 import * as priceBooks from './price-books.js';
-import { set_member_password } from '../lib/auth.js';
+import * as users from './users.js';
 import { import_book } from './import-backup.js';
 
 const pick = (mod, names) => Object.fromEntries(names.map((n) => {
@@ -50,7 +50,8 @@ export const RPC = {
     'create_paysheet', 'recalc_paysheet', 'adjust_paysheet_line', 'close_paysheet', 'cancel_paysheet', 'rpt_staff']),
   ...pick(groups, ['save_customer_group', 'delete_customer_group', 'set_customer_group', 'refresh_customer_groups']),
   ...pick(priceBooks, ['save_price_book', 'delete_price_book', 'save_price_book_items', 'import_price_book_items', 'apply_price_formula']),
-  set_member_password,
+  ...pick(users, ['admin_overview', 'admin_save_user', 'admin_resend_invite', 'admin_send_reset', 'admin_set_status', 'admin_logout_user',
+    'admin_save_role', 'admin_delete_role', 'admin_security_log']),
   import_book,
 };
 
