@@ -300,14 +300,12 @@ export function DeliverDialog({ order, onClose }) {
   const depositLeft = Math.max(order.paid_net - (order.deposit_used || 0), 0);
   const [collect, setCollect] = useState(false);
   const [fund, setFund] = useState('');
-  const [override, setOverride] = useState(false);
   const [viaSpx, setViaSpx] = useState(false); const [tracking, setTracking] = useState(''); const [cod, setCod] = useState(null); const [cr, setCr] = useState(lastCarrier());
   const pmap = useMemo(() => Object.fromEntries((products.data || []).map((p) => [p.id, p])), [products.data]);
   useEffect(() => { if (lines.data) setQtys(Object.fromEntries(lines.data.filter((l) => l.remaining_qty > 0).map((l) => [l.id, l.remaining_qty]))); }, [lines.data]);
   useEffect(() => { if (!fund && funds.data?.length) setFund(funds.data[0].id); }, [funds.data]);
-  const allowOver = book.role === 'owner' && settings.allow_oversell;
   const submit = async () => {
-    const r = await run('deliver', { order_id: order.id, date, shipping_fee: ship, note, override, deposit_used: deposit || 0, lines: Object.entries(qtys).map(([k, v]) => ({ order_line_id: k, qty: Number(v) || 0 })) },
+    const r = await run('deliver', { order_id: order.id, date, shipping_fee: ship, note, deposit_used: deposit || 0, lines: Object.entries(qtys).map(([k, v]) => ({ order_line_id: k, qty: Number(v) || 0 })) },
       (x) => `Đã giao – phiếu ${x.code}`);
     if (!r) return;
     if (collect) {
@@ -354,7 +352,7 @@ export function DeliverDialog({ order, onClose }) {
       {viaSpx && <div className="muted small">COD để trống = số khách còn nợ sau lần giao này; nhập 0 nếu khách đã chuyển khoản. Tiền COD được theo dõi ở mục Vận chuyển cho tới khi hãng chuyển về tài khoản.</div>}
       {can('thu_chi') && !viaSpx && <div className="row gap"><Check checked={collect} onChange={setCollect}>Thu luôn số khách còn nợ sau lần giao này</Check>
         {collect && <Select value={fund} onChange={setFund} options={(funds.data || []).map((x) => ({ value: x.id, label: x.name }))} style={{ maxWidth: 220 }} />}</div>}
-      {allowOver && <Check checked={override} onChange={setOverride}>Cho phép giao vượt số lượng có thể bán (chỉ chủ cửa hàng)</Check>}
+      {settings.allow_oversell && <div className="muted small">Sổ đang cho bán khi tồn không đủ: giao vượt thì tồn kho thành số âm.</div>}
     </Modal>
   );
 }

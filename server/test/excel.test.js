@@ -189,13 +189,20 @@ await E('Không bỏ được mức 4 khi còn khách đang dùng', () => api.ca
 const stockless = (await products()).find((p) => p.sku === 'NAD27-DC002');
 const order = (extra = {}) => api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: dl2.id, status: 'xac_nhan', deliver_now: true, lines: [{ product_id: stockless.id, qty: 3 }], ...extra });
 C('Hàng chưa có tồn', stockless.on_hand, 0);
-await E('Mặc định không giao được khi hết tồn', () => order({ override: true }), 'Không đủ hàng');
+C('Sổ mới mặc định cho bán khi tồn không đủ', (await api.call('bootstrap')).find((b) => b.short_name === 'TH').settings.allow_oversell, true);
+await api.call('update_book_settings', { book_id: TH, settings: { allow_oversell: false } });
+await E('Chủ sổ tắt cài đặt thì chặn giao vượt tồn', () => order({ override: true }), 'Không đủ hàng');
 await api.call('update_book_settings', { book_id: TH, settings: { allow_oversell: true } });
-await E('Bật cài đặt nhưng không xác nhận vẫn chặn', () => order(), 'Không đủ hàng');
-const sold = await order({ override: true });
-C('Bật cài đặt thì giao ngay được', !!sold.delivery_code, true);
+const sold = await order();
+C('Bật cài đặt thì giao ngay được, không cần xác nhận thêm', !!sold.delivery_code, true);
 C('Đơn lấy đúng giá mức 4', (await api.q('sales_order_lines', TH, [['order_id', 'eq', sold.id]]))[0].unit_price, 14000);
 C('Tồn bị âm đúng số đã giao', (await api.one('products', TH, [['id', 'eq', stockless.id]])).on_hand, -3);
+const seller = await api.user('ban-hang@gomsu.vn');
+await api.call('upsert_member', { book_id: TH, email: 'ban-hang@gomsu.vn', role: 'staff', perms: { ban_hang: true } });
+api.as(seller);
+const soldByStaff = await order();
+api.as(owner);
+C('Nhân viên bán hàng cũng giao được khi tồn đã âm', [!!soldByStaff.delivery_code, (await api.one('products', TH, [['id', 'eq', stockless.id]])).on_hand], [true, -6]);
 
 G('Trường kiểu KiotViet: loại hàng, đơn vị quy đổi, vị trí, tồn tối đa');
 const KV_HEAD = ['Mã hàng', 'Tên hàng', 'Loại hàng', 'Nhóm hàng', 'ĐVT', 'Đơn vị quy đổi', 'Giá lẻ', 'Giá vốn', 'Tồn kho', 'Tồn tối thiểu', 'Tồn tối đa', 'Vị trí',

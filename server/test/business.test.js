@@ -129,9 +129,11 @@ po = await api.one('purchase_orders', TH, [['id', 'eq', po3.id]]);
 C('Trạng thái nhận', po.receive_status, 'nhan_mot_phan');
 C('Nợ xưởng theo hàng đã nhận', po.payable, 10500000);
 const nOrders = (await api.q('sales_orders', TH)).length;
-await E('Bán lẻ hàng đang giữ cho đơn khác bị chặn', () => api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: KL, order_date: D(10),
+await api.call('update_book_settings', { book_id: TH, settings: { allow_oversell: false } });
+await E('Sổ tắt bán vượt tồn: bán lẻ hàng đang giữ cho đơn khác bị chặn', () => api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: KL, order_date: D(10),
   lines: [{ product_id: P4, qty: 10 }], deliver_now: true }), 'Không đủ hàng');
 C('Lỗi không để lại đơn dở dang', (await api.q('sales_orders', TH)).length, nOrders);
+await api.call('update_book_settings', { book_id: TH, settings: { allow_oversell: true } });
 
 // ---------- 5. Giao từng phần ----------
 G('5. Giao hàng từng phần + thanh toán nhiều lần');

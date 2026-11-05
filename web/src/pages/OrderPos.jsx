@@ -188,7 +188,7 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
   const isDat = f.kind === 'dat_hang';
   const isOnline = /tiktok|shopee|lazada|facebook/i.test(f.channel || '');
   const priceNames = settings.price_names || ['Giá 1', 'Giá 2', 'Giá 3'];
-  const allowOver = can('owner') && !!settings.allow_oversell;
+  const allowOver = !!settings.allow_oversell;
 
   // Phím tắt: F3 tìm hàng, F4 tìm khách
   useEffect(() => {
@@ -212,7 +212,7 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
       id: id || null, kind: f.kind, customer_id: f.customer_id, channel: f.channel, order_date: f.order_date, due_date: f.due_date || null, staff: f.staff,
       note: f.note, discount: Number(f.discount) || 0, shipping_fee: Number(f.shipping_fee) || 0, vat_rate: Number(f.vat_rate) || 0, transport: f.transport, quote_id: quote_id || null,
       price_book_id: f.price_book_id || null,
-      status: mode === 'draft' ? 'nhap' : 'xac_nhan', deliver_now: mode === 'deliver', override: mode === 'deliver' && allowOver,
+      status: mode === 'draft' ? 'nhap' : 'xac_nhan', deliver_now: mode === 'deliver',
       lines: lines.map((l) => ({ id: l.id || null, product_id: l.product_id, qty: baseQty(l), unit_price: (Number(l.unit_price) || 0) / (l.conv || 1),
         unit_name: (l.conv || 1) !== 1 ? l.unit : null, discount_pct: Number(l.discount_pct) || 0,
         po_line_id: l.po_line_id || null, note: (l.note || '').trim() || null })),

@@ -89,7 +89,7 @@ function BookSettings() {
         <Check checked={f.packaging} onChange={(v) => set('packaging', v)}>Hàng có đóng gói (hộp, thùng): hiện quy cách đóng gói, in “x hộp x y viên” trên chứng từ</Check>
       </Section>
       <Section title="Quy tắc">
-        <Check checked={f.allow_oversell} onChange={(v) => set('allow_oversell', v)}>Cho phép giao vượt số tồn kho (mặc định: chặn)</Check>
+        <Check checked={f.allow_oversell} onChange={(v) => set('allow_oversell', v)}>Cho phép bán khi tồn kho không đủ (tồn có thể âm). Bỏ tick để chặn giao vượt tồn</Check>
         <div className="grid">
           <Field label="Khóa sổ đến hết ngày" hint="Không ai sửa / thêm chứng từ có ngày ≤ ngày này (dùng sau khi chốt sổ tháng)"><DateInput value={f.lock_date} onChange={(v) => set('lock_date', v)} max={todayVN()} /></Field>
           <Field label="Nhắc trước hạn (ngày)"><NumInput money={false} min={0} suffix="ngày" value={f.due_warn_days} onChange={(v) => set('due_warn_days', v)} /></Field>

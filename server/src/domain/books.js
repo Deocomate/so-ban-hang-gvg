@@ -48,7 +48,7 @@ export function defaultSettings(variant) {
     expense_cats: DEFAULT_EXPENSE_CATS,
     fee_category: 'Phí sàn TMĐT',
     prod_steps: ['Chờ sản xuất', 'Đang sản xuất', 'Đang trong lò', 'Đã sản xuất, chưa giao hàng', 'Đang giao về'],
-    allow_oversell: false,
+    allow_oversell: true,   // bán được cả khi tồn không đủ (tồn âm); chủ sổ tắt được trong Cài đặt
     due_warn_days: 3,
     lock_date: null,
     staff_default_perms: { ban_hang: true, thu_chi: true, nhap_hang: false, kho: false, danh_muc: false, chi_phi: false, xem_gia_von: false, xem_bao_cao: false },

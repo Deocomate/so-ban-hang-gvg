@@ -21,7 +21,8 @@ export function doDeliver(orderId, date, lines, ship, note, override, depositUse
   if (o.status === 'nhap') fail(`Đơn ${o.code} đang là nháp — hãy xác nhận đơn trước khi giao`);
   if (o.status === 'huy') fail(`Đơn ${o.code} đã hủy`);
   checkDate(o.book_id, date);
-  const allow = !!override && isOwner(o.book_id) && bookSettings(o.book_id).allow_oversell === true;
+  // Sổ cho bán vượt tồn thì ai có quyền giao hàng cũng giao được, tồn có thể âm; override giữ lại để bản giao diện cũ gửi lên không lỗi
+  const allow = bookSettings(o.book_id).allow_oversell === true;
 
   // kiểm tra số lượng giao từng dòng
   const req = [];
