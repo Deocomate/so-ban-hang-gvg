@@ -28,10 +28,10 @@ export const suppBalances = (b, d) => allN(`select pid as party_id, sum(amt) as 
     select party_id as pid, amount as amt from opening_debts where book_id = @b and party_type = 'ncc' and debt_date <= @d
     union all
     select po.supplier_id, x.value from goods_receipt_lines x join goods_receipts g on g.id = x.receipt_id join purchase_orders po on po.id = g.po_id
-      where g.book_id = @b and g.receipt_date <= @d
+      where g.book_id = @b and g.receipt_date <= @d and g.cancelled_at is null
     union all
-    select po.supplier_id, -x.value from supplier_return_lines x join supplier_returns r on r.id = x.return_id join purchase_orders po on po.id = r.po_id
-      where r.book_id = @b and r.return_date <= @d
+    select r.supplier_id, -x.value from supplier_return_lines x join supplier_returns r on r.id = x.return_id
+      where r.book_id = @b and r.return_date <= @d and r.cancelled_at is null
     union all
     select supplier_id, amount from expenses where book_id = @b and supplier_id is not null and voided = 0 and exp_date <= @d
     union all

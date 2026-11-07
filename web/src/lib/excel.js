@@ -590,3 +590,35 @@ export function readPriceBookFile(sheets, bookName) {
   for (const x of rows) { const k = x.sku.toLowerCase(); if (seen.has(k)) errors.push({ row: x.__row, text: `${x.sku} trùng với dòng ${seen.get(k)}` }); else seen.set(k, x.__row); }
   return { sheet: s.name, rows, errors };
 }
+
+// Dòng hàng cho phiếu nhập, đặt hàng nhập, trả hàng nhập: cột Mã hàng, Số lượng, Đơn giá (hoặc Giá nhập / Giá trả lại), Giảm giá.
+// Trả về {rows: [{row, sku, qty, price, discount}], errors: [{row, text}]} hoặc {error}.
+export const LINE_FILE_COLUMNS = [{ key: 'sku', label: 'Mã hàng' }, { key: 'name', label: 'Tên hàng' }, { key: 'qty', label: 'Số lượng' }, { key: 'price', label: 'Đơn giá' }, { key: 'discount', label: 'Giảm giá' }];
+export function readLineFile(sheets) {
+  const rules = [
+    ['sku', (k) => k === 'sku' || k.startsWith('ma sku') || k === 'ma sp' || k === 'ma hang' || k === 'ma san pham' || k === 'ma hang hoa' || k === 'ma'],
+    ['qty', (k) => k === 'sl' || k.startsWith('so luong')],
+    ['discount', (k) => k.startsWith('giam gia') || k.startsWith('chiet khau')],
+    ['price', (k) => ['don gia', 'gia nhap', 'gia tra lai', 'gia', 'gia von'].includes(k)],
+  ];
+  let pick = null;
+  for (const s of sheets) {
+    const h = findHeader(s.rows, rules);
+    if (h.map.sku !== undefined && h.map.qty !== undefined) { pick = { s, h }; break; }
+  }
+  if (!pick) return { error: 'Không thấy cột "Mã hàng" và "Số lượng" trong file' };
+  const { s, h } = pick;
+  const rows = []; const errors = [];
+  const numAt = (r, f) => (h.map[f] === undefined || blank(r[h.map[f]]) ? null : parseNum(r[h.map[f]]));
+  s.rows.slice(h.idx + 1).forEach((r, i) => {
+    const row = s.rowBase + h.idx + i + 2;
+    const sku = textCell(r[h.map.sku]);
+    const qty = numAt(r, 'qty'); const price = numAt(r, 'price'); const discount = numAt(r, 'discount');
+    if (!sku && qty == null) return;
+    if (!sku) { errors.push({ row, text: 'Thiếu mã hàng' }); return; }
+    if (qty == null || Number.isNaN(qty) || qty <= 0) { errors.push({ row, text: `${sku}: số lượng không hợp lệ` }); return; }
+    if ((price != null && (Number.isNaN(price) || price < 0)) || (discount != null && (Number.isNaN(discount) || discount < 0))) { errors.push({ row, text: `${sku}: giá không hợp lệ` }); return; }
+    rows.push({ row, sku, qty, price, discount });
+  });
+  return { rows, errors };
+}

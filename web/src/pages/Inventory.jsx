@@ -129,7 +129,7 @@ export function StockCard({ product_id, onClose }) {
         {can('danh_muc') && <Btn icon="edit" onClick={() => open('product', { id: product_id })}>Sửa sản phẩm</Btn>}
         <span className="grow" />
         {can('kho') && !d.is_kit && <Btn onClick={() => open('adjust', { product_id })}>Điều chỉnh</Btn>}
-        {can('nhap_hang') && !d.is_kit && <Btn kind="soft" icon="truck" onClick={() => open('po-form', { product_id })}>Đặt thêm</Btn>}
+        {can('nhap_hang') && !d.is_kit && <Btn kind="soft" icon="truck" onClick={() => open('po-form', { mode: 'dat', product_id })}>Đặt thêm</Btn>}
       </>}>
       {!d ? <Loading /> : <>
         <div className="kpis">

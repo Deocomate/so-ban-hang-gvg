@@ -4,7 +4,7 @@ import { createApiBackend } from './lib/backend.js';
 import { Btn, Icon, Loading, Note, Field, Input, Modal } from './components/ui.jsx';
 import Overview from './pages/Overview.jsx';
 import { SalesPage, SpecialPage } from './pages/Sales.jsx';
-import { PurchasesPage } from './pages/Purchases.jsx';
+import { PurchasesPage, PurchaseOrdersPage, SupplierReturnsPage } from './pages/Purchases.jsx';
 import { InventoryPage } from './pages/Inventory.jsx';
 import { ProductsPage } from './pages/Products.jsx';
 import { PartiesPage } from './pages/Parties.jsx';
@@ -19,7 +19,7 @@ import { ShippingPage } from './pages/Shipping.jsx';
 import { BankPage } from './pages/BankTxns.jsx';
 import { Bell, NotifyPanel, useNotifications, openLink } from './components/Notify.jsx';
 import { registerSW } from './lib/push.js';
-import { PriceBookPage, DriversPage, SalesReturnsPage, SupplierReturnsPage } from './pages/Catalog.jsx';
+import { PriceBookPage, DriversPage, SalesReturnsPage } from './pages/Catalog.jsx';
 import { QuotesPage } from './pages/Quotes.jsx';
 import { ContractsPage } from './pages/Contracts.jsx';
 import { TaxPage, InputInvoicesPage } from './pages/Tax.jsx';
@@ -40,7 +40,8 @@ const PAGES = [
   { id: 'tra-hang', label: 'Trả hàng', icon: 'return', perm: 'xem_ban_hang', comp: SalesReturnsPage },
   { id: 'van-chuyen', label: 'Vận chuyển', icon: 'route', perm: 'xem_ban_hang', comp: ShippingPage },
   { id: 'lai-xe', label: 'Lái xe & công nợ', icon: 'truck', perm: 'xem_ban_hang', comp: DriversPage },
-  { id: 'nhap-hang', label: 'Nhập hàng / đặt xưởng', icon: 'import', perm: 'xem_nhap_hang', comp: PurchasesPage },
+  { id: 'nhap-hang', label: 'Nhập hàng', icon: 'import', perm: 'xem_nhap_hang', comp: PurchasesPage },
+  { id: 'dat-hang-nhap', label: 'Đặt hàng nhập', icon: 'truck', perm: 'xem_nhap_hang', comp: PurchaseOrdersPage },
   { id: 'hoa-don-vao', label: 'Hóa đơn đầu vào', icon: 'receipt', perm: 'xem_bao_cao', comp: InputInvoicesPage },
   { id: 'tra-nhap', label: 'Trả hàng nhập', icon: 'return', perm: 'xem_nhap_hang', comp: SupplierReturnsPage },
   { id: 'mua-dich-vu', label: 'Mua dịch vụ', icon: 'wrench', perm: 'xem_chi_phi', comp: ServicePurchasesPage },
@@ -71,7 +72,7 @@ const MENU = [
   ] },
   { label: 'Mua hàng', icon: 'truck', groups: [
     { title: 'Nhà cung cấp', items: ['nha-cung-cap', 'hoa-don-vao'] },
-    { title: 'Mua hàng', items: ['nhap-hang', 'tra-nhap'] },
+    { title: 'Mua hàng', items: ['nhap-hang', 'dat-hang-nhap', 'tra-nhap'] },
     { title: 'Mua dịch vụ', items: [{ id: 'mua-dich-vu', badge: 'Mới' }] },
   ] },
   { label: 'Đơn hàng', icon: 'order', groups: [
@@ -272,7 +273,7 @@ function Shell() {
   const Page = cur.comp;
   const quick = [
     can('ban_hang') && { label: 'Tạo đơn bán', icon: 'cart', kind: 'primary', on: () => open('order-form', {}) },
-    can('nhap_hang') && { label: 'Nhập hàng', icon: 'truck', on: () => open('po-form', {}) },
+    can('nhap_hang') && { label: 'Nhập hàng', icon: 'truck', on: () => open('po-form', { mode: 'nhap' }) },
     can('thu_chi') && { label: 'Thu tiền', icon: 'in', on: () => open('payment', { kind: 'thu_khach' }) },
     can('thu_chi') && { label: 'Chi tiền', icon: 'out', on: () => open('payment', { kind: 'tra_ncc' }) },
   ].filter(Boolean);

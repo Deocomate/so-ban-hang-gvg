@@ -111,7 +111,7 @@ export function apply_price_formula(p) {
     let base;
     if (f.base === 'cost') base = pr.on_hand > 0 ? pr.stock_value / pr.on_hand : pr.last_cost;
     else if (f.base === 'last_in') base = one(`select g.unit_cost from goods_receipt_lines g join goods_receipts r on r.id = g.receipt_id
-      where g.product_id = ? order by r.receipt_date desc, r.created_at desc limit 1`, pid)?.unit_cost ?? null;
+      where g.product_id = ? and r.cancelled_at is null order by r.receipt_date desc, r.created_at desc limit 1`, pid)?.unit_cost ?? null;
     else if (f.base.startsWith('tier')) base = pr[`price${f.base.slice(4)}`];
     else base = one(`select price from price_book_items where price_book_id = ? and product_id = ?`, f.base.slice(5), pid)?.price ?? null;
     if (base == null) { skipped++; continue; }

@@ -596,6 +596,16 @@ code { font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-r
   .pos-line-total { align-self: center; }
   .pos-sum { grid-template-columns: minmax(0, 1fr) 140px; }
 }
+/* Màn nhập hàng / đặt hàng nhập / trả hàng nhập: ô giảm giá theo VND rộng hơn ô CK %, nút Lưu tạm + Hoàn thành */
+@media (min-width: 1101px) {
+  .pos-line.po { grid-template-columns: 22px 26px minmax(0, 1fr) auto 118px 104px 112px; }
+  .pos-line.po-ret { grid-template-columns: 22px 26px minmax(0, 1fr) auto 118px 112px; }
+}
+.pos-actions.two { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); }
+.pos-actions.one { grid-template-columns: minmax(0, 1fr); }
+.pos-btn-soft { background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); }
+.pos-btn-soft:hover:not(:disabled) { border-color: var(--accent); }
+.pos-top label.pos-chip { display: inline-flex; align-items: center; gap: 6px; }
 
 /* ---------- Báo giá, hợp đồng, tổng quan điều hành ---------- */
 .sec-h { font-size: 16px; margin-top: 8px; }

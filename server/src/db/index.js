@@ -11,7 +11,7 @@ import { addAnamtileBook, defaultDocs, VARIANTS } from '../domain/books.js';
 import { DEFAULT_ROLES } from '../lib/labels.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 9;
 
 // Bảng ghi nhật ký chỉnh sửa; cột bỏ qua khi so sánh UPDATE (do hệ thống tự cập nhật)
 const AUDIT_TABLES = {
@@ -94,6 +94,13 @@ const ADDED_COLUMNS = [
   ['sales_order_lines', 'unit_conv', 'real not null default 1'],
   ['purchase_order_lines', 'unit_name', 'text'],
   ['purchase_order_lines', 'unit_conv', 'real not null default 1'],
+  ['purchase_order_lines', 'unit_price', 'real'],
+  ['purchase_order_lines', 'discount', 'real not null default 0'],
+  ['purchase_orders', 'mode', "text not null default 'dat' check (mode in ('dat','nhap'))"],
+  ['purchase_orders', 'discount', 'real not null default 0 check (discount >= 0)'],
+  ['purchase_orders', 'invoice_no', 'text'],
+  ['goods_receipts', 'cancelled_at', 'text'],
+  ['goods_receipts', 'cancel_reason', 'text'],
   ['users', 'phone', 'text'],
   ['users', 'status', "text not null default 'active' check (status in ('invited','active','disabled'))"],
   ['users', 'is_admin', 'integer not null default 0'],
@@ -171,6 +178,46 @@ function widenAdjReason(db) {
   db.pragma('foreign_keys = ON');
 }
 
+// Trả hàng nhập cũ bắt buộc theo đơn nhập; dựng lại 2 bảng để lập được phiếu trả riêng theo nhà cung cấp,
+// có giá trả lại, giảm giá, hủy phiếu. Số liệu cũ: giá trả lại = giá nhập, giá trị kho = giá trị trả.
+function relaxSupplierReturns(db) {
+  const t = db.prepare(`select sql from sqlite_master where type = 'table' and name = 'supplier_returns'`).get();
+  if (t.sql.includes('supplier_id')) return;
+  db.pragma('foreign_keys = OFF');
+  db.pragma('legacy_alter_table = ON');
+  db.transaction(() => {
+    db.exec(`
+      create table supplier_returns_new (
+        id text primary key, book_id text not null references books(id) on delete cascade, code text not null,
+        po_id text references purchase_orders(id), supplier_id text not null references suppliers(id),
+        return_date text not null, reason text, note text, discount real not null default 0, refund_payment_id text,
+        created_by text, created_at text not null, cancelled_at text, cancel_reason text);
+      insert into supplier_returns_new (id, book_id, code, po_id, supplier_id, return_date, reason, note, created_by, created_at)
+        select r.id, r.book_id, r.code, r.po_id, po.supplier_id, r.return_date, r.reason, r.note, r.created_by, r.created_at
+        from supplier_returns r join purchase_orders po on po.id = r.po_id;
+      create table supplier_return_lines_new (
+        id text primary key, return_id text not null references supplier_returns(id) on delete cascade, book_id text not null,
+        receipt_line_id text references goods_receipt_lines(id), product_id text not null references products(id),
+        qty real not null check (qty > 0), unit_cost real not null, unit_price real not null, value real not null, cost_value real not null);
+      insert into supplier_return_lines_new (id, return_id, book_id, receipt_line_id, product_id, qty, unit_cost, unit_price, value, cost_value)
+        select id, return_id, book_id, receipt_line_id, product_id, qty, unit_cost, unit_cost, value, value from supplier_return_lines;
+      drop table supplier_return_lines; drop table supplier_returns;
+      alter table supplier_returns_new rename to supplier_returns;
+      alter table supplier_return_lines_new rename to supplier_return_lines;`);
+    const broken = db.pragma('foreign_key_check');
+    if (broken.length) throw new Error(`Nâng cấp bảng trả hàng nhập làm hỏng ${broken.length} liên kết`);
+  })();
+  db.pragma('legacy_alter_table = OFF');
+  db.pragma('foreign_keys = ON');
+}
+
+// Đơn nhập đã nhận kho ngay lúc lập là phiếu nhập hàng; giá trước giảm giá của dòng cũ = giá nhập
+function splitPurchaseModes(db) {
+  db.exec(`update purchase_order_lines set unit_price = unit_cost where unit_price is null;
+    update purchase_orders set mode = 'nhap' where kind = 'mua_san' and exists (select 1 from goods_receipts g
+      where g.po_id = purchase_orders.id and abs(julianday(g.created_at) - julianday(purchase_orders.created_at)) < 0.0001);`);
+}
+
 // Sổ chưa khai đơn vị phát hành thì nhận 2 pháp nhân mặc định; sổ đã tự khai giữ nguyên
 function addLegalEntities(db) {
   for (const b of db.prepare(`select id, short_name, settings from books`).all()) {
@@ -187,6 +234,8 @@ function migrate(db, from) {
   widenPriceTier(db);
   widenDocInfo(db);
   widenAdjReason(db);
+  relaxSupplierReturns(db);
+  if (from > 0 && from < 9) splitPurchaseModes(db);
   if (from === 1) addFourthPriceName(db);
   if (from > 0 && from < 3) addLegalEntities(db);
   if (from > 0 && from < 6) setProductTypes(db);

@@ -125,7 +125,7 @@ export function ProductDetail({ id, onClose }) {
         {can('danh_muc') && <Btn busy={busy} onClick={() => run('save_product', { ...p, active: !p.active }, p.active ? `Đã ngừng kinh doanh ${p.sku}` : `${p.sku} kinh doanh trở lại`)}>{p.active ? 'Ngừng kinh doanh' : 'Kinh doanh lại'}</Btn>}
         <span className="grow" />
         {!svc && !p.is_kit && <Btn icon="history" onClick={() => open('stockcard', { product_id: p.id })}>Thẻ kho</Btn>}
-        {!svc && !p.is_kit && can('nhap_hang') && <Btn icon="truck" onClick={() => open('po-form', { product_id: p.id })}>Nhập hàng</Btn>}
+        {!svc && !p.is_kit && can('nhap_hang') && <Btn icon="truck" onClick={() => open('po-form', { mode: 'nhap', product_id: p.id })}>Nhập hàng</Btn>}
         {can('danh_muc') && <Btn kind="primary" icon="edit" onClick={() => open('product', { id: p.id })}>Chỉnh sửa</Btn>}
       </>}>
       <Tabs value={tab} onChange={setTab} tabs={[{ value: 'info', label: 'Thông tin' }, { value: 'desc', label: 'Mô tả, ghi chú' }, ...(comps?.length ? [{ value: 'comp', label: 'Hàng thành phần', count: comps.length }] : [])]} />

@@ -346,6 +346,7 @@ create table if not exists purchase_orders (
   book_id text not null references books(id) on delete cascade,
   code text not null,
   kind text not null default 'mua_san' check (kind in ('mua_san','dat_sx')),
+  mode text not null default 'dat' check (mode in ('dat','nhap')),
   status text not null default 'nhap' check (status in ('nhap','xac_nhan','huy')),
   supplier_id text references suppliers(id),
   order_date text not null,
@@ -353,6 +354,8 @@ create table if not exists purchase_orders (
   prod_step text,
   prod_step_at text,
   sales_order_id text references sales_orders(id),
+  discount real not null default 0 check (discount >= 0),
+  invoice_no text,
   note text,
   cancel_reason text,
   created_by text, created_at text not null,
@@ -374,7 +377,9 @@ create table if not exists purchase_order_lines (
   sales_order_line_id text,
   note text,
   unit_name text,
-  unit_conv real not null default 1
+  unit_conv real not null default 1,
+  unit_price real,
+  discount real not null default 0
 );
 create index if not exists pol_po_idx on purchase_order_lines (po_id);
 
@@ -385,7 +390,8 @@ create table if not exists goods_receipts (
   po_id text not null references purchase_orders(id),
   receipt_date text not null,
   note text,
-  created_by text, created_at text not null
+  created_by text, created_at text not null,
+  cancelled_at text, cancel_reason text
 );
 
 create table if not exists goods_receipt_lines (
@@ -400,25 +406,33 @@ create table if not exists goods_receipt_lines (
   returned_qty real not null default 0
 );
 
+-- Trả hàng nhập: theo phiếu nhập (po_id, receipt_line_id) hoặc lập riêng theo nhà cung cấp (để trống hai cột này)
 create table if not exists supplier_returns (
   id text primary key,
   book_id text not null references books(id) on delete cascade,
   code text not null,
-  po_id text not null references purchase_orders(id),
+  po_id text references purchase_orders(id),
+  supplier_id text not null references suppliers(id),
   return_date text not null,
   reason text, note text,
-  created_by text, created_at text not null
+  discount real not null default 0,
+  refund_payment_id text,
+  created_by text, created_at text not null,
+  cancelled_at text, cancel_reason text
 );
 
+-- value: số NCC phải trả lại (giá trả lại sau giảm giá); cost_value: giá trị kho xuất ra
 create table if not exists supplier_return_lines (
   id text primary key,
   return_id text not null references supplier_returns(id) on delete cascade,
   book_id text not null,
-  receipt_line_id text not null references goods_receipt_lines(id),
+  receipt_line_id text references goods_receipt_lines(id),
   product_id text not null references products(id),
   qty real not null check (qty > 0),
   unit_cost real not null,
-  value real not null
+  unit_price real not null,
+  value real not null,
+  cost_value real not null
 );
 
 -- ---------- KHO ----------

@@ -142,7 +142,7 @@ select b.id, b.book_id, b.sku, b.name, b.category, b.pattern, b.size, b.color, b
   b.product_type, b.product_type = 'dich_vu' as is_service, b.description, b.order_note, b.max_stock, b.location, b.width, b.length, b.dim_unit,
   b.sell_direct, b.images, case when can_cost(b.book_id) then b.last_cost end as last_cost,
   case when can_cost(b.book_id) then (select g.unit_cost from goods_receipt_lines g join goods_receipts r on r.id = g.receipt_id
-    where g.product_id = b.id order by r.receipt_date desc, r.created_at desc limit 1) end as last_in_cost,
+    where g.product_id = b.id and r.cancelled_at is null order by r.receipt_date desc, r.created_at desc limit 1) end as last_in_cost,
   coalesce(units.units, '[]') as units, coalesce(bom.bom, '[]') as bom,
   coalesce(sold.qty, 0) as sold_30d,
   case when b.is_kit or b.product_type = 'dich_vu' or coalesce(sold.qty, 0) <= 0 then null
@@ -302,17 +302,18 @@ left join (select l.return_id, sum(l.revenue) as revenue, sum(l.cogs) as cogs,
 create view v_purchase_orders as
 with l as (
   select po_id, sum((qty - cancelled_qty) * unit_cost) as order_total, sum(qty - cancelled_qty) as eff_qty,
+    sum((qty - cancelled_qty) * (coalesce(unit_price, unit_cost) - discount)) as goods_total,
     sum(received_qty) as received_qty, sum(returned_qty) as returned_qty,
     sum(max(qty - cancelled_qty - received_qty, 0)) as remaining_qty, count(*) as line_count
   from purchase_order_lines group by po_id
 ), r as (
   select g.po_id, sum(x.value) as received_value, max(g.receipt_date) as last_receipt_date
-  from goods_receipt_lines x join goods_receipts g on g.id = x.receipt_id group by g.po_id
+  from goods_receipt_lines x join goods_receipts g on g.id = x.receipt_id where g.cancelled_at is null group by g.po_id
 ), rt as (
-  select s.po_id, sum(x.value) as returned_value
-  from supplier_return_lines x join supplier_returns s on s.id = x.return_id group by s.po_id
+  select s.po_id, sum(x.value) as returned_value, count(distinct s.id) as return_count
+  from supplier_return_lines x join supplier_returns s on s.id = x.return_id where s.cancelled_at is null and s.po_id is not null group by s.po_id
 ), base as (
-  select po.*, coalesce(l.order_total, 0) as l_total, coalesce(l.eff_qty, 0) as eff_qty, coalesce(l.received_qty, 0) as received_qty,
+  select po.*, coalesce(l.order_total, 0) as l_total, coalesce(l.goods_total, 0) as goods_total, coalesce(rt.return_count, 0) as return_count, coalesce(l.eff_qty, 0) as eff_qty, coalesce(l.received_qty, 0) as received_qty,
     coalesce(l.returned_qty, 0) as returned_qty, coalesce(l.remaining_qty, 0) as remaining_qty, coalesce(l.line_count, 0) as line_count,
     coalesce(r.received_value, 0) - coalesce(rt.returned_value, 0) as received_value, coalesce(rt.returned_value, 0) as returned_value,
     coalesce(pd.paid_net, 0) as paid_net, r.last_receipt_date
@@ -320,8 +321,9 @@ with l as (
   left join l on l.po_id = po.id left join r on r.po_id = po.id left join rt on rt.po_id = po.id
   left join v_doc_paid pd on pd.doc_id = po.id
 )
-select po.id, po.book_id, po.code, po.kind, po.status, po.supplier_id, s.code as supplier_code, s.name as supplier_name,
-  s.phone as supplier_phone, po.order_date, po.expected_date, po.prod_step, po.prod_step_at, po.sales_order_id,
+select po.id, po.book_id, po.code, po.kind, po.mode, po.status, po.supplier_id, s.code as supplier_code, s.name as supplier_name,
+  s.phone as supplier_phone, po.discount, po.invoice_no, po.created_by, u.name as created_by_name, po.return_count,
+  case when po.status = 'huy' then 0 else round(po.goods_total) end as goods_total, po.order_date, po.expected_date, po.prod_step, po.prod_step_at, po.sales_order_id,
   so.code as sales_order_code, sc.name as sales_customer_name, po.note, po.cancel_reason, po.created_at,
   case when po.status = 'huy' then 0 else round(po.l_total) end as order_total,
   po.eff_qty, po.received_qty, po.returned_qty, po.remaining_qty, po.line_count,
@@ -342,6 +344,14 @@ select po.id, po.book_id, po.code, po.kind, po.status, po.supplier_id, s.code as
     when po.remaining_qty = 0 then 'Đã nhận đủ'
     when po.received_qty > 0 then 'Đã nhận một phần' || coalesce(' · ' || po.prod_step, '')
     else coalesce(po.prod_step, 'Đã đặt – chờ hàng') end as progress,
+  case
+    when po.status = 'nhap' then 'Phiếu tạm'
+    when po.status = 'huy' then 'Đã hủy'
+    when po.mode = 'nhap' then 'Đã nhập hàng'
+    when po.remaining_qty = 0 then 'Hoàn thành'
+    when po.received_qty > 0 then 'Nhập một phần'
+    else 'Đã xác nhận NCC' end as status_label,
+  case when po.status = 'xac_nhan' and po.remaining_qty > 0 then days(today(), po.order_date) end as wait_days,
   (po.status = 'xac_nhan' and po.remaining_qty > 0 and po.expected_date is not null and po.expected_date < today()) as is_late,
   case when po.received_value - po.paid_net > 0 and po.last_receipt_date is not null
        then date(po.last_receipt_date, '+' || s.credit_days || ' days') end as pay_due_date,
@@ -350,30 +360,43 @@ select po.id, po.book_id, po.code, po.kind, po.status, po.supplier_id, s.code as
        then days(today(), date(po.last_receipt_date, '+' || s.credit_days || ' days')) else 0 end as overdue_days
 from base po
 left join suppliers s on s.id = po.supplier_id
+left join users u on u.id = po.created_by
 left join sales_orders so on so.id = po.sales_order_id
 left join customers sc on sc.id = so.customer_id;
 
 create view v_purchase_order_lines as
 select l.id, l.book_id, l.po_id, po.code as po_code, l.line_no, l.product_id, p.sku, p.name as product_name, p.unit,
-  l.qty, l.unit_cost, l.cancelled_qty, l.received_qty, l.returned_qty, l.qty - l.cancelled_qty as eff_qty,
+  l.qty, l.unit_cost, coalesce(l.unit_price, l.unit_cost) as unit_price, l.discount, coalesce(l.unit_price, l.unit_cost) - l.discount as price_net,
+  round((l.qty - l.cancelled_qty) * (coalesce(l.unit_price, l.unit_cost) - l.discount)) as goods_total, l.cancelled_qty, l.received_qty, l.returned_qty, l.qty - l.cancelled_qty as eff_qty,
   max(l.qty - l.cancelled_qty - l.received_qty, 0) as remaining_qty,
   round((l.qty - l.cancelled_qty) * l.unit_cost) as line_total, l.sales_order_line_id, so.code as sales_order_code, l.note, l.unit_name, l.unit_conv
 from purchase_order_lines l join purchase_orders po on po.id = l.po_id join products p on p.id = l.product_id
 left join sales_order_lines sl on sl.id = l.sales_order_line_id left join sales_orders so on so.id = sl.order_id;
 
 create view v_receipts as
-select g.id, g.book_id, g.code, g.po_id, po.code as po_code, s.name as supplier_name, g.receipt_date, g.note, g.created_at,
-  x.value, x.lines
+select g.id, g.book_id, g.code, g.po_id, po.code as po_code, po.mode as po_mode, po.status as po_status, po.invoice_no,
+  po.supplier_id, s.code as supplier_code, s.name as supplier_name, g.receipt_date, g.note, g.created_at, g.created_by, u.name as created_by_name,
+  g.cancelled_at, g.cancel_reason, case when g.cancelled_at is null then 'Đã nhập hàng' else 'Đã hủy' end as status_label,
+  x.value, x.qty, x.returned_qty, x.lines
 from goods_receipts g join purchase_orders po on po.id = g.po_id left join suppliers s on s.id = po.supplier_id
-left join (select l.receipt_id, sum(l.value) as value, json_group_array(json_object('id', l.id, 'sku', p.sku, 'name', p.name, 'unit', p.unit,
-    'qty', l.qty, 'unit_cost', l.unit_cost, 'value', l.value, 'returned_qty', l.returned_qty, 'product_id', l.product_id) order by p.sku) as lines
+left join users u on u.id = g.created_by
+left join (select l.receipt_id, sum(l.value) as value, sum(l.qty) as qty, sum(l.returned_qty) as returned_qty,
+    json_group_array(json_object('id', l.id, 'sku', p.sku, 'name', p.name, 'unit', p.unit,
+    'qty', l.qty, 'unit_cost', l.unit_cost, 'value', l.value, 'returned_qty', l.returned_qty, 'product_id', l.product_id, 'po_line_id', l.po_line_id) order by p.sku) as lines
   from goods_receipt_lines l join products p on p.id = l.product_id group by l.receipt_id) x on x.receipt_id = g.id;
 
 create view v_supplier_returns as
-select r.id, r.book_id, r.code, r.po_id, po.code as po_code, s.name as supplier_name, r.return_date, r.reason, r.note, r.created_at,
-  x.value, x.lines
-from supplier_returns r join purchase_orders po on po.id = r.po_id left join suppliers s on s.id = po.supplier_id
-left join (select l.return_id, sum(l.value) as value, json_group_array(json_object('sku', p.sku, 'name', p.name, 'qty', l.qty, 'value', l.value)) as lines
+select r.id, r.book_id, r.code, r.po_id, po.code as po_code, r.supplier_id, s.code as supplier_code, s.name as supplier_name,
+  r.return_date, r.reason, r.note, r.created_at, r.created_by, u.name as created_by_name, r.discount,
+  r.cancelled_at, r.cancel_reason, case when r.cancelled_at is null then 'Đã trả hàng' else 'Đã hủy' end as status_label,
+  r.refund_payment_id, rp.code as refund_code, case when rp.voided = 0 then rp.amount else 0 end as refunded,
+  x.goods_total, x.value, x.qty, x.lines,
+  case when can_cost(r.book_id) then x.cost_value end as cost_value
+from supplier_returns r left join purchase_orders po on po.id = r.po_id left join suppliers s on s.id = r.supplier_id
+left join users u on u.id = r.created_by left join payments rp on rp.id = r.refund_payment_id
+left join (select l.return_id, sum(l.value) as value, sum(l.qty) as qty, round(sum(l.qty * l.unit_price)) as goods_total, sum(l.cost_value) as cost_value,
+    json_group_array(json_object('id', l.id, 'product_id', l.product_id, 'sku', p.sku, 'name', p.name, 'unit', p.unit, 'qty', l.qty,
+      'unit_price', l.unit_price, 'unit_cost', case when can_cost(l.book_id) then l.unit_cost end, 'value', l.value, 'receipt_line_id', l.receipt_line_id)) as lines
   from supplier_return_lines l join products p on p.id = l.product_id group by l.return_id) x on x.return_id = r.id;
 
 -- ---------- SỔ KHO ----------
@@ -397,7 +420,7 @@ left join customers c on c.id = so.customer_id
 left join goods_receipts g on m.doc_type = 'nhap' and g.id = m.doc_id
 left join supplier_returns spr on m.doc_type = 'tra_ncc' and spr.id = m.doc_id
 left join purchase_orders po on po.id = coalesce(g.po_id, spr.po_id)
-left join suppliers s on s.id = po.supplier_id
+left join suppliers s on s.id = coalesce(po.supplier_id, spr.supplier_id)
 left join stock_adjustments sa on m.doc_type in ('dieu_chinh','dau_ky') and sa.id = m.doc_id;
 
 create view v_adjustments as
@@ -499,16 +522,19 @@ with od as (
   from v_purchase_orders group by supplier_id
 ), ex as (
   select supplier_id, sum(amount) as amount from expenses where supplier_id is not null and voided = 0 group by supplier_id
+), rs as (
+  select r.supplier_id, sum(l.value) as amount from supplier_return_lines l join supplier_returns r on r.id = l.return_id
+  where r.po_id is null and r.cancelled_at is null group by r.supplier_id
 ), pay as (
   select party_id, sum(debt_amount) as paid from v_pay_signed where party_type = 'ncc' group by party_id
 ), t as (
-  select s.*, coalesce(od.opening, 0) as opening, coalesce(po.received, 0) + coalesce(ex.amount, 0) as received, coalesce(pay.paid, 0) as paid,
-    coalesce(od.opening, 0) + coalesce(po.received, 0) + coalesce(ex.amount, 0) - coalesce(pay.paid, 0) as balance,
+  select s.*, coalesce(od.opening, 0) as opening, coalesce(po.received, 0) + coalesce(ex.amount, 0) - coalesce(rs.amount, 0) as received, coalesce(pay.paid, 0) as paid,
+    coalesce(od.opening, 0) + coalesce(po.received, 0) + coalesce(ex.amount, 0) - coalesce(rs.amount, 0) - coalesce(pay.paid, 0) as balance,
     coalesce(od.overdue, 0) + coalesce(po.overdue, 0) as overdue_raw,
     max(coalesce(od.max_overdue, 0), coalesce(po.max_overdue, 0)) as max_overdue_days,
     coalesce(po.open_pos, 0) as open_pos, po.last_order_date
   from suppliers s left join od on od.party_id = s.id left join po on po.supplier_id = s.id
-  left join ex on ex.supplier_id = s.id left join pay on pay.party_id = s.id
+  left join ex on ex.supplier_id = s.id left join rs on rs.supplier_id = s.id left join pay on pay.party_id = s.id
 )
 select id, book_id, code, name, phone, address, contact, credit_days, note, active, created_at,
   opening, received, paid, balance, max(balance, 0) as payable, max(-balance, 0) as prepaid,

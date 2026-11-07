@@ -4,7 +4,8 @@ import { money, qty as fq, dmy, dmyhm } from '../lib/format.js';
 import { exportXlsx } from '../lib/excel.js';
 import { Btn, Loading, ErrorBox, Note, Table, Modal } from '../components/ui.jsx';
 import { OrderDetail, DeliverDialog, ReturnDialog } from './Sales.jsx';
-import { PoForm, PoDetail, ReceiveDialog, SupplierReturnDialog } from './Purchases.jsx';
+import { PoDetail, ReceiveDialog, SupplierReturnDetail, PurchaseSlip } from './Purchases.jsx';
+import { PurchasePos, ReturnPos } from './PurchasePos.jsx';
 import { PaymentForm, PaymentDetail, ExpenseForm } from './Cash.jsx';
 import { ProductionForm } from './StockDocs.jsx';
 import { CustomerGroupForm } from './CustomerGroups.jsx';
@@ -26,7 +27,7 @@ import { orderTransferContent } from '../lib/vietqr.js';
 
 const MAP = {
   'order-form': OrderPos, order: OrderDetail, deliver: DeliverDialog, return: ReturnDialog,
-  'po-form': PoForm, po: PoDetail, receive: ReceiveDialog, 'po-return': SupplierReturnDialog,
+  'po-form': PurchasePos, po: PoDetail, receive: ReceiveDialog, 'po-return': ReturnPos, sret: SupplierReturnDetail, 'po-print': PurchaseSlip,
   payment: PaymentForm, 'pay-detail': PaymentDetail, expense: ExpenseForm,
   product: ProductForm, 'product-detail': ProductDetail, 'price-book': PriceBookForm, 'price-book-import': PriceBookImport, stockcard: StockCard, adjust: AdjustForm, production: ProductionForm, 'customer-group': CustomerGroupForm,
   employee: EmployeeForm, schedule: ScheduleForm, timesheet: TimesheetForm, 'paysheet-new': PaysheetNewForm, paysheet: PaysheetDetail, commission: CommissionForm, shift: ShiftForm,

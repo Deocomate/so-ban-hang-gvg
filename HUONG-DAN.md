@@ -142,7 +142,10 @@ Nếu bản mới đổi cấu trúc dữ liệu, máy chủ tự sao lưu rồi
 | Đơn **đã xác nhận** | Giữ hàng (giảm "có thể bán"), chưa tính doanh thu |
 | **Giao hàng** | Trừ kho, ghi doanh thu và giá vốn (bình quân gia quyền tại lúc giao, lưu cố định), phát sinh công nợ |
 | **Tiền cọc** | Không phải doanh thu; hiện là "khách trả trước" |
-| **Đơn mua / đặt xưởng** | Không tăng kho. Chỉ **phiếu nhận hàng** mới tăng kho và giá vốn bình quân |
+| **Đặt hàng nhập / đặt xưởng** | Không tăng kho. Chỉ khi **nhận hàng** (hoặc bấm Hoàn thành ở phiếu nhập hàng) mới tăng kho và giá vốn bình quân |
+| **Giảm giá khi nhập** | Giảm giá từng dòng và giảm giá cả phiếu đều trừ vào giá nhập, nên giá vốn và nợ nhà cung cấp tính theo số đã giảm |
+| **Hủy phiếu nhập** | Xuất lại kho đúng giá trị đã nhập. Phải hủy phiếu chi và phiếu trả hàng nhập của phiếu đó trước |
+| **Trả hàng nhập** | Xuất kho (theo giá đã nhập, hoặc giá vốn bình quân nếu lập riêng) và giảm nợ nhà cung cấp theo **giá trả lại** |
 | Bước sản xuất | Chờ sản xuất → Đang sản xuất → Đang trong lò → Đã sản xuất, chưa giao hàng → Đang giao về. "Đã nhận một phần / đủ" do phần mềm tự cập nhật |
 | **Khách trả hàng** | Đảo doanh thu và giá vốn theo đúng giá lúc giao. Hàng lỗi không nhập lại thì ghi vào hao hụt |
 | **Vỡ, lỗi, thất thoát** | Phiếu điều chỉnh kho có lý do; giá trị tính vào chi phí vận hành |
@@ -348,7 +351,7 @@ Bấm **Tạo đơn bán** thì màn hình tạo đơn mở toàn màn hình. Kh
 ## 12. Bố cục màn hình
 
 - **Thanh trên cùng:** tên sổ, nút chuyển sổ Thanh Hải / Vũ Gia / Anamtile, chuông thông báo, nút Cài đặt và menu tài khoản (đăng xuất).
-- **Thanh menu (màu theo logo từng sổ):** Tổng quan · Hàng hóa (danh sách, bảng giá, tồn kho & kiểm kho) · Mua hàng (nhà cung cấp, nhập hàng / đặt xưởng, hóa đơn đầu vào, trả hàng nhập) · Báo giá · Hợp đồng · Đơn hàng (đặt hàng, hóa đơn, trả hàng, vận chuyển, lái xe & công nợ) · Khách hàng · Sổ quỹ · Báo cáo · Thuế HKD. Bên phải có **Tạo nhanh** và nút **Bán hàng**.
+- **Thanh menu (màu theo logo từng sổ):** Tổng quan · Hàng hóa (danh sách, bảng giá, tồn kho & kiểm kho) · Mua hàng (nhà cung cấp, hóa đơn đầu vào, nhập hàng, đặt hàng nhập, trả hàng nhập, mua dịch vụ) · Báo giá · Hợp đồng · Đơn hàng (đặt hàng, hóa đơn, trả hàng, vận chuyển, lái xe & công nợ) · Khách hàng · Sổ quỹ · Báo cáo · Thuế HKD. Bên phải có **Tạo nhanh** và nút **Bán hàng**.
 - **Các trang danh sách** chia hai phần: cột lọc bên trái (trạng thái, nhóm hàng, kênh bán, thời gian…, có số đếm từng mục) và bên phải là ô tìm kiếm, nút Xuất Excel / Thêm mới và bảng. Dòng cuối bảng cộng tổng các cột tiền. Bấm vào một dòng để mở chi tiết.
 - **Trên điện thoại:** menu nằm ở thanh dưới cùng (Tổng quan, Đơn hàng, Tạo, Thu chi, Thêm). Bộ lọc thành các nút trượt ngang; bấm "Bộ lọc khác" để hiện thêm bộ lọc.
 
@@ -371,3 +374,17 @@ Ba phân hệ hoạt động độc lập; chứng từ con chỉ sinh trong t�
 **Nạp hàng hóa.** Tệp `mau-excel/hang-hoa-thanh-hai-2026.xlsx` được dựng sẵn từ các bảng giá 2026 của Thanh Hải. Xem trang **Ghi chú** trong tệp trước khi nhập.
 
 **Mục tiêu và phễu bán hàng.** Mục tiêu doanh thu tháng đặt ở **Cài đặt**. Phễu lấy khách mới, đã tư vấn (nhân viên chọn trong hồ sơ khách), đã báo giá, đã cọc, đã chốt từ chứng từ trong kỳ.
+
+## 14. Mua hàng: nhập hàng, đặt hàng nhập, trả hàng nhập
+
+Menu **Mua hàng** có ba màn giống KiotViet. Màn tạo phiếu mở toàn màn hình như màn bán hàng: gõ mã hoặc tên hàng vào ô tìm kiếm (**F3**), chọn nhà cung cấp (**F4**, nút + để thêm mới). Muốn thêm nhiều dòng một lúc, bấm **Từ file Excel** và chọn file có cột Mã hàng, Số lượng, Đơn giá, Giảm giá (tải file mẫu ngay trên màn hình). Mã không có trong danh mục được báo lại, không tự thêm.
+
+- **Nhập hàng** (mã PN): dùng khi hàng đã về. Mỗi dòng có Đơn giá và Giảm giá (số tiền trên một đơn vị); cột phải có Số hóa đơn đầu vào, Giảm giá cả phiếu, Cần trả nhà cung cấp, Tiền trả NCC và Tính vào công nợ.
+  - **Lưu tạm**: lưu phiếu tạm, chưa vào kho. Mở lại bằng nút **Mở phiếu** trong chi tiết.
+  - **Hoàn thành**: nhập kho ngay, tính lại giá vốn và ghi nợ nhà cung cấp.
+  - Danh sách hiện cả các đợt nhận hàng (mã NK) của đơn đặt hàng nhập, lọc theo trạng thái Phiếu tạm / Đã nhập hàng / Đã hủy và theo thời gian.
+- **Đặt hàng nhập** (mã DN): đặt nhà cung cấp hoặc đặt xưởng sản xuất (nút gạt **Mua hàng / Đặt xưởng**), có Dự kiến ngày nhập, gắn đơn bán và đặt cọc. Trạng thái: Phiếu tạm, Đã xác nhận NCC, Nhập một phần, Hoàn thành, Đã hủy; cột **Số ngày chờ** đếm từ ngày đặt. Hàng về thì bấm **Nhận hàng** trong chi tiết đơn, số lượng tự điền theo phần còn chờ và nhận được nhiều đợt. Đợt nhận nhầm hủy được ở bảng các đợt nhận.
+- **Trả hàng nhập** (mã TN): lập từ nút **Trả hàng nhập** trong chi tiết phiếu nhập (chỉ trả các dòng đã nhận) hoặc lập riêng ở màn Trả hàng nhập (chọn nhà cung cấp và hàng bất kỳ còn tồn). Mỗi dòng có **Giá trả lại**, mặc định bằng giá nhập. Cột phải có Giảm giá, Nhà cung cấp cần trả, Tiền NCC trả lại; phần chưa trả lại tiền được trừ vào nợ nhà cung cấp.
+- **Chi tiết phiếu** có In, Xuất file, **Sao chép** (mở phiếu mới cùng hàng và giá), Trả tiền NCC, Trả hàng nhập và **Hủy** (bắt buộc ghi lý do).
+- **Sổ Thanh Hải** hiện quy cách thùng trên từng dòng nhập; sổ Vũ Gia và Anamtile thì không.
+- **Máy chủ đang chạy bản cũ:** khi cập nhật, máy chủ tự sao lưu rồi nâng cấp cơ sở dữ liệu. Đơn cũ đã nhập kho ngay lúc lập được chuyển thành phiếu nhập hàng; phiếu trả hàng NCC cũ giữ nguyên số liệu, giá trả lại bằng giá nhập.

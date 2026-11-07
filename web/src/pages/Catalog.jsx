@@ -292,20 +292,4 @@ export function SalesReturnsPage() {
   );
 }
 
-export function SupplierReturnsPage() {
-  const { open } = useApp();
-  const q = useQ('supplier_returns', [], 'return_date desc', 2000);
-  return (
-    <>
-      <div className="page-head"><div className="grow"><h1 className="page-title">Trả hàng nhập</h1><div className="page-sub">Hàng trả lại nhà cung cấp. Lập phiếu từ chi tiết đơn nhập, nút “Trả hàng”.</div></div></div>
-      <ErrorBox error={q.error} />
-      <Table rows={q.data} empty="Chưa có phiếu trả hàng nhập" onRow={(r) => open('po', { id: r.po_id })} columns={[
-        { key: 'c', label: 'Phiếu trả', render: (r) => <><b>{r.code}</b><div className="cell-sub">{dmy(r.return_date)}</div></> },
-        { key: 'o', label: 'Đơn nhập / NCC', render: (r) => <><div>{r.po_code}</div><div className="cell-sub">{r.supplier_name}</div></> },
-        { key: 'l', label: 'Hàng trả', render: (r) => (r.lines || []).map((x) => `${x.sku} × ${fq(x.qty)}`).join('; ') },
-        { key: 'r', label: 'Lý do', render: (r) => r.reason || '—' }, { key: 'v', label: 'Giá trị', align: 'right', render: (r) => money(r.value) },
-      ]} />
-    </>
-  );
-}
 
