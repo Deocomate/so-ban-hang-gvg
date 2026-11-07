@@ -188,7 +188,6 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
   const isDat = f.kind === 'dat_hang';
   const isOnline = /tiktok|shopee|lazada|facebook/i.test(f.channel || '');
   const priceNames = settings.price_names || ['Giá 1', 'Giá 2', 'Giá 3'];
-  const allowOver = !!settings.allow_oversell;
 
   // Phím tắt: F3 tìm hàng, F4 tìm khách
   useEffect(() => {
@@ -261,7 +260,6 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
             )}
             {f.lines.map((l, i) => {
               const p = pmap[l.product_id] || {};
-              const short = !isDat && !p.is_service && baseQty(l) > (p.available ?? 0);
               const pk = packing(baseQty(l), p.units_per_pack, p.pack_unit, p.unit);
               const us = unitsOf(p).filter((u) => u.conv === 1 || u.sell_direct || u.name === l.unit);
               const kg = wLines[i];
@@ -271,13 +269,12 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
                   <button className="pos-line-del" onClick={() => delLine(l.key)} aria-label="Xóa dòng" title="Xóa dòng"><Icon name="x" size={16} /></button>
                   <div className="pos-line-info">
                     <div className="pos-line-name"><span className="muted">{p.sku}</span> <b>{p.name || '…'}</b>{p.is_kit ? ' (bộ)' : p.is_service ? ' (dịch vụ)' : ''}</div>
-                    <div className={`small ${short ? 'bad' : 'muted'}`}>
-                      {productSub(p) ? productSub(p) + ' · ' : ''}{p.is_service ? 'Dịch vụ, không trừ kho' : <>Có thể bán {fq(p.available)} {p.unit}{p.incoming ? ` · đang về ${fq(p.incoming)}` : ''}</>}
-                      {(l.conv || 1) !== 1 ? ` · = ${fq(baseQty(l))} ${p.unit}` : ''}{short ? (allowOver ? ' — sẽ giao vượt tồn' : ' — không đủ để giao ngay') : ''}
-                    </div>
+                    {(productSub(p) || (l.conv || 1) !== 1) && <div className="small muted">
+                      {productSub(p)}{(l.conv || 1) !== 1 ? `${productSub(p) ? ' · ' : ''}= ${fq(baseQty(l))} ${p.unit}` : ''}
+                    </div>}
                     <div className="pos-split">
                       {pk.text ? <span className="pos-pack"><Icon name="box" size={14} /> {pk.text}</span>
-                        : p.id && !p.is_kit && !p.is_service && !p.units?.length ? <button className="link-btn small" onClick={() => open('product', { id: p.id })}>+ Khai số {String(p.unit || 'cái').toLowerCase()}/thùng để tự chia thùng</button> : null}
+                        : settings.packaging !== false && p.id && !p.is_kit && !p.is_service && !p.units?.length ? <button className="link-btn small" onClick={() => open('product', { id: p.id })}>+ Khai số {String(p.unit || 'cái').toLowerCase()}/thùng để tự chia thùng</button> : null}
                       {kg !== null && <span className="pos-kg">{fmtKg(kg)}</span>}
                     </div>
                     <input className="pos-note" value={l.note || ''} maxLength={300} onChange={(e) => setLine(l.key, { note: e.target.value })}
