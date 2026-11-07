@@ -29,6 +29,10 @@ npm --prefix server ci --omit=dev
 tar -czf app.tgz --exclude=web/node_modules --exclude=web/src --exclude=web/public server/src server/scripts server/package.json server/package-lock.json server/node_modules web
 ```
 
+Đăng nhập SSH bằng mật khẩu trong `.env.ssh` (`IP`, `PORT`, `USER`, `PASSWORD`), không dùng khóa SSH. Máy Windows không có `sshpass`: đặt `SSH_ASKPASS` trỏ tới một script nhỏ in biến chứa mật khẩu, cùng `SSH_ASKPASS_REQUIRE=force` và `-o PreferredAuthentications=password`, để mật khẩu không hiện trên màn hình.
+
+Trước khi giải nén bản mới: dừng dịch vụ và chép `gomsu.db*` vào `/var/lib/so-ban-hang-gom/backups/<tên-đợt>/` (máy chủ cũng tự sao lưu khi nâng cấp cấu trúc CSDL).
+
 Chép `app.tgz` lên máy chủ vào `/tmp/so-ban-hang-app.tgz`, rồi chạy trên máy chủ:
 
 ```bash
