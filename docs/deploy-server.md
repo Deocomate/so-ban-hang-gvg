@@ -43,6 +43,8 @@ Kiểm tra: `curl https://so-ban-hang-thceramics.admirable.site/api/health` ph�
 
 Đổi biến môi trường: sửa `/etc/so-ban-hang-gom/app.env` rồi `systemctl restart so-ban-hang-gom`.
 
+Nạp bản sao lưu JSON quá lớn để tải qua giao diện (giới hạn 20 MB, vd. bản chuyển từ KiotViet kèm ảnh hàng hóa): chép tệp lên máy chủ, dừng dịch vụ, rồi trong `/opt/so-ban-hang-gom/server` chạy bằng user `sobanhang` với cùng biến môi trường của dịch vụ: `npm run import-book -- TH /tmp/tep.json`. Lệnh tự sao lưu CSDL thành `gomsu.db.truoc-nap-TH-<thời điểm>.bak` rồi mới nạp, và chỉ nạp vào sổ chưa có chứng từ.
+
 `app.env` cần có `APP_URL=https://so-ban-hang-thceramics.admirable.site`, `SMTP_USER`, `SMTP_PASS` (Gmail + mật khẩu ứng dụng) để gửi thư mời, quên mật khẩu, xác thực email. `ALLOW_SIGNUP` không còn tác dụng.
 
 ## Tài khoản quản trị và dev
@@ -57,3 +59,17 @@ Kiểm tra: `curl https://so-ban-hang-thceramics.admirable.site/api/health` ph�
 ```bash
 journalctl -u so-ban-hang-gom -n 100 --no-pager
 ```
+
+## App xem dữ liệu KiotViet (riêng, không đưa lên GitHub)
+
+https://kiotviet-data.admirable.site: trang xem dữ liệu xuất từ KiotViet TH Ceramics để khách xem và ghi chú phần cần sửa. Mã nguồn và dữ liệu chỉ nằm ở `du-lieu-kiotviet/` trên máy (đã gitignore) và trên máy chủ.
+
+| Thành phần | Vị trí |
+|---|---|
+| Mã chạy + trang xem | `/opt/kiotviet-data/app/server.mjs`, `/opt/kiotviet-data/xem/` |
+| Ghi chú của khách | `/var/lib/kiotviet-data/notes.json` |
+| Mật khẩu xem + khóa phiên | `/etc/kiotviet-data/app.env` (bản gốc ở `du-lieu-kiotviet/app/app.env`) |
+| Dịch vụ | systemd `kiotviet-data` (user `kiotvietdata`, cổng nội bộ 3030) |
+| Nginx, SSL | `/etc/nginx/conf.d/kiotviet-data.admirable.site.conf`, `/etc/nginx/ssl/kiotviet-data.admirable.site.{crt,key}` (acme.sh) |
+
+Cập nhật trang xem: chạy `node du-lieu-kiotviet/_cong-cu/tach-du-lieu.mjs`, đóng gói `app/server.mjs app/deploy xem/index.html xem/du-lieu.js` trong `du-lieu-kiotviet/`, chép lên rồi giải nén vào `/opt/kiotviet-data` và `systemctl restart kiotviet-data`. Không ghi đè `/var/lib/kiotviet-data`. Đổi mật khẩu: sửa `ACCESS_PASSWORD` trong `app.env` rồi khởi động lại dịch vụ.

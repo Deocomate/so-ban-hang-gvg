@@ -81,9 +81,15 @@ export function import_book(p) {
       }
       counts[t] = rows.length;
     }
-    // Sổ: tên, mã sổ (dùng trong nội dung chuyển khoản), cài đặt
-    run(`update books set name = coalesce(?, name), short_name = coalesce(?, short_name), settings = ? where id = ?`,
-      src.name ?? null, src.short_name ?? null, typeof src.settings === 'object' && src.settings ? src.settings : json(src.settings), b);
+    // Sổ: tên, mã sổ (dùng trong nội dung chuyển khoản), cài đặt.
+    // Tệp chuyển từ phần mềm khác (vd. KiotViet) mang settings_patch: chỉ ghi các mục đó, giữ tên sổ và các cài đặt còn lại của sổ đang mở.
+    const patch = data.settings_patch && typeof data.settings_patch === 'object' && !Array.isArray(data.settings_patch) ? data.settings_patch : null;
+    if (patch) {
+      run(`update books set settings = ? where id = ?`, { ...json(one(`select settings from books where id = ?`, b).settings), ...patch }, b);
+    } else {
+      run(`update books set name = coalesce(?, name), short_name = coalesce(?, short_name), settings = ? where id = ?`,
+        src.name ?? null, src.short_name ?? null, typeof src.settings === 'object' && src.settings ? src.settings : json(src.settings), b);
+    }
 
     // Đối chiếu: tồn từng mã khớp sổ kho
     const mismatch = all(`select p.sku from products p left join (select product_id, sum(qty) q, sum(value) v from stock_moves group by 1) m on m.product_id = p.id

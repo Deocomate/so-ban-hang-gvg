@@ -17,3 +17,6 @@ server/data-rieng/
 .claude/
 CLAUDE.md
 CLAUDE.local.md
+
+# Dữ liệu xuất từ KiotViet (có thông tin khách hàng), chỉ để ở máy
+du-lieu-kiotviet/
