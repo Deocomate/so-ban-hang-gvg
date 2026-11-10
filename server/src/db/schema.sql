@@ -325,7 +325,8 @@ create table if not exists sales_returns (
   order_id text not null references sales_orders(id),
   return_date text not null,
   reason text, note text,
-  created_by text, created_at text not null
+  created_by text, created_at text not null,
+  fee real not null default 0 check (fee >= 0)   -- phí trả hàng cửa hàng giữ lại: đã trừ sẵn vào revenue của các dòng trả
 );
 
 create table if not exists sales_return_lines (
@@ -337,7 +338,8 @@ create table if not exists sales_return_lines (
   qty real not null check (qty > 0),
   revenue real not null,
   cogs real not null,
-  restock integer not null default 1
+  restock integer not null default 1,
+  fee real not null default 0 check (fee >= 0)   -- phần phí trả hàng của dòng (revenue đã trừ phần này)
 );
 
 -- ---------- MUA HÀNG / ĐẶT XƯỞNG ----------

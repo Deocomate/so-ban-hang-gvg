@@ -365,15 +365,16 @@ export function ReturnDialog({ order, onClose }) {
   const { run, busy } = useAction();
   const [q, setQ] = useState({}); const [rs, setRs] = useState({});
   const [date, setDate] = useState(todayVN()); const [reason, setReason] = useState('');
-  const [refund, setRefund] = useState(null); const [fund, setFund] = useState('');
+  const [refund, setRefund] = useState(null); const [fund, setFund] = useState(''); const [fee, setFee] = useState(null);
   useEffect(() => { if (!fund && funds.data?.length) setFund(funds.data[0].id); }, [funds.data]);
-  const value = (dl.data || []).reduce((s, l) => s + (l.qty ? (Number(q[l.id]) || 0) * (l.revenue / l.qty) : 0), 0);
+  const goods = (dl.data || []).reduce((s, l) => s + (l.qty ? (Number(q[l.id]) || 0) * (l.revenue / l.qty) : 0), 0);
+  const value = Math.max(goods - (Number(fee) || 0), 0);
   const canRefund = Math.max(0, Math.min(Math.round(value), Math.round(order.paid_net - (order.delivered_value - value))));
   useEffect(() => { setRefund(canRefund || null); }, [canRefund]);
   return (
     <Modal title={`Trả hàng – đơn ${order.code}`} subtitle={order.customer_name} onClose={onClose} size="lg"
       footer={<><Btn onClick={onClose}>Thôi</Btn><Btn kind="primary" busy={busy} onClick={async () => {
-        const r = await run('sales_return', { order_id: order.id, date, reason, lines: Object.entries(q).filter(([, v]) => Number(v) > 0).map(([k, v]) => ({ delivery_line_id: k, qty: Number(v), restock: rs[k] !== false })),
+        const r = await run('sales_return', { order_id: order.id, date, reason, fee: Number(fee) || 0, lines: Object.entries(q).filter(([, v]) => Number(v) > 0).map(([k, v]) => ({ delivery_line_id: k, qty: Number(v), restock: rs[k] !== false })),
           refund: refund > 0 ? { amount: refund, fund_id: fund } : null }, (x) => `Đã lập phiếu trả ${x.code}${x.refund_code ? ' · hoàn tiền ' + x.refund_code : ''}`);
         if (r) onClose();
       }}>Ghi nhận trả hàng</Btn></>}>
@@ -389,7 +390,8 @@ export function ReturnDialog({ order, onClose }) {
       <div className="grid">
         <Field label="Ngày trả"><DateInput value={date} onChange={setDate} max={todayVN()} /></Field>
         <Field label="Lý do"><Input value={reason} onChange={setReason} placeholder="vd. Vỡ khi vận chuyển" /></Field>
-        <Field label="Giá trị hàng trả (giảm doanh thu)"><Input value={money(value)} readOnly /></Field>
+        <Field label="Phí trả hàng" hint="Cửa hàng giữ lại, trừ vào số ghi giảm cho khách"><NumInput min={0} max={Math.round(goods)} value={fee} onChange={setFee} /></Field>
+        <Field label="Giá trị hàng trả (giảm doanh thu)" hint={Number(fee) > 0 ? `Tiền hàng ${money(goods)} − phí ${money(fee)}` : ''}><Input value={money(value)} readOnly /></Field>
       </div>
       {can('thu_chi') && <div className="grid">
         <Field label="Hoàn tiền cho khách" hint={`Tối đa ${money(canRefund)} (phần khách đã trả vượt giá trị hàng còn giữ). Để 0 nếu trừ vào công nợ.`}><NumInput value={refund} onChange={setRefund} /></Field>

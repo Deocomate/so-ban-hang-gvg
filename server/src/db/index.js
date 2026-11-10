@@ -65,6 +65,8 @@ export function auditTriggers(db) {
 
 // CSDL tạo từ bản cũ: thêm các cột mới (dữ liệu cũ giữ nguyên, cột mới để trống)
 const ADDED_COLUMNS = [
+  ['sales_returns', 'fee', 'real not null default 0 check (fee >= 0)'],
+  ['sales_return_lines', 'fee', 'real not null default 0 check (fee >= 0)'],
   ['products', 'pack_weight', 'real check (pack_weight is null or pack_weight >= 0)'],
   ['products', 'unit_weight', 'real check (unit_weight is null or unit_weight >= 0)'],
   ['products', 'price4', 'real not null default 0'],

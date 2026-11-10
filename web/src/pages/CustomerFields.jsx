@@ -34,6 +34,7 @@ export function CustomerFields({ f, set, id }) {
           </div></Section>
           <Section title="Thông tin bổ sung"><div className="grid">
             <Field label="Nhóm khách"><Input value={f.kind} onChange={(v) => set('kind', v)} list="cust-groups" placeholder="Chọn hoặc gõ nhóm mới" /><datalist id="cust-groups">{groups.map((g) => <option key={g} value={g} />)}</datalist></Field>
+            <Field label="Loại khách"><Select value={x.customer_type || ''} onChange={(v) => setX('customer_type', v)} options={['Cá nhân', 'Công ty']} placeholder="Chọn" /></Field>
             <Field label="Mức giá áp dụng"><Select value={String(f.price_tier)} onChange={(v) => set('price_tier', Number(v))} options={pn.map((n, i) => ({ value: String(i + 1), label: n }))} /></Field>
             <Field label="Giai đoạn"><Select value={f.stage || 'moi'} onChange={(v) => set('stage', v)} options={[{ value: 'moi', label: 'Khách mới' }, { value: 'tu_van', label: 'Đã tư vấn' }]} /></Field>
             <Field label="Ngày sinh"><DateInput value={x.birthday || ''} onChange={(v) => setX('birthday', v)} /></Field>

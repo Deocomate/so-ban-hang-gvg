@@ -274,7 +274,7 @@ export function sales_return(p) {
       if (!dl) fail(`Dòng giao hàng không thuộc đơn ${o.code}`);
       if (q > dl.qty - dl.returned_qty) fail(`Số lượng trả vượt số đã giao chưa trả (còn ${dl.qty - dl.returned_qty})`);
       const full = q === dl.qty - dl.returned_qty;
-      const prevRev = one(`select coalesce(sum(revenue), 0) as s from sales_return_lines where delivery_line_id = ?`, dl.id).s;
+      const prevRev = one(`select coalesce(sum(revenue + fee), 0) as s from sales_return_lines where delivery_line_id = ?`, dl.id).s;
       const rev = full ? dl.revenue - prevRev : rnd(dl.revenue * q / dl.qty);
       const rlid = uuid();
       insert('sales_return_lines', { id: rlid, return_id: rid, book_id: o.book_id, delivery_line_id: dl.id, product_id: dl.product_id, qty: q,
@@ -300,6 +300,22 @@ export function sales_return(p) {
       n++;
     }
     if (!n) fail('Chưa nhập số lượng trả');
+    // Phí trả hàng: cửa hàng giữ lại, khách được ghi giảm ít hơn. Trừ vào doanh thu giảm của từng dòng theo tỷ lệ,
+    // nên doanh thu thuần, công nợ và báo cáo tự đúng mà không cần tính riêng khoản phí.
+    const fee = rnd(num(p.fee) ?? 0);
+    if (fee < 0) fail('Phí trả hàng không được âm');
+    if (fee > 0) {
+      const rl = all(`select id, revenue from sales_return_lines where return_id = ? order by rowid`, rid);
+      const tot = rl.reduce((s, x) => s + x.revenue, 0);
+      if (fee > tot) fail(`Phí trả hàng (${fee}) lớn hơn giá trị hàng trả (${tot})`);
+      let acc = 0;
+      rl.forEach((x, i) => {
+        const cut = i === rl.length - 1 ? fee - acc : rnd(fee * x.revenue / tot);
+        acc += cut;
+        run(`update sales_return_lines set revenue = revenue - ?, fee = ? where id = ?`, cut, cut, x.id);
+      });
+      run(`update sales_returns set fee = ? where id = ?`, fee, rid);
+    }
     const adj = loss.length ? doAdjust(o.book_id, d, 'hang_tra_loi', 'Hàng khách trả bị lỗi, không nhập lại kho – phiếu ' + rc, loss, false) : null;
     let pay = null;
     const refund = num(p.refund?.amount) ?? 0;
