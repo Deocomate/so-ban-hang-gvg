@@ -1,6 +1,6 @@
 # Nạp toàn bộ dữ liệu KiotViet TH Ceramics vào sổ Thanh Hải
 
-Trạng thái: bước 1 đến 3 xong (09/11/2026); bước 4 chờ đồng ý. Đối chiếu chi tiết: [báo cáo](../reports/doi-chieu-261109-1548-kiotviet-voi-he-thong.md).
+Trạng thái: xong. Đã nạp lên bản thật 10/11/2026 20:12 — [báo cáo](../reports/nap-that-261110-2000-kiotviet-vao-so-th.md). Đối chiếu chi tiết: [báo cáo](../reports/doi-chieu-261109-1548-kiotviet-voi-he-thong.md).
 
 ## Mục tiêu
 
