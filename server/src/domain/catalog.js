@@ -26,12 +26,14 @@ export function save_product(p) {
   if (!['cm', 'm'].includes(dimUnit)) fail('Đơn vị kích thước chỉ nhận cm hoặc m');
   const images = (Array.isArray(p.images) ? p.images : []).filter((x) => typeof x === 'string' && x);
   if (images.length > 5) fail('Tối đa 5 ảnh cho một hàng hóa');
+  // Ảnh đại diện dùng ở danh sách, màn bán hàng, phiếu in: bản thu nhỏ của ảnh đầu (ứng dụng gửi kèm), không có thì dùng ảnh đầu
+  const thumb = typeof p.thumb === 'string' && /^data:image\/(png|jpe?g|webp);base64,/.test(p.thumb) ? p.thumb : null;
   const cost = nonNeg(p.cost, 'Giá vốn không được âm');
   const openQty = nonNeg(p.opening_qty, 'Tồn kho ban đầu không được âm') ?? 0;
   let pid = nz(p.id); let s = trimNz(p.sku);
   const fields = {
     name: trimNz(p.name), category: p.category ?? null, brand: p.brand ?? null, pattern: p.pattern ?? null, size: p.size ?? null, color: p.color ?? null,
-    unit: nz(p.unit) || 'Cái', image_url: images[0] ?? (Array.isArray(p.images) ? null : p.image_url ?? null),
+    unit: nz(p.unit) || 'Cái', image_url: images.length ? thumb ?? images[0] : (Array.isArray(p.images) ? null : p.image_url ?? null),
     ...Object.fromEntries(PRICE_KEYS.map((k) => [k, num(p[k]) ?? 0])),
     low_stock: svc ? 0 : low, is_kit: kit ? 1 : 0, active: (bool(p.active) ?? true) ? 1 : 0, note: p.note ?? null,
     pack_unit: trimNz(p.pack_unit) || 'hộp', units_per_pack: num(p.units_per_pack),

@@ -57,5 +57,8 @@ export function q(p) {
     order = ` order by "${col}" ${String(dir || '').toLowerCase() === 'desc' ? 'desc' : 'asc'} nulls last`;
   }
   const lim = Math.min(Number.isFinite(Number(p.limit)) && p.limit != null ? Math.trunc(Number(p.limit)) : 2000, 10000);
-  return outRows(all(`select * from v_${v} where ${where.join(' and ')}${order} limit ${lim}`, ...args));
+  const rows = outRows(all(`select * from v_${v} where ${where.join(' and ')}${order} limit ${lim}`, ...args));
+  // Ảnh đầy đủ (vài chục KB mỗi ảnh) chỉ trả khi xem một hàng hóa theo id; danh sách dùng ảnh đại diện thu nhỏ image_url
+  if (v === 'products' && !(p.filters || []).some(([col, op]) => col === 'id' && (op || 'eq') === 'eq')) for (const r of rows) delete r.images;
+  return rows;
 }

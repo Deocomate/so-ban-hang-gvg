@@ -20,6 +20,14 @@ let p = await prod(ngoi.id);
 C('Tồn và giá vốn từ phiếu tồn đầu', [p.on_hand, p.avg_cost], [1000, 9000]);
 C('Trường mới lưu đủ', [p.product_type, p.max_stock, p.location, p.width, p.length, p.dim_unit, p.description, p.order_note, p.images, p.image_url, p.sell_direct],
   ['hang', 5000, 'Kệ A1', 27, 20, 'cm', 'Ngói men đỏ', 'Kiểm đủ 4 góc', ['a.jpg', 'b.jpg'], 'a.jpg', true]);
+const THUMB = 'data:image/jpeg;base64,/9j/thumb';
+await api.call('save_product', { ...p, book_id: TH, thumb: THUMB, images: ['data:image/jpeg;base64,/9j/full'] });
+const one1 = await prod(ngoi.id);
+const inList = (await api.q('products', TH)).find((x) => x.id === ngoi.id);
+C('Ảnh đại diện là bản thu nhỏ; danh sách không tải ảnh đầy đủ, xem một mã thì có', [one1.image_url, one1.images.length, 'images' in inList, inList.image_url], [THUMB, 1, false, THUMB]);
+await api.call('save_product', { ...one1, book_id: TH, thumb: 'không phải ảnh' });
+C('Ảnh thu nhỏ không hợp lệ thì dùng ảnh đầu', (await prod(ngoi.id)).image_url, 'data:image/jpeg;base64,/9j/full');
+await api.call('save_product', { ...p, book_id: TH, images: ['a.jpg', 'b.jpg'] });
 const adj = (await api.q('adjustments', TH)).find((a) => a.reason === 'dau_ky');
 C('Có phiếu Tồn đầu kỳ làm chứng từ', !!adj, true);
 await E('Tồn tối đa nhỏ hơn tồn tối thiểu bị chặn', () => api.call('save_product', { book_id: TH, name: 'X', low_stock: 10, max_stock: 5 }), 'cao nhất');

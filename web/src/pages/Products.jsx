@@ -122,7 +122,7 @@ export function ProductDetail({ id, onClose }) {
       footer={<>
         {can('danh_muc') && <ConfirmBtn icon="trash" busy={busy} confirmText="Bấm lần nữa để xóa hẳn" onConfirm={async () => { if (await run('delete_product', { id: p.id }, `Đã xóa ${p.sku}`)) onClose(); }}>Xóa</ConfirmBtn>}
         {can('danh_muc') && <Btn icon="copy" onClick={() => { onClose(); open('product', { copy_of: p.id }); }}>Sao chép</Btn>}
-        {can('danh_muc') && <Btn busy={busy} onClick={() => run('save_product', { ...p, active: !p.active }, p.active ? `Đã ngừng kinh doanh ${p.sku}` : `${p.sku} kinh doanh trở lại`)}>{p.active ? 'Ngừng kinh doanh' : 'Kinh doanh lại'}</Btn>}
+        {can('danh_muc') && <Btn busy={busy} onClick={() => run('save_product', { ...p, thumb: p.image_url, active: !p.active }, p.active ? `Đã ngừng kinh doanh ${p.sku}` : `${p.sku} kinh doanh trở lại`)}>{p.active ? 'Ngừng kinh doanh' : 'Kinh doanh lại'}</Btn>}
         <span className="grow" />
         {!svc && !p.is_kit && <Btn icon="history" onClick={() => open('stockcard', { product_id: p.id })}>Thẻ kho</Btn>}
         {!svc && !p.is_kit && can('nhap_hang') && <Btn icon="truck" onClick={() => open('po-form', { mode: 'nhap', product_id: p.id })}>Nhập hàng</Btn>}
@@ -182,6 +182,16 @@ async function resizeImage(file, max = 480) {
     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
     return c.toDataURL('image/jpeg', 0.82);
   } finally { URL.revokeObjectURL(url); }
+}
+
+// Ảnh đại diện cho danh sách và màn bán hàng: thu nhỏ ảnh đầu về 128px (ảnh đầy đủ chỉ tải khi xem chi tiết)
+async function thumbOf(dataUrl) {
+  if (!dataUrl) return null;
+  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl; });
+  const s = Math.min(1, 128 / Math.max(img.width, img.height));
+  const c = document.createElement('canvas'); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.8);
 }
 
 const ATTRS = [{ key: 'pattern', label: 'Mẫu' }, { key: 'size', label: 'Kích thước' }, { key: 'color', label: 'Màu sắc / men' }, { key: 'material', label: 'Chất liệu' }];
@@ -258,11 +268,13 @@ export function ProductForm({ id, copy_of, type: type0, onClose, onSaved }) {
   const setAttr = (k, v) => setVariants((s) => { const attrs = { ...(s?.attrs || {}), [k]: v }; return { attrs, rows: genVariants(attrs) }; });
   const setVar = (i, patch) => setVariants((s) => ({ ...s, rows: s.rows.map((r, j) => (j === i ? { ...r, ...patch } : r)) }));
 
-  const payload = () => ({ ...f, id: id || null, cost: f.cost, opening_qty: isNew ? f.opening_qty : null,
+  const payload0 = () => ({ ...f, id: id || null, cost: f.cost, opening_qty: isNew ? f.opening_qty : null,
     units: f.units.map((u) => ({ ...u, prices: (u.prices || []).map((x) => (x === '' ? null : x)) })),
     components: kit ? f.components.filter((c) => c.product_id) : [], bom: mfg ? f.bom.filter((c) => c.product_id) : [] });
   const save = async (again) => {
     let r;
+    const thumb = await thumbOf(f.images?.[0]).catch(() => null);
+    const payload = () => ({ ...payload0(), thumb });
     if (isNew && variants?.rows?.length) {
       const base = payload();
       r = await run('create_product_variants', { base, variants: variants.rows.map((v) => ({ ...v })) }, (x) => `Đã tạo ${x.created.length} mã hàng`);
