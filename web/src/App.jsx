@@ -24,6 +24,7 @@ import { QuotesPage } from './pages/Quotes.jsx';
 import { ContractsPage } from './pages/Contracts.jsx';
 import { TaxPage, InputInvoicesPage } from './pages/Tax.jsx';
 import { Login, LinkPage, ForcePassword, isLinkPage } from './pages/Account.jsx';
+import { DocStandalone, readDocPage } from './pages/Documents.jsx';
 
 const PAGES = [
   { id: 'tong-quan', label: 'Tổng quan', icon: 'home', perm: 'xem_bao_cao', comp: Overview },
@@ -364,10 +365,13 @@ function Gate() {
   useEffect(() => { if (session) backend.refreshMe().catch(() => {}); }, [!!session]);
   // Link trong email mở khi ứng dụng đang mở sẵn ở tab này: chỉ phần sau # đổi
   const [linkKey, setLinkKey] = useState(() => (isLinkPage() ? location.hash : ''));
+  // Tab chứng từ mở từ thao tác nhanh (giao / thu): ?doc=…
+  const [docLink] = useState(readDocPage);
   useEffect(() => { const h = () => setLinkKey(isLinkPage() ? location.hash : ''); window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h); }, []);
   if (linkKey) return <LinkPage key={linkKey} />;
   if (!session) return <Login />;
   if (session.user?.must_change_password) return <ForcePassword />;
+  if (docLink) return <DocStandalone link={docLink} />;
   return <Shell />;
 }
 

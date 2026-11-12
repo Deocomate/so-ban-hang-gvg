@@ -12,6 +12,7 @@ import { packView } from '../lib/book-profile.js';
 import { useTimeFilter, TimeFilter, useStatusFilter, StatusFilter } from '../components/DocFilters.jsx';
 import { HoverCard } from '../components/HoverCard.jsx';
 import { QuickSource } from './OrderSource.jsx';
+import { reserveTab } from './Documents.jsx';
 import {
   Btn, Icon, Pill, StatusPill, DELIVERY, PAYMENT, Field, Input, TextArea, Select, DateInput, NumInput, Check, Tabs, Search, Loading,
   ErrorBox, Note, Table, Modal, ConfirmBtn, Picker, KV, Section, Empty, ListPage, FilterBox, RadioList,
@@ -94,7 +95,7 @@ export function SalesPage() {
 const QUICK_FUND_KEY = 'gomsu.quick_fund';
 const readFund = () => { try { return localStorage.getItem(QUICK_FUND_KEY) || ''; } catch (e) { return ''; } };
 function QuickPayment({ order: o, close }) {
-  const { open } = useApp();
+  const { open, bookId } = useApp();
   const funds = useFunds();
   const { run, busy } = useAction();
   const refund = o.payment_status === 'thua_tien';
@@ -115,9 +116,14 @@ function QuickPayment({ order: o, close }) {
   const submit = async () => {
     if (!(amt > 0) || tooMuch || !fund) return;
     try { localStorage.setItem(QUICK_FUND_KEY, fund); } catch (e) { /* bỏ qua */ }
+    const tab = reserveTab();
     const r = await run('create_payment', { kind, date: todayVN(), fund_id: fund, party_id: o.customer_id, amount: amt,
       allocations: [{ doc_type: 'don_ban', doc_id: o.id, amount: amt }] }, (x) => `${refund ? 'Đã hoàn' : 'Đã thu'} ${money(amt)} đ – phiếu ${x.code}`);
-    if (r) close();
+    if (!r) { tab.cancel(); return; }
+    close();
+    // Phiếu thu / chi theo mẫu mở ở tab mới để sửa thông tin và tải PDF
+    const doc = { kind: 'payment', id: r.id, type: 'phieu_thu' };
+    if (!tab.go({ book: bookId, ...doc })) open('doc', doc);
   };
   const openFull = () => { close(); open('payment', { kind, party_id: o.customer_id, alloc: { doc_type: 'don_ban', doc_id: o.id, code: o.code, amount: full } }); };
   return (
@@ -152,11 +158,30 @@ function QuickPayment({ order: o, close }) {
   );
 }
 
+// Thu luôn số khách còn nợ ngay sau một đợt giao: đọc lại đơn để lấy số nợ mới rồi lập phiếu thu gắn vào đơn.
+// Trả về phiếu thu vừa lập ({ id, code, amount }) hoặc null khi khách không còn nợ.
+async function collectAfterDelivery(rpc, order, { date, fund, code }) {
+  const [o2] = await rpc('q', { view: 'sales_orders', filters: [['id', 'eq', order.id]] });
+  const due = o2?.receivable || 0;
+  if (!(due > 0)) return null;
+  const p = await rpc('create_payment', { request_id: crypto.randomUUID?.() || String(Date.now()), kind: 'thu_khach', date, fund_id: fund, party_id: order.customer_id, amount: due,
+    allocations: [{ doc_type: 'don_ban', doc_id: order.id, amount: due }], note: 'Thu khi giao ' + code });
+  return { ...p, amount: due };
+}
+
 // Giao hàng: xác nhận phiếu tạm; giao đủ phần còn lại một lần bấm, hoặc giao một phần bằng cách sửa số lượng từng dòng ngay trong khung.
 // Ngày giao, phí vận chuyển, vận đơn… thì mở hộp thoại giao hàng đầy đủ.
 function QuickDelivery({ order: o, close }) {
-  const { open } = useApp();
+  const { open, can, rpc, toast, refresh, bookId } = useApp();
   const { run, busy } = useAction();
+  const canCollect = can('thu_chi');
+  const funds = useFunds(canCollect);
+  const [collect, setCollect] = useState(false);
+  const [fund, setFund] = useState(readFund);
+  const [collecting, setCollecting] = useState(false);
+  useEffect(() => {
+    if (funds.data?.length && !funds.data.some((f) => f.id === fund)) setFund(funds.data[0].id);
+  }, [funds.data]);
   const lines = useQ('sales_order_lines', [['order_id', 'eq', o.id]], 'line_no', 200, o.status === 'xac_nhan' && o.remaining_qty > 0);
   const open0 = useMemo(() => (lines.data || []).filter((l) => l.remaining_qty > 0), [lines.data]);
   const [mode, setMode] = useState('full');
@@ -166,10 +191,26 @@ function QuickDelivery({ order: o, close }) {
     : open0.map((l) => ({ order_line_id: l.id, qty: Math.min(Number(qtys[l.id]) || 0, l.remaining_qty) })).filter((x) => x.qty > 0);
   const total = todo.reduce((s, x) => s + x.qty, 0);
   const deliver = async () => {
-    if (!total) return;
-    const r = await run('deliver', { order_id: o.id, date: todayVN(), shipping_fee: Math.max(0, o.shipping_fee - o.ship_billed), note: null, deposit_used: 0, lines: todo },
+    if (!total || collecting) return;
+    // Mở sẵn tab mới ngay lúc bấm; giao xong chuyển tab đó tới phiếu giao (và phiếu thu nếu thu luôn)
+    const tab = reserveTab();
+    const date = todayVN();
+    const r = await run('deliver', { order_id: o.id, date, shipping_fee: Math.max(0, o.shipping_fee - o.ship_billed), note: null, deposit_used: 0, lines: todo },
       (x) => `${total >= o.remaining_qty ? 'Đã giao đủ' : 'Đã giao một phần'} đơn ${o.code} – phiếu ${x.code}`);
-    if (r) close();
+    if (!r) { tab.cancel(); return; }
+    let pay = null;
+    if (collect && fund) {
+      setCollecting(true);
+      try {
+        try { localStorage.setItem(QUICK_FUND_KEY, fund); } catch (e) { /* bỏ qua */ }
+        pay = await collectAfterDelivery(rpc, o, { date, fund, code: r.code });
+        if (pay) toast(`Đã thu ${money(pay.amount)} đ – phiếu ${pay.code}`);
+        refresh();
+      } catch (e) { toast('Đã giao nhưng chưa thu được tiền: ' + e.message, 'err'); } finally { setCollecting(false); }
+    }
+    close();
+    const doc = { kind: 'delivery', id: r.id, type: pay ? 'phieu_thu' : 'bien_ban', pay: pay?.id };
+    if (!tab.go({ book: bookId, ...doc })) open('doc', doc);
   };
   const pct0 = o.eff_qty > 0 ? Math.min(100, (o.delivered_qty / o.eff_qty) * 100) : 0;
   return (
@@ -200,8 +241,14 @@ function QuickDelivery({ order: o, close }) {
                   ))}
                 </div>
               )}
-              <Btn kind="primary" icon="truck" busy={busy || (!lines.data && !lines.error)} disabled={!total} onClick={deliver}>
-                {mode === 'full' ? `Giao đủ phần còn lại (${fq(o.remaining_qty)})` : `Giao ${fq(total)}${total ? '' : ' – nhập số lượng'}`}</Btn>
+              {canCollect && (
+                <div className="qe-collect">
+                  <Check checked={collect} onChange={setCollect}>Thu luôn tiền khách còn nợ sau lần giao này</Check>
+                  {collect && <Select value={fund} onChange={setFund} options={(funds.data || []).map((f) => ({ value: f.id, label: f.name }))} aria-label="Thu vào quỹ" />}
+                </div>
+              )}
+              <Btn kind="primary" icon="truck" busy={busy || collecting || (!lines.data && !lines.error)} disabled={!total || (collect && !fund)} onClick={deliver}>
+                {mode === 'full' ? `Giao đủ phần còn lại (${fq(o.remaining_qty)})` : `Giao ${fq(total)}${total ? '' : ' – nhập số lượng'}`}{collect ? ' & thu tiền' : ''}</Btn>
               <button type="button" className="link-btn small" onClick={() => { close(); open('deliver', { order: o }); }}>Mở phiếu giao đầy đủ (ngày, phí ship, vận đơn…)</button>
             </>
           ) : <div className="good small strong">Đã giao đủ{o.delivery_count > 1 ? ` trong ${o.delivery_count} đợt` : ''}.</div>}
@@ -486,13 +533,12 @@ export function DeliverDialog({ order, onClose }) {
     const r = await run('deliver', { order_id: order.id, date, shipping_fee: ship, note, deposit_used: deposit || 0, lines: Object.entries(qtys).map(([k, v]) => ({ order_line_id: k, qty: Number(v) || 0 })) },
       (x) => `Đã giao – phiếu ${x.code}`);
     if (!r) return;
+    let pay = null;
     if (collect) {
       try {
-        const [o2] = await rpc('q', { view: 'sales_orders', filters: [['id', 'eq', order.id]] });
-        const due = o2?.receivable || 0;
-        if (due > 0) await rpc('create_payment', { request_id: crypto.randomUUID?.() || String(Date.now()), kind: 'thu_khach', date, fund_id: fund, party_id: order.customer_id, amount: due,
-          allocations: [{ doc_type: 'don_ban', doc_id: order.id, amount: due }], note: 'Thu khi giao ' + r.code });
-        if (due > 0) toast('Đã thu ' + money(due) + ' đ'); refresh();
+        pay = await collectAfterDelivery(rpc, order, { date, fund, code: r.code });
+        if (pay) toast(`Đã thu ${money(pay.amount)} đ – phiếu ${pay.code}`);
+        refresh();
       } catch (e) { toast('Đã giao nhưng chưa thu được tiền: ' + e.message, 'err'); }
     }
     if (viaSpx && tracking.trim()) {
@@ -504,7 +550,8 @@ export function DeliverDialog({ order, onClose }) {
         toast(`Đã gắn vận đơn ${carrierInfo(cr).short} ${sh.tracking_no}${codAmt > 0 ? ' · COD ' + money(codAmt) + ' đ' : ''}`); refresh();
       } catch (e) { toast('Đã giao nhưng chưa tạo được vận đơn: ' + e.message, 'err'); }
     }
-    onClose(); open('doc', { kind: 'delivery', id: r.id, type: 'bien_ban' });
+    // Có thu tiền thì mở luôn phiếu thu theo mẫu (cùng hộp thoại với biên bản, hóa đơn của đợt giao) để sửa và xuất PDF
+    onClose(); open('doc', { kind: 'delivery', id: r.id, type: pay ? 'phieu_thu' : 'bien_ban', pay: pay?.id });
   };
   return (
     <Modal title={`Giao hàng – đơn ${order.code}`} subtitle={order.customer_name} onClose={onClose} size="lg"

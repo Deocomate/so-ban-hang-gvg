@@ -85,32 +85,82 @@ export function DocPreview({ doc }) {
   );
 }
 
+// ---------- Mở chứng từ ở tab mới (trang riêng, không có menu) ----------
+// ?doc=<kind>:<id>&type=<loại>&pay=<phiếu thu kèm>&book=<sổ>
+export function docPageUrl({ book, kind, id, type, pay }) {
+  const u = new URLSearchParams({ doc: `${kind}:${id}` });
+  if (type) u.set('type', type);
+  if (pay) u.set('pay', pay);
+  if (book) u.set('book', book);
+  return `${location.pathname}?${u.toString()}`;
+}
+export function readDocPage() {
+  try {
+    const u = new URLSearchParams(location.search); const [kind, id] = String(u.get('doc') || '').split(':');
+    return kind && id && TYPES_FOR[kind] ? { kind, id, type: u.get('type') || undefined, pay: u.get('pay') || undefined, book: u.get('book') || undefined } : null;
+  } catch (e) { return null; }
+}
+// Mở sẵn tab trống ngay lúc bấm (trình duyệt chỉ cho mở tab mới trong lúc người dùng bấm),
+// lưu xong thì chuyển tab đó tới chứng từ; lỗi thì đóng lại. Bị chặn popup thì trả về null.
+export function reserveTab() {
+  let w = null;
+  try { w = window.open('', '_blank'); } catch (e) { w = null; }
+  if (w) { try { w.document.title = 'Đang lập chứng từ…'; w.document.body.innerHTML = '<p style="font:15px sans-serif;padding:24px;color:#555">Đang lập chứng từ…</p>'; } catch (e) { /* bỏ qua */ } }
+  return {
+    go(params) { if (w && !w.closed) { w.location.href = docPageUrl(params); return true; } return false; },
+    cancel() { try { if (w && !w.closed) w.close(); } catch (e) { /* bỏ qua */ } },
+  };
+}
+
+// Trang chứng từ đứng riêng ở tab mới: chọn đúng sổ rồi hiện khung sửa + xem trước + tải PDF
+export function DocStandalone({ link }) {
+  const { books, book, setBookId, toasts, bootError } = useApp();
+  useEffect(() => { if (link.book && books?.some((b) => b.id === link.book) && book?.id !== link.book) setBookId(link.book); }, [books, link.book]);
+  if (bootError) return <div className="center-screen"><Note tone="warn">{bootError}</Note></div>;
+  if (!books || !book || (link.book && books.some((b) => b.id === link.book) && book.id !== link.book)) return <div className="center-screen"><Loading text="Đang mở chứng từ…" /></div>;
+  return (
+    <>
+      <DocDialog key={book.id} page kind={link.kind} id={link.id} type={link.type} pay={link.pay} onClose={() => { window.close(); }} />
+      <div className="toasts" aria-live="polite">{toasts.map((t) => <div key={t.id} className={`toast${t.kind === 'err' ? ' err' : ''}`}><span>{t.text}</span></div>)}</div>
+    </>
+  );
+}
+
 // ---------- Hộp thoại xuất chứng từ ----------
-export function DocDialog({ kind, id, type: type0, onClose }) {
+// pay: phiếu thu lập cùng lúc với đợt giao (giao + thu) → thêm thẻ "Phiếu thu" vào cùng hộp thoại.
+// page: hiện toàn trang (tab mới) thay cho hộp thoại.
+export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
   const { q, rpc, book, settings, can, toast } = useApp();
   const ds = useMemo(() => docSettings(book, settings), [book, settings]);
-  const types = TYPES_FOR[kind];
+  const withPay = !!pay && kind !== 'payment';
+  const types = withPay ? ['phieu_thu', ...TYPES_FOR[kind]] : TYPES_FOR[kind];
   const [type, setType] = useState(type0 && types.includes(type0) ? type0 : types[0]);
-  const [src, setSrc] = useState({ kind, id });
+  const [src, setSrc] = useState(withPay && (type0 ? type0 === 'phieu_thu' : true) ? { kind: 'payment', id: pay } : { kind, id });
   const [data, setData] = useState(null); const [err, setErr] = useState(null);
   const [edit, setEdit] = useState({}); const [busy, setBusy] = useState(false); const [reload, setReload] = useState(0);
   const [showForm, setShowForm] = useState(true);
+  const srcKey = `${src.kind}:${src.id}`;
   useEffect(() => {
     let alive = true; setErr(null);
-    loadDocData(q, rpc, src).then((d) => alive && setData({ ...d, prods: Object.fromEntries(Object.entries(d.prods).map(([id, p]) => [id, packView(p, settings)])) })).catch((e) => alive && setErr(e.message));
+    loadDocData(q, rpc, src).then((d) => alive && setData({ ...d, srcKey, prods: Object.fromEntries(Object.entries(d.prods || {}).map(([id, p]) => [id, packView(p, settings)])) })).catch((e) => alive && setErr(e.message));
     return () => { alive = false; };
   }, [src.kind, src.id, reload]);
   // Biên bản / phiếu xuất kho theo từng lần giao; hóa đơn / đơn đặt hàng theo cả đơn
   const perDelivery = PER_DELIVERY.includes(type);
   useEffect(() => {
-    if (!data || ['payment', 'contract', 'quote'].includes(data.kind)) return;
+    // Thẻ Phiếu thu đọc phiếu thu; các thẻ còn lại quay về đợt giao / đơn ban đầu
+    if (withPay && type === 'phieu_thu') { if (src.kind !== 'payment') setSrc({ kind: 'payment', id: pay }); return; }
+    if (withPay && src.kind === 'payment') { setSrc({ kind, id }); return; }
+    if (!data || data.srcKey !== srcKey || ['payment', 'contract', 'quote'].includes(data.kind)) return;
     if (!perDelivery && src.kind === 'delivery') setSrc({ kind: 'order', id: data.o.id });
   }, [type, data]);
   useEffect(() => { setEdit({}); }, [type, src.kind, src.id]);
 
   // Đề nghị thanh toán chỉ lập sau khi đã hoàn tất đối chiếu
   const tabTypes = types.filter((t) => t !== 'de_nghi_tt' || data?.k?.reconciled_at);
-  const ready = data && (['payment', 'contract', 'quote'].includes(data.kind) || !(perDelivery ? false : src.kind === 'delivery'));
+  // Chỉ dựng khi dữ liệu đã nạp khớp với thẻ đang chọn (đổi thẻ Phiếu thu ↔ Biên bản phải chờ nạp lại)
+  const ready = data && data.srcKey === srcKey && (type === 'phieu_thu') === (data.kind === 'payment')
+    && (['payment', 'contract', 'quote'].includes(data.kind) || !(perDelivery ? false : src.kind === 'delivery'));
   const fields = ready ? editableFields(type, data) : [];
   const saved = ready ? currentInfo(type, data) || {} : {};
   const info = ready ? { ...defaults(type, data, ds), ...saved, ...edit } : null;
@@ -140,15 +190,16 @@ export function DocDialog({ kind, id, type: type0, onClose }) {
   };
 
   const dels = data?.dels || [];
-  const orderId = data?.o?.id;
-  return (
-    <Modal title="Xuất chứng từ PDF" subtitle={subtitle ?? (data ? `Đơn ${data.o.code} · ${data.o.customer_name || ''}` : '')} onClose={onClose} size="xl"
-      footer={<>
-        <span className="muted small grow">{dirty ? 'Có thay đổi chưa lưu — bấm Tải PDF sẽ tự lưu.' : 'Khổ A4 · chữ trong PDF chọn và sao chép được.'}</span>
-        <Btn onClick={onClose}>Đóng</Btn>
-        {canSave && <Btn disabled={!dirty} onClick={async () => { if (await save()) toast('Đã lưu thông tin chứng từ'); }}>Lưu thông tin</Btn>}
-        <Btn kind="primary" icon="dl" busy={busy} disabled={!doc || !!doc?.error} onClick={download}>Tải PDF</Btn>
-      </>}>
+  const title = withPay ? 'Phiếu thu & chứng từ giao hàng' : 'Xuất chứng từ PDF';
+  const sub = subtitle ?? (data?.o ? `Đơn ${data.o.code} · ${data.o.customer_name || ''}` : '');
+  const footer = <>
+    <span className="muted small grow">{dirty ? 'Có thay đổi chưa lưu — bấm Tải PDF sẽ tự lưu.' : 'Khổ A4 · chữ trong PDF chọn và sao chép được.'}</span>
+    <Btn onClick={onClose}>Đóng</Btn>
+    {canSave && <Btn disabled={!dirty} onClick={async () => { if (await save()) toast('Đã lưu thông tin chứng từ'); }}>Lưu thông tin</Btn>}
+    <Btn kind="primary" icon="dl" busy={busy} disabled={!doc || !!doc?.error} onClick={download}>Tải PDF</Btn>
+  </>;
+  const content = (
+    <>
       {types.length > 1 && <Tabs value={type} onChange={setType} tabs={tabTypes.map((t) => ({ value: t, label: DOC_TYPES[t].label }))} />}
       <ErrorBox error={err || doc?.error} />
       {!data ? !err && <Loading /> : (
@@ -188,7 +239,15 @@ export function DocDialog({ kind, id, type: type0, onClose }) {
           <div className="doc-main">{doc && !doc.error ? <DocPreview doc={doc} /> : !doc?.error && <Loading />}</div>
         </div>
       )}
-    </Modal>
+    </>
+  );
+  if (!page) return <Modal title={title} subtitle={sub} onClose={onClose} size="xl" footer={footer}>{content}</Modal>;
+  return (
+    <div className="doc-pageview">
+      <div className="doc-pageview-head"><div className="modal-title">{title}</div>{sub && <div className="modal-sub">{sub}</div>}</div>
+      <div className="doc-pageview-body">{content}</div>
+      <div className="doc-pageview-foot">{footer}</div>
+    </div>
   );
 }
 
