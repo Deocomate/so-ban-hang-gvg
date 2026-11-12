@@ -45,6 +45,8 @@ Kiểm tra: `curl https://so-ban-hang-thceramics.admirable.site/api/health` ph�
 
 Nạp bản sao lưu JSON quá lớn để tải qua giao diện (giới hạn 20 MB, vd. bản chuyển từ KiotViet kèm ảnh hàng hóa): chép tệp lên máy chủ, dừng dịch vụ, rồi trong `/opt/so-ban-hang-gom/server` chạy bằng user `sobanhang` với cùng biến môi trường của dịch vụ: `npm run import-book -- TH /tmp/tep.json`. Lệnh tự sao lưu CSDL thành `gomsu.db.truoc-nap-TH-<thời điểm>.bak` rồi mới nạp, và chỉ nạp vào sổ chưa có chứng từ.
 
+Chứng từ khách lập thêm trên KiotViet sau khi đã nạp (khách dùng song song): lấy phần phát sinh từ KiotViet thành một tệp JSON (mẫu `du-lieu-kiotviet/goc/kiotviet-thceramics-phat-sinh-20261112.json`), chép lên máy chủ cùng tệp ghép mã `du-lieu-kiotviet/nap/ghep-ma-hang.json`, dừng dịch vụ, rồi chạy như trên: `npm run add-kiotviet-docs -- TH /tmp/phat-sinh.json /tmp/ghep-ma-hang.json --thu` để chạy thử, bỏ `--thu` để ghi. Lệnh tự sao lưu thành `gomsu.db.truoc-bo-sung-TH-<thời điểm>.bak`. Chứng từ có mã đã có trong sổ thì bỏ qua, nên chạy lại không ghi trùng. Lệnh nhận khách mới, phiếu điều chỉnh công nợ khách (CB…), hóa đơn bán thẳng, đặt hàng phiếu tạm và phiếu thu khách. Gặp loại khác thì lệnh dừng mà không ghi gì; nếu công nợ khách không khớp `expectedDebts` trong tệp thì cũng không ghi.
+
 `app.env` cần có `APP_URL=https://so-ban-hang-thceramics.admirable.site`, `SMTP_USER`, `SMTP_PASS` (Gmail + mật khẩu ứng dụng) để gửi thư mời, quên mật khẩu, xác thực email. `ALLOW_SIGNUP` không còn tác dụng.
 
 ## Tài khoản quản trị và dev

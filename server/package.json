@@ -14,7 +14,8 @@
     "seed:demo": "node scripts/seed-demo.js",
     "seed:sample": "node scripts/seed-sample.js",
     "reset-password": "node scripts/reset-password.js",
-    "import-book": "node scripts/import-book-file.js"
+    "import-book": "node scripts/import-book-file.js",
+    "add-kiotviet-docs": "node scripts/kiotviet-add-docs.js"
   },
   "dependencies": {
     "nodemailer": "10.3.1"
