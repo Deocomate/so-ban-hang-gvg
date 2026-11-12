@@ -879,4 +879,19 @@ body {
 .qe-chips button:hover, .qe-chips button.on { border-color: var(--accent); color: var(--accent); }
 .qe-chips button.on { background: var(--accent-2); }
 .qe-prog { display: flex; align-items: center; gap: 8px; }
+.qe-lines { max-height: 260px; overflow-y: auto; gap: 8px; }
+.qe-line { display: grid; grid-template-columns: minmax(0, 1fr) 132px; align-items: center; gap: 8px; }
+.qe-line-name { min-width: 0; font-size: 13px; }
+.qe-line-name .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Chọn nhanh nguồn hàng cho đơn đặt: đặt xưởng sản xuất / mua nhà cung cấp */
+.src-pick { display: flex; flex-direction: column; gap: 10px; }
+.src-pick .seg { align-self: flex-start; }
+.src-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.src-row > * { flex: 1 1 200px; min-width: 0; }
+.src-lines { display: flex; flex-direction: column; gap: 4px; }
+.src-lines .check { font-size: 13px; }
 @media (prefers-reduced-motion: reduce) { .hc-card, .qe-anim { animation: none; } .hc-hint { transition: none; } }
+.pos-source { gap: 6px; }
+.pos-source .seg { align-self: stretch; display: flex; flex-wrap: nowrap; }
+.pos-source .seg button { flex: 1; padding: 6px 6px; font-size: 13px; }
+.pos-source .src-row > * { flex-basis: 140px; }

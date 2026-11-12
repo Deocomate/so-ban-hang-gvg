@@ -11,6 +11,7 @@ import { packing, weightOf, fmtKg } from '../lib/docs/model.js';
 import { packView } from '../lib/book-profile.js';
 import { useTimeFilter, TimeFilter, useStatusFilter, StatusFilter } from '../components/DocFilters.jsx';
 import { HoverCard } from '../components/HoverCard.jsx';
+import { QuickSource } from './OrderSource.jsx';
 import {
   Btn, Icon, Pill, StatusPill, DELIVERY, PAYMENT, Field, Input, TextArea, Select, DateInput, NumInput, Check, Tabs, Search, Loading,
   ErrorBox, Note, Table, Modal, ConfirmBtn, Picker, KV, Section, Empty, ListPage, FilterBox, RadioList,
@@ -151,20 +152,24 @@ function QuickPayment({ order: o, close }) {
   );
 }
 
-// Giao hàng: xác nhận phiếu tạm, giao hết phần còn lại một lần bấm; giao từng phần thì mở hộp thoại giao hàng.
+// Giao hàng: xác nhận phiếu tạm; giao đủ phần còn lại một lần bấm, hoặc giao một phần bằng cách sửa số lượng từng dòng ngay trong khung.
+// Ngày giao, phí vận chuyển, vận đơn… thì mở hộp thoại giao hàng đầy đủ.
 function QuickDelivery({ order: o, close }) {
-  const { open, rpc } = useApp();
+  const { open } = useApp();
   const { run, busy } = useAction();
-  const [loading, setLoading] = useState(false);
-  const deliverAll = async () => {
-    setLoading(true);
-    try {
-      const lines = await rpc('q', { view: 'sales_order_lines', filters: [['order_id', 'eq', o.id]] });
-      const todo = (lines || []).filter((l) => l.remaining_qty > 0).map((l) => ({ order_line_id: l.id, qty: l.remaining_qty }));
-      const r = await run('deliver', { order_id: o.id, date: todayVN(), shipping_fee: Math.max(0, o.shipping_fee - o.ship_billed), note: null, deposit_used: 0, lines: todo },
-        (x) => `Đã giao đủ đơn ${o.code} – phiếu ${x.code}`);
-      if (r) close();
-    } finally { setLoading(false); }
+  const lines = useQ('sales_order_lines', [['order_id', 'eq', o.id]], 'line_no', 200, o.status === 'xac_nhan' && o.remaining_qty > 0);
+  const open0 = useMemo(() => (lines.data || []).filter((l) => l.remaining_qty > 0), [lines.data]);
+  const [mode, setMode] = useState('full');
+  const [qtys, setQtys] = useState({});
+  useEffect(() => { setQtys(Object.fromEntries(open0.map((l) => [l.id, l.remaining_qty]))); }, [open0]);
+  const todo = mode === 'full' ? open0.map((l) => ({ order_line_id: l.id, qty: l.remaining_qty }))
+    : open0.map((l) => ({ order_line_id: l.id, qty: Math.min(Number(qtys[l.id]) || 0, l.remaining_qty) })).filter((x) => x.qty > 0);
+  const total = todo.reduce((s, x) => s + x.qty, 0);
+  const deliver = async () => {
+    if (!total) return;
+    const r = await run('deliver', { order_id: o.id, date: todayVN(), shipping_fee: Math.max(0, o.shipping_fee - o.ship_billed), note: null, deposit_used: 0, lines: todo },
+      (x) => `${total >= o.remaining_qty ? 'Đã giao đủ' : 'Đã giao một phần'} đơn ${o.code} – phiếu ${x.code}`);
+    if (r) close();
   };
   const pct0 = o.eff_qty > 0 ? Math.min(100, (o.delivered_qty / o.eff_qty) * 100) : 0;
   return (
@@ -180,8 +185,24 @@ function QuickDelivery({ order: o, close }) {
           {o.eff_qty > 0 && <div className="qe-prog"><div className="prog grow"><i style={{ width: `${pct0}%` }} /></div><span className="small">Đã giao <b>{fq(o.delivered_qty)}</b> / {fq(o.eff_qty)}</span></div>}
           {o.remaining_qty > 0 ? (
             <>
-              <Btn kind="primary" icon="truck" busy={busy || loading} onClick={deliverAll}>Giao đủ phần còn lại ({fq(o.remaining_qty)})</Btn>
-              <Btn icon="edit" onClick={() => { close(); open('deliver', { order: o }); }}>Giao một phần…</Btn>
+              <div className="seg" role="radiogroup">
+                <button type="button" role="radio" aria-checked={mode === 'full'} className={mode === 'full' ? 'on' : ''} onClick={() => setMode('full')}>Giao đủ</button>
+                <button type="button" role="radio" aria-checked={mode === 'part'} className={mode === 'part' ? 'on' : ''} onClick={() => setMode('part')}>Giao một phần</button>
+              </div>
+              {mode === 'part' && (
+                <div className="qe-anim qe-lines" onKeyDown={(e) => { if (e.key === 'Enter') deliver(); }}>
+                  {!lines.data ? <Loading /> : open0.map((l, i) => (
+                    <div className="qe-line" key={l.id}>
+                      <div className="qe-line-name"><div className="ellipsis" title={`${l.sku} · ${l.product_name}`}>{l.product_name}</div><div className="cell-sub">còn {fq(l.remaining_qty)} {l.unit}</div></div>
+                      <NumInput money={false} stepper min={0} max={l.remaining_qty} value={qtys[l.id]} onChange={(v) => setQtys((s) => ({ ...s, [l.id]: v }))}
+                        autoFocus={i === 0} aria-label={`Giao lần này: ${l.product_name}`} />
+                    </div>
+                  ))}
+                </div>
+              )}
+              <Btn kind="primary" icon="truck" busy={busy || (!lines.data && !lines.error)} disabled={!total} onClick={deliver}>
+                {mode === 'full' ? `Giao đủ phần còn lại (${fq(o.remaining_qty)})` : `Giao ${fq(total)}${total ? '' : ' – nhập số lượng'}`}</Btn>
+              <button type="button" className="link-btn small" onClick={() => { close(); open('deliver', { order: o }); }}>Mở phiếu giao đầy đủ (ngày, phí ship, vận đơn…)</button>
             </>
           ) : <div className="good small strong">Đã giao đủ{o.delivery_count > 1 ? ` trong ${o.delivery_count} đợt` : ''}.</div>}
           {o.delivered_value > 0 && <button type="button" className="link-btn small" onClick={() => { close(); open('return', { order: o }); }}>Khách trả hàng…</button>}
@@ -371,14 +392,14 @@ export function OrderDetail({ id, onClose }) {
         {d.discount > 0 && <div className="muted small">Giảm giá cả đơn {money(d.discount)} đ được chia vào giá từng dòng theo tỷ lệ tiền hàng khi giao.</div>}
       </Section>
       {d.kind === 'dat_hang' && can('nhap_hang') && d.status !== 'huy' && (
-        <Section title="Sản xuất / đặt nhà cung cấp" actions={unlinked.length > 0 && d.status === 'xac_nhan' && <Btn small kind="soft" icon="kiln" onClick={() => open('po-form', { kind: 'dat_sx', sales_order_id: d.id,
-          lines: unlinked.map((l) => ({ product_id: l.product_id, qty: l.remaining_qty, sales_order_line_id: l.id })) })}>Tạo đơn đặt xưởng</Btn>}>
+        <Section title="Sản xuất / đặt nhà cung cấp">
           {d.status === 'nhap' && <Note>Xác nhận đơn trước khi đặt xưởng.</Note>}
-          <Table dense rows={pos.data} empty="Chưa đặt xưởng / nhà cung cấp cho đơn này" onRow={(r) => open('po', { id: r.id })} columns={[
+          {d.status === 'xac_nhan' && unlinked.length > 0 && <QuickSource order={d} lines={unlinked} />}
+          {(pos.data?.length > 0 || !(d.status === 'xac_nhan' && unlinked.length > 0)) && <Table dense rows={pos.data} empty="Chưa đặt xưởng / nhà cung cấp cho đơn này" onRow={(r) => open('po', { id: r.id })} columns={[
             { key: 'code', label: 'Đơn nhập', render: (r) => <b>{r.code}</b> }, { key: 's', label: 'Xưởng / NCC', render: (r) => r.supplier_name },
             { key: 'st', label: 'Tiến độ', render: (r) => <Pill tone={r.receive_status === 'da_nhan_du' ? 'good' : r.is_late ? 'bad' : 'info'}>{r.progress}</Pill> },
             { key: 'e', label: 'Hẹn nhận', render: (r) => dmy(r.expected_date) },
-          ]} />
+          ]} />}
         </Section>
       )}
       <OrderShipments order={d} />

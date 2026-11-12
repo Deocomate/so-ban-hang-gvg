@@ -9,6 +9,7 @@ import { packing, weightOf, fmtKg } from '../lib/docs/model.js';
 import { Btn, Icon, Input, Select, DateInput, NumInput, Loading, Picker } from '../components/ui.jsx';
 import { ChargesDialog } from './Charges.jsx';
 import { packView } from '../lib/book-profile.js';
+import { SourceFields, sourcePoPayload, sourceReady, kindLabel } from './OrderSource.jsx';
 
 let seq = 0;
 const METHODS = ['Tiền mặt', 'Chuyển khoản', 'Thẻ / POS', 'TikTok Shop', 'COD'];
@@ -79,6 +80,8 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
   const [loaded, setLoaded] = useState(!id && !quote_id);
   const [armClose, setArmClose] = useState(false);
   const [showCharges, setShowCharges] = useState(false);
+  // Đơn đặt: chọn luôn nơi sản xuất / mua, tạo đơn nhập ngay khi xác nhận đơn
+  const [source, setSource] = useState({ kind: '', supplier_id: '', expected_date: '' });
   const [f, setF] = useState({
     kind: kind0 || 'ban_san', customer_id: cust0 || '', channel: (settings.channels || [])[0] || '', order_date: todayVN(), due_date: '',
     staff: lsGet('gomsu.staff'), note: '', discount: 0, shipping_fee: 0, vat_rate: 0, transport: null, lines: [], price_book_id: '',
@@ -206,6 +209,8 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
   const submit = async (mode, print) => {
     const lines = f.lines.filter((l) => l.product_id && Number(l.qty) > 0);
     if (!lines.length) { toast('Đơn hàng chưa có sản phẩm — gõ tên hàng vào ô tìm kiếm', 'err'); searchRef.current?.focus(); return; }
+    const placeSource = isDat && can('nhap_hang') && mode !== 'draft' && !!source.kind;
+    if (placeSource && !sourceReady(source)) { toast(source.kind === 'dat_sx' ? 'Chưa chọn xưởng sản xuất' : 'Chưa chọn nhà cung cấp', 'err'); return; }
     lsSet('gomsu.staff', f.staff || '');
     const p = {
       id: id || null, kind: f.kind, customer_id: f.customer_id, channel: f.channel, order_date: f.order_date, due_date: f.due_date || null, staff: f.staff,
@@ -218,6 +223,16 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
       deposit: payAmt > 0 && mode !== 'draft' ? { amount: Math.min(payAmt, mode === 'deliver' ? total : payAmt), fund_id: f.pay.fund_id, method: f.pay.method, fee: f.pay.fee || 0 } : null,
     };
     const r = await run('save_sales_order', p, (r2) => `Đã lưu đơn ${r2.code}${r2.delivery_code ? ' · đã giao (' + r2.delivery_code + ')' : ''}${r2.payment_code ? ' · phiếu thu ' + r2.payment_code : ''}`);
+    if (r && placeSource) {
+      try {
+        const ls = await rpc('q', { view: 'sales_order_lines', filters: [['order_id', 'eq', r.id]] });
+        const todo = ls.filter((l) => !l.po_line_id && l.remaining_qty > 0 && !l.is_kit);
+        if (todo.length) {
+          const po = await rpc('save_purchase_order', { request_id: crypto.randomUUID?.() || String(Date.now()), ...sourcePoPayload({ order_id: r.id, source, lines: todo, products: products.data }) });
+          toast(`Đã tạo ${kindLabel(source.kind)} ${po.code}`);
+        }
+      } catch (e) { toast('Đã lưu đơn nhưng chưa đặt được xưởng / nhà cung cấp: ' + e.message, 'err'); }
+    }
     if (r) {
       onClose();
       if (r.warnings?.length) toast('Lưu ý tồn kho: ' + r.warnings.join('; '), 'err');
@@ -320,6 +335,13 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
             <Select value={f.channel} onChange={(v) => set('channel', v)} options={settings.channels || []} placeholder="Kênh bán" aria-label="Kênh bán" />
             <label className="pos-due"><span className="muted small">Hẹn giao</span><DateInput value={f.due_date} onChange={(v) => set('due_date', v)} /></label>
           </div>
+          {isDat && can('nhap_hang') && (
+            <div className="pos-source src-pick">
+              <span className="muted small">Sản xuất / đặt nhà cung cấp{editing ? ' (cho hàng chưa đặt)' : ''}</span>
+              <SourceFields value={source} onChange={(v) => setSource({ ...v, expected_date: v.expected_date || (v.kind && !source.kind ? f.due_date : v.expected_date) || '' })} allowNone />
+              {source.kind && <span className="muted small">Tạo {kindLabel(source.kind)} ngay khi bấm {savingConfirmed ? 'Lưu đơn' : 'Xác nhận đơn'}; lưu nháp thì chưa đặt.</span>}
+            </div>
+          )}
 
           <div className="pos-sum">
             {(weightSum > 0 || boxSum > 0) && <><span>Tổng trọng lượng{boxSum > 0 ? <span className="pos-count">{fq(boxSum)} {boxLabel}</span> : null}</span>
