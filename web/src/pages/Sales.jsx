@@ -10,6 +10,7 @@ import { exportXlsx } from '../lib/excel.js';
 import { packing, weightOf, fmtKg } from '../lib/docs/model.js';
 import { packView } from '../lib/book-profile.js';
 import { useTimeFilter, TimeFilter, useStatusFilter, StatusFilter } from '../components/DocFilters.jsx';
+import { HoverCard } from '../components/HoverCard.jsx';
 import {
   Btn, Icon, Pill, StatusPill, DELIVERY, PAYMENT, Field, Input, TextArea, Select, DateInput, NumInput, Check, Tabs, Search, Loading,
   ErrorBox, Note, Table, Modal, ConfirmBtn, Picker, KV, Section, Empty, ListPage, FilterBox, RadioList,
@@ -44,13 +45,20 @@ export function SalesPage() {
   const rows = useMemo(() => inTime.filter((o) => status.pass(o) && (!pay || PAY_FILTER[pay](o))), [inTime, status.sel, pay]);
   const count = (f) => inTime.filter((o) => status.pass(o) && f(o)).length;
   const cols = [
-    { key: 'code', label: 'Đơn', render: (o) => <div><div className="cell-main">{o.code}</div><div className="cell-sub">{dmy(invoiceDate(o))}{o.kind === 'dat_hang' ? ' · từ đặt hàng' : ''}</div></div> },
+    { key: 'code', label: 'Ngày / Mã đơn', render: (o) => <div><div className="cell-main">{dmy(invoiceDate(o))}</div><div className="cell-sub">{o.code}{o.kind === 'dat_hang' ? ' · từ đặt hàng' : ''}</div></div> },
     { key: 'customer', label: 'Khách hàng', render: (o) => <div><div>{o.customer_name}</div><div className="cell-sub">{o.channel || ''}</div></div> },
     { key: 'total', label: 'Tổng đơn', align: 'right', render: (o) => money(o.order_total) },
     { key: 'paid', label: 'Đã thu', align: 'right', render: (o) => money(o.paid_net) },
     { key: 'due', label: 'Khách còn nợ', align: 'right', render: (o) => o.receivable > 0 ? <span className={o.overdue_days > 0 ? 'bad strong' : 'strong'}>{money(o.receivable)}</span> : o.prepaid > 0 ? <span className="muted small">cọc {money(o.prepaid)}</span> : '—' },
-    { key: 'ds', label: 'Giao hàng', render: (o) => <div className="row gap-s"><StatusPill map={DELIVERY} value={o.delivery_status} />{o.is_late && <Pill tone="bad">trễ hẹn</Pill>}</div> },
-    { key: 'ps', label: 'Thanh toán', render: (o) => <StatusPill map={PAYMENT} value={o.payment_status} /> },
+    { key: 'ds', label: 'Giao hàng', render: (o) => {
+      const pill = <div className="row gap-s"><StatusPill map={DELIVERY} value={o.delivery_status} />{o.is_late && <Pill tone="bad">trễ hẹn</Pill>}</div>;
+      return can('ban_hang') && o.status !== 'huy' ? <HoverCard label={`Giao hàng đơn ${o.code}`} trigger={pill}>{({ close }) => <QuickDelivery order={o} close={close} />}</HoverCard> : pill;
+    } },
+    { key: 'ps', label: 'Thanh toán', render: (o) => {
+      const pill = <StatusPill map={PAYMENT} value={o.payment_status} />;
+      const editable = can('thu_chi') && o.status !== 'nhap' && (o.status !== 'huy' || o.payment_status === 'thua_tien');
+      return editable ? <HoverCard label={`Thanh toán đơn ${o.code}`} trigger={pill}>{({ close }) => <QuickPayment order={o} close={close} />}</HoverCard> : pill;
+    } },
   ];
   const sum = (k) => rows.reduce((s, o) => s + (o[k] || 0), 0);
   return (
@@ -81,6 +89,109 @@ export function SalesPage() {
         foot={rows.length ? { code: `${rows.length} đơn`, total: money(sum('order_total')), paid: money(sum('paid_net')), due: money(sum('receivable')) } : null}
         empty={time.from ? 'Không có hóa đơn nào trong khoảng thời gian này. Chọn "Toàn thời gian" ở bộ lọc Thời gian để xem các tháng khác.' : 'Không có hóa đơn phù hợp'} />
     </ListPage>
+  );
+}
+
+// ---------- Sửa nhanh ngay trên danh sách hóa đơn ----------
+// Thu tiền / hoàn tiền: chọn thu đủ hoặc gõ số thu một phần, chọn quỹ (nhớ quỹ dùng lần trước) rồi lưu một phiếu gắn vào đơn.
+const QUICK_FUND_KEY = 'gomsu.quick_fund';
+const readFund = () => { try { return localStorage.getItem(QUICK_FUND_KEY) || ''; } catch (e) { return ''; } };
+function QuickPayment({ order: o, close }) {
+  const { open } = useApp();
+  const funds = useFunds();
+  const { run, busy } = useAction();
+  const refund = o.payment_status === 'thua_tien';
+  const full = refund ? Math.max(o.paid_net - o.delivered_value, 0) : Math.max(o.remaining_to_pay, 0);
+  // Đơn giao dở: số nợ của phần hàng đã giao nhỏ hơn số còn phải trả cả đơn → gợi ý thu đúng phần này
+  const owedNow = !refund && o.receivable > 0 && o.receivable < full ? o.receivable : 0;
+  const chips = [...(owedNow ? [['Phần đã giao', owedNow]] : []),
+    ...[0.3, 0.5, 0.7].map((f) => [`${f * 100}%`, Math.round((full * f) / 1000) * 1000])].filter(([, v]) => v > 0);
+  const [mode, setMode] = useState('full');
+  const [amount, setAmount] = useState(null);
+  const [fund, setFund] = useState(readFund);
+  useEffect(() => {
+    if (funds.data?.length && !funds.data.some((f) => f.id === fund)) setFund(funds.data[0].id);
+  }, [funds.data]);
+  const amt = mode === 'full' ? full : Number(amount) || 0;
+  const tooMuch = amt > full;
+  const kind = refund ? 'hoan_khach' : 'thu_khach';
+  const submit = async () => {
+    if (!(amt > 0) || tooMuch || !fund) return;
+    try { localStorage.setItem(QUICK_FUND_KEY, fund); } catch (e) { /* bỏ qua */ }
+    const r = await run('create_payment', { kind, date: todayVN(), fund_id: fund, party_id: o.customer_id, amount: amt,
+      allocations: [{ doc_type: 'don_ban', doc_id: o.id, amount: amt }] }, (x) => `${refund ? 'Đã hoàn' : 'Đã thu'} ${money(amt)} đ – phiếu ${x.code}`);
+    if (r) close();
+  };
+  const openFull = () => { close(); open('payment', { kind, party_id: o.customer_id, alloc: { doc_type: 'don_ban', doc_id: o.id, code: o.code, amount: full } }); };
+  return (
+    <div className="qe">
+      <div className="qe-head"><b>{refund ? 'Hoàn tiền cho khách' : 'Thu tiền'}</b><span className="muted small">{o.code} · {o.customer_name}</span></div>
+      <div className="qe-sum">
+        <span>Tổng đơn</span><b>{money(o.order_total)}</b>
+        <span>Đã thu</span><b>{money(o.paid_net)}</b>
+        {owedNow > 0 && <><span>Nợ phần hàng đã giao</span><b>{money(owedNow)}</b></>}
+        <span>{refund ? 'Thu dư cần hoàn' : owedNow > 0 ? 'Còn phải thu cả đơn' : 'Còn phải thu'}</span><b className={refund ? 'bad' : 'warn'}>{money(full)}</b>
+      </div>
+      {full > 0 ? (
+        <>
+          <div className="seg" role="radiogroup">
+            <button type="button" role="radio" aria-checked={mode === 'full'} className={mode === 'full' ? 'on' : ''} onClick={() => setMode('full')}>{refund ? 'Hoàn đủ' : 'Thu đủ'}</button>
+            <button type="button" role="radio" aria-checked={mode === 'part'} className={mode === 'part' ? 'on' : ''} onClick={() => setMode('part')}>{refund ? 'Hoàn một phần' : 'Thu một phần'}</button>
+          </div>
+          {mode === 'part' && (
+            <div className="qe-anim" onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}>
+              <NumInput value={amount} onChange={setAmount} min={0} max={full} placeholder={`Tối đa ${money(full)}`} autoFocus aria-label="Số tiền" />
+              <div className="qe-chips">{chips.map(([l, v]) => <button type="button" key={l} className={Number(amount) === v ? 'on' : ''} title={`${money(v)} đ`} onClick={() => setAmount(v)}>{l}</button>)}</div>
+              {tooMuch && <div className="field-err">Vượt quá {money(full)} đ</div>}
+            </div>
+          )}
+          <Select value={fund} onChange={setFund} options={(funds.data || []).map((f) => ({ value: f.id, label: f.name }))} aria-label={refund ? 'Chi từ quỹ' : 'Thu vào quỹ'} />
+          <Btn kind="primary" icon={refund ? 'out' : 'in'} busy={busy} disabled={!(amt > 0) || tooMuch || !fund} onClick={submit}>
+            {refund ? 'Hoàn' : 'Thu'} {amt > 0 ? money(amt) + ' đ' : ''}</Btn>
+        </>
+      ) : <div className="good small strong">Đơn đã thu đủ.</div>}
+      <button type="button" className="link-btn small" onClick={openFull}>Mở phiếu đầy đủ (ngày, ghi chú, phí…)</button>
+    </div>
+  );
+}
+
+// Giao hàng: xác nhận phiếu tạm, giao hết phần còn lại một lần bấm; giao từng phần thì mở hộp thoại giao hàng.
+function QuickDelivery({ order: o, close }) {
+  const { open, rpc } = useApp();
+  const { run, busy } = useAction();
+  const [loading, setLoading] = useState(false);
+  const deliverAll = async () => {
+    setLoading(true);
+    try {
+      const lines = await rpc('q', { view: 'sales_order_lines', filters: [['order_id', 'eq', o.id]] });
+      const todo = (lines || []).filter((l) => l.remaining_qty > 0).map((l) => ({ order_line_id: l.id, qty: l.remaining_qty }));
+      const r = await run('deliver', { order_id: o.id, date: todayVN(), shipping_fee: Math.max(0, o.shipping_fee - o.ship_billed), note: null, deposit_used: 0, lines: todo },
+        (x) => `Đã giao đủ đơn ${o.code} – phiếu ${x.code}`);
+      if (r) close();
+    } finally { setLoading(false); }
+  };
+  const pct0 = o.eff_qty > 0 ? Math.min(100, (o.delivered_qty / o.eff_qty) * 100) : 0;
+  return (
+    <div className="qe">
+      <div className="qe-head"><b>Giao hàng</b><span className="muted small">{o.code} · {o.customer_name}</span></div>
+      {o.status === 'nhap' ? (
+        <>
+          <div className="small muted">Phiếu tạm chưa trừ kho. Xác nhận đơn để giữ hàng và giao.</div>
+          <Btn kind="primary" busy={busy} onClick={async () => { if (await run('confirm_sales_order', { id: o.id }, (r) => (r.warnings?.length ? 'Đã xác nhận. Lưu ý: ' + r.warnings.join('; ') : 'Đã xác nhận đơn'))) close(); }}>Xác nhận đơn</Btn>
+        </>
+      ) : (
+        <>
+          {o.eff_qty > 0 && <div className="qe-prog"><div className="prog grow"><i style={{ width: `${pct0}%` }} /></div><span className="small">Đã giao <b>{fq(o.delivered_qty)}</b> / {fq(o.eff_qty)}</span></div>}
+          {o.remaining_qty > 0 ? (
+            <>
+              <Btn kind="primary" icon="truck" busy={busy || loading} onClick={deliverAll}>Giao đủ phần còn lại ({fq(o.remaining_qty)})</Btn>
+              <Btn icon="edit" onClick={() => { close(); open('deliver', { order: o }); }}>Giao một phần…</Btn>
+            </>
+          ) : <div className="good small strong">Đã giao đủ{o.delivery_count > 1 ? ` trong ${o.delivery_count} đợt` : ''}.</div>}
+          {o.delivered_value > 0 && <button type="button" className="link-btn small" onClick={() => { close(); open('return', { order: o }); }}>Khách trả hàng…</button>}
+        </>
+      )}
+    </div>
   );
 }
 
