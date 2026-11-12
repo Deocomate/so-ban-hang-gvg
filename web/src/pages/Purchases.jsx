@@ -6,7 +6,7 @@ import { money, qty as fq, dmy, todayVN, match, dmyhm } from '../lib/format.js';
 import { KIND_LABEL } from '../lib/lookups.js';
 import { exportXlsx } from '../lib/excel.js';
 import { moneyWords } from '../lib/docs/model.js';
-import { usePeriod, PeriodPicker } from '../components/Period.jsx';
+import { useTimeFilter, TimeFilter } from '../components/DocFilters.jsx';
 import {
   Btn, Icon, Pill, Field, Input, DateInput, NumInput, Check, Search, Loading,
   ErrorBox, Note, Table, Modal, ConfirmBtn, KV, Section, ListPage, FilterBox, RadioList,
@@ -25,13 +25,12 @@ function StatusChecks({ options, value, onChange, counts }) {
   );
 }
 const countBy = (rows, k) => rows.reduce((m, r) => ({ ...m, [r[k]]: (m[r[k]] || 0) + 1 }), {});
-const inPeriod = (d, p) => !d || (d >= p.from && d <= p.to);
 
 // ===================== NHẬP HÀNG =====================
 // Mỗi dòng là một phiếu nhập: phiếu nhập thẳng (PN, kể cả phiếu tạm) hoặc một đợt nhận hàng theo đơn đặt (NK)
 export function PurchasesPage() {
   const { open, can } = useApp();
-  const [period, setPeriod] = usePeriod('month');
+  const time = useTimeFilter('month');
   const [st, setSt] = useState(['Phiếu tạm', 'Đã nhập hàng']);
   const [search, setSearch] = useState('');
   const pos = useQ('purchase_orders', [['mode', 'eq', 'nhap']], 'created_at desc', 5000);
@@ -42,13 +41,13 @@ export function PurchasesPage() {
     ...recs.data.map((r) => ({ id: r.id, po_id: r.po_id, code: r.code, sub: `theo đơn ${r.po_code}`, date: r.receipt_date, at: r.created_at, supplier_code: r.supplier_code,
       supplier_name: r.supplier_name, invoice_no: r.invoice_no, need: r.status_label === 'Đã hủy' ? 0 : r.value, paid: null, status_label: r.status_label, by: r.created_by_name, note: r.note })),
   ].sort((a, b) => String(b.at).localeCompare(String(a.at))) : null), [pos.data, recs.data]);
-  const inTime = (all || []).filter((r) => inPeriod(r.date, period) && match(`${r.code} ${r.supplier_name} ${r.supplier_code || ''} ${r.invoice_no || ''} ${r.sub || ''} ${r.note || ''}`, search));
+  const inTime = (all || []).filter((r) => time.inRange(r.date) && match(`${r.code} ${r.supplier_name} ${r.supplier_code || ''} ${r.invoice_no || ''} ${r.sub || ''} ${r.note || ''}`, search));
   const rows = inTime.filter((r) => st.includes(r.status_label));
   return (
     <ListPage title="Nhập hàng" sub="Phiếu nhập hàng vào kho. Phiếu tạm chưa làm tăng tồn; bấm Hoàn thành mới nhập kho và ghi công nợ nhà cung cấp."
       filters={<>
+        <TimeFilter filter={time} />
         <FilterBox title="Trạng thái"><StatusChecks options={['Phiếu tạm', 'Đã nhập hàng', 'Đã hủy']} value={st} onChange={setSt} counts={countBy(inTime, 'status_label')} /></FilterBox>
-        <FilterBox title="Thời gian"><PeriodPicker value={period} onChange={setPeriod} /></FilterBox>
       </>}
       search={<Search value={search} onChange={setSearch} placeholder="Theo mã phiếu, nhà cung cấp, số hóa đơn…" />}
       actions={<>
@@ -75,25 +74,25 @@ export function PurchasesPage() {
 const PO_STATUSES = ['Phiếu tạm', 'Đã xác nhận NCC', 'Nhập một phần', 'Hoàn thành', 'Đã hủy'];
 export function PurchaseOrdersPage() {
   const { open, can } = useApp();
-  const [period, setPeriod] = usePeriod('month');
+  const time = useTimeFilter('month');
   const [st, setSt] = useState(['Phiếu tạm', 'Đã xác nhận NCC', 'Nhập một phần', 'Hoàn thành']);
   const [kind, setKind] = useState('');
   const [extra, setExtra] = useState('');
   const [search, setSearch] = useState('');
   const { data, error } = useQ('purchase_orders', [['mode', 'eq', 'dat']], 'created_at desc', 5000);
   // Đơn chưa xong luôn hiện dù đặt từ trước kỳ đang xem
-  const inTime = (data || []).filter((o) => (inPeriod(o.order_date, period) || (o.status !== 'huy' && o.remaining_qty > 0))
+  const inTime = (data || []).filter((o) => (time.inRange(o.order_date) || (o.status !== 'huy' && o.remaining_qty > 0))
     && (!kind || o.kind === kind) && match(`${o.code} ${o.supplier_name} ${o.supplier_code || ''} ${o.sales_order_code || ''} ${o.invoice_no || ''} ${o.note || ''}`, search)
     && (extra !== 'late' || o.is_late) && (extra !== 'debt' || o.payable > 0));
   const rows = inTime.filter((o) => st.includes(o.status_label));
   return (
     <ListPage title="Đặt hàng nhập" sub="Đơn đặt nhà cung cấp hoặc đặt xưởng sản xuất. Đơn đặt chưa làm tăng tồn; tồn tăng khi nhận hàng (nhận được nhiều đợt)."
       filters={<>
+        <TimeFilter filter={time} />
         <FilterBox title="Trạng thái"><StatusChecks options={PO_STATUSES} value={st} onChange={setSt} counts={countBy(inTime, 'status_label')} /></FilterBox>
         <FilterBox title="Loại đơn"><RadioList value={kind} onChange={setKind} options={[{ value: '', label: 'Tất cả' }, { value: 'mua_san', label: 'Mua hàng có sẵn' }, { value: 'dat_sx', label: 'Đặt xưởng sản xuất' }]} /></FilterBox>
         <FilterBox title="Cần chú ý"><RadioList value={extra} onChange={setExtra} options={[{ value: '', label: 'Không lọc' },
           { value: 'late', label: 'Trễ hẹn nhận', count: (data || []).filter((o) => o.is_late).length }, { value: 'debt', label: 'Còn nợ NCC', count: (data || []).filter((o) => o.payable > 0).length }]} /></FilterBox>
-        <FilterBox title="Thời gian"><PeriodPicker value={period} onChange={setPeriod} /></FilterBox>
       </>}
       search={<Search value={search} onChange={setSearch} placeholder="Theo mã đơn, nhà cung cấp, đơn bán…" />}
       actions={<>
@@ -121,17 +120,17 @@ export function PurchaseOrdersPage() {
 // ===================== TRẢ HÀNG NHẬP =====================
 export function SupplierReturnsPage() {
   const { open, can } = useApp();
-  const [period, setPeriod] = usePeriod('month');
+  const time = useTimeFilter('month');
   const [st, setSt] = useState(['Đã trả hàng']);
   const [search, setSearch] = useState('');
   const { data, error } = useQ('supplier_returns', [], 'created_at desc', 5000);
-  const inTime = (data || []).filter((r) => inPeriod(r.return_date, period) && match(`${r.code} ${r.supplier_name} ${r.po_code || ''} ${r.reason || ''}`, search));
+  const inTime = (data || []).filter((r) => time.inRange(r.return_date) && match(`${r.code} ${r.supplier_name} ${r.po_code || ''} ${r.reason || ''}`, search));
   const rows = inTime.filter((r) => st.includes(r.status_label));
   return (
     <ListPage title="Trả hàng nhập" sub="Hàng trả lại nhà cung cấp: xuất khỏi kho và giảm nợ phải trả NCC theo giá trả lại."
       filters={<>
+        <TimeFilter filter={time} />
         <FilterBox title="Trạng thái"><StatusChecks options={['Đã trả hàng', 'Đã hủy']} value={st} onChange={setSt} counts={countBy(inTime, 'status_label')} /></FilterBox>
-        <FilterBox title="Thời gian"><PeriodPicker value={period} onChange={setPeriod} /></FilterBox>
       </>}
       search={<Search value={search} onChange={setSearch} placeholder="Theo mã phiếu trả, nhà cung cấp…" />}
       actions={<>

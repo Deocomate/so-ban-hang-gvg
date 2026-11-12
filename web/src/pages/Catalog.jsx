@@ -5,6 +5,7 @@ import { money, qty as fq, dmy, match, todayVN } from '../lib/format.js';
 import { useFunds } from '../lib/lookups.js';
 import { exportXlsx, loadSheets, readPriceBookFile } from '../lib/excel.js';
 import { Btn, Icon, Pill, Field, Input, TextArea, Select, DateInput, NumInput, Check, Search, ErrorBox, Note, Table, Modal, ConfirmBtn, ListPage, FilterBox, RadioList, Section, Loading } from '../components/ui.jsx';
+import { useTimeFilter, TimeFilter } from '../components/DocFilters.jsx';
 
 // ===================== BẢNG GIÁ =====================
 // "Bảng giá chung" = các mức giá theo khách (sửa nhanh ở đây). Bảng giá có tên: hiệu lực, công thức, phạm vi nhóm khách / người tạo.
@@ -277,18 +278,25 @@ export function DriversPage() {
 // ===================== TRẢ HÀNG =====================
 export function SalesReturnsPage() {
   const { open } = useApp();
-  const q = useQ('sales_returns', [], 'return_date desc', 2000);
+  const q = useQ('sales_returns', [], 'return_date desc', 3000);
+  const time = useTimeFilter('month');
+  const [search, setSearch] = useState('');
+  const rows = useMemo(() => (q.data || []).filter((r) => time.inRange(r.return_date)
+    && match(`${r.code} ${r.order_code || ''} ${r.customer_name || ''} ${r.reason || ''}`, search)), [q.data, time.time, search]);
   return (
-    <>
-      <div className="page-head"><div className="grow"><h1 className="page-title">Trả hàng</h1><div className="page-sub">Khách trả lại hàng đã giao. Lập phiếu trả từ chi tiết đơn hàng, nút “Trả hàng”.</div></div></div>
+    <ListPage title="Trả hàng" sub="Khách trả lại hàng đã giao. Lập phiếu trả từ chi tiết đơn hàng, nút “Trả hàng”."
+      filters={<TimeFilter filter={time} />}
+      search={<Search value={search} onChange={setSearch} placeholder="Tìm mã phiếu trả, mã đơn, khách…" />}>
       <ErrorBox error={q.error} />
-      <Table rows={q.data} empty="Chưa có phiếu trả hàng" onRow={(r) => open('order', { id: r.order_id })} columns={[
+      <Table rows={q.data ? rows : null} onRow={(r) => open('order', { id: r.order_id })}
+        empty={time.from ? 'Không có phiếu trả hàng nào trong khoảng thời gian này. Chọn "Toàn thời gian" để xem các tháng khác.' : 'Chưa có phiếu trả hàng'}
+        foot={rows.length ? { c: `${rows.length} phiếu`, v: money(rows.reduce((t, r) => t + (r.revenue || 0), 0)) } : null} columns={[
         { key: 'c', label: 'Phiếu trả', render: (r) => <><b>{r.code}</b><div className="cell-sub">{dmy(r.return_date)}</div></> },
         { key: 'o', label: 'Đơn / khách', render: (r) => <><div>{r.order_code}</div><div className="cell-sub">{r.customer_name}</div></> },
         { key: 'l', label: 'Hàng trả', render: (r) => (r.lines || []).map((x) => `${x.sku} × ${fq(x.qty)}`).join('; ') },
         { key: 'r', label: 'Lý do', render: (r) => r.reason || '—' }, { key: 'v', label: 'Giảm doanh thu', align: 'right', render: (r) => money(r.revenue) },
       ]} />
-    </>
+    </ListPage>
   );
 }
 

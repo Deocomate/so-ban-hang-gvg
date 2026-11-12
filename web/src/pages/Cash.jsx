@@ -3,7 +3,7 @@ import { useApp, useQ, useAction } from '../lib/store.jsx';
 import { money, dmy, todayVN, match, short } from '../lib/format.js';
 import { useCustomers, useSuppliers, useFunds } from '../lib/lookups.js';
 import { exportXlsx } from '../lib/excel.js';
-import { PeriodPicker, usePeriod } from '../components/Period.jsx';
+import { useTimeFilter, TimeFilter, dateFilters, CheckList } from '../components/DocFilters.jsx';
 import { cats, groupOf, GROUP_HINT, GROUP_COLORS } from '../lib/expenseCats.js';
 import {
   Btn, Icon, Pill, Field, Input, TextArea, Select, DateInput, NumInput, Check, Tabs, Search, Loading, ErrorBox, Note, Table, Modal, ConfirmBtn, Picker, KV, Section, ListPage, FilterBox, RadioList,
@@ -135,24 +135,24 @@ export function PaymentDetail({ id, onClose }) {
 
 export function CashPage() {
   const { open, can } = useApp();
-  const [period, setPeriod] = usePeriod('30d');
-  const [tab, setTab] = useState('all'); const [search, setSearch] = useState(''); const [fundF, setFundF] = useState('');
+  const time = useTimeFilter('month');
+  const [types, setTypes] = useState(['thu', 'chi', 'chuyen']); const [states, setStates] = useState(['ok']);
+  const [search, setSearch] = useState(''); const [fundF, setFundF] = useState('');
   const funds = useFunds();
-  const pays = useQ('payments', [['pay_date', 'gte', period.from], ['pay_date', 'lte', period.to]], 'created_at desc', 5000);
-  const rows = useMemo(() => (pays.data || []).filter((p) => {
-    if (fundF && p.fund_id !== fundF && p.to_fund_id !== fundF) return false;
-    if (!match(`${p.code} ${p.party_name || ''} ${p.note || ''} ${p.kind_label}`, search)) return false;
-    if (tab === 'thu') return p.direction === 'thu' && !p.voided;
-    if (tab === 'chi') return p.direction === 'chi' && !p.voided;
-    if (tab === 'void') return p.voided;
-    return true;
-  }), [pays.data, tab, search, fundF]);
+  const pays = useQ('payments', dateFilters('pay_date', time), 'created_at desc', 20000);
+  const base = useMemo(() => (pays.data || []).filter((p) => (!fundF || p.fund_id === fundF || p.to_fund_id === fundF)
+    && match(`${p.code} ${p.party_name || ''} ${p.note || ''} ${p.kind_label}`, search)), [pays.data, search, fundF]);
+  const rows = useMemo(() => base.filter((p) => types.includes(p.direction) && states.includes(p.voided ? 'huy' : 'ok')), [base, types, states]);
   const sum = (d) => rows.filter((p) => p.direction === d && !p.voided).reduce((s, p) => s + p.cash_amount, 0);
   return (
     <ListPage title="Sổ quỹ – thu chi" sub="Tiền thực vào – ra từng quỹ. Mỗi phiếu gắn đúng khách / NCC và chứng từ."
       filters={<>
-        <FilterBox title="Thời gian"><PeriodPicker value={period} onChange={setPeriod} /></FilterBox>
-        <FilterBox title="Loại phiếu"><RadioList value={tab} onChange={setTab} options={[{ value: 'all', label: 'Tất cả' }, { value: 'thu', label: 'Phiếu thu' }, { value: 'chi', label: 'Phiếu chi' }, { value: 'void', label: 'Đã hủy' }]} /></FilterBox>
+        <TimeFilter filter={time} />
+        <FilterBox title="Loại chứng từ"><CheckList value={types} onChange={setTypes} options={[
+          { value: 'thu', label: 'Phiếu thu', count: base.filter((p) => p.direction === 'thu').length }, { value: 'chi', label: 'Phiếu chi', count: base.filter((p) => p.direction === 'chi').length },
+          { value: 'chuyen', label: 'Chuyển quỹ', count: base.filter((p) => p.direction === 'chuyen').length }]} /></FilterBox>
+        <FilterBox title="Trạng thái"><CheckList value={states} onChange={setStates} options={[
+          { value: 'ok', label: 'Đã thanh toán', count: base.filter((p) => !p.voided).length }, { value: 'huy', label: 'Đã hủy', count: base.filter((p) => p.voided).length }]} /></FilterBox>
         {(funds.data || []).length > 1 && <FilterBox title="Quỹ tiền"><RadioList value={fundF} onChange={setFundF} options={[{ value: '', label: 'Tất cả quỹ' }, ...(funds.data || []).map((f) => ({ value: f.id, label: f.name }))]} /></FilterBox>}
       </>}
       search={<Search value={search} onChange={setSearch} placeholder="Tìm số phiếu, khách, nội dung…" />}
@@ -246,9 +246,9 @@ export function ExpenseForm({ id, service, onClose }) {
 // Mua dịch vụ: các khoản chi phí có nhà cung cấp (người nhận), theo dõi cần trả / đã trả / còn phải trả
 export function ServicePurchasesPage() {
   const { open, can } = useApp();
-  const [period, setPeriod] = usePeriod('month');
+  const time = useTimeFilter('month');
   const [st, setSt] = useState(''); const [search, setSearch] = useState('');
-  const q = useQ('expenses', [['supplier_id', 'not_null'], ['exp_date', 'gte', period.from], ['exp_date', 'lte', period.to]], 'exp_date desc', 5000);
+  const q = useQ('expenses', [['supplier_id', 'not_null'], ...dateFilters('exp_date', time)], 'exp_date desc', 20000);
   const live = (q.data || []).filter((e) => !e.voided);
   const rows = (q.data || []).filter((e) => (!st || (st === 'no' ? !e.voided && e.unpaid > 0 : st === 'du' ? !e.voided && e.unpaid <= 0 : e.voided))
     && match(`${e.code} ${e.category} ${e.description || ''} ${e.supplier_name || ''} ${e.invoice_no || ''}`, search));
@@ -256,7 +256,7 @@ export function ServicePurchasesPage() {
   return (
     <ListPage title="Mua dịch vụ" sub="Dịch vụ mua của nhà cung cấp: vận chuyển, gia công, sửa chữa, quảng cáo… Tính vào chi phí vận hành; phần chưa trả nằm trong công nợ nhà cung cấp."
       filters={<>
-        <FilterBox title="Thời gian"><PeriodPicker value={period} onChange={setPeriod} /></FilterBox>
+        <TimeFilter filter={time} />
         <FilterBox title="Trạng thái"><RadioList value={st} onChange={setSt} options={[{ value: '', label: 'Tất cả', count: (q.data || []).length },
           { value: 'no', label: 'Còn phải trả', count: live.filter((e) => e.unpaid > 0).length }, { value: 'du', label: 'Đã trả đủ', count: live.filter((e) => e.unpaid <= 0).length },
           { value: 'huy', label: 'Đã hủy', count: (q.data || []).filter((e) => e.voided).length }]} /></FilterBox>
@@ -288,9 +288,9 @@ export function ServicePurchasesPage() {
 
 export function ExpensesPage() {
   const { open, can, settings } = useApp();
-  const [period, setPeriod] = usePeriod('month');
+  const time = useTimeFilter('month');
   const [grp, setGrp] = useState(''); const [search, setSearch] = useState('');
-  const q = useQ('expenses', [['exp_date', 'gte', period.from], ['exp_date', 'lte', period.to]], 'exp_date desc', 5000);
+  const q = useQ('expenses', dateFilters('exp_date', time), 'exp_date desc', 20000);
   const { run, busy } = useAction();
   const [voidId, setVoidId] = useState(null); const [reason, setReason] = useState('');
   const tree = cats(settings);
@@ -302,7 +302,7 @@ export function ExpensesPage() {
   const all = live.reduce((s, e) => s + e.amount, 0);
   return (
     <ListPage title="Chi phí vận hành" sub="Chia theo nhóm: mặt bằng, điện nước, công cụ dụng cụ, marketing, chi phí bán hàng, nhân sự, quản lý. Đã trả hay chưa đều tính vào lợi nhuận đúng kỳ; khoản phân bổ chia đều theo tháng."
-      filters={<FilterBox title="Thời gian"><PeriodPicker value={period} onChange={setPeriod} /></FilterBox>}
+      filters={<TimeFilter filter={time} />}
       search={<Search value={search} onChange={setSearch} placeholder="Tìm khoản mục, diễn giải…" />}
       actions={<>
         <Btn icon="dl" onClick={() => exportXlsx('chi-phi.xlsx', [{ name: 'Chi phí', rows, columns: [{ key: 'code', label: 'Mã' }, { key: 'exp_date', label: 'Ngày', type: 'date' }, { key: 'expense_group', label: 'Nhóm' },

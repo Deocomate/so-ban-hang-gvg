@@ -5,6 +5,7 @@ import { money, qty as fq, dmy, match, todayVN } from '../lib/format.js';
 import { docSettings } from '../lib/docs/model.js';
 import { saveFile } from '../lib/excel.js';
 import { Btn, Icon, Pill, Field, Input, TextArea, Select, DateInput, NumInput, Check, Search, ErrorBox, Loading, Note, Table, Modal, KV, Section, ConfirmBtn, ListPage, FilterBox, RadioList } from '../components/ui.jsx';
+import { useTimeFilter, TimeFilter } from '../components/DocFilters.jsx';
 
 const STATUS = { moi_ky: ['Mới ký', 'info'], dang_giao: ['Đang giao', 'warn'], cho_thanh_toan: ['Chờ thanh toán', 'accent'], hoan_tat: ['Hoàn tất', 'good'], huy: ['Đã hủy', 'mute'] };
 const KStatus = ({ v }) => <Pill tone={STATUS[v]?.[1]}>{STATUS[v]?.[0]}</Pill>;
@@ -50,11 +51,12 @@ export function ContractsPage() {
   const { open, can } = useApp();
   const q = useQ('contracts', [], 'sign_date desc', 2000);
   const [search, setSearch] = useState(''); const [st, setSt] = useState('');
-  const all = q.data || [];
+  const time = useTimeFilter('month');
+  const all = useMemo(() => (q.data || []).filter((k) => time.inRange(k.sign_date)), [q.data, time.time]);
   const rows = useMemo(() => all.filter((k) => (!st || k.contract_status === st) && match(`${k.code} ${k.customer_name} ${k.order_code}`, search)), [all, st, search]);
   return (
     <ListPage title="Hợp đồng" sub="Mỗi hợp đồng gắn với một đơn đặt hàng, dùng chung đợt giao, tiền cọc và tồn kho của đơn đó."
-      filters={<FilterBox title="Trạng thái"><RadioList value={st} onChange={setSt} options={[{ value: '', label: 'Tất cả', count: all.length }, ...Object.entries(STATUS).map(([value, [label]]) => ({ value, label, count: all.filter((k) => k.contract_status === value).length }))]} /></FilterBox>}
+      filters={<><TimeFilter filter={time} /><FilterBox title="Trạng thái"><RadioList value={st} onChange={setSt} options={[{ value: '', label: 'Tất cả', count: all.length }, ...Object.entries(STATUS).map(([value, [label]]) => ({ value, label, count: all.filter((k) => k.contract_status === value).length }))]} /></FilterBox></>}
       search={<Search value={search} onChange={setSearch} placeholder="Tìm số hợp đồng, khách, đơn…" />}
       actions={can('ban_hang') && <Btn kind="primary" icon="plus" onClick={() => open('order-form', { kind: 'dat_hang', then_contract: true })}>Tạo hợp đồng</Btn>}>
       <ErrorBox error={q.error} />

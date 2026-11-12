@@ -5,6 +5,7 @@ import { useFunds } from '../lib/lookups.js';
 import { exportXlsx, readWorkbook } from '../lib/excel.js';
 import { CARRIERS, carrier, lastCarrier, rememberCarrier } from '../lib/carriers.js';
 import { Btn, Icon, Pill, Field, Input, Select, DateInput, NumInput, Check, Tabs, Search, Loading, ErrorBox, Note, Table, Modal, KV, Section, ListPage, FilterBox, RadioList } from '../components/ui.jsx';
+import { useTimeFilter, TimeFilter } from '../components/DocFilters.jsx';
 
 // Trạng thái vận đơn (giống app Shopee Express / BEST)
 export const SHIP_STATUS = {
@@ -54,14 +55,17 @@ export function ShippingPage() {
   const { open, can } = useApp();
   const q = useQ('shipments', [], 'status_at desc', 3000);
   const [tab, setTab] = useState('running'); const [search, setSearch] = useState(''); const [cr, setCr] = useState('');
-  const rows = (q.data || []).filter((s) => !cr || s.carrier === cr);
+  // Hàng chờ việc: mặc định Toàn thời gian để không giấu vận đơn đang chạy từ tháng trước
+  const time = useTimeFilter('all');
+  const rows = (q.data || []).filter((s) => (!cr || s.carrier === cr) && time.inRange(s.created_at));
   const t = TABS.find((x) => x.value === tab);
-  const list = useMemo(() => rows.filter(t.f).filter((s) => match(`${s.tracking_no} ${s.code} ${s.order_code} ${s.customer_name || ''} ${s.receiver_phone || ''}`, search)), [rows, tab, search]);
+  const list = useMemo(() => rows.filter(t.f).filter((s) => match(`${s.tracking_no} ${s.code} ${s.order_code} ${s.customer_name || ''} ${s.receiver_phone || ''}`, search)), [q.data, cr, time.time, tab, search]);
   const codHeld = rows.filter((s) => s.cod_status === 'spx_dang_giu');
   const sum = (a, k) => a.reduce((x, s) => x + Number(s[k] || 0), 0);
   return (
     <ListPage title="Vận chuyển" sub="Theo dõi vận đơn Shopee Express và BEST Express theo đúng các trạng thái trên app của hãng. Tiền thu hộ (COD) hãng giữ đến khi đối soát về tài khoản."
       filters={<>
+        <TimeFilter filter={time} title="Thời gian tạo vận đơn" />
         <FilterBox title="Trạng thái"><RadioList value={tab} onChange={setTab} options={TABS.map((x) => ({ value: x.value, label: x.label, count: rows.filter(x.f).length }))} /></FilterBox>
         <FilterBox title="Đơn vị vận chuyển"><RadioList value={cr} onChange={setCr} options={[{ value: '', label: 'Tất cả hãng' }, ...CARRIERS.map((c) => ({ value: c.code, label: c.name }))]} /></FilterBox>
       </>}

@@ -6,6 +6,7 @@ import { useProducts, useCustomers, priceOf, usePriceBooks, booksFor, autoBookFo
 import { docSettings, DEFAULT_TEXTS, weightOf } from '../lib/docs/model.js';
 import { exportXlsx } from '../lib/excel.js';
 import { Btn, Icon, Pill, Field, Input, TextArea, Select, DateInput, NumInput, Check, Search, ErrorBox, Loading, Note, Table, Modal, Picker, KV, Section, ListPage, FilterBox, RadioList } from '../components/ui.jsx';
+import { useTimeFilter, TimeFilter } from '../components/DocFilters.jsx';
 
 const STATUS = { nhap: ['Nháp', 'neutral'], da_gui: ['Đã gửi khách', 'info'], chot: ['Đã chốt', 'good'], huy: ['Đã hủy', 'mute'] };
 const QStatus = ({ v }) => <Pill tone={STATUS[v]?.[1]}>{STATUS[v]?.[0]}</Pill>;
@@ -21,11 +22,12 @@ export function QuotesPage() {
   const { open, can } = useApp();
   const q = useQ('quotes', [], 'created_at desc', 2000);
   const [search, setSearch] = useState(''); const [st, setSt] = useState('');
-  const all = q.data || [];
+  const time = useTimeFilter('month');
+  const all = useMemo(() => (q.data || []).filter((x) => time.inRange(x.quote_date)), [q.data, time.time]);
   const rows = useMemo(() => all.filter((x) => (!st || x.status === st) && match(`${x.code} ${x.customer_name} ${x.site || ''}`, search)), [all, st, search]);
   return (
     <ListPage title="Báo giá" sub="Báo giá không giữ hàng và không ghi công nợ. Muốn lập đơn thì mở báo giá và bấm “Chuyển sang đơn”."
-      filters={<FilterBox title="Trạng thái"><RadioList value={st} onChange={setSt} options={[{ value: '', label: 'Tất cả', count: all.length }, ...Object.entries(STATUS).map(([value, [label]]) => ({ value, label, count: all.filter((x) => x.status === value).length }))]} /></FilterBox>}
+      filters={<><TimeFilter filter={time} /><FilterBox title="Trạng thái"><RadioList value={st} onChange={setSt} options={[{ value: '', label: 'Tất cả', count: all.length }, ...Object.entries(STATUS).map(([value, [label]]) => ({ value, label, count: all.filter((x) => x.status === value).length }))]} /></FilterBox></>}
       search={<Search value={search} onChange={setSearch} placeholder="Tìm mã, khách, công trình…" />}
       actions={can('ban_hang') && <Btn kind="primary" icon="plus" onClick={() => open('quote-form', {})}>Tạo báo giá</Btn>}>
       <ErrorBox error={q.error} />

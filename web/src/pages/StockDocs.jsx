@@ -4,7 +4,7 @@ import { useApp, useQ, useAction } from '../lib/store.jsx';
 import { money, qty as fq, dmy, todayVN, match } from '../lib/format.js';
 import { useProducts, productLabel, productSub } from '../lib/lookups.js';
 import { exportXlsx } from '../lib/excel.js';
-import { PeriodPicker, usePeriod } from '../components/Period.jsx';
+import { useTimeFilter, TimeFilter, dateFilters } from '../components/DocFilters.jsx';
 import { Btn, Pill, Field, Input, DateInput, NumInput, Check, Search, ErrorBox, Note, Table, Modal, Picker, ListPage, FilterBox, RadioList } from '../components/ui.jsx';
 import { DAMAGE_REASONS, INTERNAL_PURPOSES } from './Inventory.jsx';
 
@@ -13,9 +13,9 @@ const linesText = (ls) => (ls || []).slice(0, 4).map((x) => `${x.sku} ${fq(Math.
 // Danh sách phiếu điều chỉnh lọc theo nhóm lý do; `kinds` là các lựa chọn lọc {value, label}, `kindOf` lấy giá trị lọc của một phiếu
 function AdjDocsPage({ title, sub, reasons, kinds, kindOf, kindLabel, mode, createLabel, file }) {
   const { open, can } = useApp();
-  const [period, setPeriod] = usePeriod('month');
+  const time = useTimeFilter('month');
   const [kind, setKind] = useState(''); const [search, setSearch] = useState('');
-  const q = useQ('adjustments', [['reason', 'in', reasons], ['adj_date', 'gte', period.from], ['adj_date', 'lte', period.to]], 'created_at desc', 5000);
+  const q = useQ('adjustments', [['reason', 'in', reasons], ...dateFilters('adj_date', time)], 'created_at desc', 20000);
   const all = q.data || [];
   const rows = all.filter((a) => (!kind || kindOf(a) === kind) && match(`${a.code} ${a.note || ''} ${(a.lines || []).map((x) => `${x.sku} ${x.name}`).join(' ')}`, search));
   const cost = can('xem_gia_von');
@@ -23,7 +23,7 @@ function AdjDocsPage({ title, sub, reasons, kinds, kindOf, kindLabel, mode, crea
   return (
     <ListPage title={title} sub={sub}
       filters={<>
-        <FilterBox title="Thời gian"><PeriodPicker value={period} onChange={setPeriod} /></FilterBox>
+        <TimeFilter filter={time} />
         <FilterBox title={kindLabel}><RadioList value={kind} onChange={setKind} options={[{ value: '', label: 'Tất cả', count: all.length },
           ...kinds.map((k) => ({ ...k, count: all.filter((a) => kindOf(a) === k.value).length }))]} /></FilterBox>
       </>}
@@ -60,14 +60,14 @@ export function InternalUsePage() {
 
 export function ProductionPage() {
   const { open, can } = useApp();
-  const [period, setPeriod] = usePeriod('month');
+  const time = useTimeFilter('month');
   const [search, setSearch] = useState('');
-  const q = useQ('productions', [['prod_date', 'gte', period.from], ['prod_date', 'lte', period.to]], 'created_at desc', 5000);
+  const q = useQ('productions', dateFilters('prod_date', time), 'created_at desc', 20000);
   const rows = (q.data || []).filter((x) => match(`${x.code} ${x.sku} ${x.name} ${x.note || ''}`, search));
   const cost = can('xem_gia_von');
   return (
     <ListPage title="Sản xuất" sub="Lắp ráp hoặc làm thành phẩm từ nguyên liệu trong kho: thành phần bị trừ kho, thành phẩm được nhập với giá vốn bằng tổng giá trị thành phần."
-      filters={<FilterBox title="Thời gian"><PeriodPicker value={period} onChange={setPeriod} /></FilterBox>}
+      filters={<TimeFilter filter={time} />}
       search={<Search value={search} onChange={setSearch} placeholder="Tìm mã phiếu, mặt hàng…" />}
       actions={<>
         <Btn icon="dl" onClick={() => exportXlsx('san-xuat.xlsx', [{ name: 'Sản xuất', rows: rows.map((x) => ({ ...x, items: linesText(x.lines) })), columns: [{ key: 'code', label: 'Mã sản xuất' },

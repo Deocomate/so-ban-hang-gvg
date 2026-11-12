@@ -9,34 +9,42 @@ import { useProducts, useCustomers, useFunds, tierPrice, productLabel, productSu
 import { exportXlsx } from '../lib/excel.js';
 import { packing, weightOf, fmtKg } from '../lib/docs/model.js';
 import { packView } from '../lib/book-profile.js';
+import { useTimeFilter, TimeFilter, useStatusFilter, StatusFilter } from '../components/DocFilters.jsx';
 import {
   Btn, Icon, Pill, StatusPill, DELIVERY, PAYMENT, Field, Input, TextArea, Select, DateInput, NumInput, Check, Tabs, Search, Loading,
   ErrorBox, Note, Table, Modal, ConfirmBtn, Picker, KV, Section, Empty, ListPage, FilterBox, RadioList,
 } from '../components/ui.jsx';
 
 // ===================== DANH SÁCH ĐƠN BÁN =====================
+// Như KiotViet: hóa đơn gồm đơn bán ngay và đơn đặt hàng đã giao ít nhất một đợt (phiếu đặt chưa giao nằm ở trang Đặt hàng).
+// Lọc theo thời gian (mặc định Tháng này; đơn đặt tính theo ngày giao gần nhất) và trạng thái (mặc định bỏ Đã hủy).
+const INVOICE_STATUS = [
+  { value: 'nhap', label: 'Phiếu tạm', test: (o) => o.status === 'nhap' },
+  { value: 'cho_giao', label: 'Chờ giao', test: (o) => o.status === 'xac_nhan' && o.remaining_qty > 0 },
+  { value: 'xong', label: 'Hoàn thành', test: (o) => o.status === 'xac_nhan' && !(o.remaining_qty > 0) },
+  { value: 'huy', label: 'Đã hủy', test: (o) => o.status === 'huy' },
+];
+const PAY_FILTER = {
+  debt: (o) => o.receivable > 0,
+  paid: (o) => o.status !== 'huy' && !(o.receivable > 0) && o.payment_status !== 'thua_tien',
+  refund: (o) => o.payment_status === 'thua_tien' && (o.status === 'huy' || o.remaining_qty === 0),
+};
+const invoiceDate = (o) => (o.kind === 'dat_hang' ? o.last_delivery_date || o.order_date : o.order_date);
 export function SalesPage() {
   const { open, can, settings } = useApp();
-  const [tab, setTab] = useState('open');
+  const time = useTimeFilter('month');
+  const status = useStatusFilter(INVOICE_STATUS);
+  const [pay, setPay] = useState('');
   const [search, setSearch] = useState('');
   const [channel, setChannel] = useState('');
-  const { data, error } = useQ('sales_orders', [], 'created_at desc', 3000);
-  const rows = useMemo(() => (data || []).filter((o) => {
-    if (channel && o.channel !== channel) return false;
-    if (!match(`${o.code} ${o.customer_name} ${o.customer_phone || ''} ${o.note || ''}`, search)) return false;
-    switch (tab) {
-      case 'open': return o.status === 'xac_nhan' && o.remaining_qty > 0;
-      case 'draft': return o.status === 'nhap';
-      case 'debt': return o.receivable > 0;
-      case 'refund': return o.payment_status === 'thua_tien' && (o.status === 'huy' || o.remaining_qty === 0);
-      case 'done': return o.status === 'xac_nhan' && o.remaining_qty === 0;
-      case 'cancel': return o.status === 'huy';
-      default: return true;
-    }
-  }), [data, tab, search, channel]);
-  const count = (f) => (data || []).filter(f).length;
+  const { data, error } = useQ('sales_orders', [], 'created_at desc', 5000);
+  const invoices = useMemo(() => (data || []).filter((o) => o.kind !== 'dat_hang' || o.delivery_count > 0), [data]);
+  const inTime = useMemo(() => invoices.filter((o) => time.inRange(invoiceDate(o))
+    && (!channel || o.channel === channel) && match(`${o.code} ${o.customer_name} ${o.customer_code || ''} ${o.customer_phone || ''} ${o.note || ''}`, search)), [invoices, time.time, channel, search]);
+  const rows = useMemo(() => inTime.filter((o) => status.pass(o) && (!pay || PAY_FILTER[pay](o))), [inTime, status.sel, pay]);
+  const count = (f) => inTime.filter((o) => status.pass(o) && f(o)).length;
   const cols = [
-    { key: 'code', label: 'Đơn', render: (o) => <div><div className="cell-main">{o.code}</div><div className="cell-sub">{dmy(o.order_date)}{o.kind === 'dat_hang' ? ' · đặt riêng' : ''}</div></div> },
+    { key: 'code', label: 'Đơn', render: (o) => <div><div className="cell-main">{o.code}</div><div className="cell-sub">{dmy(invoiceDate(o))}{o.kind === 'dat_hang' ? ' · từ đặt hàng' : ''}</div></div> },
     { key: 'customer', label: 'Khách hàng', render: (o) => <div><div>{o.customer_name}</div><div className="cell-sub">{o.channel || ''}</div></div> },
     { key: 'total', label: 'Tổng đơn', align: 'right', render: (o) => money(o.order_total) },
     { key: 'paid', label: 'Đã thu', align: 'right', render: (o) => money(o.paid_net) },
@@ -48,13 +56,14 @@ export function SalesPage() {
   return (
     <ListPage title="Hóa đơn" sub="Đơn nháp không ảnh hưởng tồn kho hay doanh thu. Doanh thu ghi nhận khi giao hàng."
       filters={<>
-        <FilterBox title="Trạng thái">
-          <RadioList value={tab} onChange={setTab} options={[
-            { value: 'open', label: 'Chờ giao', count: count((o) => o.status === 'xac_nhan' && o.remaining_qty > 0) },
-            { value: 'draft', label: 'Nháp', count: count((o) => o.status === 'nhap') },
-            { value: 'debt', label: 'Khách còn nợ', count: count((o) => o.receivable > 0) },
-            { value: 'refund', label: 'Cần hoàn tiền', count: count((o) => o.payment_status === 'thua_tien' && (o.status === 'huy' || o.remaining_qty === 0)) },
-            { value: 'done', label: 'Đã giao đủ' }, { value: 'cancel', label: 'Đã hủy' }, { value: 'all', label: 'Tất cả' },
+        <TimeFilter filter={time} />
+        <StatusFilter filter={status} rows={inTime} />
+        <FilterBox title="Thanh toán">
+          <RadioList value={pay} onChange={setPay} options={[
+            { value: '', label: 'Tất cả' },
+            { value: 'debt', label: 'Khách còn nợ', count: count(PAY_FILTER.debt) },
+            { value: 'paid', label: 'Đã thanh toán đủ' },
+            { value: 'refund', label: 'Cần hoàn tiền', count: count(PAY_FILTER.refund) },
           ]} />
         </FilterBox>
         {(settings.channels || []).length > 0 && <FilterBox title="Kênh bán"><Select value={channel} onChange={setChannel} options={settings.channels || []} placeholder="Mọi kênh bán" aria-label="Kênh bán" /></FilterBox>}
@@ -70,16 +79,55 @@ export function SalesPage() {
       <ErrorBox error={error} />
       <Table columns={cols} rows={data ? rows : null} onRow={(o) => open('order', { id: o.id })} rowClass={(o) => (o.is_late || o.overdue_days > 0 ? 'row-late' : '')}
         foot={rows.length ? { code: `${rows.length} đơn`, total: money(sum('order_total')), paid: money(sum('paid_net')), due: money(sum('receivable')) } : null}
-        empty={tab === 'open' ? 'Không có đơn nào đang chờ giao' : 'Không có đơn phù hợp'} />
+        empty={time.from ? 'Không có hóa đơn nào trong khoảng thời gian này. Chọn "Toàn thời gian" ở bộ lọc Thời gian để xem các tháng khác.' : 'Không có hóa đơn phù hợp'} />
     </ListPage>
   );
 }
 
 // ===================== ĐƠN ĐẶT RIÊNG (bảng tiến độ) =====================
+// Như KiotViet: mặc định là danh sách lọc theo thời gian (Tháng này) và trạng thái (bỏ Đã hủy); bảng tiến độ là kiểu xem phụ.
+const ORDER_STATUS = [
+  { value: 'nhap', label: 'Phiếu tạm', test: (o) => o.status === 'nhap' },
+  { value: 'xac_nhan', label: 'Đã xác nhận', test: (o) => o.status === 'xac_nhan' && !(o.delivered_qty > 0) && o.remaining_qty > 0 },
+  { value: 'dang_giao', label: 'Đang giao hàng', test: (o) => o.status === 'xac_nhan' && o.delivered_qty > 0 && o.remaining_qty > 0 },
+  { value: 'xong', label: 'Hoàn thành', test: (o) => o.status === 'xac_nhan' && !(o.remaining_qty > 0) },
+  { value: 'huy', label: 'Đã hủy', test: (o) => o.status === 'huy' },
+];
 export function SpecialPage() {
   const { open, can } = useApp();
-  const { data, error } = useQ('sales_orders', [['kind', 'eq', 'dat_hang']], 'due_date', 2000);
+  const { data, error } = useQ('sales_orders', [['kind', 'eq', 'dat_hang']], 'created_at desc', 3000);
+  const [view, setView] = useState('list');
   const [showDone, setShowDone] = useState(false);
+  const time = useTimeFilter('month');
+  const status = useStatusFilter(ORDER_STATUS);
+  const [search, setSearch] = useState('');
+  const inTime = useMemo(() => (data || []).filter((o) => time.inRange(o.order_date)
+    && match(`${o.code} ${o.customer_name} ${o.customer_code || ''} ${o.customer_phone || ''} ${o.note || ''}`, search)), [data, time.time, search]);
+  const rows = useMemo(() => inTime.filter(status.pass), [inTime, status.sel]);
+  const sum = (k) => rows.reduce((t, o) => t + (o[k] || 0), 0);
+  const viewSwitch = <Tabs value={view} onChange={setView} tabs={[{ value: 'list', label: 'Danh sách' }, { value: 'board', label: 'Bảng tiến độ' }]} />;
+  const createBtn = can('ban_hang') && <Btn kind="primary" icon="plus" onClick={() => open('order-form', { kind: 'dat_hang' })}>Tạo đơn đặt hàng</Btn>;
+  if (view === 'list') {
+    const cols = [
+      { key: 'code', label: 'Mã đặt hàng', render: (o) => <div><div className="cell-main">{o.code}</div><div className="cell-sub">{dmy(o.order_date)}</div></div> },
+      { key: 'customer', label: 'Khách hàng', render: (o) => <div><div>{o.customer_name}</div><div className="cell-sub">{o.customer_code || ''}</div></div> },
+      { key: 'due', label: 'Hẹn giao', render: (o) => (o.due_date ? <span className={o.is_late ? 'bad strong' : ''}>{dmy(o.due_date)}</span> : <span className="muted">—</span>) },
+      { key: 'total', label: 'Tổng đơn', align: 'right', render: (o) => money(o.order_total) },
+      { key: 'paid', label: 'Đã thu / cọc', align: 'right', render: (o) => money(o.paid_net) },
+      { key: 'st', label: 'Trạng thái', render: (o) => <div className="row gap-s"><Pill tone={o.status === 'huy' ? 'mute' : o.status === 'nhap' ? 'warn' : 'accent'}>{ORDER_STATUS.find((x) => x.test(o))?.label}</Pill>{o.is_late && <Pill tone="bad">trễ hẹn</Pill>}</div> },
+    ];
+    return (
+      <ListPage title="Đặt hàng" sub="Phiếu tạm chưa giữ hàng. Xác nhận đơn thì hàng được giữ; mỗi đợt giao là một hóa đơn."
+        filters={<><TimeFilter filter={time} /><StatusFilter filter={status} rows={inTime} /></>}
+        search={<Search value={search} onChange={setSearch} placeholder="Tìm mã đặt hàng, khách, SĐT…" />}
+        actions={<>{viewSwitch}{createBtn}</>}>
+        <ErrorBox error={error} />
+        <Table columns={cols} rows={data ? rows : null} onRow={(o) => open('order', { id: o.id })} rowClass={(o) => (o.is_late ? 'row-late' : '')}
+          foot={rows.length ? { code: `${rows.length} đơn`, total: money(sum('order_total')), paid: money(sum('paid_net')) } : null}
+          empty={time.from ? 'Không có đơn đặt hàng nào trong khoảng thời gian này. Chọn "Toàn thời gian" ở bộ lọc Thời gian để xem các tháng khác.' : 'Không có đơn đặt hàng phù hợp'} />
+      </ListPage>
+    );
+  }
   const cols = [
     { id: 'Mới nhận', title: 'Mới nhận (nháp)' },
     { id: 'Đã xác nhận', title: 'Đã xác nhận – chưa đặt xưởng' },
@@ -95,7 +143,7 @@ export function SpecialPage() {
         <div className="grow"><h1 className="page-title">Đặt hàng</h1>
           <div className="page-sub">Mới nhận → Xác nhận → Sản xuất / đặt NCC → Hàng về → Giao một phần / giao đủ → Hoàn tất. Các bước tự chuyển theo đơn đặt xưởng, phiếu nhận, phiếu giao và tiền thu.</div></div>
         <Check checked={showDone} onChange={setShowDone}>Hiện đơn đã xong / đã hủy</Check>
-        {can('ban_hang') && <Btn kind="primary" icon="plus" onClick={() => open('order-form', { kind: 'dat_hang' })}>Tạo đơn đặt hàng</Btn>}
+        {viewSwitch}{createBtn}
       </div>
       <ErrorBox error={error} />
       {!data ? <Loading /> : (

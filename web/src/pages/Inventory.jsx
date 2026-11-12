@@ -4,6 +4,7 @@ import { money, qty as fq, dmy, todayVN, match } from '../lib/format.js';
 import { useProducts, productLabel, productSub } from '../lib/lookups.js';
 import { exportXlsx } from '../lib/excel.js';
 import { PeriodPicker, usePeriod } from '../components/Period.jsx';
+import { useTimeFilter, TimeFilter, dateFilters } from '../components/DocFilters.jsx';
 import { Btn, Icon, Pill, Field, Input, Select, DateInput, NumInput, Tabs, usePageTab, Search, Loading, ErrorBox, Note, Table, Modal, Picker, KV, Section, ListPage, FilterBox, RadioList } from '../components/ui.jsx';
 
 const REASONS = [
@@ -23,6 +24,7 @@ const ADJ_MODES = {
 export function InventoryPage(nav) {
   const { open, can, settings } = useApp();
   const [tab, setTab] = usePageTab(nav, 'stock');
+  const adjTime = useTimeFilter('month');
   const [search, setSearch] = useState(''); const [cat, setCat] = useState(''); const [only, setOnly] = useState('');
   const prods = useQ('products', [['is_kit', 'eq', 'false'], ['product_type', 'neq', 'dich_vu']], 'sku', 5000);
   const cost = can('xem_gia_von');
@@ -41,6 +43,7 @@ export function InventoryPage(nav) {
             { value: 'incoming', label: 'Đang về', count: all.filter((p) => p.incoming > 0).length }, { value: 'zero', label: 'Hết hàng', count: all.filter((p) => p.on_hand <= 0).length }]} /></FilterBox>
           {cats.length > 0 && <FilterBox title="Nhóm hàng"><Select value={cat} onChange={setCat} options={cats} placeholder="Mọi nhóm hàng" aria-label="Nhóm hàng" /></FilterBox>}
         </>}
+        {tab === 'adj' && <TimeFilter filter={adjTime} />}
       </>}
       search={tab === 'stock' ? <Search value={search} onChange={setSearch} placeholder="Tìm SKU, tên, màu, cỡ…" /> : null}
       actions={<>
@@ -64,7 +67,7 @@ export function InventoryPage(nav) {
           ]} />
       </>}
       {tab === 'nxt' && <StockReport />}
-      {tab === 'adj' && <AdjList />}
+      {tab === 'adj' && <AdjList time={adjTime} />}
     </ListPage>
   );
 }
@@ -101,10 +104,10 @@ export function StockReport() {
   );
 }
 
-function AdjList() {
-  const q = useQ('adjustments', [], 'created_at desc', 1000);
+function AdjList({ time }) {
+  const q = useQ('adjustments', dateFilters('adj_date', time), 'created_at desc', 20000);
   const { can } = useApp();
-  return <Table rows={q.data} empty="Chưa có phiếu điều chỉnh" columns={[
+  return <Table rows={q.data} empty={time.from ? 'Không có phiếu điều chỉnh / kiểm kho nào trong khoảng thời gian này. Chọn "Toàn thời gian" để xem các tháng khác.' : 'Chưa có phiếu điều chỉnh'} columns={[
     { key: 'c', label: 'Phiếu', render: (a) => <><b>{a.code}</b><div className="cell-sub">{dmy(a.adj_date)}</div></> },
     { key: 'r', label: 'Lý do', render: (a) => <><Pill tone={a.reason === 'dau_ky' ? 'info' : a.reason === 'kiem_ke' ? 'neutral' : 'warn'}>{a.reason_label}</Pill><div className="cell-sub">{a.note}</div></> },
     { key: 'l', label: 'Hàng', render: (a) => <span className="small">{(a.lines || []).slice(0, 6).map((x) => `${x.sku} ${x.qty > 0 ? '+' : ''}${fq(x.qty)}`).join('; ')}{(a.lines || []).length > 6 ? ` … (+${a.lines.length - 6})` : ''}</span> },

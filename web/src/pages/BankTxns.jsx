@@ -5,6 +5,7 @@ import { useCustomers } from '../lib/lookups.js';
 import { exportXlsx } from '../lib/excel.js';
 import { orderTransferContent } from '../lib/vietqr.js';
 import { Btn, Icon, Pill, Field, Input, NumInput, Tabs, Search, ErrorBox, Note, Table, Modal, KV, Picker, Section, ListPage, FilterBox, RadioList } from '../components/ui.jsx';
+import { useTimeFilter, TimeFilter } from '../components/DocFilters.jsx';
 
 const ST = { cho_xu_ly: ['Chờ xử lý', 'warn'], da_ghi: ['Đã ghi vào sổ', 'good'], bo_qua: ['Bỏ qua', 'mute'] };
 const StP = ({ s }) => { const [t, tone] = ST[s] || [s, 'neutral']; return <Pill tone={tone}>{t}</Pill>; };
@@ -13,13 +14,15 @@ export function BankPage() {
   const { open, settings, book } = useApp();
   const q = useQ('bank_txns', [], 'txn_at desc', 2000);
   const [tab, setTab] = useState('cho_xu_ly'); const [search, setSearch] = useState('');
-  const rows = (q.data || []).filter((t) => t.direction === 'in' || tab === 'all');
-  const list = useMemo(() => rows.filter((t) => (tab === 'all' || t.status === tab)).filter((t) => match(`${t.content || ''} ${t.counter_name || ''} ${t.order_code || ''} ${t.amount}`, search)), [rows, tab, search]);
+  // Hàng chờ việc: mặc định Toàn thời gian để không giấu giao dịch chờ xử lý từ tháng trước
+  const time = useTimeFilter('all');
+  const rows = (q.data || []).filter((t) => (t.direction === 'in' || tab === 'all') && time.inRange(t.txn_at));
+  const list = useMemo(() => rows.filter((t) => (tab === 'all' || t.status === tab)).filter((t) => match(`${t.content || ''} ${t.counter_name || ''} ${t.order_code || ''} ${t.amount}`, search)), [q.data, time.time, tab, search]);
   const pending = rows.filter((t) => t.status === 'cho_xu_ly');
   const bank = settings.bank;
   return (
     <ListPage title="Tiền về tài khoản"
-      filters={<FilterBox title="Trạng thái"><RadioList value={tab} onChange={setTab} options={[{ value: 'cho_xu_ly', label: 'Chờ xử lý', count: pending.length }, { value: 'da_ghi', label: 'Đã ghi' }, { value: 'bo_qua', label: 'Bỏ qua' }, { value: 'all', label: 'Tất cả (cả tiền ra)' }]} /></FilterBox>}
+      filters={<><TimeFilter filter={time} /><FilterBox title="Trạng thái"><RadioList value={tab} onChange={setTab} options={[{ value: 'cho_xu_ly', label: 'Chờ xử lý', count: pending.length }, { value: 'da_ghi', label: 'Đã ghi' }, { value: 'bo_qua', label: 'Bỏ qua' }, { value: 'all', label: 'Tất cả (cả tiền ra)' }]} /></FilterBox></>}
       search={<Search value={search} onChange={setSearch} placeholder="Tìm nội dung, người chuyển, mã đơn, số tiền…" />}
       sub={<>{bank ? `${bank.bank_name || 'Ngân hàng'} · ${bank.account_no} · ${bank.account_name}. ` : ''}Khách chuyển khoản ghi nội dung <b>{orderTransferContent(book, 'DH00012')}</b> (mã sổ + mã đơn) thì phần mềm tự gạch nợ đúng đơn. Các khoản không có mã đơn nằm ở “Chờ xử lý”.</>}
       actions={<>
