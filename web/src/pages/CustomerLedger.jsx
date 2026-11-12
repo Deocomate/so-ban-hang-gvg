@@ -1,4 +1,4 @@
-// Trang chi tiết khách hàng: Sổ công nợ (mọi giao dịch theo thứ tự thực tế) và Chi tiết đơn; phiếu thu theo đợt cấn cho nhiều đơn.
+// Trang chi tiết khách hàng: Sổ công nợ (mọi giao dịch theo thứ tự thực tế) và Chi tiết đơn; phiếu thu theo đợt trừ nợ cho nhiều đơn.
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp, useQ, useRpcData, useAction } from '../lib/store.jsx';
 import { money, dmy, todayVN } from '../lib/format.js';
@@ -6,19 +6,20 @@ import { useFunds } from '../lib/lookups.js';
 import { TIME_PRESETS, presetRange } from '../components/DocFilters.jsx';
 import { Btn, Icon, Pill, StatusPill, DELIVERY, Field, Input, Select, DateInput, NumInput, Tabs, Loading, ErrorBox, Note, Table, Modal } from '../components/ui.jsx';
 
-const TYPE_TONE = { ban_hang: 'info', tra_hang: 'warn', thu: 'good', hoan: 'warn', no_dau_ky: 'neutral' };
-const METHODS = ['Chuyển khoản', 'Tiền mặt', 'Thẻ / POS', 'Bù trừ'];
+const METHODS = ['Chuyển khoản', 'Tiền mặt', 'Quẹt thẻ', 'Bù trừ'];
 
 // Trạng thái thanh toán của đơn so với số phải thu (hàng đã giao); đơn hủy / nháp: không có
 export function orderPayState(o) {
   if (o.status === 'huy' || o.status === 'nhap') return null;
-  if (o.delivered_value <= 0) return o.paid_net > 0 ? ['Đã cọc', 'info'] : null;
+  if (o.delivered_value <= 0) return o.paid_net > 0 ? ['Đã đặt cọc', 'info'] : null;
   if (o.paid_net <= 0) return ['Chưa thu', 'warn'];
   if (o.paid_net >= o.delivered_value) return ['Đã thu đủ', 'good'];
   return ['Đã thu một phần', 'info'];
 }
 
-const Balance = ({ v }) => (v < 0 ? <span className="good">{money(-v)}<div className="cell-sub">khách trả trước</div></span> : <b>{money(v)}</b>);
+// Dư nợ âm = khách đang trả trước
+const Balance = ({ v }) => (v < 0 ? <span className="good">{money(-v)}<div className="cell-sub">khách trả trước</div></span> : <span className={v > 0 ? 'bad' : ''}>{money(v)}</span>);
+const stop = (fn) => (e) => { e.stopPropagation(); fn(); };
 
 export function CustomerPage({ id, onBack }) {
   const { open, can } = useApp();
@@ -27,28 +28,27 @@ export function CustomerPage({ id, onBack }) {
   const led = useRpcData('customer_ledger', { customer_id: id }, seeLedger);
   const [tab, setTab] = useState(seeLedger ? 'ledger' : 'orders');
   const c = cq.data?.[0];
-  if (!c) return <div className="stack">{cq.error ? <ErrorBox error={cq.error} /> : cq.data ? <Note tone="warn">Không tìm thấy khách hàng</Note> : <Loading />}<div><Btn icon="back" onClick={onBack}>Danh sách khách hàng</Btn></div></div>;
+  if (!c) return <div className="stack">{cq.error ? <ErrorBox error={cq.error} /> : cq.data ? <Note tone="warn">Không tìm thấy khách hàng này</Note> : <Loading />}<div><Btn icon="back" onClick={onBack}>Về danh sách khách hàng</Btn></div></div>;
   const L = led.data;
   const nPay = L ? L.rows.filter((r) => r.type === 'thu').length : 0;
-  const receipt = () => open('receipt', { customer_id: id, round: nPay + 1 });
   return (
     <div className="stack">
       <div className="page-head">
-        <button type="button" className="icon-btn" onClick={onBack} aria-label="Quay lại danh sách khách hàng"><Icon name="back" /></button>
+        <button type="button" className="icon-btn" onClick={onBack} aria-label="Về danh sách khách hàng"><Icon name="back" /></button>
         <div className="grow">
           <h1 className="page-title">{c.name}</h1>
-          <div className="page-sub">{[c.code, c.phone, c.address].filter(Boolean).join(' · ')}{c.credit_days ? ` · được nợ ${c.credit_days} ngày` : ''}</div>
+          <div className="page-sub">{[c.code, c.phone, c.address].filter(Boolean).join(' · ')}{c.credit_days ? ` · cho nợ ${c.credit_days} ngày` : ''}</div>
         </div>
         {can('danh_muc') && <Btn icon="edit" onClick={() => open('party', { type: 'kh', id })}>Sửa thông tin</Btn>}
         {can('ban_hang') && <Btn icon="cart" onClick={() => open('order-form', { customer_id: id })}>Tạo đơn</Btn>}
-        {can('thu_chi') && <Btn kind="primary" icon="plus" onClick={receipt}>Ghi phiếu thu</Btn>}
+        {can('thu_chi') && <Btn kind="primary" icon="plus" onClick={() => open('receipt', { customer_id: id, round: nPay + 1 })}>Ghi phiếu thu</Btn>}
       </div>
       <div className={`kpis ${c.prepaid > 0 ? 'kpis-4' : 'kpis-3'}`}>
-        {L && <div className="kpi"><span className="kpi-label">Tổng phải thu</span><span className="kpi-value">{money(L.total_billed)}</span></div>}
+        {L && <div className="kpi"><span className="kpi-label">Tiền hàng</span><span className="kpi-value">{money(L.total_billed)}</span></div>}
         {L && <div className="kpi"><span className="kpi-label">Tổng đã thu</span><span className="kpi-value">{money(L.total_paid)}</span></div>}
         <div className={`kpi ${c.overdue > 0 ? 'alertk' : c.receivable > 0 ? 'key' : ''}`}><span className="kpi-label">Khách còn nợ</span><span className="kpi-value">{money(c.receivable)}</span>
-          {c.overdue > 0 && <span className="kpi-sub bad">quá hạn {money(c.overdue)} · lâu nhất {c.max_overdue_days} ngày</span>}</div>
-        {c.prepaid > 0 && <div className="kpi"><span className="kpi-label">Tiền khách trả trước</span><span className="kpi-value good">{money(c.prepaid)}</span></div>}
+          {c.overdue > 0 && <span className="kpi-sub bad">Quá hạn {money(c.overdue)}, lâu nhất {c.max_overdue_days} ngày</span>}</div>
+        {c.prepaid > 0 && <div className="kpi"><span className="kpi-label">Khách trả trước</span><span className="kpi-value good">{money(c.prepaid)}</span></div>}
       </div>
       <ErrorBox error={led.error} />
       <Tabs value={tab} onChange={setTab} tabs={[...(seeLedger ? [{ value: 'ledger', label: 'Sổ công nợ' }] : []), { value: 'orders', label: 'Chi tiết đơn' }]} />
@@ -58,10 +58,37 @@ export function CustomerPage({ id, onBack }) {
   );
 }
 
+// Một dòng sổ: mã chứng từ, ngày; phiếu thu bấm để mở rộng xem trừ vào những đơn nào
+function LedgerCell({ r, open: isOpen, onOrder, onPay }) {
+  if (r.mark) return <b>{r.mark}{r.date ? ` (${dmy(r.date)})` : ''}</b>;
+  const pay = r.type === 'thu' || r.type === 'hoan';
+  return (
+    <div>
+      <div className="cell-main">
+        {pay && <span className="muted" aria-hidden>{isOpen ? '▾ ' : '▸ '}</span>}
+        <b className={pay ? 'accent' : ''}>{r.code}</b>{r.title && <span>{' · ' + r.title}</span>}
+      </div>
+      <div className="cell-sub">{dmy(r.date)}{pay && r.method ? ' · ' + r.method : ''}{!pay && r.note ? ' · ' + r.note : ''}</div>
+      {pay && isOpen && (
+        <div className="ledger-more small">
+          {r.note && <div>{r.note}</div>}
+          {r.ref_no && <div className="muted">Mã giao dịch: {r.ref_no}</div>}
+          {r.allocs.map((a) => (
+            <div key={a.doc_id}>{a.doc_type === 'don_ban' ? <a href="#" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onOrder(a.doc_id); }}>{a.code}</a> : a.code} · {money(a.amount)} đ</div>
+          ))}
+          {r.prepaid > 0 && <div className="good">Khách trả trước · {money(r.prepaid)} đ</div>}
+          <button type="button" className="link-btn small" onClick={stop(onPay)}>Xem phiếu {r.code}</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LedgerTab({ id }) {
   const { open } = useApp();
   const [preset, setPreset] = useState('all'); const [from, setFrom] = useState(''); const [to, setTo] = useState('');
   const [newest, setNewest] = useState(true);
+  const [openKeys, setOpenKeys] = useState(() => new Set());
   const [f, t] = preset === 'custom' ? [from || null, to || null] : presetRange(preset);
   const led = useRpcData('customer_ledger', { customer_id: id, from: f, to: t });
   const L = led.data;
@@ -69,36 +96,34 @@ function LedgerTab({ id }) {
   const rows = useMemo(() => {
     if (!L) return null;
     const list = [...L.rows];
-    if (filtered) { list.unshift({ key: 'open', mark: 'Số dư đầu kỳ', date: f, balance: L.opening }); list.push({ key: 'close', mark: 'Số dư cuối kỳ', date: t, balance: L.closing }); }
+    if (filtered) { list.unshift({ key: 'open', mark: 'Dư nợ đầu kỳ', date: f, balance: L.opening }); list.push({ key: 'close', mark: 'Dư nợ cuối kỳ', date: t, balance: L.closing }); }
     return newest ? list.reverse() : list;
   }, [L, newest, filtered]);
   const sum = (k) => (L ? L.rows.reduce((s, r) => s + r[k], 0) : 0);
+  const toggle = (k) => setOpenKeys((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+  const onRow = (r) => (r.payment_id ? toggle(r.key) : r.order_id ? open('order', { id: r.order_id }) : null);
   return (
     <div className="stack">
       <div className="row gap">
-        <Select value={preset} onChange={(v) => setPreset(v || 'all')} options={[...TIME_PRESETS.filter((p) => p.value !== 'all'), { value: 'all', label: 'Toàn thời gian' }, { value: 'custom', label: 'Tùy chỉnh…' }]}
+        <Select value={preset} onChange={(v) => setPreset(v || 'all')} options={[...TIME_PRESETS.filter((p) => p.value !== 'all'), { value: 'all', label: 'Toàn thời gian' }, { value: 'custom', label: 'Chọn ngày…' }]}
           aria-label="Khoảng thời gian" style={{ minWidth: 170 }} />
         {preset === 'custom' && <><DateInput value={from} onChange={(v) => setFrom(v || '')} placeholder="Từ ngày" aria-label="Từ ngày" /><DateInput value={to} onChange={(v) => setTo(v || '')} placeholder="Đến ngày" aria-label="Đến ngày" /></>}
         <span className="grow" />
         <div className="seg" role="group" aria-label="Thứ tự">
-          <button type="button" className={newest ? 'on' : ''} onClick={() => setNewest(true)}>Mới nhất trước</button>
-          <button type="button" className={newest ? '' : 'on'} onClick={() => setNewest(false)}>Cũ nhất trước</button>
+          <button type="button" className={newest ? 'on' : ''} onClick={() => setNewest(true)}>Mới nhất</button>
+          <button type="button" className={newest ? '' : 'on'} onClick={() => setNewest(false)}>Cũ nhất</button>
         </div>
       </div>
-      {filtered && L && <div className="small muted">Số dư đầu kỳ <b>{money(L.opening)}</b> · phát sinh tăng {money(sum('inc'))} · giảm {money(sum('dec'))} · số dư cuối kỳ <b>{money(L.closing)}</b></div>}
+      {filtered && L && <div className="small muted">Dư nợ đầu kỳ <b>{money(L.opening)}</b> · phát sinh {money(sum('debt'))} · đã thu {money(sum('paid'))} · dư nợ cuối kỳ <b>{money(L.closing)}</b></div>}
       <ErrorBox error={led.error} />
-      <Table rows={rows} rowKey="key" empty={filtered ? 'Không có giao dịch trong khoảng này' : 'Khách chưa có giao dịch'}
-        rowClass={(r) => (r.mark ? 'row-strong' : '')}
-        onRow={(r) => (r.payment_id ? open('pay-detail', { id: r.payment_id }) : r.order_id ? open('order', { id: r.order_id }) : null)}
-        foot={L && L.rows.length ? { dt: `${L.rows.length} giao dịch`, i: money(sum('inc')), x: money(sum('dec')), b: <Balance v={L.closing} /> } : null}
+      <Table rows={rows} rowKey="key" empty={filtered ? 'Không có giao dịch nào trong thời gian này' : 'Khách chưa có giao dịch nào'}
+        rowClass={(r) => (r.mark ? 'row-strong' : openKeys.has(r.key) ? 'row-top' : '')} onRow={onRow}
+        foot={L && L.rows.length ? { d: `${L.rows.length} giao dịch`, n: money(sum('debt')), p: money(sum('paid')), b: <Balance v={L.closing} /> } : null}
         columns={[
-          { key: 'dt', label: 'Ngày', width: 104, render: (r) => (r.date ? dmy(r.date) : '—') },
-          { key: 'd', label: 'Chứng từ và diễn giải', className: 'col-fill', render: (r) => (r.mark ? <b>{r.mark}</b> : <>
-            <div className="cell-main row gap-s"><b>{r.code}</b><Pill tone={TYPE_TONE[r.type]}>{r.type_label}</Pill></div>
-            {r.desc && <div className="cell-sub" title={r.desc}>{r.desc}</div>}</>) },
-          { key: 'i', label: 'Tăng công nợ', align: 'right', width: 132, render: (r) => (r.inc ? money(r.inc) : r.mark ? '' : '—') },
-          { key: 'x', label: 'Giảm công nợ', align: 'right', width: 132, render: (r) => (r.dec ? <span className="good">{money(r.dec)}</span> : r.mark ? '' : '—') },
-          { key: 'b', label: 'Số dư sau giao dịch', align: 'right', width: 150, render: (r) => <Balance v={r.balance} /> },
+          { key: 'd', label: 'Giao dịch', className: 'col-fill', render: (r) => <LedgerCell r={r} open={openKeys.has(r.key)} onOrder={(oid) => open('order', { id: oid })} onPay={() => open('pay-detail', { id: r.payment_id })} /> },
+          { key: 'n', label: 'Phát sinh nợ', align: 'right', width: 140, render: (r) => (r.mark ? '' : r.debt ? <span className={r.debt < 0 ? 'good' : ''}>{money(r.debt)}</span> : '—') },
+          { key: 'p', label: 'Đã thu', align: 'right', width: 140, render: (r) => (r.mark ? '' : r.paid ? <span className={r.paid < 0 ? 'bad' : ''}>{money(r.paid)}</span> : '—') },
+          { key: 'b', label: 'Dư nợ', align: 'right', width: 140, render: (r) => <Balance v={r.balance} /> },
         ]} />
     </div>
   );
@@ -122,21 +147,21 @@ function OrdersTab({ id, usablePrepaid }) {
         </div>
         <span className="grow" />
         {can('thu_chi') && usablePrepaid > 0 && owing.length > 0 && (
-          <Btn kind="soft" busy={busy} onClick={() => run('apply_prepaid', { customer_id: id }, (r) => `Đã cấn ${money(r.used)} tiền trả trước vào ${r.docs.join(', ')}`)}>
-            Cấn {money(usablePrepaid)} tiền trả trước vào đơn còn nợ</Btn>)}
+          <Btn kind="soft" busy={busy} onClick={() => run('apply_prepaid', { customer_id: id }, (r) => `Đã trừ ${money(r.used)} đ tiền khách trả trước vào ${r.docs.join(', ')}`)}>
+            Trừ {money(usablePrepaid)} đ khách trả trước vào đơn còn nợ</Btn>)}
       </div>
       <ErrorBox error={q.error} />
       <Table rows={rows} onRow={(o) => open('order', { id: o.id })} rowClass={(o) => (o.status === 'huy' ? 'row-void' : o.overdue_days > 0 ? 'row-late' : '')}
-        empty={only ? 'Không có đơn còn nợ' : 'Khách chưa có đơn'}
+        empty={only ? 'Không có đơn nào còn nợ' : 'Khách chưa có đơn nào'}
         foot={rows?.length ? { c: `${rows.length} đơn`, t: money(tot('net_total')), r: money(tot('delivered_value')), p: money(tot('paid_net')), d: money(tot('receivable')) } : null}
         columns={[
           { key: 'c', label: 'Mã đơn', width: 120, render: (o) => <b>{o.code}</b> },
-          { key: 'dt', label: 'Ngày đơn', width: 100, render: (o) => dmy(o.order_date) },
-          { key: 't', label: 'Tổng tiền đơn', align: 'right', width: 120, render: (o) => money(o.net_total) },
+          { key: 'dt', label: 'Ngày', width: 100, render: (o) => dmy(o.order_date) },
+          { key: 't', label: 'Tổng tiền', align: 'right', width: 120, render: (o) => money(o.net_total) },
           { key: 'r', label: 'Phải thu', align: 'right', width: 116, render: (o) => (o.delivered_value > 0 ? money(o.delivered_value) : '—') },
-          { key: 'p', label: 'Đã thanh toán', align: 'right', width: 120, render: (o) => (o.paid_net ? money(o.paid_net) : '—') },
+          { key: 'p', label: 'Đã thu', align: 'right', width: 116, render: (o) => (o.paid_net ? money(o.paid_net) : '—') },
           { key: 'd', label: 'Còn nợ', align: 'right', width: 116, render: (o) => (o.receivable > 0 ? <b className={o.overdue_days > 0 ? 'bad' : ''}>{money(o.receivable)}</b> : '—') },
-          { key: 'h', label: 'Hạn trả', width: 116, render: (o) => (o.pay_due_date ? <>{dmy(o.pay_due_date)}{o.overdue_days > 0 && <div className="cell-sub bad">Quá hạn {o.overdue_days} ngày</div>}</> : '—') },
+          { key: 'h', label: 'Hạn thanh toán', width: 124, render: (o) => (o.pay_due_date ? <>{dmy(o.pay_due_date)}{o.overdue_days > 0 && <div className="cell-sub bad">Quá hạn {o.overdue_days} ngày</div>}</> : '—') },
           { key: 'g', label: 'Giao hàng', width: 120, render: (o) => <StatusPill map={DELIVERY} value={o.delivery_status} /> },
           { key: 's', label: 'Thanh toán', width: 128, render: (o) => { const s = orderPayState(o); return s ? <Pill tone={s[1]}>{s[0]}</Pill> : '—'; } },
         ]} />
@@ -160,7 +185,7 @@ export function ReceiptForm({ customer_id, round = 1, onClose }) {
   const [manual, setManual] = useState({});
   const [plan, setPlan] = useState(null); const [planErr, setPlanErr] = useState(null);
   const c = cq.data?.[0];
-  // Quỹ theo hình thức thu: tiền mặt → quỹ tiền mặt, còn lại → tài khoản ngân hàng
+  // Quỹ theo hình thức thu: tiền mặt vào quỹ tiền mặt, còn lại vào tài khoản ngân hàng
   useEffect(() => {
     const list = funds.data || []; if (!list.length) return;
     const cash = list.find((x) => /mặt/i.test(x.name)); const bank = list.find((x) => !/mặt/i.test(x.name));
@@ -185,42 +210,42 @@ export function ReceiptForm({ customer_id, round = 1, onClose }) {
     if (r) onClose();
   };
   return (
-    <Modal title="Ghi phiếu thu" subtitle={c ? `${c.name} · ${c.code} · đang nợ ${money(c.receivable)}${c.prepaid > 0 ? ` · trả trước ${money(c.prepaid)}` : ''}` : ''} onClose={onClose} size="lg"
-      footer={<><Btn onClick={onClose}>Thôi</Btn><Btn kind="primary" icon="in" busy={busy} disabled={!!err || !(amount > 0) || !plan} onClick={submit}>Lưu phiếu thu</Btn></>}>
+    <Modal title="Ghi phiếu thu" subtitle={c ? `${c.name} · ${c.code} · đang nợ ${money(c.receivable)} đ${c.prepaid > 0 ? ` · trả trước ${money(c.prepaid)} đ` : ''}` : ''} onClose={onClose} size="lg"
+      footer={<><Btn onClick={onClose}>Hủy</Btn><Btn kind="primary" icon="in" busy={busy} disabled={!!err || !(amount > 0) || !plan} onClick={submit}>Lưu phiếu thu</Btn></>}>
       <div className="grid">
         <Field label="Ngày nhận tiền" required><DateInput value={date} onChange={(v) => setDate(v || todayVN())} max={todayVN()} /></Field>
-        <Field label="Số tiền nhận" required><NumInput value={amount} onChange={setAmount} placeholder="0" autoFocus /></Field>
-        <Field label="Hình thức thu"><Select value={method} onChange={setMethod} options={METHODS} /></Field>
+        <Field label="Số tiền" required><NumInput value={amount} onChange={setAmount} placeholder="0" /></Field>
+        <Field label="Hình thức"><Select value={method} onChange={setMethod} options={METHODS} /></Field>
         <Field label="Vào quỹ"><Select value={fund} onChange={setFund} options={(funds.data || []).map((x) => ({ value: x.id, label: x.name }))} /></Field>
-        <Field label="Mã giao dịch" hint="Nếu có, vd. mã chuyển khoản ngân hàng"><Input value={refNo} onChange={setRefNo} /></Field>
-        <Field label="Nội dung thu"><Input value={note} onChange={setNote} /></Field>
+        <Field label="Mã giao dịch" hint="Mã trên sao kê ngân hàng, nếu có"><Input value={refNo} onChange={setRefNo} /></Field>
+        <Field label="Nội dung"><Input value={note} onChange={setNote} /></Field>
       </div>
       <div className="row gap">
-        <div className="seg" role="group" aria-label="Cách cấn đơn">
-          <button type="button" className={mode === 'auto' ? 'on' : ''} onClick={() => setMode('auto')}>Cấn đơn cũ trước</button>
-          <button type="button" className={mode === 'manual' ? 'on' : ''} onClick={() => setMode('manual')}>Chọn đơn thủ công</button>
+        <div className="seg" role="group" aria-label="Cách trừ nợ">
+          <button type="button" className={mode === 'auto' ? 'on' : ''} onClick={() => setMode('auto')}>Trừ đơn cũ trước</button>
+          <button type="button" className={mode === 'manual' ? 'on' : ''} onClick={() => setMode('manual')}>Tự chọn đơn</button>
         </div>
-        <span className="muted small">{mode === 'auto' ? 'Cấn hết số nợ của đơn ghi nhận nợ sớm nhất rồi sang đơn tiếp theo.' : 'Nhập số tiền cấn cho từng đơn khách chỉ định.'}</span>
+        <span className="muted small">{mode === 'auto' ? 'Trả hết đơn cũ nhất rồi mới sang đơn tiếp theo.' : 'Nhập số tiền trả cho từng đơn theo ý khách.'}</span>
       </div>
-      {!plan ? <Loading /> : docs.length === 0 ? <Note>Khách không còn đơn nào đang nợ. {amount > 0 ? 'Toàn bộ số tiền sẽ là tiền khách trả trước, dùng cấn cho đơn phát sinh sau.' : ''}</Note> : (
-        <Table dense rows={shown} rowKey="doc_id" empty="Nhập số tiền nhận để xem đơn được cấn" columns={[
-          { key: 'c', label: 'Đơn', render: (d) => <><b>{d.code}</b><div className="cell-sub">ghi nợ {dmy(d.debt_date)}{d.due_date ? ' · hạn ' + dmy(d.due_date) : ''}</div></> },
-          { key: 'b', label: 'Còn nợ', align: 'right', render: (d) => money(d.before) },
-          { key: 'a', label: 'Cấn lần này', align: 'right', render: (d) => (mode === 'manual'
+      {!plan ? <Loading /> : docs.length === 0 ? <Note>Khách không còn đơn nào đang nợ.{amount > 0 ? ' Số tiền này sẽ ghi là khách trả trước và được trừ vào các đơn sau.' : ''}</Note> : (
+        <Table dense rows={shown} rowKey="doc_id" empty="Nhập số tiền để xem tiền được trừ vào những đơn nào" columns={[
+          { key: 'c', label: 'Đơn', render: (d) => <><b>{d.code}</b><div className="cell-sub">{dmy(d.debt_date)}{d.due_date ? ' · hạn ' + dmy(d.due_date) : ''}</div></> },
+          { key: 'b', label: 'Đang nợ', align: 'right', render: (d) => money(d.before) },
+          { key: 'a', label: 'Trả lần này', align: 'right', render: (d) => (mode === 'manual'
             ? <div className="row gap-s" style={{ justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
-                <NumInput value={manual[d.doc_id] ?? null} onChange={(v) => setManual((s) => ({ ...s, [d.doc_id]: v }))} style={{ maxWidth: 130 }} aria-label={`Cấn cho ${d.code}`} />
-                <button type="button" className="link-btn small" onClick={() => setManual((s) => ({ ...s, [d.doc_id]: d.before }))}>Đủ</button></div>
+                <NumInput value={manual[d.doc_id] ?? null} onChange={(v) => setManual((s) => ({ ...s, [d.doc_id]: v }))} style={{ maxWidth: 130 }} aria-label={`Số tiền trả cho ${d.code}`} />
+                <button type="button" className="link-btn small" onClick={() => setManual((s) => ({ ...s, [d.doc_id]: d.before }))}>Trả hết</button></div>
             : <b>{money(d.amount)}</b>) },
-          { key: 'r', label: 'Còn nợ sau khi cấn', align: 'right', render: (d) => (d.after > 0 ? money(d.after) : <Pill tone="good">Đã thu đủ</Pill>) },
+          { key: 'r', label: 'Còn nợ', align: 'right', render: (d) => (d.after > 0 ? money(d.after) : <Pill tone="good">Đã thu đủ</Pill>) },
         ]} />
       )}
       {plan && (
         <div className="card"><div className="totals">
-          {prepaidUsed > 0 && <><span>Dùng tiền khách trả trước có sẵn<div className="cell-sub">cấn {[...new Set(plan.prepaid_use.map((u) => u.code))].join(', ')} trước khi cấn tiền nhận lần này</div></span><span className="r">{money(prepaidUsed)}</span></>}
-          <span>Cấn vào đơn</span><span className="r">{money(plan.allocated)}</span>
-          {plan.excess > 0 && <><span>Tiền khách trả trước (chưa cấn)</span><span className="r good strong">{money(plan.excess)}</span></>}
-          <span className="strong">Tổng khách còn nợ sau khi thu</span><span className={`r strong ${plan.debt_after > 0 ? 'bad' : ''}`}>{money(plan.debt_after)}</span>
-          {plan.prepaid_after > 0 && <><span>Tiền khách trả trước sau khi thu</span><span className="r good">{money(plan.prepaid_after)}</span></>}
+          {prepaidUsed > 0 && <><span>Trừ tiền khách trả trước còn dư<div className="cell-sub">vào {[...new Set(plan.prepaid_use.map((u) => u.code))].join(', ')}</div></span><span className="r">{money(prepaidUsed)}</span></>}
+          <span>Trừ vào đơn</span><span className="r">{money(plan.allocated)}</span>
+          {plan.excess > 0 && <><span>Tiền thừa, ghi là khách trả trước</span><span className="r good strong">{money(plan.excess)}</span></>}
+          <span className="strong">Khách còn nợ sau phiếu này</span><span className={`r strong ${plan.debt_after > 0 ? 'bad' : ''}`}>{money(plan.debt_after)}</span>
+          {plan.prepaid_after > 0 && <><span>Khách trả trước sau phiếu này</span><span className="r good">{money(plan.prepaid_after)}</span></>}
         </div></div>
       )}
       {err && <Note tone="warn">{err}</Note>}

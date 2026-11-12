@@ -66,7 +66,6 @@ export function PaymentForm({ kind: kind0 = 'thu_khach', party_id: party0, alloc
   const kinds = PAY_KINDS.filter((k) => !k.owner || can('owner'));
   return (
     <Modal title={def?.dir === 'thu' ? 'Thu tiền' : def?.dir === 'chi' ? 'Chi tiền' : 'Chuyển quỹ'} onClose={onClose} size="lg"
-      subtitle="Mỗi khoản thu/chi gắn đúng đối tượng và chứng từ để công nợ tự cập nhật."
       footer={<><Btn onClick={onClose}>Thôi</Btn><Btn kind="primary" busy={busy} onClick={submit} icon={def?.dir === 'thu' ? 'in' : 'out'}>Lưu phiếu</Btn></>}>
       <div className="grid">
         <Field label="Loại phiếu"><Select value={kind} onChange={(v) => { setKind(v); if (PAY_KINDS.find((k) => k.value === v)?.party !== def?.party) setParty(''); }}
@@ -85,19 +84,19 @@ export function PaymentForm({ kind: kind0 = 'thu_khach', party_id: party0, alloc
       </div>
       {kind === 'thu_khach' && fee > 0 && <Note>Tiền thực vào quỹ: {money((amount || 0) - fee)} đ. Công nợ của khách giảm đủ {money(amount)} đ; phí {money(fee)} đ ghi vào chi phí "Phí sàn".</Note>}
       {docTypes.length > 0 && (party || kind === 'chi_phi') && (
-        <Section title="Gắn vào chứng từ" actions={<Btn small onClick={autoFill}>Tự phân bổ (cũ trước)</Btn>}>
-          {!docsQ.data ? <Loading /> : docs.length === 0 ? <div className="muted small">Không có chứng từ nào đang mở{refund ? ' có tiền trả dư' : ''}. {kind === 'thu_khach' ? 'Toàn bộ số tiền sẽ tính là khách trả trước.' : ''}</div> : (
+        <Section title={refund ? 'Hoàn theo chứng từ' : 'Trả cho chứng từ nào'} actions={<Btn small onClick={autoFill}>{refund ? 'Tự chia' : 'Trả chứng từ cũ trước'}</Btn>}>
+          {!docsQ.data ? <Loading /> : docs.length === 0 ? <div className="muted small">Không có chứng từ nào đang mở{refund ? ' có tiền trả dư' : ''}. {kind === 'thu_khach' ? 'Toàn bộ số tiền sẽ ghi là khách trả trước.' : ''}</div> : (
             <Table dense rows={docs} rowKey="doc_id" columns={[
               { key: 'c', label: 'Chứng từ', render: (d) => <><b>{d.code}</b><div className="cell-sub">{DOC_LABEL[d.doc_type]} · {dmy(d.doc_date)}{d.due_date ? ' · hạn ' + dmy(d.due_date) : ''}</div></> },
               { key: 't', label: 'Tổng', align: 'right', render: (d) => money(d.total) },
               { key: 'p', label: 'Đã trả', align: 'right', render: (d) => money(d.paid_net) },
               { key: 'r', label: refund ? 'Có thể hoàn' : 'Còn phải trả', align: 'right', render: (d) => <>{money(d.limit)}{!refund && d.remaining_due > 0 && d.remaining_due < d.limit && <div className="cell-sub">đến hạn {money(d.remaining_due)}</div>}</> },
-              { key: 'a', label: 'Gắn', align: 'right', render: (d) => <NumInput value={al[d.doc_id]} onChange={(v) => setAl((s) => ({ ...s, [d.doc_id]: v }))} style={{ maxWidth: 130 }} /> },
+              { key: 'a', label: refund ? 'Số tiền hoàn' : 'Số tiền trả', align: 'right', render: (d) => <NumInput value={al[d.doc_id]} onChange={(v) => setAl((s) => ({ ...s, [d.doc_id]: v }))} style={{ maxWidth: 130 }} /> },
             ]} />
           )}
-          <div className={`small ${allocated > (Number(amount) || 0) ? 'bad' : 'muted'}`}>Đã gắn {money(allocated)} / {money(amount || 0)}.{' '}
-            {(Number(amount) || 0) - allocated > 0 && (kind === 'thu_khach' ? `Phần còn lại ${money((amount || 0) - allocated)} tính là khách trả trước chung.` : kind === 'tra_ncc' ? `Phần còn lại tính là trả trước cho NCC.` : '')}
-            {allocated > (Number(amount) || 0) && ' Tổng gắn vượt số tiền phiếu.'}</div>
+          <div className={`small ${allocated > (Number(amount) || 0) ? 'bad' : 'muted'}`}>Đã chia {money(allocated)} / {money(amount || 0)}.{' '}
+            {(Number(amount) || 0) - allocated > 0 && (kind === 'thu_khach' ? `Còn ${money((amount || 0) - allocated)} sẽ ghi là khách trả trước.` : kind === 'tra_ncc' ? `Phần còn lại ghi là trả trước cho nhà cung cấp.` : '')}
+            {allocated > (Number(amount) || 0) && ' Số tiền chia cho các chứng từ đang lớn hơn số tiền phiếu.'}</div>
         </Section>
       )}
       {kind === 'chi_phi' && <Note>Chi phí mới hãy ghi ở mục <b>Chi phí</b> (có tùy chọn trả ngay). Mục này để trả các chi phí đã ghi nhưng chưa trả.</Note>}
@@ -120,14 +119,14 @@ export function PaymentDetail({ id, onClose }) {
         [p.direction === 'thu' ? 'Ngày nhận' : 'Ngày', dmy(p.pay_date)],
         ['Số tiền', <b>{money(p.amount)} đ</b>], p.fee > 0 && ['Phí sàn bị trừ', money(p.fee) + ' đ'], p.fee > 0 && ['Thực vào quỹ', money(p.cash_amount) + ' đ'],
         ['Hình thức', [p.method, p.fund_name + (p.to_fund_name ? ' → ' + p.to_fund_name : '')].filter(Boolean).join(' · ')], p.ref_no && ['Mã giao dịch', p.ref_no],
-        ['Đối tượng', p.party_name || '—'], ['Nội dung', p.note || '—'], ['Người ghi nhận', p.created_by_name || '—'],
-        p.unallocated > 0 && p.party_type && [p.party_type === 'kh' && p.kind === 'thu_khach' ? 'Tiền khách trả trước' : 'Chưa gắn chứng từ', <b className="good">{money(p.unallocated)} đ</b>],
+        ['Đối tượng', p.party_name || '—'], ['Nội dung', p.note || '—'], ['Người ghi', p.created_by_name || '—'],
+        p.unallocated > 0 && p.party_type && [p.party_type === 'kh' && p.kind === 'thu_khach' ? 'Khách trả trước' : 'Chưa trả cho chứng từ nào', <b className="good">{money(p.unallocated)} đ</b>],
         p.voided && ['Lý do hủy', p.void_reason],
       ]} />
       {(p.allocations || []).length > 0 && <Table dense rows={p.allocations} rowKey="doc_id" onRow={(a) => (a.doc_type === 'don_ban' ? open('order', { id: a.doc_id }) : a.doc_type === 'don_mua' ? open('po', { id: a.doc_id }) : null)}
-        foot={{ c: 'Tổng đã cấn', a: money(p.allocated) }} columns={[
-          { key: 'c', label: p.kind === 'hoan_khach' || p.kind === 'ncc_hoan' ? 'Hoàn theo chứng từ' : 'Đã cấn vào', render: (a) => <><b>{a.doc_code}</b><div className="cell-sub">{DOC_LABEL[a.doc_type]}</div></> },
-          { key: 'a', label: 'Số tiền cấn', align: 'right', render: (a) => money(a.amount) },
+        foot={{ c: 'Tổng', a: money(p.allocated) }} columns={[
+          { key: 'c', label: p.kind === 'hoan_khach' || p.kind === 'ncc_hoan' ? 'Hoàn theo chứng từ' : 'Trả cho', render: (a) => <><b>{a.doc_code}</b><div className="cell-sub">{DOC_LABEL[a.doc_type]}</div></> },
+          { key: 'a', label: 'Số tiền', align: 'right', render: (a) => money(a.amount) },
         ]} />}
       {can('owner') && !p.voided && (
         <Section title="Hủy phiếu">
@@ -180,7 +179,7 @@ export function CashPage() {
         { key: 'c', label: 'Phiếu', render: (p) => <><div className="cell-main">{p.code}</div><div className="cell-sub">{dmy(p.pay_date)}</div></> },
         { key: 'k', label: 'Loại', render: (p) => <>{p.kind_label}<div className="cell-sub">{p.fund_name}{p.to_fund_name ? ' → ' + p.to_fund_name : ''}</div></> },
         { key: 'p', label: 'Đối tượng / nội dung', render: (p) => <>{p.party_name || '—'}<div className="cell-sub">{p.note}</div></> },
-        { key: 'al', label: 'Gắn chứng từ', render: (p) => <span className="small">{(p.allocations || []).map((a) => a.doc_code).join(', ') || (p.party_type ? <span className="muted">trả trước chung</span> : '')}</span> },
+        { key: 'al', label: 'Trả cho', render: (p) => <span className="small">{(p.allocations || []).map((a) => a.doc_code).join(', ') || (p.party_type ? <span className="muted">trả trước</span> : '')}</span> },
         { key: 'a', label: 'Số tiền', align: 'right', render: (p) => <span className={p.direction === 'thu' ? 'good strong' : p.direction === 'chi' ? 'bad strong' : ''}>{p.direction === 'chi' ? '−' : p.direction === 'thu' ? '+' : ''}{money(p.cash_amount)}{p.fee > 0 && <div className="cell-sub">phí sàn {money(p.fee)}</div>}</span> },
       ]} />
     </ListPage>

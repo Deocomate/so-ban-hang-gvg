@@ -281,7 +281,7 @@ function DataTools() {
 
 const TABLE_LABEL = { sales_orders: 'Đơn bán', sales_order_lines: 'Dòng đơn bán', deliveries: 'Phiếu giao', delivery_lines: 'Dòng phiếu giao', sales_returns: 'Phiếu khách trả',
   purchase_orders: 'Đơn nhập', purchase_order_lines: 'Dòng đơn nhập', goods_receipts: 'Phiếu nhận hàng', supplier_returns: 'Phiếu trả NCC', products: 'Sản phẩm', customers: 'Khách hàng',
-  suppliers: 'Nhà cung cấp', payments: 'Phiếu thu/chi', payment_allocations: 'Gắn phiếu', expenses: 'Chi phí', stock_adjustments: 'Điều chỉnh kho', stock_adjustment_lines: 'Dòng điều chỉnh',
+  suppliers: 'Nhà cung cấp', payments: 'Phiếu thu/chi', payment_allocations: 'Phiếu thu chi theo chứng từ', expenses: 'Chi phí', stock_adjustments: 'Điều chỉnh kho', stock_adjustment_lines: 'Dòng điều chỉnh',
   funds: 'Quỹ', opening_debts: 'Nợ đầu kỳ', books: 'Cài đặt sổ', book_members: 'Người dùng', kit_items: 'Thành phần bộ', goods_receipt_lines: 'Dòng nhận hàng', supplier_return_lines: 'Dòng trả NCC', sales_return_lines: 'Dòng khách trả' };
 const OP = { INSERT: ['Thêm', 'good'], UPDATE: ['Sửa', 'warn'], DELETE: ['Xóa', 'bad'] };
 

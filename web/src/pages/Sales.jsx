@@ -50,10 +50,6 @@ export function SalesPage() {
     { key: 'total', label: 'Tổng đơn', align: 'right', render: (o) => money(o.order_total) },
     { key: 'paid', label: 'Đã thu', align: 'right', render: (o) => money(o.paid_net) },
     { key: 'due', label: 'Khách còn nợ', align: 'right', render: (o) => o.receivable > 0 ? <span className={o.overdue_days > 0 ? 'bad strong' : 'strong'}>{money(o.receivable)}</span> : o.prepaid > 0 ? <span className="muted small">cọc {money(o.prepaid)}</span> : '—' },
-    { key: 'ds', label: 'Giao hàng', render: (o) => {
-      const pill = <div className="row gap-s"><StatusPill map={DELIVERY} value={o.delivery_status} />{o.is_late && <Pill tone="bad">trễ hẹn</Pill>}</div>;
-      return can('ban_hang') && o.status !== 'huy' ? <HoverCard label={`Giao hàng đơn ${o.code}`} trigger={pill}>{({ close }) => <QuickDelivery order={o} close={close} />}</HoverCard> : pill;
-    } },
     { key: 'ps', label: 'Thanh toán', render: (o) => {
       const pill = <StatusPill map={PAYMENT} value={o.payment_status} />;
       const editable = can('thu_chi') && o.status !== 'nhap' && (o.status !== 'huy' || o.payment_status === 'thua_tien');
@@ -225,7 +221,10 @@ export function SpecialPage() {
       { key: 'due', label: 'Hẹn giao', render: (o) => (o.due_date ? <span className={o.is_late ? 'bad strong' : ''}>{dmy(o.due_date)}</span> : <span className="muted">—</span>) },
       { key: 'total', label: 'Tổng đơn', align: 'right', render: (o) => money(o.order_total) },
       { key: 'paid', label: 'Đã thu / cọc', align: 'right', render: (o) => money(o.paid_net) },
-      { key: 'st', label: 'Trạng thái', render: (o) => <div className="row gap-s"><Pill tone={o.status === 'huy' ? 'mute' : o.status === 'nhap' ? 'warn' : 'accent'}>{ORDER_STATUS.find((x) => x.test(o))?.label}</Pill>{o.is_late && <Pill tone="bad">trễ hẹn</Pill>}</div> },
+      { key: 'ds', label: 'Giao hàng', render: (o) => {
+        const pill = <div className="row gap-s"><StatusPill map={DELIVERY} value={o.delivery_status} />{o.is_late && <Pill tone="bad">trễ hẹn</Pill>}</div>;
+        return can('ban_hang') && o.status !== 'huy' ? <HoverCard label={`Giao hàng đơn ${o.code}`} trigger={pill} width={340}>{({ close }) => <QuickDelivery order={o} close={close} />}</HoverCard> : pill;
+      } },
     ];
     return (
       <ListPage title="Đặt hàng"
@@ -349,10 +348,10 @@ export function OrderDetail({ id, onClose }) {
           {d.vat_rate > 0 && <><span className="muted">Gồm VAT {fq(d.vat_rate)}%</span><span className="r muted">{money(d.vat_total)}</span></>}
           <span>Đã giao (doanh thu)</span><span className="r">{money(d.delivered_value + d.returned_value)}</span>
           {d.returned_value > 0 && <><span>− Khách trả lại</span><span className="r">{money(d.returned_value)}</span></>}
-          <span>Đã thu (thuần)</span><span className="r">{money(d.paid_net)}</span>
+          <span>Đã thu (sau khi trừ tiền hoàn)</span><span className="r">{money(d.paid_net)}</span>
           <span className="strong">Khách còn nợ (hàng đã giao)</span><span className={`r strong ${d.receivable > 0 ? 'bad' : ''}`}>{money(d.receivable)}</span>
           {d.prepaid > 0 && <><span>Khách trả trước / cọc</span><span className="r good strong">{money(d.prepaid)}</span></>}
-          <span>Còn phải trả cả đơn</span><span className="r">{money(d.remaining_to_pay)}</span>
+          <span>Khách còn phải trả cho cả đơn</span><span className="r">{money(d.remaining_to_pay)}</span>
           {d.cogs !== null && d.cogs !== undefined && <><span className="muted">Giá vốn hàng đã giao</span><span className="r muted">{money(d.cogs)}</span>
             <span className="muted">Lợi nhuận gộp (sau thuế ước tính)</span><span className="r muted">{money(d.gross_profit)}</span></>}
           {d.overdue_days > 0 && <><span className="bad">Quá hạn thanh toán</span><span className="r bad">{d.overdue_days} ngày</span></>}
@@ -410,7 +409,7 @@ export function OrderDetail({ id, onClose }) {
           <Table dense rows={pays.data} rowKey="payment_id" empty="Chưa có khoản thu" onRow={(r) => open('pay-detail', { id: r.payment_id })} columns={[
             { key: 'c', label: 'Phiếu thu', render: (r) => <><b>{r.code}</b><div className="cell-sub">{dmy(r.pay_date)} · {r.fund_name}{r.ref_no ? ' · ' + r.ref_no : ''}</div></> },
             { key: 'k', label: 'Loại', render: (r) => (r.kind === 'hoan_khach' ? <Pill tone="warn">Hoàn tiền</Pill> : d.delivery_count === 0 || r.pay_date < (d.last_delivery_date || '9999') ? 'Cọc / trả trước' : 'Thu tiền') },
-            { key: 'a', label: 'Số tiền cấn vào đơn', align: 'right', render: (r) => <span className={r.signed_amount < 0 ? 'bad' : ''}>{money(r.signed_amount)}</span> },
+            { key: 'a', label: 'Trả cho đơn này', align: 'right', render: (r) => <span className={r.signed_amount < 0 ? 'bad' : ''}>{money(r.signed_amount)}</span> },
           ]} />
         </Section>
       </div>

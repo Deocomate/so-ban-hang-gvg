@@ -300,6 +300,10 @@ span.cal-title { cursor: default; }
 .tbl td.col-fill { width: 100%; max-width: 0; }
 .tbl td.col-fill > *, .tbl td.col-clip > * { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tbl td.col-clip { max-width: 140px; }
+.ledger-more { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; padding-left: 14px; color: var(--muted); }
+.ledger-more .link-btn { align-self: flex-start; margin-top: 2px; }
+.accent { color: var(--accent); }
+.tbl tr.row-top td { vertical-align: top; }
 .tbl td.r, .tbl td.c { white-space: nowrap; }
 .tbl tbody tr:first-child td { border-top: 0; }
 .tbl.dense td { padding: 6px 8px; } .tbl.dense th { padding: 7px 8px; }

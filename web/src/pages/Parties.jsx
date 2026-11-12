@@ -83,16 +83,16 @@ export function PartiesPage({ type, sub }) {
         <FilterBox title="Thời gian quá hạn">
           <RadioList value={od} onChange={setOd} options={[{ value: '', label: 'Tất cả' },
             ...OVERDUE_BANDS.map((b) => ({ value: b.value, label: b.label, count: all.filter((c) => c.overdue > 0 && c.max_overdue_days >= b.min && c.max_overdue_days <= b.max).length })),
-            { value: 'custom', label: 'Hạn trả trong khoảng' }]} />
+            { value: 'custom', label: 'Chọn khoảng hạn thanh toán' }]} />
           {od === 'custom' && <div className="tf-range">
-            <DateInput value={odFrom} onChange={(v) => setOdFrom(v || '')} max={today} placeholder="Từ ngày" aria-label="Hạn trả từ ngày" />
-            <DateInput value={odTo} onChange={(v) => setOdTo(v || '')} max={today} placeholder="Đến ngày" aria-label="Hạn trả đến ngày" />
+            <DateInput value={odFrom} onChange={(v) => setOdFrom(v || '')} max={today} placeholder="Từ ngày" aria-label="Hạn thanh toán từ ngày" />
+            <DateInput value={odTo} onChange={(v) => setOdTo(v || '')} max={today} placeholder="Đến ngày" aria-label="Hạn thanh toán đến ngày" />
           </div>}
         </FilterBox>
         <RangeBox title={isKh ? 'Nợ hiện tại' : 'Mình còn nợ'} value={debtR} onChange={setDebtR} />
         {isKh && groups.length > 0 && <FilterBox title="Nhóm khách"><RadioList value={grp} onChange={setGrp} options={[{ value: '', label: 'Tất cả' },
           ...groups.map((g) => ({ value: g, label: g, count: all.filter((c) => c.kind === g).length })), { value: '-', label: 'Chưa có nhóm', count: all.filter((c) => !c.kind).length }]} /></FilterBox>}
-        <TimeFilter filter={lastTx} title="Giao dịch gần nhất" />
+        <TimeFilter filter={lastTx} title={isKh ? 'Lần mua gần nhất' : 'Lần nhập gần nhất'} />
         <RangeBox title={isKh ? 'Tổng bán' : 'Tổng nhận'} value={soldR} onChange={setSoldR} />
         {isKh && pn.length > 0 && <FilterBox title="Mức giá"><RadioList value={tier} onChange={setTier} options={[{ value: '', label: 'Tất cả' }, ...pn.map((n, i) => ({ value: String(i + 1), label: n }))]} /></FilterBox>}
         <TimeFilter filter={created} title="Ngày tạo" />
@@ -108,7 +108,7 @@ export function PartiesPage({ type, sub }) {
           ...(isKh ? [{ key: 'credit_limit', label: 'Hạn mức nợ' }] : []), { key: 'note', label: 'Ghi chú' },
           { key: 'opening', label: 'Nợ đầu kỳ' }, { key: debtKey, label: isKh ? 'Còn phải thu' : 'Còn phải trả' }, { key: 'prepaid', label: 'Trả trước' }, { key: 'overdue', label: 'Quá hạn' }, { key: 'max_overdue_days', label: 'Số ngày quá hạn' },
           { key: 'overdue_since', label: 'Quá hạn từ ngày', get: (c) => (overdueSince(c) ? dmy(overdueSince(c)) : '') },
-          { key: soldKey, label: isKh ? 'Tổng bán' : 'Tổng nhận' }, { key: 'last_order_date', label: 'Giao dịch gần nhất', get: (c) => (c.last_order_date ? dmy(c.last_order_date) : '') }] }])}>Xuất Excel</Btn>
+          { key: soldKey, label: isKh ? 'Tổng bán' : 'Tổng nhận' }, { key: 'last_order_date', label: isKh ? 'Lần mua gần nhất' : 'Lần nhập gần nhất', get: (c) => (c.last_order_date ? dmy(c.last_order_date) : '') }] }])}>Xuất Excel</Btn>
         {can('owner') && <Btn icon="up" onClick={() => open('import', { kind: type })}>Nhập từ Excel</Btn>}
         {can('danh_muc') && <Btn kind="primary" icon="plus" onClick={() => open('party', { type })}>{isKh ? 'Thêm khách hàng' : 'Thêm nhà cung cấp'}</Btn>}
       </>}>
@@ -120,17 +120,17 @@ export function PartiesPage({ type, sub }) {
       </div>
       <ErrorBox error={q.error} />
       <Table rows={q.data ? rows : null} onRow={(c) => (isKh ? openCustomer(c.id) : open('party-detail', { type, id: c.id }))} rowClass={(c) => (c.overdue > 0 ? 'row-late' : '')}
-        empty={all.length ? 'Không có kết quả phù hợp bộ lọc' : 'Chưa có dữ liệu'}
+        empty={all.length ? `Không có ${who} nào khớp bộ lọc` : `Chưa có ${who} nào`}
         foot={rows.length ? { n: `${money(rows.length)} ${who}`, d: money(tot(debtKey)), o: money(tot('overdue')), p: money(tot('prepaid')), s: money(tot(soldKey)) } : null} columns={[
         { key: 'c', label: isKh ? 'Mã KH' : 'Mã NCC', width: 100, render: (c) => c.code },
         { key: 'n', label: isKh ? 'Tên khách hàng' : 'Tên nhà cung cấp', className: 'col-fill', render: (c) => <><div className="cell-main" title={c.name}>{c.name}</div>{(c.kind || c.address) && <div className="cell-sub" title={c.address || ''}>{[c.kind, c.address].filter(Boolean).join(' · ')}</div>}</> },
         { key: 'ph', label: 'Điện thoại', width: 116, className: 'col-clip', render: (c) => <span title={c.phone || ''}>{c.phone || '—'}</span> },
         { key: 'd', label: isKh ? 'Nợ hiện tại' : 'Còn phải trả', align: 'right', width: 124, render: (c) => (c[debtKey] > 0 ? <b>{money(c[debtKey])}</b> : '—') },
         { key: 'o', label: 'Quá hạn', align: 'right', width: 124, render: (c) => (c.overdue > 0 ? <span className="bad strong">{money(c.overdue)}</span> : '—') },
-        { key: 'od', label: 'Ngày QH', align: 'right', width: 76, render: (c) => (c.overdue > 0 ? <span className="bad" title={`Quá hạn từ ${dmy(overdueSince(c))}`}>{money(c.max_overdue_days)}</span> : '—') },
+        { key: 'od', label: 'Số ngày quá hạn', align: 'right', width: 92, render: (c) => (c.overdue > 0 ? <span className="bad" title={`Quá hạn từ ${dmy(overdueSince(c))}`}>{money(c.max_overdue_days)}</span> : '—') },
         { key: 'p', label: 'Trả trước', align: 'right', width: 108, render: (c) => (c.prepaid > 0 ? <span className="good">{money(c.prepaid)}</span> : '—') },
         { key: 's', label: isKh ? 'Tổng bán' : 'Tổng nhận', align: 'right', width: 128, render: (c) => (c[soldKey] > 0 ? money(c[soldKey]) : '—') },
-        { key: 'l', label: 'GD gần nhất', align: 'center', width: 100, render: (c) => (c.last_order_date ? dmy(c.last_order_date) : '—') },
+        { key: 'l', label: isKh ? 'Mua gần nhất' : 'Nhập gần nhất', align: 'center', width: 104, render: (c) => (c.last_order_date ? dmy(c.last_order_date) : '—') },
       ]} />
     </ListPage>
   );
@@ -202,13 +202,13 @@ export function PartyDetail({ type, id, onClose }) {
         { key: 't', label: 'Tổng', align: 'right', render: (o) => money(o.order_total) },
         { key: 'p', label: 'Đã trả', align: 'right', render: (o) => money(o.paid_net) },
         { key: 'd', label: 'Còn nợ', align: 'right', render: (o) => { const v = isKh ? o.receivable : o.payable; return v > 0 ? <b className={o.overdue_days > 0 ? 'bad' : ''}>{money(v)}</b> : '—'; } },
-        { key: 'h', label: 'Hạn trả', render: (o) => (o.pay_due_date ? dmy(o.pay_due_date) + (o.overdue_days > 0 ? ` (quá ${o.overdue_days} ngày)` : '') : '—') },
+        { key: 'h', label: 'Hạn thanh toán', render: (o) => (o.pay_due_date ? dmy(o.pay_due_date) + (o.overdue_days > 0 ? ` (quá hạn ${o.overdue_days} ngày)` : '') : '—') },
         { key: 's', label: 'Trạng thái', render: (o) => (isKh ? <div className="row gap-s"><StatusPill map={DELIVERY} value={o.delivery_status} /><StatusPill map={PAYMENT} value={o.payment_status} /></div> : <StatusPill map={RECEIVE} value={o.receive_status} />) },
       ]} />}
       {tab === 'pays' && <Table dense rows={pays.data} onRow={(p) => open('pay-detail', { id: p.id })} rowClass={(p) => (p.voided ? 'row-void' : '')} columns={[
         { key: 'c', label: 'Phiếu', render: (p) => <><b>{p.code}</b><div className="cell-sub">{dmy(p.pay_date)} · {p.fund_name}</div></> },
         { key: 'k', label: 'Loại', render: (p) => p.kind_label },
-        { key: 'al', label: 'Gắn chứng từ', render: (p) => (p.allocations || []).map((a) => a.doc_code).join(', ') || <span className="muted">trả trước chung</span> },
+        { key: 'al', label: 'Trả cho', render: (p) => (p.allocations || []).map((a) => a.doc_code).join(', ') || <span className="muted">trả trước</span> },
         { key: 'a', label: 'Số tiền', align: 'right', render: (p) => money(p.amount) },
       ]} />}
       {tab === 'debts' && <div className="stack">

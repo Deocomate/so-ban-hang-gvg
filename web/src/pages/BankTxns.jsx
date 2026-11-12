@@ -76,12 +76,12 @@ export function BankTxnDialog({ txn, onClose }) {
           {mode === 'order' && <>
             <Picker items={open_orders} value={orderId} onChange={setOrderId} placeholder="Chọn đơn (đơn có số còn phải trả gần với số tiền được xếp trước)…"
               getLabel={(o) => `${o.code} · ${o.customer_name}`} getSub={(o) => `còn phải trả ${money(o.remaining_to_pay)}${o.remaining_to_pay === t.amount ? ' · KHỚP SỐ TIỀN' : ''}`} />
-            <div className="muted small">Nếu tiền về lớn hơn số còn phải trả, phần dư tính là khách trả trước.</div>
+            <div className="muted small">Nếu tiền về nhiều hơn số còn phải trả, phần thừa được ghi là khách trả trước.</div>
             <div><Btn kind="primary" busy={busy} disabled={!orderId} onClick={async () => done(await run('assign_bank_txn', { id: t.id, order_id: orderId }, (x) => `Đã ghi phiếu thu ${x.payment_code}`))}>Ghi vào đơn</Btn></div>
           </>}
           {mode === 'cust' && <>
             <Picker items={customers.data} value={cust} onChange={setCust} getLabel={(c) => c.name} getSub={(c) => `nợ ${money(c.receivable)}`} placeholder="Chọn khách hàng…" />
-            <div className="muted small">Tự trừ vào các khoản nợ cũ nhất của khách trước; còn dư thì tính là trả trước.</div>
+            <div className="muted small">Tự trừ vào khoản nợ cũ nhất của khách trước; còn thừa thì ghi là khách trả trước.</div>
             <div><Btn kind="primary" busy={busy} disabled={!cust} onClick={async () => done(await run('assign_bank_txn', { id: t.id, customer_id: cust }, (x) => `Đã ghi phiếu thu ${x.payment_code}`))}>Ghi vào công nợ khách</Btn></div>
           </>}
           {mode === 'ignore' && <div className="row gap"><Input value={reason} onChange={setReason} placeholder="Lý do (vd. tiền cá nhân, chuyển giữa tài khoản)" style={{ maxWidth: 380 }} />

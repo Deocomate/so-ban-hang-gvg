@@ -83,7 +83,7 @@ export const DELIVERY = {
 };
 export const PAYMENT = {
   chua_thanh_toan: ['Chưa thu', 'warn'], da_dat_coc: ['Đã cọc', 'info'], thanh_toan_mot_phan: ['Thu một phần', 'info'],
-  da_thanh_toan_du: ['Đã thu đủ', 'good'], thua_tien: ['Thu dư – cần hoàn', 'bad'],
+  da_thanh_toan_du: ['Đã thu đủ', 'good'], thua_tien: ['Thu thừa, cần trả lại', 'bad'],
 };
 export const RECEIVE = {
   nhap: ['Nháp', 'neutral'], chua_nhan: ['Chưa nhận', 'warn'], nhan_mot_phan: ['Nhận một phần', 'info'], da_nhan_du: ['Đã nhận đủ', 'good'], da_huy: ['Đã hủy', 'mute'],
