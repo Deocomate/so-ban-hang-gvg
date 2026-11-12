@@ -4,7 +4,7 @@ import { useApp, useQ, useRpcData, useAction } from '../lib/store.jsx';
 import { money, dmy, todayVN } from '../lib/format.js';
 import { useFunds } from '../lib/lookups.js';
 import { TIME_PRESETS, presetRange } from '../components/DocFilters.jsx';
-import { Btn, Icon, Pill, StatusPill, DELIVERY, Field, Input, Select, DateInput, NumInput, Tabs, Loading, ErrorBox, Note, Table, Modal } from '../components/ui.jsx';
+import { Btn, Pill, StatusPill, DELIVERY, Field, Input, Select, DateInput, NumInput, Tabs, Loading, ErrorBox, Note, Table, Modal } from '../components/ui.jsx';
 
 const METHODS = ['Chuyển khoản', 'Tiền mặt', 'Quẹt thẻ', 'Bù trừ'];
 
@@ -21,28 +21,25 @@ export function orderPayState(o) {
 const Balance = ({ v }) => (v < 0 ? <span className="good">{money(-v)}<div className="cell-sub">khách trả trước</div></span> : <span className={v > 0 ? 'bad' : ''}>{money(v)}</span>);
 const stop = (fn) => (e) => { e.stopPropagation(); fn(); };
 
-export function CustomerPage({ id, onBack }) {
+// Hộp chi tiết khách hàng mở đè lên danh sách: số liệu công nợ, tab Sổ công nợ / Chi tiết đơn, nút Ghi phiếu thu luôn ở chân hộp
+export function CustomerDetail({ id, onClose }) {
   const { open, can } = useApp();
   const seeLedger = can('xem_thu_chi');
   const cq = useQ('customers', [['id', 'eq', id]]);
   const led = useRpcData('customer_ledger', { customer_id: id }, seeLedger);
   const [tab, setTab] = useState(seeLedger ? 'ledger' : 'orders');
   const c = cq.data?.[0];
-  if (!c) return <div className="stack">{cq.error ? <ErrorBox error={cq.error} /> : cq.data ? <Note tone="warn">Không tìm thấy khách hàng này</Note> : <Loading />}<div><Btn icon="back" onClick={onBack}>Về danh sách khách hàng</Btn></div></div>;
+  if (!c) return <Modal title="Khách hàng" onClose={onClose} size="xl">{cq.error ? <ErrorBox error={cq.error} /> : cq.data ? <Note tone="warn">Không tìm thấy khách hàng này</Note> : <Loading />}</Modal>;
   const L = led.data;
   const nPay = L ? L.rows.filter((r) => r.type === 'thu').length : 0;
   return (
-    <div className="stack">
-      <div className="page-head">
-        <button type="button" className="icon-btn" onClick={onBack} aria-label="Về danh sách khách hàng"><Icon name="back" /></button>
-        <div className="grow">
-          <h1 className="page-title">{c.name}</h1>
-          <div className="page-sub">{[c.code, c.phone, c.address].filter(Boolean).join(' · ')}{c.credit_days ? ` · cho nợ ${c.credit_days} ngày` : ''}</div>
-        </div>
+    <Modal title={c.name} subtitle={[c.code, c.phone, c.address].filter(Boolean).join(' · ') + (c.credit_days ? ` · cho nợ ${c.credit_days} ngày` : '')} onClose={onClose} size="xl"
+      footer={<>
         {can('danh_muc') && <Btn icon="edit" onClick={() => open('party', { type: 'kh', id })}>Sửa thông tin</Btn>}
         {can('ban_hang') && <Btn icon="cart" onClick={() => open('order-form', { customer_id: id })}>Tạo đơn</Btn>}
+        <span className="grow" />
         {can('thu_chi') && <Btn kind="primary" icon="plus" onClick={() => open('receipt', { customer_id: id, round: nPay + 1 })}>Ghi phiếu thu</Btn>}
-      </div>
+      </>}>
       <div className={`kpis ${c.prepaid > 0 ? 'kpis-4' : 'kpis-3'}`}>
         {L && <div className="kpi"><span className="kpi-label">Tiền hàng</span><span className="kpi-value">{money(L.total_billed)}</span></div>}
         {L && <div className="kpi"><span className="kpi-label">Tổng đã thu</span><span className="kpi-value">{money(L.total_paid)}</span></div>}
@@ -54,7 +51,7 @@ export function CustomerPage({ id, onBack }) {
       <Tabs value={tab} onChange={setTab} tabs={[...(seeLedger ? [{ value: 'ledger', label: 'Sổ công nợ' }] : []), { value: 'orders', label: 'Chi tiết đơn' }]} />
       {tab === 'ledger' && <LedgerTab id={id} />}
       {tab === 'orders' && <OrdersTab id={id} usablePrepaid={L?.usable_prepaid || 0} />}
-    </div>
+    </Modal>
   );
 }
 

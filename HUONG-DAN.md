@@ -353,7 +353,7 @@ Bấm **Tạo đơn bán** thì màn hình tạo đơn mở toàn màn hình. Kh
 - **Thanh trên cùng:** tên sổ, nút chuyển sổ Thanh Hải / Vũ Gia / Anamtile, chuông thông báo, nút Cài đặt và menu tài khoản (đăng xuất).
 - **Thanh menu (màu theo logo từng sổ):** Tổng quan · Hàng hóa (danh sách, bảng giá, tồn kho & kiểm kho) · Mua hàng (nhà cung cấp, hóa đơn đầu vào, nhập hàng, đặt hàng nhập, trả hàng nhập, mua dịch vụ) · Báo giá · Hợp đồng · Đơn hàng (đặt hàng, hóa đơn, trả hàng, vận chuyển, lái xe & công nợ) · Khách hàng · Sổ quỹ · Báo cáo · Thuế HKD. Bên phải có **Tạo nhanh** và nút **Bán hàng**.
 - **Các trang danh sách** chia hai phần: cột lọc bên trái (trạng thái, nhóm hàng, kênh bán, thời gian…, có số đếm từng mục) và bên phải là ô tìm kiếm, nút Xuất Excel / Thêm mới và bảng. Dòng cuối bảng cộng tổng các cột tiền. Bấm vào một dòng để mở chi tiết.
-- **Trang khách hàng:** bấm vào một khách để mở trang riêng của khách đó. Nút Quay lại của trình duyệt đưa về danh sách.
+- **Chi tiết khách hàng:** bấm vào một khách trong danh sách để mở hộp chi tiết của khách đó; đóng hộp là về lại danh sách.
   - Tab **Sổ công nợ** ghi lần lượt từng hóa đơn, đợt giao, phiếu trả hàng, phiếu thu và hoàn tiền, kèm dư nợ sau mỗi lần. Bấm vào phiếu thu để xem phiếu đó trả cho những đơn nào. Chọn khoảng thời gian để có dư nợ đầu kỳ và cuối kỳ khi đối chiếu với khách.
   - Tab **Chi tiết đơn** cho biết từng đơn đã giao tới đâu, đã thu bao nhiêu và còn nợ bao nhiêu. Bấm **Còn nợ** để chỉ xem các đơn chưa thu đủ.
   - **Ghi phiếu thu:** mỗi lần khách chuyển tiền chỉ cần ghi một phiếu. Phần mềm tự trả hết đơn cũ nhất rồi mới sang đơn tiếp theo; nếu khách muốn trả cho đơn cụ thể thì chọn **Tự chọn đơn**. Tiền thừa được ghi là khách trả trước và trừ dần vào các đơn sau.

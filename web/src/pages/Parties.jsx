@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useApp, useQ, useAction } from '../lib/store.jsx';
 import { money, dmy, todayVN, addDays, match, short } from '../lib/format.js';
 import { TimeFilter, useTimeFilter } from '../components/DocFilters.jsx';
-import { CustomerPage } from './CustomerLedger.jsx';
+import { CustomerDetail } from './CustomerLedger.jsx';
 import { exportXlsx } from '../lib/excel.js';
 import { CustomerFields } from './CustomerFields.jsx';
 import { Btn, Icon, Pill, StatusPill, DELIVERY, PAYMENT, RECEIVE, Field, Input, TextArea, Select, DateInput, NumInput, Check, Search, Tabs, Loading, ErrorBox, Note, Table, Modal, KV, Section, ListPage, FilterBox, RadioList } from '../components/ui.jsx';
@@ -28,10 +28,7 @@ function RangeBox({ title, value, onChange }) {
   );
 }
 
-// Khách hàng: bấm một khách mở trang chi tiết #khach-hang/<id> (nút quay lại của trình duyệt về danh sách)
-export const openCustomer = (id) => { location.hash = '#khach-hang/' + id; };
-
-export function PartiesPage({ type, sub }) {
+export function PartiesPage({ type }) {
   const { open, can, settings } = useApp();
   const isKh = type === 'kh';
   const [search, setSearch] = useState(''); const [only, setOnly] = useState(''); const [tier, setTier] = useState(''); const [grp, setGrp] = useState('');
@@ -73,7 +70,6 @@ export function PartiesPage({ type, sub }) {
   const clearAll = () => { setOnly(''); setTier(''); setGrp(''); setStatus('on'); setOd(''); setOdFrom(''); setOdTo(''); setDebtR([null, null]); setSoldR([null, null]); lastTx.setTime(allTime); created.setTime(allTime); };
   const filtered = only || tier || grp || status !== 'on' || od || [...debtR, ...soldR].some((v) => v !== null && v !== undefined) || lastTx.from || lastTx.to || created.from || created.to;
   const who = isKh ? 'khách' : 'nhà cung cấp';
-  if (isKh && sub) return <CustomerPage id={sub} onBack={() => { location.hash = '#khach-hang'; }} />;
   return (
     <ListPage title={isKh ? 'Khách hàng' : 'Nhà cung cấp / xưởng'}
       filters={<>
@@ -119,7 +115,7 @@ export function PartiesPage({ type, sub }) {
         <div className="kpi"><span className="kpi-label">{isKh ? 'Khách đã trả trước / cọc' : 'Mình đã trả trước'}</span><span className="kpi-value">{short(tot('prepaid'))}</span></div>
       </div>
       <ErrorBox error={q.error} />
-      <Table rows={q.data ? rows : null} onRow={(c) => (isKh ? openCustomer(c.id) : open('party-detail', { type, id: c.id }))} rowClass={(c) => (c.overdue > 0 ? 'row-late' : '')}
+      <Table rows={q.data ? rows : null} onRow={(c) => open('party-detail', { type, id: c.id })} rowClass={(c) => (c.overdue > 0 ? 'row-late' : '')}
         empty={all.length ? `Không có ${who} nào khớp bộ lọc` : `Chưa có ${who} nào`}
         foot={rows.length ? { n: `${money(rows.length)} ${who}`, d: money(tot(debtKey)), o: money(tot('overdue')), p: money(tot('prepaid')), s: money(tot(soldKey)) } : null} columns={[
         { key: 'c', label: isKh ? 'Mã KH' : 'Mã NCC', width: 100, render: (c) => c.code },
@@ -163,11 +159,14 @@ export function PartyForm({ type, id, name, onClose, onSaved }) {
   );
 }
 
-export function PartyDetail({ type, id, onClose }) {
-  const { open, can, settings, closeAll } = useApp();
+// Khách hàng: hộp sổ công nợ + chi tiết đơn; nhà cung cấp: hộp đơn nhập, thu chi, nợ đầu kỳ
+export function PartyDetail(p) {
+  return p.type === 'kh' ? <CustomerDetail id={p.id} onClose={p.onClose} /> : <SupplierDetail {...p} />;
+}
+
+function SupplierDetail({ type, id, onClose }) {
+  const { open, can, settings } = useApp();
   const isKh = type === 'kh';
-  // Khách hàng có trang riêng (sổ công nợ + chi tiết đơn); hộp thoại này còn dùng cho nhà cung cấp
-  useEffect(() => { if (isKh) { closeAll(); openCustomer(id); } }, [isKh, id]);
   const q = useQ(isKh ? 'customers' : 'suppliers', [['id', 'eq', id]]);
   const orders = useQ(isKh ? 'sales_orders' : 'purchase_orders', [[isKh ? 'customer_id' : 'supplier_id', 'eq', id]], 'order_date desc', 500, can(isKh ? 'xem_ban_hang' : 'xem_nhap_hang'));
   const pays = useQ('payments', [['party_id', 'eq', id]], 'pay_date desc', 500, can('xem_thu_chi'));
@@ -175,7 +174,6 @@ export function PartyDetail({ type, id, onClose }) {
   const [tab, setTab] = useState('orders');
   const [addDebt, setAddDebt] = useState(false);
   const c = q.data?.[0];
-  if (isKh) return null;
   if (!c) return <Modal title="Đối tượng" onClose={onClose}>{q.error ? <ErrorBox error={q.error} /> : <Loading />}</Modal>;
   const debtKey = isKh ? 'receivable' : 'payable';
   return (
