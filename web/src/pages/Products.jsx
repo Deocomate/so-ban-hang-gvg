@@ -15,11 +15,12 @@ const daysAgoIso = (n) => new Date(Date.now() - n * 86400000).toISOString();
 // Cột chọn được trên danh sách (giống KiotViet), lưu theo máy
 const COLS = [
   { key: 'type', label: 'Loại hàng' }, { key: 'category', label: 'Nhóm hàng' }, { key: 'brand', label: 'Thương hiệu' }, { key: 'location', label: 'Vị trí' },
-  { key: 'dims', label: 'Kích thước' }, { key: 'cost', label: 'Giá vốn' }, { key: 'prices', label: 'Giá bán' }, { key: 'on_hand', label: 'Tồn kho' },
+  { key: 'dims', label: 'Kích thước' }, { key: 'cost', label: 'Giá vốn' }, { key: 'prices', label: 'Giá bán' }, { key: 'prices_more', label: 'Các mức giá khác' }, { key: 'on_hand', label: 'Tồn kho' },
   { key: 'reserved', label: 'Khách đặt' }, { key: 'available', label: 'Có thể bán' }, { key: 'days_left', label: 'Dự kiến hết hàng' },
   { key: 'low', label: 'Định mức tồn ít nhất' }, { key: 'max', label: 'Định mức tồn nhiều nhất' }, { key: 'created', label: 'Thời gian tạo' }, { key: 'state', label: 'Trạng thái' },
 ];
-const DEF_COLS = ['cost', 'prices', 'on_hand', 'reserved', 'available', 'days_left'];
+// Mặc định gọn như KiotViet: giá vốn, một giá bán, tồn kho, khách đặt, có thể bán; các mức giá khác bật thêm khi cần
+const DEF_COLS = ['cost', 'prices', 'on_hand', 'reserved', 'available'];
 
 export function ProductsPage() {
   const { open, can, settings } = useApp();
@@ -40,9 +41,11 @@ export function ProductsPage() {
     && (!stock || (stock === 'low' && p.is_low) || (stock === 'in' && p.available > 0) || (stock === 'out' && p.available <= 0 && !p.is_service)
       || (stock === 'over' && p.max_stock > 0 && p.on_hand > p.max_stock))
     && match(`${p.sku} ${p.name} ${p.size || ''} ${p.color || ''} ${p.pattern || ''} ${p.brand || ''} ${p.location || ''}`, search)), [all, search, cat, state, stock, type, brand, loc, direct, since]);
-  const uniq = (k) => [...new Set(all.map((p) => p[k]).filter(Boolean))].sort();
-  const cats = [...new Set([...(settings.categories || []), ...uniq('category')])];
-  const opt = (vals, k) => [{ value: '', label: 'Tất cả' }, ...vals.map((v) => ({ value: v, label: v, count: all.filter((p) => p[k] === v).length }))];
+  // Nhóm hàng, thương hiệu, vị trí: chỉ liệt kê giá trị có hàng ở trạng thái đang xem (mặc định đang kinh doanh), kèm số mã
+  const inState = useMemo(() => all.filter((p) => state === 'all' || (state === 'active' ? p.active : !p.active)), [all, state]);
+  const tally = (k) => { const m = new Map(); for (const p of inState) if (p[k]) m.set(p[k], (m.get(p[k]) || 0) + 1); return m; };
+  const uniq = (k) => [...tally(k).keys()].sort((a, b) => a.localeCompare(b, 'vi'));
+  const pickOpts = (k) => { const m = tally(k); return [...m.keys()].sort((a, b) => a.localeCompare(b, 'vi')).map((v) => ({ value: v, label: `${v} (${m.get(v)})` })); };
   const unitLc = (p) => String(p.unit || 'đv').toLowerCase();
   const pack = (p) => [prof.packaging && p.units_per_pack ? `${fq(p.units_per_pack)} ${unitLc(p)}/${p.pack_unit || 'hộp'}` : '',
     ...(p.units || []).map((u) => `1 ${u.name} = ${fq(u.conv)} ${unitLc(p)}`)].filter(Boolean).join(' · ');
@@ -51,12 +54,12 @@ export function ProductsPage() {
   return (
     <ListPage title="Hàng hóa" sub={`Mỗi biến thể (mẫu + kích thước + màu men) có một mã SKU riêng. ${pn.length} mức giá: ${pn.join(' / ')}.`}
       filters={<>
-        <FilterBox title="Loại hàng"><RadioList value={type} onChange={setType} options={[{ value: '', label: 'Tất cả' }, ...PRODUCT_TYPES.map((t) => ({ ...t, count: all.filter((p) => p.product_type === t.value).length }))]} /></FilterBox>
-        <FilterBox title="Nhóm hàng"><RadioList value={cat} onChange={setCat} options={opt(cats, 'category')} /></FilterBox>
-        <FilterBox title="Tồn kho"><RadioList value={stock} onChange={setStock} options={[{ value: '', label: 'Tất cả' }, { value: 'low', label: 'Dưới định mức tồn', count: all.filter((p) => p.is_low).length },
-          { value: 'over', label: 'Vượt định mức tồn', count: all.filter((p) => p.max_stock > 0 && p.on_hand > p.max_stock).length }, { value: 'in', label: 'Còn hàng' }, { value: 'out', label: 'Hết hàng' }]} /></FilterBox>
-        {prof.has('brand') && uniq('brand').length > 0 && <FilterBox title="Thương hiệu"><RadioList value={brand} onChange={setBrand} options={opt(uniq('brand'), 'brand')} /></FilterBox>}
-        {uniq('location').length > 0 && <FilterBox title="Vị trí"><RadioList value={loc} onChange={setLoc} options={opt(uniq('location'), 'location')} /></FilterBox>}
+        <FilterBox title="Loại hàng"><RadioList value={type} onChange={setType} options={[{ value: '', label: 'Tất cả' }, ...PRODUCT_TYPES.map((t) => ({ ...t, count: inState.filter((p) => p.product_type === t.value).length }))]} /></FilterBox>
+        <FilterBox title="Nhóm hàng"><Select value={cat} onChange={setCat} options={pickOpts('category')} placeholder="Tất cả nhóm hàng" aria-label="Nhóm hàng" /></FilterBox>
+        <FilterBox title="Tồn kho"><RadioList value={stock} onChange={setStock} options={[{ value: '', label: 'Tất cả' }, { value: 'low', label: 'Dưới định mức tồn', count: inState.filter((p) => p.is_low).length },
+          { value: 'over', label: 'Vượt định mức tồn', count: inState.filter((p) => p.max_stock > 0 && p.on_hand > p.max_stock).length }, { value: 'in', label: 'Còn hàng' }, { value: 'out', label: 'Hết hàng' }]} /></FilterBox>
+        {prof.has('brand') && uniq('brand').length > 0 && <FilterBox title="Thương hiệu"><Select value={brand} onChange={setBrand} options={pickOpts('brand')} placeholder="Tất cả thương hiệu" aria-label="Thương hiệu" /></FilterBox>}
+        {uniq('location').length > 0 && <FilterBox title="Vị trí"><Select value={loc} onChange={setLoc} options={pickOpts('location')} placeholder="Tất cả vị trí" aria-label="Vị trí" /></FilterBox>}
         <FilterBox title="Bán trực tiếp"><RadioList value={direct} onChange={setDirect} options={[{ value: '', label: 'Tất cả' }, { value: 'yes', label: 'Có' }, { value: 'no', label: 'Không' }]} /></FilterBox>
         <FilterBox title="Thời gian tạo"><RadioList value={created} onChange={setCreated} options={CREATED} /></FilterBox>
         <FilterBox title="Trạng thái"><RadioList value={state} onChange={setState} options={[{ value: 'active', label: 'Đang kinh doanh' }, { value: 'off', label: 'Ngừng kinh doanh' }, { value: 'all', label: 'Tất cả' }]} /></FilterBox>
@@ -80,15 +83,15 @@ export function ProductsPage() {
       <ErrorBox error={q.error} />
       <Table rows={q.data ? rows : null} onRow={(p) => open('product-detail', { id: p.id })} empty={<span>Chưa có sản phẩm. {can('owner') && 'Bấm “Nhập từ Excel” để đưa toàn bộ hàng hóa vào một lần.'}</span>}
         foot={rows.length ? { p: `${rows.length} mã hàng` } : null} columns={[
-        { key: 'img', label: '', width: 48, render: (p) => (p.image_url ? <img className="thumb" src={p.image_url} alt="" /> : <span className="thumb"><Icon name="vase" size={18} /></span>) },
-        { key: 'p', label: 'Hàng hóa', render: (p) => <><div className="cell-main">{p.sku} · {p.name} {p.product_type !== 'hang' && <Pill tone="accent">{typeLabel(p.product_type)}</Pill>} {!p.active && <Pill tone="mute">ngừng bán</Pill>} {!p.sell_direct && <Pill tone="mute">không bán trực tiếp</Pill>}</div><div className="cell-sub">{[productSub(p), p.unit, pack(p)].filter(Boolean).join(' · ')}</div></> },
+        { key: 'img', label: '', width: 48, render: (p) => (p.image_url ? <img className="thumb" src={p.image_url} alt="" loading="lazy" decoding="async" /> : <span className="thumb"><Icon name="vase" size={18} /></span>) },
+        { key: 'p', label: 'Hàng hóa', className: 'col-product', render: (p) => <><div className="cell-main">{p.sku} · {p.name} {p.product_type !== 'hang' && <Pill tone="accent">{typeLabel(p.product_type)}</Pill>} {!p.active && <Pill tone="mute">ngừng bán</Pill>} {!p.sell_direct && <Pill tone="mute">không bán trực tiếp</Pill>}</div><div className="cell-sub">{[productSub(p), p.unit, pack(p)].filter(Boolean).join(' · ')}</div></> },
         ...(show('type') ? [{ key: 'type', label: 'Loại hàng', render: (p) => typeLabel(p.product_type) }] : []),
         ...(show('category') ? [{ key: 'category', label: 'Nhóm hàng' }] : []),
         ...(show('brand') && prof.has('brand') ? [{ key: 'brand', label: 'Thương hiệu' }] : []),
         ...(show('location') ? [{ key: 'location', label: 'Vị trí' }] : []),
         ...(show('dims') ? [{ key: 'dims', label: 'Kích thước', render: dims }] : []),
         ...(cost && show('cost') ? [{ key: 'c', label: 'Giá vốn', align: 'right', render: (p) => money(p.avg_cost) }] : []),
-        ...(show('prices') ? pn.map((label, i) => ({ key: `p${i + 1}`, label, align: 'right', render: (p) => money(p[`price${i + 1}`]) })) : []),
+        ...pn.map((label, i) => ({ key: `p${i + 1}`, label, align: 'right', render: (p) => money(p[`price${i + 1}`]) })).filter((c, i) => (i === 0 ? show('prices') : show('prices_more'))),
         ...(show('on_hand') ? [{ key: 'oh', label: 'Tồn kho', align: 'right', render: (p) => stockCell(p, fq(p.on_hand)) }] : []),
         ...(show('reserved') ? [{ key: 'rs', label: 'Khách đặt', align: 'right', render: (p) => stockCell(p, fq(p.reserved)) }] : []),
         ...(show('available') ? [{ key: 'av', label: 'Có thể bán', align: 'right', render: (p) => stockCell(p, <span className={p.is_low ? 'warn strong' : ''}>{fq(p.available)}</span>) }] : []),

@@ -158,6 +158,11 @@ a { color: var(--accent); }
 .cl-item:hover { background: var(--surface-2); }
 .cl-item > input { accent-color: var(--accent); margin: 0; flex: none; }
 .cl-item.on .rl-label { font-weight: 600; }
+.tbl td.col-product { min-width: 260px; }
+.pager { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.pager .icon-btn:disabled { opacity: .35; cursor: default; }
+.pager-size { display: inline-flex; align-items: center; gap: 6px; }
+.pager-size select { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); padding: 3px 6px; font: inherit; }
 .lp-sum { display: flex; gap: 6px 18px; flex-wrap: wrap; font-size: 13.5px; color: var(--muted); }
 .lp-sum b { color: var(--ink); font-variant-numeric: tabular-nums; }
 /* ---------- Nút ---------- */

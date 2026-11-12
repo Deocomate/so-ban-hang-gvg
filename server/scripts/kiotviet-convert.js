@@ -18,6 +18,8 @@ const SURCHARGE_VAT = 'VAT';
 const OPENING_DATE = '2020-07-31';   // trước chứng từ đầu tiên trên KiotViet (01/08/2020)
 
 const DEL_RE = /\{DEL\d*\}$/;
+// Tên, nhóm hàng của bản ghi đã xóa trên KiotViet mang đuôi {DEL}/{DELn}; bỏ đuôi đó (mã thì giữ nguyên để không trùng mã đang dùng)
+const undel = (s) => (s == null ? s : String(s).replace(DEL_RE, '').trim());
 const kvDate = (s) => String(s).slice(0, 10);                       // KiotViet trả giờ Việt Nam (+07:00)
 const kvIso = (s) => new Date(s).toISOString();
 const r0 = (x) => Math.round(x);
@@ -161,7 +163,7 @@ export function convertKiotViet(K0, { today, ledger = null, hidden = null, catal
     const code = l.ProductCode || `KV-${l.ProductId}`;
     if (prodByCode.has(code)) { prodId.set(l.ProductId, prodByCode.get(code)); continue; }
     const r = call('save_product', { sku: newSku.has(code) ? `${code}-KV` : code, name: stripUnit(l.ProductFullName || l.ProductName, l.Unit) || code, unit: l.Unit || 'Cái',
-      category: l.CategoryTree || null, active: false, sell_direct: false, note: 'Hàng đã xóa trên KiotViet, còn trong lịch sử chứng từ' });
+      category: undel(l.CategoryTree) || null, active: false, sell_direct: false, note: 'Hàng đã xóa trên KiotViet, còn trong lịch sử chứng từ' });
     prodId.set(l.ProductId, r.id); prodByCode.set(code, r.id); deletedProducts++;
   }
   const P = (l) => prodId.get(l.ProductId);
@@ -175,7 +177,7 @@ export function convertKiotViet(K0, { today, ledger = null, hidden = null, catal
     // Nhóm khách: Groups là chuỗi tên nhóm, CustomerGroupNames là mảng (mỗi khách KiotViet ở tối đa 1 nhóm)
     const group = (Array.isArray(c.CustomerGroupNames) ? c.CustomerGroupNames[0] : null) || c.Groups || null;
     const r = call('save_party', {
-      type: 'kh', code, name: c.Name || code, phone: c.ContactNumber || null, address: c.Address || null,
+      type: 'kh', code, name: undel(c.Name) || code, phone: c.ContactNumber || null, address: c.Address || null,
       kind: group, price_tier: GROUP_TIER[group] || 1, note: c.Comments || null,
       extra: Object.fromEntries(Object.entries({
         customer_type: c.CustomerType || (c.Type === 1 ? 'Công ty' : null), email: c.Email, tax_code: c.TaxCode, tax_name: c.Organization,
@@ -198,7 +200,7 @@ export function convertKiotViet(K0, { today, ledger = null, hidden = null, catal
   const addSupplier = (s, deleted) => {
     let code = s.Code || `KV-NCC-${s.Id}`;
     if (supCode.has(code.toLowerCase())) code = `${code}-${s.Id}`;
-    const r = call('save_party', { type: 'ncc', code, name: s.Name || code, phone: s.Phone || null,
+    const r = call('save_party', { type: 'ncc', code, name: undel(s.Name) || code, phone: s.Phone || null,
       address: [s.Address, s.LocationName].filter(Boolean).join(', ') || null, note: s.Comments || null });
     supCode.add(code.toLowerCase()); supId.set(s.Id, r.id);
     if (deleted) sql(`update suppliers set active = 0, note = ? where id = ?`, 'Nhà cung cấp đã xóa trên KiotViet, còn trong lịch sử chứng từ', r.id);

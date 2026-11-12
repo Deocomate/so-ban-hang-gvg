@@ -212,15 +212,28 @@ export function Empty({ title, children, action }) {
 export function Note({ tone = 'info', children }) { return <div className={`alert alert-${tone}`}><Icon name={tone === 'bad' || tone === 'warn' ? 'alert' : 'info'} /> <div>{children}</div></div>; }
 
 // Bảng dữ liệu: cột {key,label,align,render,width,className}
+// Bảng trong trang danh sách (ListPage) tự chia trang như KiotViet để trang mở nhanh khi có hàng nghìn dòng; bảng trong hộp thoại, biểu mẫu hiện đủ.
+const PAGE_SIZES = [20, 50, 100, 200];
+const ListCtx = React.createContext(false);
+function readPageSize() { try { return Number(localStorage.getItem('gomsu.page_size')) || 50; } catch (e) { return 50; } }
 export function Table({ columns, rows, onRow, empty = 'Chưa có dữ liệu', rowKey = 'id', foot, dense, rowClass }) {
+  const paged = React.useContext(ListCtx);
+  const [size, setSize0] = useState(readPageSize);
+  const [page, setPage] = useState(0);
+  const resetKey = rows ? `${rows.length}:${rows[0]?.[rowKey] ?? ''}` : '';
+  useEffect(() => { setPage(0); }, [resetKey]);
   if (!rows) return <Loading />;
+  const setSize = (n) => { setSize0(n); setPage(0); try { localStorage.setItem('gomsu.page_size', String(n)); } catch (e) { /* bỏ qua */ } };
+  const pages = paged ? Math.max(1, Math.ceil(rows.length / size)) : 1;
+  const cur = Math.min(page, pages - 1);
+  const shown = paged && rows.length > size ? rows.slice(cur * size, cur * size + size) : rows;
   return (
     <div className="table-wrap">
       <table className={`tbl${dense ? ' dense' : ''}`}>
         <thead><tr>{columns.map((c) => <th key={c.key} className={c.align === 'right' ? 'r' : c.align === 'center' ? 'c' : ''} style={c.width ? { width: c.width } : null}>{c.label}</th>)}</tr></thead>
         <tbody>
           {rows.length === 0 && <tr><td colSpan={columns.length} className="tbl-empty">{empty}</td></tr>}
-          {rows.map((r, i) => (
+          {shown.map((r, i) => (
             <tr key={r[rowKey] ?? i} onClick={onRow ? () => onRow(r) : undefined} className={`${onRow ? 'clickable' : ''} ${rowClass ? rowClass(r) || '' : ''}`}>
               {columns.map((c) => <td key={c.key} className={`${c.align === 'right' ? 'r num' : c.align === 'center' ? 'c' : ''} ${c.className || ''}`}>{c.render ? c.render(r, i) : r[c.key]}</td>)}
             </tr>
@@ -228,6 +241,18 @@ export function Table({ columns, rows, onRow, empty = 'Chưa có dữ liệu', r
         </tbody>
         {foot && <tfoot><tr>{columns.map((c) => <td key={c.key} className={c.align === 'right' ? 'r num' : ''}>{foot[c.key] ?? ''}</td>)}</tr></tfoot>}
       </table>
+      {paged && rows.length > PAGE_SIZES[0] && (
+        <div className="pager">
+          <span className="muted small">{cur * size + 1}–{Math.min(rows.length, cur * size + size)} / {rows.length.toLocaleString('vi-VN')}</span>
+          <span className="grow" />
+          <label className="pager-size small muted">Hiển thị
+            <select value={size} onChange={(e) => setSize(Number(e.target.value))}>{PAGE_SIZES.map((n) => <option key={n} value={n}>{n} dòng</option>)}</select>
+          </label>
+          <button type="button" className="icon-btn" disabled={cur === 0} onClick={() => setPage(cur - 1)} aria-label="Trang trước"><Icon name="back" size={16} /></button>
+          <span className="small">Trang {cur + 1}/{pages}</span>
+          <button type="button" className="icon-btn" disabled={cur >= pages - 1} onClick={() => setPage(cur + 1)} aria-label="Trang sau"><Icon name="chev" size={16} /></button>
+        </div>
+      )}
     </div>
   );
 }
@@ -313,6 +338,7 @@ export function KV({ items }) {
 export function ListPage({ title, sub, filters, search, actions, children }) {
   const [more, setMore] = useState(false);
   return (
+    <ListCtx.Provider value>
     <div className="lp">
       <aside className="lp-side">
         <div className="lp-head"><h1 className="page-title">{title}</h1>{sub && <div className="page-sub">{sub}</div>}</div>
@@ -324,6 +350,7 @@ export function ListPage({ title, sub, filters, search, actions, children }) {
         {children}
       </div>
     </div>
+    </ListCtx.Provider>
   );
 }
 export function FilterBox({ title, children }) {
