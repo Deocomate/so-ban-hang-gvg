@@ -13,6 +13,7 @@ import { EmployeeForm, ScheduleForm, TimesheetForm, PaysheetNewForm, PaysheetDet
 import { ProductForm, ProductDetail } from './Products.jsx';
 import { StockCard, AdjustForm } from './Inventory.jsx';
 import { PartyForm, PartyDetail } from './Parties.jsx';
+import { ReceiptForm } from './CustomerLedger.jsx';
 import { ImportDialog } from '../components/Import.jsx';
 import { ShipmentForm, ShipmentDetail, CodSettleDialog, ShipImportDialog } from './Shipping.jsx';
 import { BankTxnDialog, BankSimDialog } from './BankTxns.jsx';
@@ -28,7 +29,7 @@ import { orderTransferContent } from '../lib/vietqr.js';
 const MAP = {
   'order-form': OrderPos, order: OrderDetail, deliver: DeliverDialog, return: ReturnDialog,
   'po-form': PurchasePos, po: PoDetail, receive: ReceiveDialog, 'po-return': ReturnPos, sret: SupplierReturnDetail, 'po-print': PurchaseSlip,
-  payment: PaymentForm, 'pay-detail': PaymentDetail, expense: ExpenseForm,
+  payment: PaymentForm, 'pay-detail': PaymentDetail, expense: ExpenseForm, receipt: ReceiptForm,
   product: ProductForm, 'product-detail': ProductDetail, 'price-book': PriceBookForm, 'price-book-import': PriceBookImport, stockcard: StockCard, adjust: AdjustForm, production: ProductionForm, 'customer-group': CustomerGroupForm,
   employee: EmployeeForm, schedule: ScheduleForm, timesheet: TimesheetForm, 'paysheet-new': PaysheetNewForm, paysheet: PaysheetDetail, commission: CommissionForm, shift: ShiftForm,
   party: PartyForm, 'party-detail': PartyDetail, import: ImportDialog,

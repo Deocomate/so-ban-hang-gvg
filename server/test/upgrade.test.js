@@ -68,7 +68,7 @@ C('Đã sao lưu trước khi nâng cấp', fs.existsSync(`${file}.truoc-nang-ca
 const bak = new Database(`${file}.truoc-nang-cap-v1.bak`, { readonly: true });
 C('Bản sao lưu còn cấu trúc cũ', bak.prepare(`select 1 from pragma_table_info('products') where name = 'price4'`).get(), undefined);
 bak.close();
-C('Lên phiên bản mới', db.pragma('user_version', { simple: true }), 9);
+C('Lên phiên bản mới', db.pragma('user_version', { simple: true }), 10);
 C('Đơn nhập kho ngay lúc lập thành phiếu nhập, đơn đặt giữ nguyên', db.prepare(`select id, mode from purchase_orders order by id`).all(), [{ id: 'po1', mode: 'nhap' }, { id: 'po2', mode: 'dat' }]);
 C('Giá trước giảm giá của dòng cũ bằng giá nhập', db.prepare(`select unit_price, discount from purchase_order_lines where id = 'pl2'`).get(), { unit_price: 120, discount: 0 });
 C('Phiếu trả cũ nhận nhà cung cấp của đơn, giá trả lại = giá nhập', db.prepare(`select r.supplier_id, l.unit_price, l.cost_value, l.value from supplier_returns r join supplier_return_lines l on l.return_id = r.id`).get(),

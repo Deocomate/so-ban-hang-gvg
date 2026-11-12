@@ -296,10 +296,10 @@ export function OrderDetail({ id, onClose }) {
         </Section>
         <Section title="Thanh toán & đặt cọc">
           {d.paid_net > 0 && <div className="totals"><span>Đã nhận</span><span className="r">{money(d.paid_net)}</span><span>Đã khấu trừ vào hóa đơn</span><span className="r">{money(d.deposit_used)}</span><span className="strong">Cọc còn lại</span><span className="r strong good">{money(Math.max(d.paid_net - d.deposit_used, 0))}</span></div>}
-          <Table dense rows={pays.data} empty="Chưa có khoản thu" columns={[
-            { key: 'c', label: 'Phiếu', render: (r) => <><b>{r.code}</b><div className="cell-sub">{dmy(r.pay_date)} · {r.fund_name}</div></> },
+          <Table dense rows={pays.data} rowKey="payment_id" empty="Chưa có khoản thu" onRow={(r) => open('pay-detail', { id: r.payment_id })} columns={[
+            { key: 'c', label: 'Phiếu thu', render: (r) => <><b>{r.code}</b><div className="cell-sub">{dmy(r.pay_date)} · {r.fund_name}{r.ref_no ? ' · ' + r.ref_no : ''}</div></> },
             { key: 'k', label: 'Loại', render: (r) => (r.kind === 'hoan_khach' ? <Pill tone="warn">Hoàn tiền</Pill> : d.delivery_count === 0 || r.pay_date < (d.last_delivery_date || '9999') ? 'Cọc / trả trước' : 'Thu tiền') },
-            { key: 'a', label: 'Số tiền', align: 'right', render: (r) => <span className={r.signed_amount < 0 ? 'bad' : ''}>{money(r.signed_amount)}</span> },
+            { key: 'a', label: 'Số tiền cấn vào đơn', align: 'right', render: (r) => <span className={r.signed_amount < 0 ? 'bad' : ''}>{money(r.signed_amount)}</span> },
           ]} />
         </Section>
       </div>

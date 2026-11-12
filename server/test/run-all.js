@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const files = ['business', 'ship-bank', 'expenses', 'documents', 'seed', 'sample', 'import', 'excel', 'upgrade', 'workflow', 'stock-groups-services', 'staff', 'products-kiotviet', 'purchases-kiotviet', 'kiotviet-import', 'permissions', 'http'].map((f) => path.join(here, `${f}.test.js`));
+const files = ['business', 'ship-bank', 'expenses', 'documents', 'seed', 'sample', 'import', 'excel', 'upgrade', 'workflow', 'stock-groups-services', 'staff', 'products-kiotviet', 'purchases-kiotviet', 'kiotviet-import', 'permissions', 'receivables', 'http'].map((f) => path.join(here, `${f}.test.js`));
 let bad = 0;
 for (const f of files) {
   const r = spawnSync(process.execPath, [f], { stdio: 'inherit' });

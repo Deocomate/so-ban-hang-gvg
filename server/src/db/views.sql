@@ -160,7 +160,7 @@ with l as (
     count(*) as line_count
   from sales_order_lines group by order_id
 ), d as (
-  select order_id, sum(shipping_fee) as ship_billed, max(delivery_date) as last_delivery_date, count(*) as delivery_count, sum(deposit_used) as deposit_used
+  select order_id, sum(shipping_fee) as ship_billed, max(delivery_date) as last_delivery_date, min(delivery_date) as first_delivery_date, count(*) as delivery_count, sum(deposit_used) as deposit_used
   from deliveries group by order_id
 ), dl as (
   select d.order_id, sum(x.revenue) as goods_delivered, sum(x.cogs) as cogs_delivered
@@ -186,7 +186,7 @@ select o.id as order_id,
     - coalesce(rt.returned_value, 0) - round(coalesce(rt.returned_value, 0) * o.vat_rate / 100.0) as delivered_value,
   coalesce(dl.cogs_delivered, 0) - coalesce(rt.returned_cogs, 0) as cogs_net,
   coalesce(pd.paid_net, 0) as paid_net, pd.last_pay_date,
-  d.last_delivery_date, coalesce(d.delivery_count, 0) as delivery_count, coalesce(d.deposit_used, 0) as deposit_used
+  d.last_delivery_date, d.first_delivery_date, coalesce(d.delivery_count, 0) as delivery_count, coalesce(d.deposit_used, 0) as deposit_used
 from sales_orders o
 left join l on l.order_id = o.id
 left join d on d.order_id = o.id
@@ -214,7 +214,7 @@ select o.id, o.book_id, o.code, o.kind, o.status, o.customer_id, c.code as custo
   o.channel, o.order_date, o.due_date, o.staff, o.discount, o.shipping_fee, o.note, o.cancel_reason,
   o.created_at, o.confirmed_at, o.cancelled_at, o.vat_rate, o.price_book_id, v.vat_total, v.vat_net, v.deposit_used,
   v.goods_gross, v.goods_total, v.order_total, v.eff_qty, v.delivered_qty, v.returned_qty, v.remaining_qty, v.line_count,
-  v.delivered_value, v.returned_value, v.ship_billed, v.paid_net, v.last_pay_date, v.last_delivery_date, v.delivery_count,
+  v.delivered_value, v.returned_value, v.ship_billed, v.paid_net, v.last_pay_date, v.last_delivery_date, v.first_delivery_date, v.delivery_count,
   v.order_total - v.returned_value as net_total,
   max(v.delivered_value - v.paid_net, 0) as receivable,
   max(v.paid_net - v.delivered_value, 0) as prepaid,
@@ -562,7 +562,8 @@ select p.id, p.book_id, p.code, p.pay_date, p.kind,
   p.direction, p.fund_id, f.name as fund_name, p.to_fund_id, tf.name as to_fund_name, p.party_type, p.party_id,
   coalesce(c.name, s.name) as party_name, coalesce(c.code, s.code) as party_code,
   p.amount, p.fee, case when p.direction = 'thu' then p.amount - p.fee else p.amount end as cash_amount,
-  p.method, p.note, p.voided, p.void_reason, p.voided_at, p.created_at,
+  p.method, p.note, p.voided, p.void_reason, p.voided_at, p.created_at, p.ref_no, p.created_by,
+  (select coalesce(m.display_name, u.name, u.email) from users u left join book_members m on m.user_id = u.id and m.book_id = p.book_id where u.id = p.created_by) as created_by_name,
   coalesce(x.allocated, 0) as allocated, p.amount - coalesce(x.allocated, 0) as unallocated, x.allocations
 from payments p join funds f on f.id = p.fund_id left join funds tf on tf.id = p.to_fund_id
 left join customers c on p.party_type = 'kh' and c.id = p.party_id
@@ -578,25 +579,25 @@ left join (select a.payment_id, sum(a.amount) as allocated, json_group_array(jso
 
 -- Các khoản thanh toán gắn với 1 chứng từ (để xem trong chi tiết đơn)
 create view v_doc_payments as
-select a.book_id, a.doc_id, a.doc_type, a.payment_id, p.code, p.pay_date, p.kind, a.amount, a.signed_amount, f.name as fund_name, p.method, p.note
+select a.book_id, a.doc_id, a.doc_type, a.payment_id, p.code, p.pay_date, p.kind, a.amount, a.signed_amount, f.name as fund_name, p.method, p.note, p.ref_no
 from v_alloc_signed a join payments p on p.id = a.payment_id join funds f on f.id = p.fund_id;
 
 -- Chứng từ còn mở của 1 đối tượng (gợi ý phân bổ khi thu/chi)
 create view v_open_docs as
 select book_id, 'don_ban' as doc_type, id as doc_id, code, order_date as doc_date, customer_id as party_id, 'kh' as party_type,
   net_total as total, delivered_value as due_now, paid_net, net_total - paid_net as remaining_total,
-  delivered_value - paid_net as remaining_due, pay_due_date as due_date, status
+  delivered_value - paid_net as remaining_due, pay_due_date as due_date, status, coalesce(first_delivery_date, order_date) as debt_date
 from v_sales_orders where status <> 'nhap' or paid_net <> 0
 union all
 select book_id, 'don_mua', id, code, order_date, supplier_id, 'ncc', net_total, received_value, paid_net, net_total - paid_net,
-  received_value - paid_net, pay_due_date, status
+  received_value - paid_net, pay_due_date, status, order_date
 from v_purchase_orders
 union all
-select book_id, 'no_dau_ky', id, code, debt_date, party_id, party_type, amount, amount, paid_net, remaining, remaining, due_date, 'xac_nhan'
+select book_id, 'no_dau_ky', id, code, debt_date, party_id, party_type, amount, amount, paid_net, remaining, remaining, due_date, 'xac_nhan', debt_date
 from v_opening_debts
 union all
 select book_id, 'chi_phi', id, code, exp_date, supplier_id, case when supplier_id is null then null else 'ncc' end,
-  amount, amount, paid, unpaid, unpaid, null, case when voided then 'huy' else 'xac_nhan' end
+  amount, amount, paid, unpaid, unpaid, null, case when voided then 'huy' else 'xac_nhan' end, exp_date
 from v_expenses where settled_payment_id is null;
 
 create view v_members as

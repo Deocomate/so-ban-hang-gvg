@@ -11,7 +11,7 @@ import { addAnamtileBook, defaultDocs, VARIANTS } from '../domain/books.js';
 import { DEFAULT_ROLES } from '../lib/labels.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const SCHEMA_VERSION = 9;
+const SCHEMA_VERSION = 10;
 
 // Bảng ghi nhật ký chỉnh sửa; cột bỏ qua khi so sánh UPDATE (do hệ thống tự cập nhật)
 const AUDIT_TABLES = {
@@ -65,6 +65,7 @@ export function auditTriggers(db) {
 
 // CSDL tạo từ bản cũ: thêm các cột mới (dữ liệu cũ giữ nguyên, cột mới để trống)
 const ADDED_COLUMNS = [
+  ['payments', 'ref_no', 'text'],
   ['sales_returns', 'fee', 'real not null default 0 check (fee >= 0)'],
   ['sales_return_lines', 'fee', 'real not null default 0 check (fee >= 0)'],
   ['products', 'pack_weight', 'real check (pack_weight is null or pack_weight >= 0)'],

@@ -32,7 +32,7 @@ export function PaymentForm({ kind: kind0 = 'thu_khach', party_id: party0, alloc
   const [amount, setAmount] = useState(alloc?.amount > 0 ? alloc.amount : null);
   const [fee, setFee] = useState(null);
   const [fund, setFund] = useState(''); const [toFund, setToFund] = useState('');
-  const [date, setDate] = useState(todayVN()); const [method, setMethod] = useState('Chuyển khoản'); const [note, setNote] = useState('');
+  const [date, setDate] = useState(todayVN()); const [method, setMethod] = useState('Chuyển khoản'); const [note, setNote] = useState(''); const [refNo, setRefNo] = useState('');
   const [al, setAl] = useState(alloc ? { [alloc.doc_id]: alloc.amount > 0 ? alloc.amount : null } : {});
   const def = PAY_KINDS.find((k) => k.value === kind);
   const docTypes = kind === 'thu_khach' || kind === 'hoan_khach' ? ['don_ban', 'no_dau_ky'] : kind === 'tra_ncc' || kind === 'ncc_hoan' ? ['don_mua', 'no_dau_ky', 'chi_phi'] : kind === 'chi_phi' ? ['chi_phi'] : [];
@@ -59,7 +59,7 @@ export function PaymentForm({ kind: kind0 = 'thu_khach', party_id: party0, alloc
   const partyRow = partyList?.find((p) => p.id === party);
   const submit = async () => {
     const allocations = Object.entries(al).filter(([, v]) => Number(v) > 0).map(([doc_id, v]) => ({ doc_id, doc_type: docs.find((d) => d.doc_id === doc_id)?.doc_type || alloc?.doc_type, amount: Number(v) }));
-    const r = await run('create_payment', { kind, date, fund_id: fund, to_fund_id: toFund || null, party_id: party || null, amount, fee, method, note, allocations },
+    const r = await run('create_payment', { kind, date, fund_id: fund, to_fund_id: toFund || null, party_id: party || null, amount, fee, method, ref_no: refNo, note, allocations },
       (x) => `Đã lập ${def.dir === 'thu' ? 'phiếu thu' : def.dir === 'chi' ? 'phiếu chi' : 'phiếu chuyển quỹ'} ${x.code}`);
     if (r) onClose();
   };
@@ -80,6 +80,7 @@ export function PaymentForm({ kind: kind0 = 'thu_khach', party_id: party0, alloc
         {kind === 'chuyen_quy' && <Field label="Sang quỹ"><Select value={toFund} onChange={setToFund} placeholder="Chọn quỹ nhận" options={(funds.data || []).filter((f) => f.id !== fund).map((f) => ({ value: f.id, label: f.name }))} /></Field>}
         <Field label="Ngày"><DateInput value={date} onChange={setDate} max={todayVN()} /></Field>
         <Field label="Hình thức"><Select value={method} onChange={setMethod} options={['Tiền mặt', 'Chuyển khoản', 'Thẻ / POS', 'TikTok Shop', 'COD', 'Bù trừ']} /></Field>
+        <Field label="Mã giao dịch" hint="Nếu có"><Input value={refNo} onChange={setRefNo} /></Field>
         <Field label="Nội dung" wide><Input value={note} onChange={setNote} placeholder="vd. Đại lý chuyển khoản đợt 2" /></Field>
       </div>
       {kind === 'thu_khach' && fee > 0 && <Note>Tiền thực vào quỹ: {money((amount || 0) - fee)} đ. Công nợ của khách giảm đủ {money(amount)} đ; phí {money(fee)} đ ghi vào chi phí "Phí sàn".</Note>}
@@ -116,12 +117,18 @@ export function PaymentDetail({ id, onClose }) {
       subtitle={<span className="row gap-s">{p.kind_label} · {dmy(p.pay_date)} {p.voided && <Pill tone="bad">Đã hủy</Pill>}</span>}
       footer={<Btn icon="dl" onClick={() => open('doc', { kind: 'payment', id })}>Xuất phiếu PDF</Btn>}>
       <KV items={[
+        [p.direction === 'thu' ? 'Ngày nhận' : 'Ngày', dmy(p.pay_date)],
         ['Số tiền', <b>{money(p.amount)} đ</b>], p.fee > 0 && ['Phí sàn bị trừ', money(p.fee) + ' đ'], p.fee > 0 && ['Thực vào quỹ', money(p.cash_amount) + ' đ'],
-        ['Quỹ', p.fund_name + (p.to_fund_name ? ' → ' + p.to_fund_name : '')], ['Đối tượng', p.party_name || '—'], ['Hình thức', p.method || '—'], ['Nội dung', p.note || '—'],
-        ['Gắn vào', (p.allocations || []).map((a) => `${a.doc_code}: ${money(a.amount)}`).join('; ') || '—'],
-        p.unallocated > 0 && p.party_type && ['Chưa gắn chứng từ', money(p.unallocated) + ' đ (tính là trả trước chung)'],
+        ['Hình thức', [p.method, p.fund_name + (p.to_fund_name ? ' → ' + p.to_fund_name : '')].filter(Boolean).join(' · ')], p.ref_no && ['Mã giao dịch', p.ref_no],
+        ['Đối tượng', p.party_name || '—'], ['Nội dung', p.note || '—'], ['Người ghi nhận', p.created_by_name || '—'],
+        p.unallocated > 0 && p.party_type && [p.party_type === 'kh' && p.kind === 'thu_khach' ? 'Tiền khách trả trước' : 'Chưa gắn chứng từ', <b className="good">{money(p.unallocated)} đ</b>],
         p.voided && ['Lý do hủy', p.void_reason],
       ]} />
+      {(p.allocations || []).length > 0 && <Table dense rows={p.allocations} rowKey="doc_id" onRow={(a) => (a.doc_type === 'don_ban' ? open('order', { id: a.doc_id }) : a.doc_type === 'don_mua' ? open('po', { id: a.doc_id }) : null)}
+        foot={{ c: 'Tổng đã cấn', a: money(p.allocated) }} columns={[
+          { key: 'c', label: p.kind === 'hoan_khach' || p.kind === 'ncc_hoan' ? 'Hoàn theo chứng từ' : 'Đã cấn vào', render: (a) => <><b>{a.doc_code}</b><div className="cell-sub">{DOC_LABEL[a.doc_type]}</div></> },
+          { key: 'a', label: 'Số tiền cấn', align: 'right', render: (a) => money(a.amount) },
+        ]} />}
       {can('owner') && !p.voided && (
         <Section title="Hủy phiếu">
           <div className="muted small">Phiếu hủy vẫn giữ trong lịch sử, chỉ không còn tính vào quỹ và công nợ. Ghi nhầm thì hủy rồi lập phiếu mới.</div>

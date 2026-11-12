@@ -26,11 +26,11 @@ export function insertExpense(book, e, prefix = 'CP') {
   return one(`select * from expenses where id = ?`, id);
 }
 
-// Gợi ý phân bổ: trả các khoản đã đến hạn (hàng đã giao/nhận, nợ đầu kỳ) – cũ trước
+// Gợi ý phân bổ: trả các khoản đã đến hạn (hàng đã giao/nhận, nợ đầu kỳ) – khoản ghi nhận nợ sớm nhất trước
 export function suggestAlloc(book, ptype, party, amount) {
   let left = amount; const res = [];
   for (const d of all(`select * from v_open_docs where book_id = ? and party_type = ? and party_id = ? and status <> 'huy' and remaining_due > 0
-      order by doc_date, code`, book, ptype, party)) {
+      order by debt_date, doc_date, code`, book, ptype, party)) {
     if (left <= 0) break;
     const a = Math.min(d.remaining_due, d.remaining_total, left);
     if (a > 0) { res.push({ doc_type: d.doc_type, doc_id: d.doc_id, amount: a }); left -= a; }
@@ -64,7 +64,7 @@ export function doPayment(book, p) {
   const code = nextCode(book, dir === 'thu' ? 'PT' : dir === 'chi' ? 'PC' : 'CQ');
   const payId = uuid();
   insert('payments', { id: payId, book_id: book, code, pay_date: d, kind: k, direction: dir, fund_id: fid, to_fund_id: tfid, party_type: pt, party_id: pid,
-    amount: amt, fee, method: p.method ?? null, note: p.note ?? null, created_by: ctx.uid, created_at: nowIso() });
+    amount: amt, fee, method: p.method ?? null, note: p.note ?? null, ref_no: trimNz(p.ref_no), created_by: ctx.uid, created_at: nowIso() });
 
   let al = Array.isArray(p.allocations) ? p.allocations : [];
   if (!al.length && bool(p.auto_allocate) === true &&['thu_khach', 'tra_ncc'].includes(k)) al = suggestAlloc(book, pt, pid, amt);
