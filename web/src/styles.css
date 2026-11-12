@@ -1,62 +1,67 @@
-/* Bố cục kiểu phần mềm bán hàng: thanh trên trắng + thanh menu xanh ngang; trang danh sách gồm cột lọc trái và bảng.
-   Xanh dương cho điều hướng / lựa chọn, xanh lá cho nút hành động chính (Lưu, Thêm mới, Bán hàng). */
+/* Bố cục kiểu phần mềm bán hàng: thanh trên + thanh menu ngang; trang danh sách gồm cột lọc trái và bảng.
+   Phong cách "vườn thực vật": nền giấy kem, xanh rừng đậm cho điều hướng và hành động chính, vàng nghệ làm điểm nhấn,
+   tiêu đề chữ có chân (Playfair Display), chữ thân giữ Roboto cho dễ đọc số liệu. */
 :root {
-  --bg: #eef1f5;
-  --surface: #ffffff;
-  --surface-2: #f3f6f9;
-  --ink: #1b2430;
-  --muted: #5b6676;
-  --line: #dce3ea;
-  --accent: #0b6bcb;
-  --accent-2: #e6f0fb;
-  --accent-ink: #ffffff;
-  --action: #15803d; --action-hover: #116a32; --action-ink: #ffffff;
-  --mbar: #0b6bcb; --mbar-hover: #0a5fb4; --mbar-on: #08529c; --mbar-ink: #ffffff;
-  --celadon: #3f7f69;
-  --good: #1f7a45; --good-bg: #e3f3e9;
-  --warn: #965800; --warn-bg: #fdf0db;
-  --bad: #b3261e;  --bad-bg: #fbe5e3;
-  --info: #1a5f9e; --info-bg: #e2eef9;
-  --mute-bg: #eceff3;
-  --shadow: 0 1px 2px rgba(16, 32, 52, .06), 0 4px 16px rgba(16, 32, 52, .06);
-  --shadow-pop: 0 8px 28px rgba(16, 32, 52, .16);
-  --font: Roboto, system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-  --font-display: var(--font);
-  --r: 8px;
+  --bg: #f3efe4;
+  --surface: #fffdf7;
+  --surface-2: #f0ece0;
+  --ink: #1e2a21;
+  --muted: #646d5e;
+  --line: #e1dbc9;
+  --accent: #2f5b3a;
+  --accent-2: #e4ebd9;
+  --accent-ink: #fbf8ef;
+  --action: #2f5b3a; --action-hover: #244a2e; --action-ink: #fbf8ef;
+  --gold: #e8b23c; --gold-hover: #f0c056; --gold-ink: #1e1a0c;
+  --mbar: #1f3828; --mbar-hover: #2a4734; --mbar-on: #15291c; --mbar-ink: #f3efe4;
+  --celadon: #7a9a63;
+  --good: #2f7a45; --good-bg: #e2efdc;
+  --warn: #8f5a00; --warn-bg: #f8ecd2;
+  --bad: #a8321f;  --bad-bg: #f8e3dc;
+  --info: #2d5f6e; --info-bg: #e0ece9;
+  --mute-bg: #ebe7db;
+  --shadow: 0 1px 2px rgba(40, 46, 28, .05), 0 6px 20px rgba(40, 46, 28, .06);
+  --shadow-pop: 0 10px 32px rgba(30, 40, 24, .18);
+  --font: 'Be Vietnam Pro', Roboto, system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --paper: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .3 0 0 0 0 .2 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --r: 12px;
   --wrap: 1440px;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0e141c; --surface: #151e29; --surface-2: #1c2734; --ink: #e5ecf4; --muted: #98a6b8; --line: #283546;
-    --accent: #6aa8ef; --accent-2: #1a2c44; --accent-ink: #0d1520; --celadon: #7fb8a3;
-    --action: #2fae5f; --action-hover: #39c06c; --action-ink: #06200f;
-    --mbar: #123a66; --mbar-hover: #184778; --mbar-on: #0c2d52; --mbar-ink: #e8f1fc;
-    --good: #6cc995; --good-bg: #16302a; --warn: #f0b562; --warn-bg: #33281a; --bad: #f08a80; --bad-bg: #3a1f1f;
-    --info: #8bbcf0; --info-bg: #182a40; --mute-bg: #222d3a; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25); --shadow-pop: 0 8px 28px rgba(0,0,0,.45);
+    --bg: #0f1712; --surface: #16211a; --surface-2: #1d2b22; --ink: #ece6d5; --muted: #a3aa97; --line: #2b3a2f;
+    --accent: #a8cf8f; --accent-2: #223322; --accent-ink: #0e1a10; --celadon: #93b97c;
+    --action: #a8cf8f; --action-hover: #bcdca6; --action-ink: #0e1a10;
+    --gold: #e8b23c; --gold-hover: #f0c056; --gold-ink: #1e1a0c;
+    --mbar: #0b130e; --mbar-hover: #18261c; --mbar-on: #060c08; --mbar-ink: #ece6d5;
+    --good: #8fd09f; --good-bg: #183020; --warn: #f0bd62; --warn-bg: #33291a; --bad: #f09a86; --bad-bg: #3a201b;
+    --info: #8fc6c8; --info-bg: #17302f; --mute-bg: #222e25; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.28); --shadow-pop: 0 10px 32px rgba(0,0,0,.5);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0e141c; --surface: #151e29; --surface-2: #1c2734; --ink: #e5ecf4; --muted: #98a6b8; --line: #283546;
-  --accent: #6aa8ef; --accent-2: #1a2c44; --accent-ink: #0d1520; --celadon: #7fb8a3;
-  --action: #2fae5f; --action-hover: #39c06c; --action-ink: #06200f;
-  --mbar: #123a66; --mbar-hover: #184778; --mbar-on: #0c2d52; --mbar-ink: #e8f1fc;
-  --good: #6cc995; --good-bg: #16302a; --warn: #f0b562; --warn-bg: #33281a; --bad: #f08a80; --bad-bg: #3a1f1f;
-  --info: #8bbcf0; --info-bg: #182a40; --mute-bg: #222d3a; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25); --shadow-pop: 0 8px 28px rgba(0,0,0,.45);
+  --bg: #0f1712; --surface: #16211a; --surface-2: #1d2b22; --ink: #ece6d5; --muted: #a3aa97; --line: #2b3a2f;
+  --accent: #a8cf8f; --accent-2: #223322; --accent-ink: #0e1a10; --celadon: #93b97c;
+  --action: #a8cf8f; --action-hover: #bcdca6; --action-ink: #0e1a10;
+  --gold: #e8b23c; --gold-hover: #f0c056; --gold-ink: #1e1a0c;
+  --mbar: #0b130e; --mbar-hover: #18261c; --mbar-on: #060c08; --mbar-ink: #ece6d5;
+  --good: #8fd09f; --good-bg: #183020; --warn: #f0bd62; --warn-bg: #33291a; --bad: #f09a86; --bad-bg: #3a201b;
+  --info: #8fc6c8; --info-bg: #17302f; --mute-bg: #222e25; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.28); --shadow-pop: 0 10px 32px rgba(0,0,0,.5);
   color-scheme: dark;
 }
-/* Màu theo logo từng thương hiệu: Thanh Hải than + cam gạch, Vũ Gia nâu đất, Anamtile xanh than */
-:root[data-book="TH"] { --accent: #b4580c; --accent-2: #fbeee0; --mbar: #2b2b27; --mbar-hover: #3b3b35; --mbar-on: #1d1d1a; --action: #b4580c; --action-hover: #99490a; }
-:root[data-book="VG"] { --accent: #8f3f18; --accent-2: #f7e9e1; --mbar: #8f3f18; --mbar-hover: #7d3614; --mbar-on: #6a2d10; --action: #8f3f18; --action-hover: #7d3614; }
-:root[data-book="AN"] { --accent: #1c6275; --accent-2: #e1eff2; --mbar: #122a33; --mbar-hover: #1c3b47; --mbar-on: #0b1d24; --action: #1c6275; --action-hover: #164f5f; }
+/* Bảng màu riêng từng sổ: Vũ Gia nâu sô-cô-la + kem, Thanh Hải xanh mòng két #115462 (cam logo làm điểm nhấn), Anamtile xanh lục bảo + vàng */
+:root[data-book="VG"] { --bg: #f5ead3; --surface: #fffaef; --surface-2: #f0e2c6; --ink: #3a190b; --muted: #7a5846; --line: #e5d3b2; --accent: #6b2f17; --accent-2: #f0dec3; --accent-ink: #fff7e6; --action: #6b2f17; --action-hover: #55240f; --action-ink: #fff7e6; --gold: #d99a5e; --gold-hover: #e4ad78; --gold-ink: #2e1206; --mbar: #5a2814; --mbar-hover: #6b331c; --mbar-on: #45200f; --mbar-ink: #fbf1da; --celadon: #b07a4f; }
+:root[data-book="TH"] { --bg: #e9f0f1; --surface: #fafcfc; --surface-2: #ebf2f3; --ink: #0f2328; --muted: #566b70; --line: #d1dfe1; --accent: #115462; --accent-2: #dcebed; --accent-ink: #f2f9fa; --action: #115462; --action-hover: #0c4450; --action-ink: #f2f9fa; --gold: #e08a3c; --gold-hover: #ea9b52; --gold-ink: #1d1206; --mbar: #115462; --mbar-hover: #186575; --mbar-on: #0c414c; --mbar-ink: #eef7f8; --celadon: #4f8f99; }
+:root[data-book="AN"] { --bg: #e8f2ec; --surface: #f9fdfb; --surface-2: #e6f1eb; --ink: #0e2a1f; --muted: #4d6a5e; --line: #cfe2d8; --accent: #0d6b4b; --accent-2: #d9eee3; --accent-ink: #f2fbf6; --action: #0d6b4b; --action-hover: #0a573d; --action-ink: #f2fbf6; --gold: #e9be54; --gold-hover: #f1cb6c; --gold-ink: #1d1606; --mbar: #0a4a34; --mbar-hover: #0f5b41; --mbar-on: #073826; --mbar-ink: #ecf9f2; --celadon: #3f9a75; }
 @media (prefers-color-scheme: dark) {
-  :root[data-book="TH"]:not([data-theme="light"]) { --accent: #e8974a; --accent-2: #33261a; --accent-ink: #1b1209; --action: #e8974a; --action-hover: #f0a860; --action-ink: #1b1209; }
-  :root[data-book="VG"]:not([data-theme="light"]) { --accent: #d98a62; --accent-2: #33211a; --accent-ink: #1b0f09; --action: #d98a62; --action-hover: #e49d78; --action-ink: #1b0f09; }
-  :root[data-book="AN"]:not([data-theme="light"]) { --accent: #6fb6c9; --accent-2: #172c33; --accent-ink: #08171c; --action: #6fb6c9; --action-hover: #86c6d7; --action-ink: #08171c; }
+  :root[data-book="VG"]:not([data-theme="light"]) { --bg: #1f1009; --surface: #2a170e; --surface-2: #372015; --ink: #f6e8cf; --muted: #c4a68c; --line: #4a2e1e; --accent: #e9bb8b; --accent-2: #3c2517; --accent-ink: #21110a; --action: #e9bb8b; --action-hover: #f2cba2; --action-ink: #21110a; --gold: #f2d9a8; --gold-hover: #f8e4bc; --gold-ink: #2a160a; --mbar: #170b05; --mbar-hover: #2a170e; --mbar-on: #0f0703; --mbar-ink: #f6e8cf; --celadon: #d19a6a; }
+  :root[data-book="TH"]:not([data-theme="light"]) { --bg: #08151a; --surface: #0f2026; --surface-2: #152b32; --ink: #e3eff1; --muted: #93acb1; --line: #1f3a42; --accent: #6cc3cf; --accent-2: #12343b; --accent-ink: #04151a; --action: #6cc3cf; --action-hover: #8bd2dc; --action-ink: #04151a; --gold: #e8954b; --gold-hover: #f0a865; --gold-ink: #1d1206; --mbar: #061116; --mbar-hover: #102830; --mbar-on: #030a0d; --mbar-ink: #e3eff1; --celadon: #5fb3be; }
+  :root[data-book="AN"]:not([data-theme="light"]) { --bg: #07130e; --surface: #0d1e17; --surface-2: #132a20; --ink: #e2f2e9; --muted: #92b3a4; --line: #1d392d; --accent: #5fd2a1; --accent-2: #11302a; --accent-ink: #04140d; --action: #5fd2a1; --action-hover: #7fdfb5; --action-ink: #04140d; --gold: #eac15a; --gold-hover: #f2cf74; --gold-ink: #1d1606; --mbar: #040c08; --mbar-hover: #0f2219; --mbar-on: #020604; --mbar-ink: #e2f2e9; --celadon: #55c393; }
 }
-:root[data-book="TH"][data-theme="dark"] { --accent: #e8974a; --accent-2: #33261a; --accent-ink: #1b1209; --action: #e8974a; --action-hover: #f0a860; --action-ink: #1b1209; }
-:root[data-book="VG"][data-theme="dark"] { --accent: #d98a62; --accent-2: #33211a; --accent-ink: #1b0f09; --action: #d98a62; --action-hover: #e49d78; --action-ink: #1b0f09; }
-:root[data-book="AN"][data-theme="dark"] { --accent: #6fb6c9; --accent-2: #172c33; --accent-ink: #08171c; --action: #6fb6c9; --action-hover: #86c6d7; --action-ink: #08171c; }
+:root[data-book="VG"][data-theme="dark"] { --bg: #1f1009; --surface: #2a170e; --surface-2: #372015; --ink: #f6e8cf; --muted: #c4a68c; --line: #4a2e1e; --accent: #e9bb8b; --accent-2: #3c2517; --accent-ink: #21110a; --action: #e9bb8b; --action-hover: #f2cba2; --action-ink: #21110a; --gold: #f2d9a8; --gold-hover: #f8e4bc; --gold-ink: #2a160a; --mbar: #170b05; --mbar-hover: #2a170e; --mbar-on: #0f0703; --mbar-ink: #f6e8cf; --celadon: #d19a6a; }
+:root[data-book="TH"][data-theme="dark"] { --bg: #08151a; --surface: #0f2026; --surface-2: #152b32; --ink: #e3eff1; --muted: #93acb1; --line: #1f3a42; --accent: #6cc3cf; --accent-2: #12343b; --accent-ink: #04151a; --action: #6cc3cf; --action-hover: #8bd2dc; --action-ink: #04151a; --gold: #e8954b; --gold-hover: #f0a865; --gold-ink: #1d1206; --mbar: #061116; --mbar-hover: #102830; --mbar-on: #030a0d; --mbar-ink: #e3eff1; --celadon: #5fb3be; }
+:root[data-book="AN"][data-theme="dark"] { --bg: #07130e; --surface: #0d1e17; --surface-2: #132a20; --ink: #e2f2e9; --muted: #92b3a4; --line: #1d392d; --accent: #5fd2a1; --accent-2: #11302a; --accent-ink: #04140d; --action: #5fd2a1; --action-hover: #7fdfb5; --action-ink: #04140d; --gold: #eac15a; --gold-hover: #f2cf74; --gold-ink: #1d1606; --mbar: #040c08; --mbar-hover: #0f2219; --mbar-on: #020604; --mbar-ink: #e2f2e9; --celadon: #55c393; }
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
@@ -697,3 +702,148 @@ code { font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-r
 .dim-row { display: grid; grid-template-columns: 1fr 1fr 76px; gap: 6px; }
 .pre-wrap { white-space: pre-wrap; }
 .pos-unit-sel { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text); padding: 3px 4px; font-size: 13px; }
+
+/* ---------- Phong cách vườn thực vật: giấy kem, chữ có chân, góc bo mềm ---------- */
+body { background-color: var(--bg); background-image: var(--paper); }
+.page-title, .modal-title, .login-title, .brand-name, .section-head h3, .sec-h, .empty-title, .pos-empty h3 {
+  font-family: var(--font-display); font-weight: 600; letter-spacing: -.005em;
+}
+.page-title { font-size: 27px; line-height: 1.15; color: var(--accent); }
+.page-sub { font-style: italic; }
+.modal-title { font-size: 20px; }
+.section-head h3 { font-size: 17px; }
+.brand-name { font-size: 17px; }
+.kpi-value { font-family: var(--font-display); font-variant-numeric: lining-nums tabular-nums; font-size: 25px; letter-spacing: 0; }
+.mega-title, .more-title, .kpi-label, .field-label, .fbox-title { letter-spacing: .04em; }
+.fbox-title { font-size: 11.5px; text-transform: uppercase; color: var(--muted); }
+
+/* Thanh trên kem, thanh menu xanh rừng với gạch chân vàng nghệ */
+.hdr { background: color-mix(in srgb, var(--surface) 82%, transparent); backdrop-filter: blur(6px); }
+.seal { border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px var(--accent); font-family: var(--font-display); }
+.seal-img { box-shadow: 0 0 0 1px var(--line); }
+.book-switch { border-radius: 999px; padding: 3px; }
+.book-switch button { border-radius: 999px; padding: 5px 14px; }
+.book-switch button.on { background: var(--accent); color: var(--accent-ink); }
+.user-btn, .hdr-quick { border-radius: 999px; }
+.mnav { font-weight: 400; letter-spacing: .01em; }
+.mnav.on { background: transparent; box-shadow: inset 0 -3px 0 var(--gold); color: #fff; font-weight: 500; }
+.mnav:hover, .dd:hover > .mnav { background: var(--mbar-hover); }
+.sell-btn { background: var(--gold); color: var(--gold-ink); border-radius: 999px; box-shadow: none; }
+.sell-btn:hover { background: var(--gold-hover); }
+.badge-new { background: var(--gold); color: var(--gold-ink); }
+.dd-menu { border-radius: 0 0 14px 14px; }
+.hdr .dd-menu { border-radius: 14px; }
+.dd-item { border-radius: 9px; }
+
+/* Nút bo tròn kiểu viên thuốc, ô nhập bo mềm */
+.btn { border-radius: 999px; padding: 7px 18px; }
+.btn-sm { padding: 4px 12px; }
+.btn-primary { box-shadow: 0 1px 0 rgba(0,0,0,.08); }
+.btn-soft { background: var(--accent-2); }
+.inp, .search, .pager-size select, .seg { border-radius: 10px; }
+.search { border-radius: 999px; padding: 0 14px; }
+.chip, .pos-chip { border-radius: 999px; }
+.chip.on, .pos-chip.on { background: var(--accent); border-color: var(--accent); }
+
+/* Thẻ: nền kem sáng, bo 12–16px, bóng rất nhẹ */
+.card, .section, .fbox, .kpi, .table-wrap, .exp-card, .cat-group, .nitem, .ticket { border-radius: var(--r); }
+.card, .section, .kpi, .table-wrap { box-shadow: var(--shadow); }
+.kpi { padding: 16px 18px; border-color: color-mix(in srgb, var(--line) 80%, transparent); }
+.kpi.key { background: var(--mbar); border-color: var(--mbar); color: var(--mbar-ink); }
+.kpi.key .kpi-value { color: var(--gold); }
+.kpi.key .kpi-label, .kpi.key .kpi-sub, .kpi.key .kpi-info { color: color-mix(in srgb, var(--mbar-ink) 72%, transparent); }
+.board-col { border-radius: var(--r); }
+.modal { border-radius: 18px; }
+.modal-foot { border-radius: 0 0 18px 18px; }
+.modal-head { padding: 16px 20px 12px; }
+
+/* Bảng: đầu bảng chữ in hoa giãn cách kiểu nhãn cổ điển trên nền xanh xô thơm */
+.tbl th { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); background: var(--accent-2); }
+.tbl tr.clickable:hover td { background: color-mix(in srgb, var(--accent-2) 55%, var(--surface)); }
+.tabs { border-bottom-color: var(--line); }
+.tab.on { border-bottom-width: 2px; }
+
+/* Đăng nhập: khối xanh rừng phía trên, thẻ kem bo tròn */
+.login-screen { background: linear-gradient(180deg, var(--mbar) 0 260px, transparent 260px), var(--paper), var(--bg); }
+.login { border-radius: 18px; }
+
+/* Quầy bán hàng: dùng cùng tông */
+.pos-btn { border-radius: 999px; }
+.pos-due-amt { font-family: var(--font-display); font-variant-numeric: lining-nums tabular-nums; }
+.pos-line, .pos-right, .pos-ordernote { border-radius: 14px; }
+
+@media (max-width: 860px) {
+  .page-title { font-size: 23px; }
+  .kpi-value { font-size: 21px; }
+  .bottom-nav .fab { background: var(--gold); color: var(--gold-ink); border-radius: 999px; }
+}
+
+/* ---------- Kính mờ: nền có quầng màu theo sổ, thẻ và menu trong suốt nhẹ + làm mờ phía sau ---------- */
+:root { --glass: color-mix(in srgb, var(--surface) 64%, transparent); --glass-strong: color-mix(in srgb, var(--surface) 86%, transparent);
+  --glass-edge: color-mix(in srgb, #ffffff 60%, var(--line)); --glass-blur: blur(14px) saturate(1.4); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --glass-edge: rgba(255, 255, 255, .09); } }
+:root[data-theme="dark"] { --glass-edge: rgba(255, 255, 255, .09); }
+body {
+  background:
+    radial-gradient(1100px 620px at 8% -8%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 62%),
+    radial-gradient(900px 520px at 100% 4%, color-mix(in srgb, var(--gold) 24%, transparent), transparent 60%),
+    radial-gradient(1000px 700px at 55% 115%, color-mix(in srgb, var(--celadon) 18%, transparent), transparent 62%),
+    var(--paper), var(--bg);
+  background-attachment: fixed;
+}
+.card, .section, .kpi:not(.key), .table-wrap, .fbox, .exp-card, .cat-group, .ticket, .nitem, .board-col,
+.pos-right, .pos-line, .pos-ordernote, .login {
+  background: var(--glass); border-color: var(--glass-edge);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #ffffff 45%, transparent), var(--shadow);
+}
+.dd-menu, .pop, .picker-menu, .pos-results, .col-pick-menu, .modal {
+  background: var(--glass-strong); border-color: var(--glass-edge);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5);
+}
+.modal-foot { background: color-mix(in srgb, var(--surface-2) 70%, transparent); }
+.overlay { background: color-mix(in srgb, var(--mbar) 38%, rgba(0, 0, 0, .25)); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+.hdr { background: color-mix(in srgb, var(--surface) 58%, transparent); border-bottom-color: var(--glass-edge); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+.mbar { background: color-mix(in srgb, var(--mbar) 86%, transparent); -webkit-backdrop-filter: blur(12px) saturate(1.4); backdrop-filter: blur(12px) saturate(1.4); }
+.kpi.key { background: linear-gradient(145deg, color-mix(in srgb, var(--mbar) 92%, transparent), color-mix(in srgb, var(--accent) 80%, transparent));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), var(--shadow); }
+.inp, .search, .book-switch, .user-btn, .hdr-quick, .btn:not(.btn-primary):not(.btn-soft):not(.btn-danger):not(.btn-good), .chip:not(.on), .seg {
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+}
+.inp[readonly] { background: color-mix(in srgb, var(--surface-2) 72%, transparent); }
+.tbl th { background: color-mix(in srgb, var(--accent-2) 90%, transparent); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.tbl tfoot td, .tbl tr.row-group td, .tbl tr.row-strong td { background: color-mix(in srgb, var(--surface-2) 70%, transparent); }
+.bottom-nav { background: color-mix(in srgb, var(--surface) 70%, transparent); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+@media (max-width: 860px) {
+  .fbox { background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .card, .section, .kpi:not(.key), .table-wrap, .exp-card, .cat-group, .ticket, .nitem, .board-col, .pos-right, .pos-line, .pos-ordernote, .login,
+  .dd-menu, .pop, .picker-menu, .pos-results, .col-pick-menu, .modal, .hdr, .mbar, .bottom-nav { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .card, .section, .kpi:not(.key), .table-wrap, .exp-card, .cat-group, .ticket, .nitem, .pos-right, .pos-line, .pos-ordernote, .login,
+  .dd-menu, .pop, .picker-menu, .pos-results, .col-pick-menu, .modal, .hdr, .bottom-nav { background: var(--surface); }
+  .mbar { background: var(--mbar); }
+}
+
+/* ---------- Nền các khối: gradient có hạt (grainy) theo màu sổ, vẫn giữ lớp kính mờ ---------- */
+:root {
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='.16'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  --grain-grad: linear-gradient(150deg,
+    color-mix(in srgb, var(--surface) 78%, transparent) 0%,
+    color-mix(in srgb, var(--accent-2) 70%, transparent) 55%,
+    color-mix(in srgb, var(--gold) 14%, color-mix(in srgb, var(--accent-2) 60%, transparent)) 100%);
+}
+.card, .section, .kpi:not(.key), .table-wrap, .fbox, .exp-card, .cat-group, .ticket, .nitem, .board-col,
+.pos-right, .pos-line, .pos-ordernote, .login {
+  background: var(--grain), var(--grain-grad);
+}
+.kpi.key { background: var(--grain), linear-gradient(145deg, color-mix(in srgb, var(--mbar) 94%, transparent), color-mix(in srgb, var(--accent) 78%, transparent)); }
+.mbar { background: var(--grain), linear-gradient(90deg, color-mix(in srgb, var(--mbar) 92%, transparent), color-mix(in srgb, var(--mbar-hover) 88%, transparent)); }
+.mnav:hover, .dd:hover > .mnav { background: color-mix(in srgb, var(--mbar-ink) 10%, transparent); }
+.page-title { font-weight: 600; letter-spacing: -.015em; }
+@media (max-width: 860px) {
+  .fbox { background: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .card, .section, .kpi:not(.key), .table-wrap, .exp-card, .cat-group, .ticket, .nitem, .pos-right, .pos-line, .pos-ordernote, .login { background: var(--grain), var(--surface); }
+}
