@@ -901,3 +901,16 @@ create table if not exists audit_log (
   new_data text
 );
 create index if not exists audit_book_at_idx on audit_log (book_id, at desc);
+
+-- Lịch sử một đơn bán, viết bằng lời: tạo, sửa (cái gì đổi thành gì), giao, hủy đợt giao, thu / hoàn tiền, trả hàng, hủy
+create table if not exists order_events (
+  id integer primary key autoincrement,
+  book_id text not null,
+  order_id text not null,
+  at text not null,
+  user_id text,
+  action text not null,
+  summary text not null,
+  detail text                                 -- các dòng chi tiết, mỗi thay đổi một dòng (JSON mảng chuỗi)
+);
+create index if not exists order_events_order_idx on order_events (order_id, at);

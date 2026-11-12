@@ -295,7 +295,18 @@ Có 5 loại chứng từ, xuất ra PDF khổ A4, dựng theo đúng mẫu cử
 | Đơn đặt hàng | Chi tiết đơn → **Xuất PDF** → thẻ "Đơn đặt hàng" | Hộ kinh doanh |
 | Biên bản bàn giao hàng hóa | Chi tiết đơn → bấm vào một lần giao (hoặc tự mở ngay sau khi bấm Giao hàng) | Công ty (có logo) |
 | Phiếu xuất kho | Như biên bản, thẻ "Phiếu xuất kho" | Hộ kinh doanh |
-| Phiếu thu / phiếu chi | Thu chi → mở phiếu → **Xuất phiếu PDF** | Hộ kinh doanh |
+| Phiếu thu / phiếu chi | Thu chi → mở phiếu → **Xuất phiếu PDF**; tự mở khi giao hàng có tick "Thu luôn" hoặc thu tiền nhanh trên danh sách | Hộ kinh doanh |
+
+- **Sau khi giao hàng:** khung **Xuất chứng từ giao hàng** bên trái cho chọn Hợp đồng vận chuyển, Hóa đơn bán hàng, Biên bản giao hàng (và Phiếu thu nếu vừa thu tiền). Chọn 1 hoặc nhiều rồi bấm **Tải … chứng từ**: mặc định gộp vào một tệp PDF, mỗi chứng từ một trang mới; bỏ tick "Gộp vào một tệp PDF" để tải từng tệp. Lựa chọn được nhớ cho lần sau.
+- **Giao nhanh / thu nhanh trên danh sách** mở chứng từ ở tab mới của trình duyệt. Trình duyệt chặn cửa sổ bật lên thì chứng từ mở ngay trong trang đang xem.
+
+### Sửa đơn đã giao, đã thu và lịch sử đơn
+
+- Nút **Sửa** luôn có ở chi tiết đơn (trừ đơn đã hủy), kể cả khi đã giao đủ, đã thu đủ. Sửa giá, chiết khấu, giảm giá, phí vận chuyển thì tiền hàng đã giao tự tính lại; khách còn nợ hay trả dư hiện ngay theo số mới.
+- Dòng hàng đã giao không bỏ được, không đổi sang hàng khác và không giảm dưới số đã giao. Đơn đã có phiếu thu thì không đổi được khách. Đơn đã có hàng khách trả lại thì không đổi được tiền hàng đã giao.
+- **Giao nhầm:** ở mục "Các đợt giao hàng", bấm **Hủy đợt giao**, ghi lý do. Hàng nhập lại kho đúng giá vốn đã xuất, doanh thu đợt đó bỏ đi, đơn quay lại chờ giao, tiền đã thu thành tiền khách trả trước. Sau đó sửa đơn như đơn chưa giao.
+- **Thu nhầm:** mở phiếu thu và hủy phiếu (quyền chủ sổ).
+- Mục **Lịch sử đơn hàng** cuối chi tiết đơn ghi mọi thao tác: ai làm, lúc nào, tạo đơn, sửa gì từ bao nhiêu thành bao nhiêu, giao, hủy đợt giao, thu / hoàn tiền, hủy phiếu, trả hàng, hủy đơn. Ai xem được đơn bán đều xem được lịch sử. Đơn lập trước bản này chỉ có lịch sử từ lúc cập nhật.
 
 - **Cài đặt một lần:** vào **Cài đặt → Mẫu chứng từ**.
   - Khai báo đơn vị phát hành: tên, địa chỉ, điện thoại, email, website, dòng số tài khoản, người đại diện, logo. Có thể khai nhiều đơn vị (ví dụ Hộ kinh doanh gốm sứ Mai Hiếu và Công ty TNHH SX&TM Thanh Hải).

@@ -36,7 +36,7 @@ export const RPC = {
   ...pick(stock, ['adjust_stock', 'save_production', 'import_products']),
   ...pick(cash, ['create_payment', 'void_payment', 'save_expense', 'void_expense']),
   ...pick(receivables, ['customer_ledger', 'preview_receipt', 'record_receipt', 'apply_prepaid']),
-  ...pick(sales, ['save_sales_order', 'confirm_sales_order', 'cancel_sales_order', 'cancel_remaining', 'deliver', 'sales_return']),
+  ...pick(sales, ['save_sales_order', 'confirm_sales_order', 'cancel_sales_order', 'cancel_remaining', 'deliver', 'cancel_delivery', 'sales_return']),
   ...pick(purchases, ['save_purchase_order', 'confirm_purchase_order', 'cancel_purchase_order', 'cancel_po_remaining', 'set_prod_step', 'receive', 'supplier_return', 'cancel_receipt', 'cancel_supplier_return']),
   ...pick(reports, ['rpt_end_of_day', 'rpt_overview', 'rpt_drill', 'rpt_monthly', 'rpt_products', 'rpt_groups', 'rpt_stock', 'rpt_expenses', 'rpt_dashboard', 'rpt_factory']),
   ...pick(query, ['q']),

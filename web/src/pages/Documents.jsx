@@ -126,6 +126,53 @@ export function DocStandalone({ link }) {
   );
 }
 
+// ---------- Chọn chứng từ của một đợt giao để tải cùng lúc ----------
+// Sau khi giao: hợp đồng vận chuyển, hóa đơn bán hàng, biên bản giao hàng (và phiếu thu nếu thu luôn) — chọn 1 hoặc nhiều,
+// gộp vào một tệp PDF (mỗi chứng từ một trang mới) hoặc tải từng tệp. Dùng thông tin đã lưu của từng chứng từ.
+const BATCH_TYPES = [['hd_van_chuyen', 'Hợp đồng vận chuyển'], ['hoa_don', 'Hóa đơn bán hàng'], ['bien_ban', 'Biên bản giao hàng']];
+const BATCH_KEY = 'gomsu.doc_batch';
+function readBatch() { try { const v = JSON.parse(localStorage.getItem(BATCH_KEY) || 'null'); return v && typeof v === 'object' ? v : null; } catch (e) { return null; } }
+function BatchExport({ deliveryId, pay, ds, beforeExport }) {
+  const { q, rpc, settings, toast } = useApp();
+  const opts = [...BATCH_TYPES, ...(pay ? [['phieu_thu', 'Phiếu thu']] : [])];
+  const saved = readBatch();
+  const [pick, setPick] = useState(() => Object.fromEntries(opts.map(([t]) => [t, saved?.pick?.[t] ?? true])));
+  const [merge, setMerge] = useState(saved?.merge ?? true);
+  const [busy, setBusy] = useState(false);
+  const chosen = opts.filter(([t]) => pick[t]).map(([t]) => t);
+  const load = async (src) => { const d = await loadDocData(q, rpc, src); return { ...d, prods: Object.fromEntries(Object.entries(d.prods || {}).map(([k, p]) => [k, packView(p, settings)])) }; };
+  const run = async () => {
+    if (!chosen.length) return;
+    try { localStorage.setItem(BATCH_KEY, JSON.stringify({ pick, merge })); } catch (e) { /* bỏ qua */ }
+    setBusy(true);
+    try {
+      if (beforeExport && !(await beforeExport())) return;
+      const [dd, pd] = await Promise.all([load({ kind: 'delivery', id: deliveryId }), pay && chosen.includes('phieu_thu') ? load({ kind: 'payment', id: pay }) : null]);
+      const docs = chosen.map((t) => { const data = t === 'phieu_thu' ? pd : dd; return buildDoc(t, data, ds, { ...defaults(t, data, ds), ...(currentInfo(t, data) || {}) }); });
+      const { pdfBlob } = await import('../lib/docs/pdf.js');
+      if (merge && docs.length > 1) {
+        const name = `chung-tu-giao-hang_${dd.d.code}.pdf`;
+        if (await saveFile(name, await pdfBlob(docs))) toast(`Đã tạo ${name} (${docs.length} chứng từ)`);
+      } else {
+        for (const doc of docs) await saveFile(doc.filename, await pdfBlob(doc));
+        toast(`Đã tạo ${docs.length} tệp PDF`);
+      }
+    } catch (e) { toast('Không tạo được PDF: ' + e.message, 'err'); } finally { setBusy(false); }
+  };
+  return (
+    <div className="card doc-batch">
+      <b>Xuất chứng từ giao hàng</b>
+      <div className="small muted">Chọn chứng từ cần in (1 hoặc nhiều). Sửa thông tin từng loại ở các thẻ bên trên trước khi tải.</div>
+      <div className="doc-batch-list">
+        {opts.map(([t, label]) => <Check key={t} checked={!!pick[t]} onChange={(v) => setPick((s) => ({ ...s, [t]: v }))}>{label}</Check>)}
+      </div>
+      {chosen.length > 1 && <Check checked={merge} onChange={setMerge}>Gộp vào một tệp PDF</Check>}
+      <Btn kind="primary" icon="dl" busy={busy} disabled={!chosen.length} onClick={run}>
+        {chosen.length ? `Tải ${chosen.length} chứng từ` : 'Chọn chứng từ'}</Btn>
+    </div>
+  );
+}
+
 // ---------- Hộp thoại xuất chứng từ ----------
 // pay: phiếu thu lập cùng lúc với đợt giao (giao + thu) → thêm thẻ "Phiếu thu" vào cùng hộp thoại.
 // page: hiện toàn trang (tab mới) thay cho hộp thoại.
@@ -205,6 +252,7 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
       {!data ? !err && <Loading /> : (
         <div className="doc-wrap">
           <div className="doc-side">
+            {kind === 'delivery' && <BatchExport deliveryId={id} pay={withPay ? pay : null} ds={ds} beforeExport={save} />}
             {perDelivery && !['payment', 'contract', 'quote'].includes(data.kind) && (
               <Field label="Lập theo">
                 <Select value={src.kind === 'delivery' ? src.id : ''} onChange={(v) => setSrc(v ? { kind: 'delivery', id: v } : { kind: 'order', id: data.o.id })}

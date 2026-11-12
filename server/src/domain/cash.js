@@ -1,7 +1,8 @@
 // Thu chi tiền (phiếu thu/chi, phân bổ vào chứng từ, phí sàn), hủy phiếu, chi phí phân nhóm + phân bổ dần.
-import { ctx, fail, one, all, run, insert, uuid, nowIso, num, int, bool, nz, trimNz, rnd, asDate, today, json } from '../lib/context.js';
+import { ctx, fail, one, all, run, insert, uuid, nowIso, num, int, bool, nz, trimNz, rnd, asDate, today, json, vnd } from '../lib/context.js';
 import { requirePerm, checkDate, nextCode, once, bookSettings, setting } from './access.js';
 import { DEFAULT_EXPENSE_CATS } from './books.js';
+import { logOrder } from './order-log.js';
 
 // Nhóm lớn của 1 khoản mục (theo danh mục của sổ; tên cũ trước bản phân nhóm cũng được hiểu)
 const LEGACY_GROUPS = {
@@ -88,6 +89,11 @@ export function doPayment(book, p) {
       if (aa > lim) fail(`Số tiền hoàn cho ${doc.code} (${aa}) vượt số đã trả dư (${Math.max(lim, 0)})`);
     }
     insert('payment_allocations', { id: uuid(), payment_id: payId, book_id: book, doc_type: dt, doc_id: a.doc_id, amount: aa });
+    if (dt === 'don_ban') {
+      const fund = one(`select name from funds where id = ?`, fid)?.name;
+      logOrder(a.doc_id, k === 'hoan_khach' ? 'hoan_tien' : 'thu_tien', `${k === 'hoan_khach' ? 'Hoàn tiền cho khách' : 'Thu tiền'} – phiếu ${code}: ${vnd(aa)}`,
+        [fund ? `${k === 'hoan_khach' ? 'Chi từ' : 'Vào'} quỹ: ${fund}` : null, aa !== amt ? `Phiếu ${vnd(amt)}, phần cho đơn này ${vnd(aa)}` : null, trimNz(p.note) ? `Ghi chú: ${p.note}` : null].filter(Boolean));
+    }
     tot += aa;
   }
   if (tot > amt) fail(`Tổng số tiền gắn vào chứng từ (${tot}) vượt số tiền phiếu (${amt})`);
@@ -115,6 +121,9 @@ export function void_payment(p) {
   if (!trimNz(p.reason)) fail('Hãy ghi lý do hủy phiếu');
   checkDate(pay.book_id, pay.pay_date);
   run(`update payments set voided = 1, void_reason = ?, voided_at = ? where id = ?`, p.reason, nowIso(), pay.id);
+  for (const a of all(`select doc_id, amount from payment_allocations where payment_id = ? and doc_type = 'don_ban'`, pay.id)) {
+    logOrder(a.doc_id, 'huy_phieu', `Hủy phiếu ${pay.code} (${vnd(a.amount)})`, [`Lý do: ${p.reason}`]);
+  }
   run(`update expenses set voided = 1, void_reason = ? where settled_payment_id = ?`, 'Hủy theo phiếu ' + pay.code, pay.id);
   // Giao dịch ngân hàng: khi mọi phiếu thu sinh ra từ nó đều đã hủy → chờ ghi lại
   for (const t of all(`select * from bank_txns where exists (select 1 from json_each(payment_ids) where value = ?)`, pay.id)) {

@@ -15,6 +15,7 @@ drop view if exists v_quotes;
 drop view if exists v_drivers;
 drop view if exists v_driver_trips;
 drop view if exists v_audit;
+drop view if exists v_order_events;
 drop view if exists v_members;
 drop view if exists v_bank_txns;
 drop view if exists v_shipments;
@@ -611,6 +612,11 @@ select a.id, a.book_id, a.user_id, coalesce(m.display_name, u.email) as user_nam
   a.old_data, a.new_data
 from audit_log a left join users u on u.id = a.user_id
 left join book_members m on m.user_id = a.user_id and m.book_id = a.book_id;
+
+create view v_order_events as
+select e.id, e.book_id, e.order_id, e.at, e.user_id, coalesce(m.display_name, u.name, u.email) as user_name, e.action, e.summary, e.detail
+from order_events e left join users u on u.id = e.user_id
+left join book_members m on m.user_id = e.user_id and m.book_id = e.book_id;
 
 -- ---------- VẬN ĐƠN & TIỀN VỀ ----------
 create view v_shipments as

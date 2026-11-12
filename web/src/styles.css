@@ -534,6 +534,9 @@ code { font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-r
 .doc-wrap { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 16px; align-items: start; }
 .doc-side { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 0; }
 .doc-side .stack-s { gap: 14px; }
+.doc-batch { display: flex; flex-direction: column; gap: 10px; }
+.doc-batch-list { display: flex; flex-direction: column; gap: 8px; }
+.doc-batch .btn { justify-content: center; }
 .doc-main, .doc-side { min-width: 0; }
 .modal-body > .tabs { overflow-x: auto; flex-shrink: 0; }
 .doc-scroll { overflow: auto; background: var(--surface-2); border-radius: 10px; padding: 14px; max-height: 72vh; }
@@ -884,6 +887,15 @@ body {
 .qe-anim { display: flex; flex-direction: column; gap: 6px; animation: hc-in .14s ease-out; }
 .qe-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .qe-collect { display: flex; flex-direction: column; gap: 6px; }
+.pos-edit-note { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 10px; padding: 10px 12px; border-radius: 10px; background: var(--warn-bg, #fff6e5); color: var(--ink); font-size: 13px; line-height: 1.45; }
+.pos-line-del:disabled { opacity: .3; cursor: not-allowed; }
+.order-history { display: flex; flex-direction: column; gap: 10px; }
+.order-history .oh-item { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 4px 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.order-history .oh-item:last-child { border-bottom: 0; padding-bottom: 0; }
+.order-history .oh-when { font-size: 12.5px; color: var(--muted); }
+.order-history .oh-what b { font-weight: 600; }
+.order-history ul { margin: 4px 0 0; padding-left: 18px; font-size: 13px; color: var(--muted); }
+@media (max-width: 600px) { .order-history .oh-item { grid-template-columns: minmax(0, 1fr); } }
 .qe-collect .check { font-size: 13px; }
 .qe-chips button { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 99px; padding: 2px 8px; font-size: 12px; cursor: pointer; }
 .qe-chips button:hover, .qe-chips button.on { border-color: var(--accent); color: var(--accent); }

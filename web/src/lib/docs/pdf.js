@@ -87,10 +87,15 @@ export function toPdfDef(doc) {
   };
 }
 
-export async function pdfBlob(doc) {
+// Một hoặc nhiều chứng từ (cùng phông) → một tệp PDF; mỗi chứng từ bắt đầu ở trang mới
+export async function pdfBlob(docOrList) {
+  const docs = Array.isArray(docOrList) ? docOrList : [docOrList];
+  const doc = docs[0];
   if (!pdfMakeP) pdfMakeP = import('pdfmake/build/pdfmake').then((m) => m.default || m);
   const [pdfMake, f] = await Promise.all([pdfMakeP, fontVfs(doc.font)]);
   const def = toPdfDef(doc);
+  for (const d of docs.slice(1)) def.content.push({ text: '', pageBreak: 'after' }, ...toPdfDef(d).content);
+  if (docs.length > 1) def.info.title = docs.map((d) => d.title).join(', ') + ' ' + (doc.code || '');
   return new Promise((resolve, reject) => {
     try { pdfMake.createPdf(def, null, { [doc.font]: f.def }, f.vfs).getBlob((b) => resolve(b)); } catch (e) { reject(e); }
   });

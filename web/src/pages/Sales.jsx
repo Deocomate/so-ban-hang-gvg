@@ -251,7 +251,10 @@ function QuickDelivery({ order: o, close }) {
                 {mode === 'full' ? `Giao đủ phần còn lại (${fq(o.remaining_qty)})` : `Giao ${fq(total)}${total ? '' : ' – nhập số lượng'}`}{collect ? ' & thu tiền' : ''}</Btn>
               <button type="button" className="link-btn small" onClick={() => { close(); open('deliver', { order: o }); }}>Mở phiếu giao đầy đủ (ngày, phí ship, vận đơn…)</button>
             </>
-          ) : <div className="good small strong">Đã giao đủ{o.delivery_count > 1 ? ` trong ${o.delivery_count} đợt` : ''}.</div>}
+          ) : <>
+            <div className="good small strong">Đã giao đủ{o.delivery_count > 1 ? ` trong ${o.delivery_count} đợt` : ''}.</div>
+            <button type="button" className="link-btn small" onClick={() => { close(); open('order', { id: o.id }); }}>Giao nhầm? Mở đơn để sửa hoặc hủy đợt giao…</button>
+          </>}
           {o.delivered_value > 0 && <button type="button" className="link-btn small" onClick={() => { close(); open('return', { order: o }); }}>Khách trả hàng…</button>}
         </>
       )}
@@ -375,11 +378,13 @@ export function OrderDetail({ id, onClose }) {
   const rets = useQ('sales_returns', [['order_id', 'eq', id]], 'created_at');
   const pays = useQ('doc_payments', [['doc_id', 'eq', id]], 'pay_date');
   const pos = useQ('purchase_orders', [['sales_order_id', 'eq', id]], 'created_at', 50, can('xem_nhap_hang'));
-  const audit = useQ('audit', [['row_id', 'eq', id]], 'at desc', 50, can('owner'));
+  const history = useQ('order_events', [['order_id', 'eq', id]], 'id desc', 300);
   const contract = useQ('contracts', [['order_id', 'eq', id]]);
   const { run, busy } = useAction();
   const [cancelMode, setCancelMode] = useState(null);
   const [reason, setReason] = useState('');
+  const [undo, setUndo] = useState(null); // đợt giao đang chờ xác nhận hủy
+  const [undoReason, setUndoReason] = useState('');
   const d = o.data?.[0];
   if (!d) return <Modal title="Đơn hàng" onClose={onClose} size="lg">{o.error ? <ErrorBox error={o.error} /> : <Loading />}</Modal>;
   const canSell = can('ban_hang');
@@ -393,8 +398,7 @@ export function OrderDetail({ id, onClose }) {
         {contract.data?.[0] ? <Btn icon="receipt" onClick={() => open('contract', { id: contract.data[0].id })}>Hợp đồng {contract.data[0].code}</Btn>
           : canSell && d.status !== 'huy' && d.kind === 'dat_hang' && <Btn icon="receipt" onClick={() => open('contract-form', { order_id: id })}>Lập hợp đồng</Btn>}
         <span className="grow" />
-        {canSell && d.status === 'nhap' && <Btn onClick={() => { onClose(); open('order-form', { id }); }} icon="edit">Sửa</Btn>}
-        {canSell && d.status === 'xac_nhan' && d.delivery_count === 0 && <Btn onClick={() => { onClose(); open('order-form', { id }); }} icon="edit">Sửa</Btn>}
+        {canSell && d.status !== 'huy' && <Btn onClick={() => { onClose(); open('order-form', { id }); }} icon="edit">Sửa</Btn>}
         {canSell && d.status === 'nhap' && <Btn kind="soft" busy={busy} onClick={() => run('confirm_sales_order', { id }, (r) => (r.warnings?.length ? 'Đã xác nhận. Lưu ý: ' + r.warnings.join('; ') : 'Đã xác nhận đơn – hàng đã được giữ'))}>Xác nhận đơn</Btn>}
         {can('thu_chi') && d.status !== 'nhap' && (d.remaining_to_pay > 0 || d.payment_status === 'thua_tien') && (
           <Btn kind="soft" icon={payKind === 'thu_khach' ? 'in' : 'out'} onClick={() => open('payment', { kind: payKind, party_id: d.customer_id,
@@ -464,8 +468,23 @@ export function OrderDetail({ id, onClose }) {
             { key: 'c', label: 'Đợt', render: (r) => <><b>Đợt {dels.data.indexOf(r) + 1}</b><div className="cell-sub">{r.code} · {dmy(r.delivery_date)}</div></> },
             { key: 'v', label: 'Tiền đợt này', align: 'right', render: (r) => money(r.total) },
             { key: 'g', label: 'Giá vốn', align: 'right', render: (r) => (r.cogs === null || r.cogs === undefined ? '—' : money(r.cogs)) },
-            { key: 'p', label: 'Chứng từ', render: (r) => <div className="row gap-s">{[['hoa_don', 'Hóa đơn'], ['bien_ban', 'Biên bản'], ['hd_van_chuyen', 'HĐVC']].map(([t, l]) => <Btn small key={t} onClick={() => open('doc', { kind: 'delivery', id: r.id, type: t })}>{l}</Btn>)}{canSell && <Btn small onClick={() => open('trip', { order_id: id, delivery_id: r.id })}>Lái xe</Btn>}</div> },
+            { key: 'p', label: 'Chứng từ', render: (r) => <div className="row gap-s">{[['hoa_don', 'Hóa đơn'], ['bien_ban', 'Biên bản'], ['hd_van_chuyen', 'HĐVC']].map(([t, l]) => <Btn small key={t} onClick={() => open('doc', { kind: 'delivery', id: r.id, type: t })}>{l}</Btn>)}{canSell && <Btn small onClick={() => open('trip', { order_id: id, delivery_id: r.id })}>Lái xe</Btn>}
+              {canSell && <Btn small kind="ghost" onClick={() => { setUndo(r); setUndoReason(''); }}>Hủy đợt giao</Btn>}</div> },
           ]} />
+          {undo && (
+            <div className="card stack-s">
+              <b>Hủy phiếu giao {undo.code} ({dmy(undo.delivery_date)})?</b>
+              <div className="small muted">Hàng của đợt này nhập lại kho, doanh thu đợt này bỏ đi, đơn quay lại chờ giao. Tiền đã thu vẫn giữ (thành tiền khách trả trước). Thao tác được ghi vào Lịch sử đơn.</div>
+              <div className="row gap">
+                <Input value={undoReason} onChange={setUndoReason} placeholder="Lý do (bắt buộc), vd. bấm nhầm giao đủ" style={{ maxWidth: 360 }} autoFocus />
+                <ConfirmBtn kind="danger" busy={busy} onConfirm={async () => {
+                  if (!undoReason.trim()) return;
+                  if (await run('cancel_delivery', { id: undo.id, reason: undoReason.trim() }, `Đã hủy phiếu giao ${undo.code}`)) setUndo(null);
+                }}>Xác nhận hủy đợt giao</ConfirmBtn>
+                <Btn onClick={() => setUndo(null)}>Thôi</Btn>
+              </div>
+            </div>
+          )}
           {(rets.data || []).length > 0 && <Table dense rows={rets.data} columns={[
             { key: 'c', label: 'Phiếu trả', render: (r) => <><b>{r.code}</b><div className="cell-sub">{dmy(r.return_date)} · {r.reason}</div></> },
             { key: 'l', label: 'Hàng', render: (r) => (r.lines || []).map((x) => `${x.sku} × ${fq(x.qty)}${x.restock ? '' : ' (lỗi, không nhập kho)'}`).join('; ') },
@@ -487,7 +506,7 @@ export function OrderDetail({ id, onClose }) {
             <div className="row gap">
               {d.delivery_count === 0 && <Btn onClick={() => setCancelMode('all')}>Hủy đơn</Btn>}
               {d.status === 'xac_nhan' && d.delivery_count > 0 && d.remaining_qty > 0 && <Btn onClick={() => setCancelMode('rest')}>Hủy phần chưa giao</Btn>}
-              <span className="muted small">{d.delivery_count > 0 ? 'Đơn đã giao không xóa được. Hàng đã giao muốn hủy thì dùng "Trả hàng" để ghi đảo doanh thu, giá vốn, công nợ.' : 'Hủy đơn chưa giao sẽ nhả hàng đang giữ. Tiền cọc (nếu có) chuyển thành tiền cần hoàn cho khách.'}</span>
+              <span className="muted small">{d.delivery_count > 0 ? 'Đơn đã giao không hủy được. Giao nhầm thì bấm "Hủy đợt giao" ở từng đợt; khách trả lại hàng thì dùng "Trả hàng".' : 'Hủy đơn chưa giao sẽ nhả hàng đang giữ. Tiền cọc (nếu có) chuyển thành tiền cần hoàn cho khách.'}</span>
             </div>
           ) : (
             <div className="row gap">
@@ -501,11 +520,18 @@ export function OrderDetail({ id, onClose }) {
           )}
         </Section>
       )}
-      {can('owner') && audit.data && audit.data.length > 0 && (
-        <details><summary className="muted small">Nhật ký chỉnh sửa đơn ({audit.data.length})</summary>
-          <div className="small muted">{audit.data.map((a) => <div key={a.id}>{new Date(a.at).toLocaleString('vi-VN')} · {a.user_name || 'hệ thống'} · {a.op === 'INSERT' ? 'tạo' : a.op === 'UPDATE' ? 'sửa' : 'xóa'}</div>)}</div>
-        </details>
-      )}
+      <Section title={`Lịch sử đơn hàng${history.data?.length ? ` (${history.data.length})` : ''}`}>
+        {!history.data ? <Loading /> : !history.data.length ? <div className="muted small">Chưa có thao tác nào được ghi (đơn lập trước khi có lịch sử).</div> : (
+          <div className="order-history">
+            {history.data.map((e) => (
+              <div className="oh-item" key={e.id}>
+                <div className="oh-when">{new Date(e.at).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' })}<div>{e.user_name || 'Hệ thống'}</div></div>
+                <div className="oh-what"><b>{e.summary}</b>{Array.isArray(e.detail) && e.detail.length > 0 && <ul>{e.detail.map((x, i) => <li key={i}>{x}</li>)}</ul>}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
     </Modal>
   );
 }

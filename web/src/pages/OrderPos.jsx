@@ -97,8 +97,9 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
       const ls = await rpc('q', { view: 'sales_order_lines', filters: [['order_id', 'eq', id]], order: 'line_no' });
       const trip = (await rpc('q', { view: 'driver_trips', filters: [['order_id', 'eq', id]] })).find((t) => !t.delivery_id);
       setF((s) => ({ ...s, kind: o.kind, customer_id: o.customer_id, channel: o.channel || '', order_date: o.order_date, due_date: o.due_date || '', staff: o.staff || '',
-        note: o.note || '', discount: o.discount, shipping_fee: o.shipping_fee, vat_rate: o.vat_rate || 0, price_book_id: o.price_book_id || '', transport: trip ? { driver_id: trip.driver_id, amount: trip.amount, payer: trip.payer, collect: trip.collect, note: trip.note || '' } : null, status0: o.status, code: o.code,
-        lines: ls.map((l) => { const c = l.unit_conv || 1; return { key: ++seq, id: l.id, product_id: l.product_id, qty: l.qty / c, unit_price: l.unit_price * c, unit: l.unit_name || l.unit, conv: c,
+        note: o.note || '', discount: o.discount, shipping_fee: o.shipping_fee, vat_rate: o.vat_rate || 0, price_book_id: o.price_book_id || '', transport: trip ? { driver_id: trip.driver_id, amount: trip.amount, payer: trip.payer, collect: trip.collect, note: trip.note || '' } : null, status0: o.status, code: o.code, delivery_count: o.delivery_count || 0, paid_net: o.paid_net || 0,
+        lines: ls.filter((l) => l.qty - (l.cancelled_qty || 0) > 0 || l.delivered_qty > 0).map((l) => { const c = l.unit_conv || 1; return { key: ++seq, id: l.id, product_id: l.product_id,
+          qty: (l.qty - (l.cancelled_qty || 0)) / c, unit_price: l.unit_price * c, unit: l.unit_name || l.unit, conv: c, delivered: l.delivered_qty || 0,
           discount_pct: l.discount_pct, po_line_id: l.po_line_id, note: l.note || '', manual: true }; }) }));
       setLoaded(true);
     })().catch((e) => toast(e.message, 'err'));
@@ -171,7 +172,7 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
     lastAdded.current = null;
   }, [f.lines]);
   const setLine = (key, patch) => setF((s) => ({ ...s, lines: s.lines.map((l) => (l.key === key ? { ...l, ...patch } : l)) }));
-  const delLine = (key) => setF((s) => ({ ...s, lines: s.lines.filter((l) => l.key !== key) }));
+  const delLine = (key) => setF((s) => ({ ...s, lines: s.lines.filter((l) => l.key !== key || l.delivered > 0) }));
 
   const lineTotal = (l) => Math.round((Number(l.qty) || 0) * (Number(l.unit_price) || 0) * (1 - (Number(l.discount_pct) || 0) / 100));
   const gross = f.lines.reduce((s, l) => s + lineTotal(l), 0);
@@ -266,6 +267,14 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
       <div className="pos-body">
         <div className="pos-left">
           <div className="pos-lines">
+            {editing && (f.delivery_count > 0 || f.paid_net > 0) && (
+              <div className="pos-edit-note">
+                <Icon name="alert" size={16} />
+                <span>{f.delivery_count > 0 ? `Đơn đã giao ${f.delivery_count} đợt. ` : ''}{f.paid_net > 0 ? `Đã thu ${money(f.paid_net)} đ. ` : ''}
+                  Sửa giá, thêm hàng, ghi chú được; tiền hàng đã giao tự tính lại theo giá mới. Dòng đã giao không bỏ được và không giảm dưới số đã giao —
+                  muốn làm vậy hãy bấm "Hủy đợt giao" trong chi tiết đơn trước. Mọi thay đổi được ghi vào Lịch sử đơn.</span>
+              </div>
+            )}
             {f.lines.length === 0 && (
               <div className="pos-empty">
                 <Icon name="search" size={34} />
@@ -281,9 +290,11 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
               return (
                 <div className="pos-line" key={l.key} data-line={l.key}>
                   <div className="pos-line-no">{i + 1}</div>
-                  <button className="pos-line-del" onClick={() => delLine(l.key)} aria-label="Xóa dòng" title="Xóa dòng"><Icon name="x" size={16} /></button>
+                  <button className="pos-line-del" onClick={() => delLine(l.key)} disabled={l.delivered > 0} aria-label="Xóa dòng"
+                    title={l.delivered > 0 ? 'Dòng đã giao — muốn bỏ hãy hủy đợt giao trong chi tiết đơn' : 'Xóa dòng'}><Icon name="x" size={16} /></button>
                   <div className="pos-line-info">
                     <div className="pos-line-name"><span className="muted">{p.sku}</span> <b>{p.name || '…'}</b>{p.is_kit ? ' (bộ)' : p.is_service ? ' (dịch vụ)' : ''}</div>
+                    {l.delivered > 0 && <div className="small warn">Đã giao {fq(l.delivered)} {p.unit} — số lượng không được thấp hơn</div>}
                     {(productSub(p) || (l.conv || 1) !== 1) && <div className="small muted">
                       {productSub(p)}{(l.conv || 1) !== 1 ? `${productSub(p) ? ' · ' : ''}= ${fq(baseQty(l))} ${p.unit}` : ''}
                     </div>}
