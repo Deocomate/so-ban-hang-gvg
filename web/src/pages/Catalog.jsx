@@ -244,7 +244,7 @@ export function DriversPage() {
   const rows = useMemo(() => (trips.data || []).filter((t) => (tab === 'all' || t.unpaid > 0) && match(`${t.code} ${t.driver_name} ${t.order_code || ''} ${t.customer_name || ''}`, search)), [trips.data, tab, search]);
   const unpaid = (drivers.data || []).reduce((s, d) => s + d.unpaid, 0);
   return (
-    <ListPage title="Lái xe & công nợ" sub="Thu hộ cùng hóa đơn hoặc cửa hàng chịu phí thì phát sinh khoản phải trả lái xe. Khách trả trực tiếp cho lái xe thì không phát sinh nợ."
+    <ListPage title="Lái xe & công nợ"
       filters={<FilterBox title="Chuyến"><RadioList value={tab} onChange={setTab} options={[{ value: 'debt', label: 'Còn phải trả', count: (trips.data || []).filter((t) => t.unpaid > 0).length }, { value: 'all', label: 'Tất cả', count: (trips.data || []).length }]} /></FilterBox>}
       search={<Search value={search} onChange={setSearch} placeholder="Tìm lái xe, đơn, khách…" />}
       actions={<>{can('ban_hang') && <Btn onClick={() => open('trip', {})} icon="truck">Ghi chuyến</Btn>}{can('ban_hang') && <Btn kind="primary" icon="plus" onClick={() => open('driver', {})}>Thêm lái xe</Btn>}</>}>
@@ -284,7 +284,7 @@ export function SalesReturnsPage() {
   const rows = useMemo(() => (q.data || []).filter((r) => time.inRange(r.return_date)
     && match(`${r.code} ${r.order_code || ''} ${r.customer_name || ''} ${r.reason || ''}`, search)), [q.data, time.time, search]);
   return (
-    <ListPage title="Trả hàng" sub="Khách trả lại hàng đã giao. Lập phiếu trả từ chi tiết đơn hàng, nút “Trả hàng”."
+    <ListPage title="Trả hàng"
       filters={<TimeFilter filter={time} />}
       search={<Search value={search} onChange={setSearch} placeholder="Tìm mã phiếu trả, mã đơn, khách…" />}>
       <ErrorBox error={q.error} />

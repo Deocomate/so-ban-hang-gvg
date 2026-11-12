@@ -23,8 +23,7 @@ export function ReportsPage(nav) {
   const [tab, setTab] = usePageTab(nav, 'pl', ['eod', 'pl', 'prod', 'grp', 'orders', 'staff', 'factory', 'stock', 'debt', ...(cost ? ['exp'] : [])]);
   return (
     <>
-      <div className="page-head"><div className="grow"><h1 className="page-title">Báo cáo</h1>
-        <div className="page-sub">Doanh thu tính theo ngày giao hàng. Tiền thu tính theo ngày thu. Mọi bảng đều xuất được ra Excel.</div></div></div>
+      <div className="page-head"><div className="grow"><h1 className="page-title">Báo cáo</h1></div></div>
       <Tabs value={tab} onChange={setTab} tabs={[
         { value: 'eod', label: 'Cuối ngày' }, { value: 'pl', label: 'Lãi lỗ theo tháng' }, { value: 'prod', label: 'Theo sản phẩm' }, { value: 'grp', label: 'Theo kênh / khách / nhóm' },
         { value: 'orders', label: 'Đặt hàng' }, { value: 'staff', label: 'Nhân viên' },

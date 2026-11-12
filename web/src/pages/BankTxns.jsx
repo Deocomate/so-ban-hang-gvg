@@ -24,7 +24,7 @@ export function BankPage() {
     <ListPage title="Tiền về tài khoản"
       filters={<><TimeFilter filter={time} /><FilterBox title="Trạng thái"><RadioList value={tab} onChange={setTab} options={[{ value: 'cho_xu_ly', label: 'Chờ xử lý', count: pending.length }, { value: 'da_ghi', label: 'Đã ghi' }, { value: 'bo_qua', label: 'Bỏ qua' }, { value: 'all', label: 'Tất cả (cả tiền ra)' }]} /></FilterBox></>}
       search={<Search value={search} onChange={setSearch} placeholder="Tìm nội dung, người chuyển, mã đơn, số tiền…" />}
-      sub={<>{bank ? `${bank.bank_name || 'Ngân hàng'} · ${bank.account_no} · ${bank.account_name}. ` : ''}Khách chuyển khoản ghi nội dung <b>{orderTransferContent(book, 'DH00012')}</b> (mã sổ + mã đơn) thì phần mềm tự gạch nợ đúng đơn. Các khoản không có mã đơn nằm ở “Chờ xử lý”.</>}
+      sub={bank ? `${bank.bank_name || 'Ngân hàng'} · ${bank.account_no} · ${bank.account_name}` : ''}
       actions={<>
         <Btn icon="dl" onClick={() => exportXlsx('tien-ve-tai-khoan.xlsx', [{ name: 'Tiền về', rows: list, columns: [
           { key: 'txn_at', label: 'Thời gian', get: (t) => dmyhm(t.txn_at) }, { key: 'amount', label: 'Số tiền' }, { key: 'direction', label: 'Chiều', get: (t) => (t.direction === 'in' ? 'Vào' : 'Ra') },

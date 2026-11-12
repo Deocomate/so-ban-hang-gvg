@@ -34,7 +34,7 @@ export function InventoryPage(nav) {
   const tot = rows.reduce((s, p) => s + (p.stock_value || 0), 0);
   const cats = [...new Set([...(settings.categories || []), ...all.map((p) => p.category).filter(Boolean)])];
   return (
-    <ListPage title="Kho hàng" sub="Tồn thực tế = tồn trong kho. Có thể bán = tồn thực tế − hàng đang giữ cho đơn đã xác nhận chưa giao."
+    <ListPage title="Kho hàng"
       filters={<>
         <FilterBox title="Xem"><RadioList value={tab} onChange={setTab} options={[{ value: 'stock', label: 'Tồn kho' }, { value: 'nxt', label: 'Nhập – xuất – tồn theo kỳ' }, { value: 'adj', label: 'Phiếu điều chỉnh / kiểm kho' }]} /></FilterBox>
         {tab === 'stock' && <>

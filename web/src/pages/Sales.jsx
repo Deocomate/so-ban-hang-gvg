@@ -54,7 +54,7 @@ export function SalesPage() {
   ];
   const sum = (k) => rows.reduce((s, o) => s + (o[k] || 0), 0);
   return (
-    <ListPage title="Hóa đơn" sub="Đơn nháp không ảnh hưởng tồn kho hay doanh thu. Doanh thu ghi nhận khi giao hàng."
+    <ListPage title="Hóa đơn"
       filters={<>
         <TimeFilter filter={time} />
         <StatusFilter filter={status} rows={inTime} />
@@ -117,7 +117,7 @@ export function SpecialPage() {
       { key: 'st', label: 'Trạng thái', render: (o) => <div className="row gap-s"><Pill tone={o.status === 'huy' ? 'mute' : o.status === 'nhap' ? 'warn' : 'accent'}>{ORDER_STATUS.find((x) => x.test(o))?.label}</Pill>{o.is_late && <Pill tone="bad">trễ hẹn</Pill>}</div> },
     ];
     return (
-      <ListPage title="Đặt hàng" sub="Phiếu tạm chưa giữ hàng. Xác nhận đơn thì hàng được giữ; mỗi đợt giao là một hóa đơn."
+      <ListPage title="Đặt hàng"
         filters={<><TimeFilter filter={time} /><StatusFilter filter={status} rows={inTime} /></>}
         search={<Search value={search} onChange={setSearch} placeholder="Tìm mã đặt hàng, khách, SĐT…" />}
         actions={<>{viewSwitch}{createBtn}</>}>
@@ -140,8 +140,7 @@ export function SpecialPage() {
   return (
     <>
       <div className="page-head">
-        <div className="grow"><h1 className="page-title">Đặt hàng</h1>
-          <div className="page-sub">Mới nhận → Xác nhận → Sản xuất / đặt NCC → Hàng về → Giao một phần / giao đủ → Hoàn tất. Các bước tự chuyển theo đơn đặt xưởng, phiếu nhận, phiếu giao và tiền thu.</div></div>
+        <div className="grow"><h1 className="page-title">Đặt hàng</h1></div>
         <Check checked={showDone} onChange={setShowDone}>Hiện đơn đã xong / đã hủy</Check>
         {viewSwitch}{createBtn}
       </div>

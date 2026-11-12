@@ -47,13 +47,13 @@ function AdjDocsPage({ title, sub, reasons, kinds, kindOf, kindLabel, mode, crea
 }
 
 export function DamagePage() {
-  return <AdjDocsPage title="Xuất hủy" sub="Hàng vỡ, lỗi, thất thoát được xuất khỏi kho. Giá trị theo giá vốn bình quân, tính vào hao hụt kho trong chi phí vận hành."
+  return <AdjDocsPage title="Xuất hủy"
     reasons={[...DAMAGE_REASONS.map((r) => r.value), 'hang_tra_loi']} kinds={[...DAMAGE_REASONS, { value: 'hang_tra_loi', label: 'Hàng khách trả bị lỗi' }]}
     kindOf={(a) => a.reason} kindLabel="Lý do" mode="huy" createLabel="Xuất hủy" file="xuat-huy.xlsx" />;
 }
 
 export function InternalUsePage() {
-  return <AdjDocsPage title="Xuất dùng nội bộ" sub="Hàng lấy ra dùng trong cửa hàng, làm mẫu trưng bày hoặc tặng khách. Giá trị theo giá vốn bình quân, tính vào chi phí."
+  return <AdjDocsPage title="Xuất dùng nội bộ"
     reasons={['noi_bo']} kinds={INTERNAL_PURPOSES.map((x) => ({ value: x, label: x }))} kindOf={(a) => a.purpose} kindLabel="Loại xuất"
     mode="noi_bo" createLabel="Xuất dùng nội bộ" file="xuat-dung-noi-bo.xlsx" />;
 }
@@ -66,7 +66,7 @@ export function ProductionPage() {
   const rows = (q.data || []).filter((x) => match(`${x.code} ${x.sku} ${x.name} ${x.note || ''}`, search));
   const cost = can('xem_gia_von');
   return (
-    <ListPage title="Sản xuất" sub="Lắp ráp hoặc làm thành phẩm từ nguyên liệu trong kho: thành phần bị trừ kho, thành phẩm được nhập với giá vốn bằng tổng giá trị thành phần."
+    <ListPage title="Sản xuất"
       filters={<TimeFilter filter={time} />}
       search={<Search value={search} onChange={setSearch} placeholder="Tìm mã phiếu, mặt hàng…" />}
       actions={<>

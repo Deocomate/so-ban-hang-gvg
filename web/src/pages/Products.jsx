@@ -52,7 +52,7 @@ export function ProductsPage() {
   const show = (k) => cols.includes(k);
   const stockCell = (p, v) => (p.is_service ? <span className="muted">—</span> : v);
   return (
-    <ListPage title="Hàng hóa" sub={`Mỗi biến thể (mẫu + kích thước + màu men) có một mã SKU riêng. ${pn.length} mức giá: ${pn.join(' / ')}.`}
+    <ListPage title="Hàng hóa"
       filters={<>
         <FilterBox title="Loại hàng"><RadioList value={type} onChange={setType} options={[{ value: '', label: 'Tất cả' }, ...PRODUCT_TYPES.map((t) => ({ ...t, count: inState.filter((p) => p.product_type === t.value).length }))]} /></FilterBox>
         <FilterBox title="Nhóm hàng"><Select value={cat} onChange={setCat} options={pickOpts('category')} placeholder="Tất cả nhóm hàng" aria-label="Nhóm hàng" /></FilterBox>

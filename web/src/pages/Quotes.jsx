@@ -26,7 +26,7 @@ export function QuotesPage() {
   const all = useMemo(() => (q.data || []).filter((x) => time.inRange(x.quote_date)), [q.data, time.time]);
   const rows = useMemo(() => all.filter((x) => (!st || x.status === st) && match(`${x.code} ${x.customer_name} ${x.site || ''}`, search)), [all, st, search]);
   return (
-    <ListPage title="Báo giá" sub="Báo giá không giữ hàng và không ghi công nợ. Muốn lập đơn thì mở báo giá và bấm “Chuyển sang đơn”."
+    <ListPage title="Báo giá"
       filters={<><TimeFilter filter={time} /><FilterBox title="Trạng thái"><RadioList value={st} onChange={setSt} options={[{ value: '', label: 'Tất cả', count: all.length }, ...Object.entries(STATUS).map(([value, [label]]) => ({ value, label, count: all.filter((x) => x.status === value).length }))]} /></FilterBox></>}
       search={<Search value={search} onChange={setSearch} placeholder="Tìm mã, khách, công trình…" />}
       actions={can('ban_hang') && <Btn kind="primary" icon="plus" onClick={() => open('quote-form', {})}>Tạo báo giá</Btn>}>

@@ -18,7 +18,7 @@ export function SettingsPage(nav) {
   useEffect(() => { const h = (e) => setTab(e.detail); window.addEventListener('settings-tab', h); return () => window.removeEventListener('settings-tab', h); }, []);
   return (
     <>
-      <div className="page-head"><div className="grow"><h1 className="page-title">Cài đặt</h1><div className="page-sub">Sổ đang mở: <b>{book?.name}</b>. Mỗi thương hiệu là một sổ riêng: hàng hóa, khách, quỹ tiền và báo cáo không lẫn vào nhau.</div></div></div>
+      <div className="page-head"><div className="grow"><h1 className="page-title">Cài đặt</h1><div className="page-sub">Sổ đang mở: <b>{book?.name}</b>.</div></div></div>
       <Tabs value={tab} onChange={setTab} tabs={owner ? [
         { value: 'book', label: 'Thông tin sổ' }, { value: 'lists', label: 'Danh sách chọn' }, { value: 'funds', label: 'Quỹ tiền' }, ...adminTabs,
         { value: 'bank', label: 'Tài khoản nhận tiền' }, { value: 'docs', label: 'Mẫu chứng từ' }, { value: 'carriers', label: 'Đơn vị vận chuyển' }, { value: 'notify', label: 'Thông báo điện thoại' },

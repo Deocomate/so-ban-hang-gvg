@@ -4,7 +4,7 @@ Bản chạy thật: https://so-ban-hang-thceramics.admirable.site
 
 ## Máy chủ
 
-- CentOS 7, SSH cổng và tài khoản trong `.env.ssh` (không đưa lên git).
+- CentOS 7, SSH cổng và tài khoản trong `.env` ở thư mục dự án (`SSH_IP`, `SSH_PORT`, `SSH_USER`, `SSH_PASSWORD`; không đưa lên git).
 - Node 22 có sẵn ở `/opt/node22/bin/node`. CSDL dùng `node:sqlite` có sẵn trong Node nên không cần biên dịch thư viện nào trên máy chủ.
 - API có một thư viện JavaScript thuần (`nodemailer`, gửi email), đóng gói sẵn trong `server/node_modules` của `app.tgz`.
 - Máy chủ còn chạy nhiều site khác. Không chạy `yum update` hay nâng cấp glibc.
@@ -29,7 +29,7 @@ npm --prefix server ci --omit=dev
 tar -czf app.tgz --exclude=web/node_modules --exclude=web/src --exclude=web/public server/src server/scripts server/package.json server/package-lock.json server/node_modules web
 ```
 
-Đăng nhập SSH bằng mật khẩu trong `.env.ssh` (`IP`, `PORT`, `USER`, `PASSWORD`), không dùng khóa SSH. Máy Windows không có `sshpass`: đặt `SSH_ASKPASS` trỏ tới một script nhỏ in biến chứa mật khẩu, cùng `SSH_ASKPASS_REQUIRE=force` và `-o PreferredAuthentications=password`, để mật khẩu không hiện trên màn hình.
+Đăng nhập SSH bằng mật khẩu trong `.env` (`SSH_IP`, `SSH_PORT`, `SSH_USER`, `SSH_PASSWORD`), không dùng khóa SSH. Máy Windows không có `sshpass`: đặt `SSH_ASKPASS` trỏ tới một script nhỏ in biến chứa mật khẩu, cùng `SSH_ASKPASS_REQUIRE=force` và `-o PreferredAuthentications=password`, để mật khẩu không hiện trên màn hình.
 
 Trước khi giải nén bản mới: dừng dịch vụ và chép `gomsu.db*` vào `/var/lib/so-ban-hang-gom/backups/<tên-đợt>/` (máy chủ cũng tự sao lưu khi nâng cấp cấu trúc CSDL).
 

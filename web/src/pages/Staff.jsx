@@ -35,7 +35,7 @@ export function EmployeesPage() {
   const all = q.data || [];
   const rows = all.filter((e) => String(e.active ? 1 : 0) === st && match(`${e.code} ${e.name} ${e.phone || ''} ${e.title || ''}`, search));
   return (
-    <ListPage title="Danh sách nhân viên" sub="Hồ sơ và cách tính lương của từng nhân viên. Người bán ghi trên đơn trùng tên hoặc mã nhân viên thì doanh số được tính cho người đó."
+    <ListPage title="Danh sách nhân viên"
       filters={<FilterBox title="Trạng thái"><RadioList value={st} onChange={setSt} options={[{ value: '1', label: 'Đang làm việc', count: all.filter((e) => e.active).length },
         { value: '0', label: 'Đã nghỉ', count: all.filter((e) => !e.active).length }]} /></FilterBox>}
       search={<Search value={search} onChange={setSearch} placeholder="Tìm theo mã, tên nhân viên" />}
@@ -158,7 +158,7 @@ export function SchedulePage() {
   const rows = (emps.data || []).filter((e) => match(`${e.code} ${e.name}`, search));
   const cell = (eid, wd) => (sch.data || []).filter((w) => w.employee_id === eid && w.weekday === wd);
   return (
-    <ListPage title="Lịch làm việc" sub="Lịch lặp lại hằng tuần của từng nhân viên. Bảng chấm công dùng lịch này để chấm nhanh “đi làm” cho cả tuần."
+    <ListPage title="Lịch làm việc"
       search={<Search value={search} onChange={setSearch} placeholder="Tìm nhân viên" />}
       actions={!(shifts.data || []).length && can('owner') && <Btn kind="primary" icon="plus" onClick={() => open('shift', {})}>Tạo ca làm việc</Btn>}>
       <ErrorBox error={emps.error || sch.error} />
@@ -206,7 +206,7 @@ export function TimesheetPage() {
   const today = todayVN();
   const sum = (eid) => { const x = (ts.data || []).filter((t) => t.employee_id === eid && t.status === 'di_lam'); return { n: x.length, h: x.reduce((s, t) => s + t.hours + t.ot_hours, 0) }; };
   return (
-    <ListPage title="Bảng chấm công" sub="Bấm vào ô để chấm công một ngày. “Chấm theo lịch” điền đi làm cho các ca trong lịch tuần chưa chấm (không quá hôm nay)."
+    <ListPage title="Bảng chấm công"
       filters={<FilterBox title="Tuần"><div className="small"><b>{dmy(days[0])}</b> – <b>{dmy(days[6])}</b></div>
         <div className="row gap-s" style={{ marginTop: 8 }}><Btn small icon="back" aria-label="Tuần trước" onClick={() => setMon(addDays(mon, -7))} />
           <Btn small onClick={() => setMon(mondayOf(today))}>Tuần này</Btn><Btn small icon="chev" aria-label="Tuần sau" onClick={() => setMon(addDays(mon, 7))} /></div></FilterBox>}
@@ -262,7 +262,7 @@ export function PaysheetsPage() {
   const all = q.data || [];
   const rows = all.filter((s) => !st || s.status === st);
   return (
-    <ListPage title="Bảng lương" sub="Lập bảng lương theo kỳ từ chấm công, doanh số và cách tính lương của từng người. Chốt bảng lương để ghi chi phí lương; trả lương bằng phiếu chi."
+    <ListPage title="Bảng lương"
       filters={<FilterBox title="Trạng thái"><RadioList value={st} onChange={setSt} options={[{ value: '', label: 'Tất cả', count: all.length },
         ...[['tam', 'Tạm tính'], ['chot', 'Đã chốt'], ['huy', 'Đã hủy']].map(([v, l]) => ({ value: v, label: l, count: all.filter((s) => s.status === v).length }))]} /></FilterBox>}
       actions={<Btn kind="primary" icon="plus" onClick={() => open('paysheet-new', {})}>Bảng tính lương</Btn>}>
@@ -363,7 +363,7 @@ export function CommissionPage() {
   const { open } = useApp();
   const q = useQ('commission_tables', [], 'name', 200);
   return (
-    <ListPage title="Bảng hoa hồng" sub="Hoa hồng tính trên doanh số người bán (đã trừ hàng trả lại) theo từng hàng hóa, nhóm hàng hoặc toàn bộ. Gán bảng cho nhân viên ở phần Thiết lập lương."
+    <ListPage title="Bảng hoa hồng"
       actions={<Btn kind="primary" icon="plus" onClick={() => open('commission', {})}>Bảng hoa hồng</Btn>}>
       <ErrorBox error={q.error} />
       <Table rows={q.data} empty="Chưa có bảng hoa hồng" onRow={(t) => open('commission', { table: t })} columns={[
@@ -419,7 +419,7 @@ export function StaffSettingsPage({ go }) {
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
   return (
     <>
-      <div className="page-head"><div className="grow"><h1 className="page-title">Thiết lập nhân viên</h1><div className="page-sub">Ca làm việc, ngày công chuẩn, làm thêm giờ và đi muộn dùng chung cho chấm công và bảng lương.</div></div>
+      <div className="page-head"><div className="grow"><h1 className="page-title">Thiết lập nhân viên</h1></div>
         <Btn icon="users" onClick={() => go('cai-dat', 'users')}>Tài khoản đăng nhập & quyền</Btn></div>
       <Section title="Ca làm việc">
         <Table dense rows={shifts.data} empty="Chưa có ca làm việc" onRow={(s) => open('shift', { shift: s })} columns={[

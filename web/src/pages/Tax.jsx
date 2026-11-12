@@ -47,7 +47,7 @@ export function InvoiceList({ direction, title, sub }) {
   const sum = (k) => rows.reduce((s, t) => s + t[k], 0);
   return (
     <div className="stack">
-      {title && <div className="page-head"><div className="grow"><h1 className="page-title">{title}</h1><div className="page-sub">{sub}</div></div></div>}
+      {title && <div className="page-head"><div className="grow"><h1 className="page-title">{title}</h1>{sub && <div className="page-sub">{sub}</div>}</div></div>}
       <div className="row gap"><div className="grow" style={{ maxWidth: 380 }}><Search value={search} onChange={setSearch} placeholder="Tìm số hóa đơn, tên, mã số thuế…" /></div>
         <Btn icon="dl" onClick={() => exportXlsx(`hoa-don-${direction === 'vao' ? 'dau-vao' : 'dau-ra'}.xlsx`, [{ name: LABEL[direction], rows, columns: [{ key: 'inv_no', label: 'Số hóa đơn' }, { key: 'inv_date', label: 'Ngày', type: 'date' }, { key: 'party_name', label: 'Đối tác' }, { key: 'party_tax', label: 'Mã số thuế' }, { key: 'amount', label: 'Tiền trước thuế' }, { key: 'vat_rate', label: 'Thuế suất %' }, { key: 'vat_amount', label: 'Tiền VAT' }, { key: 'total', label: 'Tổng' }] }])}>Xuất Excel</Btn>
         {can(direction === 'vao' ? 'nhap_hang' : 'ban_hang') && <Btn kind="primary" icon="plus" onClick={() => open('tax-invoice', { direction })}>Thêm hóa đơn</Btn>}</div>
@@ -62,7 +62,7 @@ export function InvoiceList({ direction, title, sub }) {
   );
 }
 
-export function InputInvoicesPage() { return <InvoiceList direction="vao" title="Hóa đơn đầu vào" sub="Chung một kho chứng từ với mục Thuế HKD." />; }
+export function InputInvoicesPage() { return <InvoiceList direction="vao" title="Hóa đơn đầu vào" />; }
 
 function Reconcile({ profile }) {
   const [year, setYear] = useState(todayVN().slice(0, 4));
@@ -105,7 +105,7 @@ export function TaxPage(nav) {
   const [tab, setTab] = usePageTab(nav, 'tong');
   return (
     <>
-      <div className="page-head"><div className="grow"><h1 className="page-title">Thuế HKD</h1><div className="page-sub">Chứng từ đầu vào, đầu ra và đối soát doanh thu theo từng pháp nhân.</div></div>
+      <div className="page-head"><div className="grow"><h1 className="page-title">Thuế HKD</h1></div>
         <div style={{ minWidth: 280 }}><Select value={profile} onChange={setProfile} options={ds.profiles.map((p) => ({ value: p.id, label: p.legal_name || p.name }))} aria-label="Pháp nhân" /></div></div>
       <Tabs value={tab} onChange={setTab} tabs={[{ value: 'tong', label: 'Tổng quan thuế' }, { value: 'vao', label: 'Hóa đơn đầu vào' }, { value: 'ra', label: 'Hóa đơn đầu ra' }, { value: 'so', label: 'Sổ sách & hồ sơ' }]} />
       {tab === 'tong' && <Reconcile profile={profile} />}

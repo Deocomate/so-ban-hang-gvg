@@ -63,7 +63,7 @@ export function ShippingPage() {
   const codHeld = rows.filter((s) => s.cod_status === 'spx_dang_giu');
   const sum = (a, k) => a.reduce((x, s) => x + Number(s[k] || 0), 0);
   return (
-    <ListPage title="Vận chuyển" sub="Theo dõi vận đơn Shopee Express và BEST Express theo đúng các trạng thái trên app của hãng. Tiền thu hộ (COD) hãng giữ đến khi đối soát về tài khoản."
+    <ListPage title="Vận chuyển"
       filters={<>
         <TimeFilter filter={time} title="Thời gian tạo vận đơn" />
         <FilterBox title="Trạng thái"><RadioList value={tab} onChange={setTab} options={TABS.map((x) => ({ value: x.value, label: x.label, count: rows.filter(x.f).length }))} /></FilterBox>

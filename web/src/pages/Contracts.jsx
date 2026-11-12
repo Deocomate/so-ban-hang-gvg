@@ -55,7 +55,7 @@ export function ContractsPage() {
   const all = useMemo(() => (q.data || []).filter((k) => time.inRange(k.sign_date)), [q.data, time.time]);
   const rows = useMemo(() => all.filter((k) => (!st || k.contract_status === st) && match(`${k.code} ${k.customer_name} ${k.order_code}`, search)), [all, st, search]);
   return (
-    <ListPage title="Hợp đồng" sub="Mỗi hợp đồng gắn với một đơn đặt hàng, dùng chung đợt giao, tiền cọc và tồn kho của đơn đó."
+    <ListPage title="Hợp đồng"
       filters={<><TimeFilter filter={time} /><FilterBox title="Trạng thái"><RadioList value={st} onChange={setSt} options={[{ value: '', label: 'Tất cả', count: all.length }, ...Object.entries(STATUS).map(([value, [label]]) => ({ value, label, count: all.filter((k) => k.contract_status === value).length }))]} /></FilterBox></>}
       search={<Search value={search} onChange={setSearch} placeholder="Tìm số hợp đồng, khách, đơn…" />}
       actions={can('ban_hang') && <Btn kind="primary" icon="plus" onClick={() => open('order-form', { kind: 'dat_hang', then_contract: true })}>Tạo hợp đồng</Btn>}>

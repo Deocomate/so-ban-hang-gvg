@@ -44,7 +44,7 @@ export function PurchasesPage() {
   const inTime = (all || []).filter((r) => time.inRange(r.date) && match(`${r.code} ${r.supplier_name} ${r.supplier_code || ''} ${r.invoice_no || ''} ${r.sub || ''} ${r.note || ''}`, search));
   const rows = inTime.filter((r) => st.includes(r.status_label));
   return (
-    <ListPage title="Nhập hàng" sub="Phiếu nhập hàng vào kho. Phiếu tạm chưa làm tăng tồn; bấm Hoàn thành mới nhập kho và ghi công nợ nhà cung cấp."
+    <ListPage title="Nhập hàng"
       filters={<>
         <TimeFilter filter={time} />
         <FilterBox title="Trạng thái"><StatusChecks options={['Phiếu tạm', 'Đã nhập hàng', 'Đã hủy']} value={st} onChange={setSt} counts={countBy(inTime, 'status_label')} /></FilterBox>
@@ -86,7 +86,7 @@ export function PurchaseOrdersPage() {
     && (extra !== 'late' || o.is_late) && (extra !== 'debt' || o.payable > 0));
   const rows = inTime.filter((o) => st.includes(o.status_label));
   return (
-    <ListPage title="Đặt hàng nhập" sub="Đơn đặt nhà cung cấp hoặc đặt xưởng sản xuất. Đơn đặt chưa làm tăng tồn; tồn tăng khi nhận hàng (nhận được nhiều đợt)."
+    <ListPage title="Đặt hàng nhập"
       filters={<>
         <TimeFilter filter={time} />
         <FilterBox title="Trạng thái"><StatusChecks options={PO_STATUSES} value={st} onChange={setSt} counts={countBy(inTime, 'status_label')} /></FilterBox>
@@ -127,7 +127,7 @@ export function SupplierReturnsPage() {
   const inTime = (data || []).filter((r) => time.inRange(r.return_date) && match(`${r.code} ${r.supplier_name} ${r.po_code || ''} ${r.reason || ''}`, search));
   const rows = inTime.filter((r) => st.includes(r.status_label));
   return (
-    <ListPage title="Trả hàng nhập" sub="Hàng trả lại nhà cung cấp: xuất khỏi kho và giảm nợ phải trả NCC theo giá trả lại."
+    <ListPage title="Trả hàng nhập"
       filters={<>
         <TimeFilter filter={time} />
         <FilterBox title="Trạng thái"><StatusChecks options={['Đã trả hàng', 'Đã hủy']} value={st} onChange={setSt} counts={countBy(inTime, 'status_label')} /></FilterBox>

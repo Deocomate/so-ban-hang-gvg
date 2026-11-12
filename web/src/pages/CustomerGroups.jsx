@@ -31,7 +31,7 @@ export function CustomerGroupsPage() {
   const rows = groups.filter((g) => match(g.name, search) && (!only || (only === 'auto' ? g.info?.conds?.length : only === 'discount' ? g.info?.discount : !g.count)));
   const ungrouped = all.filter((c) => !c.kind).length;
   return (
-    <ListPage title="Nhóm khách hàng" sub="Mỗi khách thuộc một nhóm. Giảm giá của nhóm tự áp khi lập đơn mới; nhóm có điều kiện tự thêm, bỏ khách khi bấm cập nhật và mỗi ngày một lần."
+    <ListPage title="Nhóm khách hàng"
       filters={<FilterBox title="Lọc"><RadioList value={only} onChange={setOnly} options={[{ value: '', label: 'Tất cả', count: groups.length },
         { value: 'auto', label: 'Có điều kiện tự động', count: groups.filter((g) => g.info?.conds?.length).length },
         { value: 'discount', label: 'Có giảm giá', count: groups.filter((g) => g.info?.discount).length }, { value: 'empty', label: 'Chưa có khách', count: groups.filter((g) => !g.count).length }]} /></FilterBox>}

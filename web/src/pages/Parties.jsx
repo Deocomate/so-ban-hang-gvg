@@ -19,7 +19,6 @@ export function PartiesPage({ type }) {
   const tot = (k) => rows.reduce((s, c) => s + (c[k] || 0), 0);
   return (
     <ListPage title={isKh ? 'Khách hàng' : 'Nhà cung cấp / xưởng'}
-      sub={isKh ? 'Công nợ = nợ đầu kỳ + hàng đã giao − hàng trả lại − tiền khách đã trả. Tiền cọc hiện ở cột “trả trước”.' : 'Công nợ = nợ đầu kỳ + hàng đã nhận + chi phí ghi nợ − hàng trả lại − tiền đã trả.'}
       filters={<>
         <FilterBox title="Công nợ"><RadioList value={only} onChange={setOnly} options={[{ value: '', label: 'Tất cả', count: all.length },
           { value: 'debt', label: 'Còn nợ', count: all.filter((c) => c[debtKey] > 0).length }, { value: 'over', label: 'Quá hạn', count: all.filter((c) => c.overdue > 0).length },

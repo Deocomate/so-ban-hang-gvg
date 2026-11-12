@@ -145,7 +145,7 @@ export function CashPage() {
   const rows = useMemo(() => base.filter((p) => types.includes(p.direction) && states.includes(p.voided ? 'huy' : 'ok')), [base, types, states]);
   const sum = (d) => rows.filter((p) => p.direction === d && !p.voided).reduce((s, p) => s + p.cash_amount, 0);
   return (
-    <ListPage title="Sổ quỹ – thu chi" sub="Tiền thực vào – ra từng quỹ. Mỗi phiếu gắn đúng khách / NCC và chứng từ."
+    <ListPage title="Sổ quỹ – thu chi"
       filters={<>
         <TimeFilter filter={time} />
         <FilterBox title="Loại chứng từ"><CheckList value={types} onChange={setTypes} options={[
@@ -254,7 +254,7 @@ export function ServicePurchasesPage() {
     && match(`${e.code} ${e.category} ${e.description || ''} ${e.supplier_name || ''} ${e.invoice_no || ''}`, search));
   const sum = (k) => rows.filter((e) => !e.voided).reduce((s, e) => s + (e[k] || 0), 0);
   return (
-    <ListPage title="Mua dịch vụ" sub="Dịch vụ mua của nhà cung cấp: vận chuyển, gia công, sửa chữa, quảng cáo… Tính vào chi phí vận hành; phần chưa trả nằm trong công nợ nhà cung cấp."
+    <ListPage title="Mua dịch vụ"
       filters={<>
         <TimeFilter filter={time} />
         <FilterBox title="Trạng thái"><RadioList value={st} onChange={setSt} options={[{ value: '', label: 'Tất cả', count: (q.data || []).length },
@@ -301,7 +301,7 @@ export function ExpensesPage() {
   const total = rows.filter((e) => !e.voided).reduce((s, e) => s + e.amount, 0);
   const all = live.reduce((s, e) => s + e.amount, 0);
   return (
-    <ListPage title="Chi phí vận hành" sub="Chia theo nhóm: mặt bằng, điện nước, công cụ dụng cụ, marketing, chi phí bán hàng, nhân sự, quản lý. Đã trả hay chưa đều tính vào lợi nhuận đúng kỳ; khoản phân bổ chia đều theo tháng."
+    <ListPage title="Chi phí vận hành"
       filters={<TimeFilter filter={time} />}
       search={<Search value={search} onChange={setSearch} placeholder="Tìm khoản mục, diễn giải…" />}
       actions={<>
