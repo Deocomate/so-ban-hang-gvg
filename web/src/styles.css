@@ -158,7 +158,7 @@ a { color: var(--accent); }
 .tf-row > input { accent-color: var(--accent); margin: 0; flex: none; }
 .tf-row > .sel, .tf-row > div { flex: 1; min-width: 0; }
 .tf-row.on > span { color: var(--accent); font-weight: 500; }
-.tf-range { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding-left: 22px; }
+.tf-range { display: grid; grid-template-columns: 1fr; gap: 6px; padding-left: 22px; }
 .clist { display: flex; flex-direction: column; gap: 2px; }
 .cl-item { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 6px; cursor: pointer; min-height: 32px; }
 .cl-item:hover { background: var(--surface-2); }
@@ -294,6 +294,13 @@ span.cal-title { cursor: default; }
 .tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .tbl th { text-align: left; font-size: 12.5px; color: var(--ink); font-weight: 600; background: var(--accent-2); padding: 10px 10px; white-space: nowrap; position: sticky; top: 0; border-bottom: 1px solid var(--line); }
 .tbl td { padding: 9px 10px; border-top: 1px solid var(--line); vertical-align: middle; }
+/* Tiêu đề và chân bảng căn theo cột (phải cho số, giữa cho nhãn), không bị .tbl th ghi đè về trái */
+.tbl th.r, .tbl td.r { text-align: right; } .tbl th.c, .tbl td.c { text-align: center; }
+/* Cột chữ dài (tên, địa chỉ) chiếm phần còn lại và cắt bằng dấu …, để các cột số không bị đẩy tràn khỏi bảng */
+.tbl td.col-fill { width: 100%; max-width: 0; }
+.tbl td.col-fill > *, .tbl td.col-clip > * { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tbl td.col-clip { max-width: 140px; }
+.tbl td.r, .tbl td.c { white-space: nowrap; }
 .tbl tbody tr:first-child td { border-top: 0; }
 .tbl.dense td { padding: 6px 8px; } .tbl.dense th { padding: 7px 8px; }
 .tbl tr.clickable { cursor: pointer; } .tbl tr.clickable:hover td { background: color-mix(in srgb, var(--accent-2) 70%, var(--surface)); }

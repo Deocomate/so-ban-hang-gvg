@@ -239,7 +239,7 @@ export function Table({ columns, rows, onRow, empty = 'Chưa có dữ liệu', r
             </tr>
           ))}
         </tbody>
-        {foot && <tfoot><tr>{columns.map((c) => <td key={c.key} className={c.align === 'right' ? 'r num' : ''}>{foot[c.key] ?? ''}</td>)}</tr></tfoot>}
+        {foot && <tfoot><tr>{columns.map((c) => <td key={c.key} className={c.align === 'right' ? 'r num' : c.align === 'center' ? 'c' : ''}>{foot[c.key] ?? ''}</td>)}</tr></tfoot>}
       </table>
       {paged && rows.length > PAGE_SIZES[0] && (
         <div className="pager">
