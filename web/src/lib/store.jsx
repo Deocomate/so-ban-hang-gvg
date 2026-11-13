@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { uid } from './format.js';
+import { onTemplatesChanged } from './docs/editor-link.js';
 
 const Ctx = createContext(null);
 export const useApp = () => useContext(Ctx);
@@ -31,6 +32,8 @@ export function AppProvider({ backend, children }) {
   }, [backend]);
 
   useEffect(() => { if (session) loadBooks(); else setBooks(null); }, [session, loadBooks]);
+  // Tab sửa mẫu in vừa lưu mẫu → nạp lại cài đặt sổ để chứng từ / trang Cài đặt dùng mẫu mới ngay
+  useEffect(() => (session ? onTemplatesChanged(() => loadBooks()) : undefined), [session, loadBooks]);
   useEffect(() => { try { if (bookId) localStorage.setItem('gomsu.book', bookId); } catch (e) { /* bỏ qua */ } }, [bookId]);
 
   const book = books?.find((b) => b.id === bookId) || null;

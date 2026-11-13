@@ -80,7 +80,33 @@ api.as(staff);
 await E('Nhân viên không sửa được mẫu chứng từ', () => api.call('update_book_settings', { book_id: TH, settings: { docs: {} } }), 'chủ');
 api.as(owner);
 
-G('4. CSDL tạo từ bản cũ (chưa có cột trọng lượng)');
+G('4. Mẫu in sửa trực quan');
+{
+  api.as(owner);
+  const tpl = (id, x = {}) => ({ id, name: `Mẫu ${id}`, html: '<p>{Khach_Hang}</p>', paper: 'A4', ...x });
+  const r = await api.call('save_print_templates', { book_id: TH, doc_type: 'hoa_don', templates: [tpl('a'), tpl('b', { paper: 'K80', orient: 'landscape', margin: { top: 2 } })] });
+  C('Lưu 2 mẫu, mẫu đầu thành mặc định', r.templates.map((t) => [t.id, t.is_default, t.paper]), [['a', true, 'A4'], ['b', false, 'K80']]);
+  C('Lề thiếu lấy mặc định', r.templates[1].margin, { top: 2, right: 14, bottom: 10, left: 14 });
+  const st = async () => (await api.call('my_books')).find((b) => b.id === TH).settings.docs;
+  C('Mẫu nằm trong cài đặt sổ', (await st()).templates.hoa_don.length, 2);
+  const docs = await st();
+  await api.call('update_book_settings', { book_id: TH, settings: { docs: { profiles: docs.profiles, types: docs.types, font: 'Tinos' } } });
+  C('Lưu phông / đơn vị phát hành không làm mất mẫu in', [(await st()).font, (await st()).templates.hoa_don.length], ['Tinos', 2]);
+  await api.call('save_print_templates', { book_id: TH, doc_type: 'bien_ban', templates: [tpl('x', { is_default: false }), tpl('y', { is_default: true })] });
+  C('Chọn mẫu mặc định khác', (await st()).templates.bien_ban.map((t) => t.is_default), [false, true]);
+  await api.call('save_print_templates', { book_id: TH, doc_type: 'bien_ban', templates: [] });
+  C('Xóa hết mẫu riêng: quay về mẫu mặc định', (await st()).templates.bien_ban, undefined);
+  await E('Loại chứng từ lạ bị chặn', () => api.call('save_print_templates', { book_id: TH, doc_type: 'xyz', templates: [] }), 'không hợp lệ');
+  await E('Mẫu trống bị chặn', () => api.call('save_print_templates', { book_id: TH, doc_type: 'hoa_don', templates: [tpl('a', { html: ' ' })] }), 'trống');
+  await E('Trùng mã mẫu bị chặn', () => api.call('save_print_templates', { book_id: TH, doc_type: 'hoa_don', templates: [tpl('a'), tpl('a')] }), 'Trùng');
+  await E('Mẫu quá lớn bị chặn', () => api.call('save_print_templates', { book_id: TH, doc_type: 'hoa_don', templates: [tpl('a', { html: 'x'.repeat(700000) })] }), 'quá lớn');
+  api.as(staff);
+  await E('Nhân viên không sửa được mẫu in', () => api.call('save_print_templates', { book_id: TH, doc_type: 'hoa_don', templates: [tpl('z')] }), '');
+  api.as(owner);
+  C('Mẫu cũ còn nguyên sau các lần bị chặn', (await st()).templates.hoa_don.map((t) => t.id), ['a', 'b']);
+}
+
+G('5. CSDL tạo từ bản cũ (chưa có cột trọng lượng)');
 {
   const { openDb } = await import('../src/db/index.js');
   const fs = await import('node:fs'); const os = await import('node:os'); const path = await import('node:path');
@@ -96,5 +122,6 @@ G('4. CSDL tạo từ bản cũ (chưa có cột trọng lượng)');
   C('Sản phẩm cũ còn nguyên, có thêm cột trọng lượng (mở 2 lần không lỗi)', [r.length, r[0].name, r[0].pack_unit, r[0].pack_weight, r[0].weight_per_unit], [1, 'Sản phẩm cũ', 'hộp', null, null]);
   db.close();
 }
+
 
 finish('Chứng từ in');

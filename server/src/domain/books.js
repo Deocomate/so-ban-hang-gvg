@@ -116,10 +116,58 @@ export function update_book_settings(p) {
   if ('price_names' in s && s.price_names.some((x) => typeof x !== 'string' || !x.trim())) fail('Tên mức giá không được để trống ở giữa');
   const unused = 'price_names' in s && one(`select max(price_tier) t from customers where book_id = ? and price_tier > ?`, b, s.price_names.length)?.t;
   if (unused) fail(`Còn khách hàng đang dùng mức giá ${unused} — hãy đổi mức giá của họ trước`);
-  const settings = { ...bookSettings(b), ...s };
+  const cur = bookSettings(b);
+  // Mẫu in lưu riêng bằng save_print_templates: lưu phần khác của "docs" (đơn vị phát hành, phông…) không được làm mất mẫu
+  if (s.docs && typeof s.docs === 'object' && !('templates' in s.docs) && cur.docs?.templates) s.docs = { ...s.docs, templates: cur.docs.templates };
+  if (s.docs?.templates !== undefined) checkTemplates(s.docs.templates);
+  const settings = { ...cur, ...s };
   run(`update books set settings = ?, name = coalesce(?, name) where id = ?`, settings, nz(p.name), b);
   const r = one(`select settings, name from books where id = ?`, b);
   return { settings: json(r.settings), name: r.name };
+}
+
+// ---------- Mẫu in (Cài đặt → Mẫu in) ----------
+// settings.docs.templates = { <loại chứng từ>: [{ id, name, html, paper, orient, margin:{top,right,bottom,left} (mm), sep, is_default, updated_at }] }
+const DOC_KINDS = ['hoa_don', 'don_dat_hang', 'bien_ban', 'phieu_xuat_kho', 'phieu_thu', 'hd_van_chuyen', 'de_nghi_tam_ung', 'doi_chieu_sl', 'doi_chieu_tt', 'de_nghi_tt', 'bao_gia'];
+const PAPERS = ['A4', 'A5', 'K80', 'K58'];
+const MAX_TEMPLATE = 600000; const MAX_ALL_TEMPLATES = 3000000;
+function cleanTemplate(t, i) {
+  if (!t || typeof t !== 'object') fail('Mẫu in không hợp lệ');
+  const name = String(t.name ?? '').trim().slice(0, 120); if (!name) fail(`Mẫu in thứ ${i + 1} chưa có tên`);
+  const html = String(t.html ?? ''); if (!html.trim()) fail(`Mẫu "${name}" đang trống`);
+  if (html.length > MAX_TEMPLATE) fail(`Mẫu "${name}" quá lớn — hãy dùng ảnh nhỏ hơn`);
+  const id = String(t.id ?? '').trim().slice(0, 40); if (!/^[A-Za-z0-9_-]+$/.test(id)) fail('Mã mẫu in không hợp lệ');
+  const m = t.margin && typeof t.margin === 'object' ? t.margin : {};
+  const mm = (v, d) => { const n = num(v); if (n === null || n === undefined) return d; if (n < 0 || n > 50) fail('Lề giấy phải từ 0 đến 50 mm'); return n; };
+  return { id, name, html, paper: PAPERS.includes(t.paper) ? t.paper : 'A4', orient: t.orient === 'landscape' ? 'landscape' : 'portrait',
+    margin: { top: mm(m.top, 10), right: mm(m.right, 14), bottom: mm(m.bottom, 10), left: mm(m.left, 14) },
+    sep: t.sep === '.' ? '.' : ',', is_default: !!t.is_default, updated_at: String(t.updated_at || nowIso()).slice(0, 40) };
+}
+function cleanList(list) {
+  if (!Array.isArray(list)) fail('Danh sách mẫu in không hợp lệ');
+  if (list.length > 20) fail('Mỗi loại chứng từ tối đa 20 mẫu in');
+  const out = list.map(cleanTemplate);
+  if (new Set(out.map((t) => t.id)).size !== out.length) fail('Trùng mã mẫu in');
+  // Đúng một mẫu mặc định
+  if (out.length) { const d = Math.max(0, out.findIndex((t) => t.is_default)); out.forEach((t, i) => { t.is_default = i === d; }); }
+  return out;
+}
+function checkTemplates(all) {
+  if (!all || typeof all !== 'object' || Array.isArray(all)) fail('Mẫu in không hợp lệ');
+  for (const k of Object.keys(all)) { if (!DOC_KINDS.includes(k)) fail('Loại chứng từ không hợp lệ'); all[k] = cleanList(all[k]); }
+  if (JSON.stringify(all).length > MAX_ALL_TEMPLATES) fail('Tổng dung lượng mẫu in quá lớn — hãy bớt ảnh trong mẫu');
+}
+// p = { book_id, doc_type, templates:[…] } — thay danh sách mẫu của một loại chứng từ; danh sách rỗng = quay về mẫu mặc định
+export function save_print_templates(p) {
+  const b = p.book_id; requirePerm(b, 'owner');
+  if (!DOC_KINDS.includes(p.doc_type)) fail('Loại chứng từ không hợp lệ');
+  const list = cleanList(p.templates ?? []);
+  const cur = bookSettings(b); const docs = cur.docs && typeof cur.docs === 'object' ? cur.docs : {};
+  const templates = { ...(docs.templates || {}) };
+  if (list.length) templates[p.doc_type] = list; else delete templates[p.doc_type];
+  if (JSON.stringify(templates).length > MAX_ALL_TEMPLATES) fail('Tổng dung lượng mẫu in quá lớn — hãy bớt ảnh trong mẫu');
+  run(`update books set settings = ? where id = ?`, { ...cur, docs: { ...docs, templates } }, b);
+  return { templates: list };
 }
 
 // Cấp quyền 1 người ở 1 sổ (chỉ Tổng quản trị). role_id: vai trò mẫu; perms: phần chỉnh riêng từng ô (true/false) so với vai trò.

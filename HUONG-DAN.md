@@ -308,22 +308,26 @@ Có 5 loại chứng từ, xuất ra PDF khổ A4, dựng theo đúng mẫu cử
 - **Thu nhầm:** mở phiếu thu và hủy phiếu (quyền chủ sổ).
 - Mục **Lịch sử đơn hàng** cuối chi tiết đơn ghi mọi thao tác: ai làm, lúc nào, tạo đơn, sửa gì từ bao nhiêu thành bao nhiêu, giao, hủy đợt giao, thu / hoàn tiền, hủy phiếu, trả hàng, hủy đơn. Ai xem được đơn bán đều xem được lịch sử. Đơn lập trước bản này chỉ có lịch sử từ lúc cập nhật.
 
-- **Cài đặt một lần:** vào **Cài đặt → Mẫu chứng từ**.
-  - Khai báo đơn vị phát hành: tên, địa chỉ, điện thoại, email, website, dòng số tài khoản, người đại diện, logo. Có thể khai nhiều đơn vị (ví dụ Hộ kinh doanh gốm sứ Mai Hiếu và Công ty TNHH SX&TM Thanh Hải).
-  - Với từng loại chứng từ, chọn đơn vị phát hành và dấu phân cách hàng nghìn (24,000,000 hay 24.000.000).
-  - Sửa được nội dung ghi chú / chính sách đổi trả ở cuối hóa đơn, dòng cuối đơn đặt hàng và đoạn cam kết cuối biên bản. Bọc chữ trong `**hai dấu sao**` để in đậm.
+- **Cài đặt một lần:** vào **Cài đặt → Mẫu in** (chỉ quản lý sổ).
+  - Thẻ **Đơn vị phát hành & phông chữ**: tên, địa chỉ, điện thoại, email, website, dòng số tài khoản, người đại diện, logo. Có thể khai nhiều đơn vị (ví dụ Hộ kinh doanh gốm sứ Mai Hiếu và Công ty TNHH SX&TM Thanh Hải).
+  - Thẻ **Quản lý mẫu in**: cột trái là các loại chứng từ, ở giữa là các mẫu của loại đó kèm bản xem trước. Chọn đơn vị phát hành cho từng loại; **Tạo mẫu in**, **Nhân bản**, **Đặt làm mặc định**, **Xóa** (xóa hết thì quay về mẫu gốc của hệ thống).
   - Mỗi sổ (Thanh Hải, Vũ Gia, Anamtile) có mẫu riêng. Sổ mới có sẵn 2 đơn vị đứng tên là Công ty Thanh Hải và HKD Mai Hiếu; khi xuất chứng từ, đổi đơn vị ở mục **Đơn vị đứng tên**.
+- **Sửa mẫu in (giống KiotViet):** bấm **Sửa** — trình sửa mở ở tab mới.
+  - Bên trái sửa trực tiếp như soạn văn bản: phông, cỡ chữ, đậm / nghiêng / gạch, màu chữ, màu nền, căn lề, danh sách, giãn dòng và khoảng cách đoạn, chèn ảnh, kẻ ngang, ngắt trang. Bảng: chèn bảng, thêm / xóa dòng cột, gộp / tách ô, bật tắt viền, màu nền ô, kéo mép cột để đổi độ rộng.
+  - Thông tin tự điền (tên khách, ngày, thành tiền…) hiện dạng thẻ màu. Gõ `/` rồi gõ vài chữ để chèn nhanh, hoặc bấm **chèn thông tin** để chọn theo nhóm, có ô tìm kiếm. Thẻ xanh lá là thông tin hàng hóa: đặt trong một dòng bảng thì dòng đó tự lặp cho từng mặt hàng. Dòng có thông tin trống (chiết khấu bằng 0, VAT 0%, không trả hàng…) tự ẩn khi in.
+  - Bên phải là bản xem trước đúng khổ giấy: chọn khổ A4, A5, K80, K58, khổ dọc / ngang, lề giấy, dấu phân cách hàng nghìn, thu phóng; xem bằng dữ liệu mẫu hoặc chọn một đơn / phiếu thật.
+  - **Chọn mẫu gợi ý** để lấy lại mẫu gốc, mẫu giấy cuộn K80 (hóa đơn, phiếu thu) hoặc chép từ mẫu khác. **Source** để sửa thẳng mã HTML. **In thử** in ngay mẫu đang soạn. **Đặt lại** bỏ thay đổi chưa lưu. **Lưu mẫu** (Ctrl+S) xong thì các tab khác đang mở dùng mẫu mới ngay.
 - **Quy cách đóng gói:** trong sản phẩm, điền "Số viên / hộp" (ví dụ 140) và đơn vị đóng gói (hộp, thùng, kiện…). Khi đó chứng từ tự in dòng "4 hộp x 140 viên + 40 viên" và tự tính tổng số hộp (hộp lẻ tính 1 hộp). File Excel nhập hàng có thêm 2 cột "Số viên/hộp" và "Đơn vị đóng gói".
-- **Sửa trước khi tải:** bên trái bản xem trước có các ô sửa được, như ngày trên chứng từ, SĐT và địa chỉ nhận hàng, tổng số hộp, nợ cũ, lái xe, người nhận và tình trạng hàng. Bấm **Tải PDF** thì phần mềm tự lưu các ô này để lần sau mở lại vẫn còn.
+- **Sửa trước khi tải:** bên trái bản xem trước có các ô sửa được, như ngày trên chứng từ, SĐT và địa chỉ nhận hàng, tổng số hộp, nợ cũ, lái xe, người nhận và tình trạng hàng. Bấm **In** (in thẳng ra máy in) hoặc **Tải PDF** thì phần mềm tự lưu các ô này để lần sau mở lại vẫn còn. Loại chứng từ có nhiều mẫu thì chọn ở ô **Mẫu in**; quản lý sổ có thêm đường dẫn **Sửa mẫu in này**.
 - **Số tiền trên hóa đơn:**
   - Nợ cũ = công nợ hiện tại của khách trừ phần của chính đơn này. Ô này sửa được.
   - Tổng thanh toán = tiền hàng + nợ cũ + tiền vận chuyển.
   - Còn thanh toán = Tổng thanh toán − đã thanh toán (gồm cả tiền cọc).
   - Số tiền bằng chữ in theo dạng "Mười ba triệu tám trăm nghìn đồng chẵn".
 - **Biên bản và phiếu xuất kho** lập theo từng lần giao. Nếu chưa giao, chọn "Cả đơn" để in trước, giao cho lái xe mang theo.
-- **Phiếu thu, phiếu chi và phiếu xuất kho** có dòng "Mẫu số … Thông tư 88/2021/TT-BTC" ở góc phải. Dòng này tắt được trong cài đặt. Nếu đơn vị phát hành là công ty, nên sửa dòng này theo chế độ kế toán công ty đang áp dụng (hỏi kế toán).
+- **Phiếu thu, phiếu chi và phiếu xuất kho** có dòng "Mẫu số … Thông tư 88/2021/TT-BTC" ở góc phải. Muốn bỏ dòng này thì sửa mẫu in và xóa ô đó. Nếu đơn vị phát hành là công ty, nên sửa dòng này theo chế độ kế toán công ty đang áp dụng (hỏi kế toán).
 - **Phông chữ:**
-  - Tất cả chứng từ dùng chung một phông, mặc định Arial (Arimo). Muốn đổi sang Times New Roman (Tinos) thì vào **Cài đặt → Mẫu chứng từ → Phông chữ**. Bản xem trước dùng đúng phông sẽ in.
+  - Tất cả chứng từ dùng chung một phông, mặc định Arial (Arimo). Muốn đổi sang Times New Roman (Tinos) thì vào **Cài đặt → Mẫu in → Đơn vị phát hành & phông chữ**; từng đoạn chữ trong mẫu cũng chọn phông riêng được. Bản xem trước dùng đúng phông sẽ in.
   - Phông được nhúng sẵn trong PDF, nên mở trên điện thoại, máy tính hay gửi Zalo đều đúng dấu tiếng Việt, và chữ chọn hoặc sao chép được.
   - Hai phông này dùng giấy phép Apache 2.0, miễn phí.
 - **Đây không phải hóa đơn điện tử.** "Hóa đơn bán hàng" ở đây là chứng từ nội bộ để giao cho khách, không thay hóa đơn điện tử có mã của cơ quan thuế. Hộ kinh doanh có doanh thu trên 1 tỷ đồng/năm thuộc diện phải dùng hóa đơn điện tử theo quy định hiện hành, nên hỏi lại cán bộ thuế hoặc kế toán để áp dụng cho đúng.
@@ -374,7 +378,7 @@ Bấm **Tạo đơn bán** thì màn hình tạo đơn mở toàn màn hình. Kh
 
 Ba phân hệ hoạt động độc lập; chứng từ con chỉ sinh trong từng phân hệ. Riêng báo giá có nút **Chuyển sang đơn** do nhân viên tự bấm để sao chép khách và dòng hàng, sau đó hai bên không còn phụ thuộc nhau.
 
-**Báo giá.** Chọn mẫu ngói / gốm xây dựng hoặc mẫu tranh mosaic. Mẫu ngói có nhóm hàng I, II, III; số lượng tự tính bằng khối lượng × định mức − số viên diềm (định mức khai ở từng hàng hóa); cột định mức có thể ẩn khi xuất. Lưu ý cuối báo giá sửa được từng lần; nội dung mặc định sửa ở **Cài đặt → Mẫu chứng từ**. Báo giá không giữ hàng, không ghi công nợ. Dòng tự nhập không gắn hàng hóa sẽ bị bỏ qua khi chuyển sang đơn.
+**Báo giá.** Chọn mẫu ngói / gốm xây dựng hoặc mẫu tranh mosaic. Mẫu ngói có nhóm hàng I, II, III; số lượng tự tính bằng khối lượng × định mức − số viên diềm (định mức khai ở từng hàng hóa); cột định mức có thể ẩn khi xuất. Lưu ý cuối báo giá sửa được từng lần; nội dung mặc định sửa ở **Cài đặt → Mẫu in → Đơn vị phát hành & phông chữ**. Báo giá không giữ hàng, không ghi công nợ. Dòng tự nhập không gắn hàng hóa sẽ bị bỏ qua khi chuyển sang đơn.
 
 **Hợp đồng.** Mỗi hợp đồng gắn với một đơn đặt hàng và dùng chung đợt giao, tiền cọc, tồn kho của đơn. Tạo ở mục **Hợp đồng** hoặc nút **Lập hợp đồng** trong đơn đặt hàng. Thứ tự giấy tờ: đề nghị tạm ứng → các đợt giao (mỗi đợt có hóa đơn, biên bản giao hàng, hợp đồng vận chuyển) → đối chiếu số lượng → đối chiếu kèm thanh toán → bấm **Hoàn tất đối chiếu** → đề nghị thanh toán. Số thanh toán tính theo số lượng thực giao. Bản scan hợp đồng tải lên trong trang hợp đồng, tối đa 15 MB mỗi tệp, được lưu cùng cơ sở dữ liệu nên có trong bản sao lưu hằng đêm. Riêng tệp đính kèm không nằm trong tệp sao lưu JSON tải về.
 
@@ -382,7 +386,7 @@ Ba phân hệ hoạt động độc lập; chứng từ con chỉ sinh trong t�
 
 **Lái xe.** Khách trả cùng hóa đơn hoặc cửa hàng chịu phí thì phát sinh một khoản chi phí chưa trả cho lái xe. Khách trả trực tiếp cho lái xe thì không phát sinh công nợ. Trả tiền ở **Đơn hàng → Lái xe & công nợ**, phiếu chi được ghi vào sổ quỹ như mọi chi phí khác.
 
-**Pháp nhân.** Mỗi sổ khai 2 đơn vị đứng tên (Công ty Thanh Hải, HKD Mai Hiếu) ở **Cài đặt → Mẫu chứng từ**. Khi xuất chứng từ, đổi ở mục **Đơn vị đứng tên**.
+**Pháp nhân.** Mỗi sổ khai 2 đơn vị đứng tên (Công ty Thanh Hải, HKD Mai Hiếu) ở **Cài đặt → Mẫu in**. Khi xuất chứng từ, đổi ở mục **Đơn vị đứng tên**.
 
 **Thuế HKD.** Hóa đơn đầu vào và đầu ra nằm chung một kho chứng từ. Trang này đối soát doanh thu trên sổ với hóa đơn đầu ra theo tháng và xuất sổ ra Excel. Số thuế là ước tính để theo dõi, không thay tờ khai.
 

@@ -68,7 +68,9 @@ export function docSettings(book, settings) {
       show_form: u.show_form !== false, text: u.text ?? null };
   }
   // Một phông chữ cho mọi chứng từ (mặc định Arial / Arimo như mẫu hóa đơn của cửa hàng)
-  return { profiles, types, font: d.font === 'Tinos' ? 'Tinos' : 'Arimo' };
+  // templates: mẫu in riêng theo loại chứng từ (xem templates.js)
+  const templates = d.templates && typeof d.templates === 'object' ? d.templates : {};
+  return { profiles, types, font: d.font === 'Tinos' ? 'Tinos' : 'Arimo', templates };
 }
 // Đơn vị đứng tên: chọn riêng trên chứng từ (info) nếu có, không thì theo cài đặt của loại chứng từ
 export function profileFor(ds, type, info) { return ds.profiles.find((p) => p.id === (info?.[`profile_${type}`] || ds.types[type].profile)) || ds.profiles[0]; }

@@ -28,6 +28,8 @@ import { ContractsPage } from './pages/Contracts.jsx';
 import { TaxPage, InputInvoicesPage } from './pages/Tax.jsx';
 import { Login, LinkPage, ForcePassword, isLinkPage } from './pages/Account.jsx';
 import { DocStandalone, readDocPage } from './pages/Documents.jsx';
+import { readEditorLink } from './lib/docs/editor-link.js';
+const PrintEditorPage = React.lazy(() => import('./pages/PrintEditor.jsx').then((m) => ({ default: m.PrintEditorPage })));
 import { WarrantyPage } from './pages/Warranty.jsx';
 import { LoyaltyPage } from './pages/Loyalty.jsx';
 import { ShiftsPage } from './pages/Shifts.jsx';
@@ -418,11 +420,14 @@ function Gate() {
   const [linkKey, setLinkKey] = useState(() => (isLinkPage() ? location.hash : ''));
   // Tab chứng từ mở từ thao tác nhanh (giao / thu): ?doc=…
   const [docLink] = useState(readDocPage);
+  // Trình sửa mẫu in mở ở tab riêng: ?mau-in=…
+  const [editorLink] = useState(readEditorLink);
   useEffect(() => { const h = () => setLinkKey(isLinkPage() ? location.hash : ''); window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h); }, []);
   if (linkKey) return <LinkPage key={linkKey} />;
   if (!session) return <Login />;
   if (session.user?.must_change_password) return <ForcePassword />;
   if (docLink) return <DocStandalone link={docLink} />;
+  if (editorLink) return <React.Suspense fallback={<div className="center-screen"><Loading text="Đang mở trình sửa mẫu in…" /></div>}><PrintEditorPage link={editorLink} /></React.Suspense>;
   return <Shell />;
 }
 

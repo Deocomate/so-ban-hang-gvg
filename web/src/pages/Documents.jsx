@@ -4,82 +4,30 @@ import { packView } from '../lib/book-profile.js';
 import { dmy } from '../lib/format.js';
 import { saveFile } from '../lib/excel.js';
 import { Btn, Loading, ErrorBox, Note, Modal, Field, Input, TextArea, Select, DateInput, NumInput, Check, Section, Tabs, ConfirmBtn } from '../components/ui.jsx';
-import { DOC_TYPES, DEFAULT_TEXTS, docSettings, loadDocData, buildDoc, defaults, currentInfo, editableFields, infoRef, profileFor, profileFromBook, PER_DELIVERY } from '../lib/docs/model.js';
+import { DOC_TYPES, DEFAULT_TEXTS, docSettings, loadDocData, defaults, currentInfo, editableFields, infoRef, profileFor, profileFromBook, PER_DELIVERY } from '../lib/docs/model.js';
+import { buildPrintDoc, templatesFor, pageSize, PAPERS, FONT_CSS } from '../lib/docs/templates.js';
+import { openTemplateEditor } from '../lib/docs/editor-link.js';
+import { sampleData } from '../lib/docs/tokens.js';
 
-// Nạp phông nhúng trong PDF cho bản xem trước, để xem trước và tệp PDF giống hệt nhau
-import ArimoR from '../assets/fonts/Arimo-Regular.ttf?url';
-import ArimoB from '../assets/fonts/Arimo-Bold.ttf?url';
-import ArimoI from '../assets/fonts/Arimo-Italic.ttf?url';
-import ArimoBI from '../assets/fonts/Arimo-BoldItalic.ttf?url';
-import TinosR from '../assets/fonts/Tinos-Regular.ttf?url';
-import TinosB from '../assets/fonts/Tinos-Bold.ttf?url';
-import TinosI from '../assets/fonts/Tinos-Italic.ttf?url';
-import TinosBI from '../assets/fonts/Tinos-BoldItalic.ttf?url';
-let fontsInjected = false;
-function useDocFonts() {
-  useEffect(() => {
-    if (fontsInjected) return; fontsInjected = true;
-    const face = (fam, url, w, st) => `@font-face{font-family:"${fam}";src:url("${url}") format("truetype");font-weight:${w};font-style:${st};font-display:swap}`;
-    const el = document.createElement('style');
-    el.textContent = [face('Arimo', ArimoR, 400, 'normal'), face('Arimo', ArimoB, 700, 'normal'), face('Arimo', ArimoI, 400, 'italic'), face('Arimo', ArimoBI, 700, 'italic'),
-      face('Tinos', TinosR, 400, 'normal'), face('Tinos', TinosB, 700, 'normal'), face('Tinos', TinosI, 400, 'italic'), face('Tinos', TinosBI, 700, 'italic')].join('\n');
-    document.head.appendChild(el);
-  }, []);
-}
+import { useDocFonts } from '../lib/docs/fonts.js';
 
 const TYPES_FOR = { quote: ['bao_gia'], contract: ['de_nghi_tam_ung', 'doi_chieu_sl', 'doi_chieu_tt', 'de_nghi_tt'], order: ['hoa_don', 'don_dat_hang', 'bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen'], delivery: ['bien_ban', 'hoa_don', 'hd_van_chuyen', 'phieu_xuat_kho', 'don_dat_hang'], payment: ['phieu_thu'] };
-const FONT_CSS = { Arimo: 'Arimo, Arial, "Helvetica Neue", sans-serif', Tinos: 'Tinos, "Times New Roman", Times, serif' };
 
-// ---------- Bản xem trước (vẽ cùng danh sách khối với tệp PDF) ----------
-const runEl = (r, i) => <span key={i} style={{ fontWeight: r.b ? 700 : undefined, fontStyle: r.i ? 'italic' : undefined, color: r.color }}>{r.text}</span>;
-function cellEl(c, i, size, tall) {
-  if (c?.image) return <td key={i} style={{ textAlign: 'center' }}><img src={c.image} alt="" style={{ maxWidth: 38, maxHeight: 38 }} /></td>;
-  if (!c || (c.text === undefined && !c.runs && !c.colSpan)) return null;
-  return (
-    <td key={i} colSpan={c.colSpan || undefined} style={{ textAlign: c.align || 'left', fontWeight: c.b ? 700 : undefined, fontStyle: c.i ? 'italic' : undefined, verticalAlign: tall ? 'middle' : 'top' }}>
-      {c.runs ? c.runs.map(runEl) : c.sub ? <>{c.text}<div style={{ fontStyle: 'italic', fontSize: `${size - 0.5}pt` }}>{c.sub}</div></> : c.text}
-    </td>
-  );
-}
+// ---------- Bản xem trước: chứng từ dựng từ mẫu in (HTML), đúng khổ giấy và lề ----------
 export function DocPreview({ doc }) {
   useDocFonts();
-  // Thu nhỏ trang A4 cho vừa màn hình điện thoại
+  const size = pageSize(doc); const m = doc.margin || {};
+  // Thu nhỏ trang cho vừa khung (điện thoại, hộp thoại hẹp)
   const ref = React.useRef(null); const [zoom, setZoom] = useState(1);
   useEffect(() => {
     const el = ref.current; if (!el || typeof ResizeObserver === 'undefined') return undefined;
-    const ro = new ResizeObserver(() => { const w = el.clientWidth - 16; setZoom(Math.min(1, Math.max(0.3, w / 794))); });
+    const ro = new ResizeObserver(() => { const w = el.clientWidth - 16; setZoom(Math.min(1, Math.max(0.3, w / (size.w * 96 / 25.4)))); });
     ro.observe(el); return () => ro.disconnect();
-  }, []);
+  }, [size.w]);
   return (
     <div className="doc-scroll" ref={ref}>
-      <div className="doc-page" style={{ fontFamily: FONT_CSS[doc.font], zoom }}>
-        {doc.blocks.map((b, k) => {
-          if (b.t === 'letterhead') {
-            const lines = <div>{b.lines.map((l, i) => <div key={i} style={{ fontWeight: l.b ? 700 : 400, fontSize: `${l.size || b.size}pt`, marginBottom: `${b.gap ?? 2}pt` }}>{l.text}</div>)}</div>;
-            return <div key={k}>{b.rule && <div className="doc-rule" />}{b.logo ? <div className="doc-lh"><img src={b.logo} alt="" />{lines}</div> : lines}</div>;
-          }
-          if (b.t === 'cols') return <div key={k} className="doc-cols">{b.cols.map((c, i) => <div key={i} style={{ flex: c.width === '*' ? 1 : `0 0 ${c.width}pt`, textAlign: c.align || 'left' }}>
-            {c.lines.map((l, j) => <div key={j} style={{ fontWeight: l.b ? 700 : 400, fontStyle: l.i ? 'italic' : undefined, fontSize: `${l.size || b.size}pt` }}>{l.text}</div>)}</div>)}</div>;
-          if (b.t === 'title') return <div key={k} style={{ fontWeight: 700, fontSize: `${b.size}pt`, textAlign: 'center', marginTop: `${b.mt || 0}pt`, marginBottom: `${b.mb || 2}pt` }}>{b.text}</div>;
-          if (b.t === 'p') return <div key={k} style={{ fontSize: `${b.size}pt`, textAlign: b.align || 'left', lineHeight: b.lh || 1.2, marginTop: `${b.mt || 0}pt`, marginBottom: `${b.mb || 0}pt`, paddingLeft: `${b.indent || 0}pt`, color: b.color }}>{b.runs.map(runEl)}</div>;
-          if (b.t === 'table') {
-            const star = b.widths.includes('*');
-            return (
-              <table key={k} className="doc-table" style={{ fontSize: `${b.size}pt` }}>
-                <colgroup>{b.widths.map((w, i) => <col key={i} style={{ width: w === '*' ? undefined : `${w}pt` }} />)}</colgroup>
-                <thead><tr>{b.head.map((h, i) => cellEl(h, i, b.size))}</tr></thead>
-                <tbody>{b.body.map((row, r) => { const tall = row.some((c) => c && c.sub); return <tr key={r}>{row.map((c, i) => cellEl(c, i, b.size, tall))}</tr>; })}</tbody>
-              </table>
-            );
-          }
-          if (b.t === 'sign') return (
-            <div key={k} style={{ marginTop: `${b.mt || 0}pt`, fontSize: `${b.size}pt` }}>
-              <div className="doc-sign">{b.cols.map((c, i) => <div key={i}><b>{c.title}</b>{c.note && <div style={{ fontStyle: 'italic', fontSize: `${b.size - 1}pt` }}>{c.note}</div>}</div>)}</div>
-              <div className="doc-sign" style={{ marginTop: `${b.space || 48}pt` }}>{b.cols.map((c, i) => <div key={i}><b>{c.name || ' '}</b></div>)}</div>
-            </div>
-          );
-          return null;
-        })}
+      <div className="doc-page" style={{ fontFamily: FONT_CSS[doc.font], zoom, width: `${size.w}mm`, minHeight: size.h ? `${size.h}mm` : 'auto', padding: `${m.top}mm ${m.right}mm ${m.bottom}mm ${m.left}mm` }}>
+        <div className="tpl" dangerouslySetInnerHTML={{ __html: doc.html }} />
       </div>
     </div>
   );
@@ -148,8 +96,9 @@ function BatchExport({ deliveryId, pay, ds, beforeExport }) {
     try {
       if (beforeExport && !(await beforeExport())) return;
       const [dd, pd] = await Promise.all([load({ kind: 'delivery', id: deliveryId }), pay && chosen.includes('phieu_thu') ? load({ kind: 'payment', id: pay }) : null]);
-      const docs = chosen.map((t) => { const data = t === 'phieu_thu' ? pd : dd; return buildDoc(t, data, ds, { ...defaults(t, data, ds), ...(currentInfo(t, data) || {}) }); });
-      const { pdfBlob } = await import('../lib/docs/pdf.js');
+      const docs = chosen.map((t) => { const data = t === 'phieu_thu' ? pd : dd; return buildPrintDoc(t, data, ds, { ...defaults(t, data, ds), ...(currentInfo(t, data) || {}) }); });
+      const { pdfBlob, printDocs } = await import('../lib/docs/pdf.js');
+      if (asImage === 'print') { await printDocs(docs); return; }
       const { pdfToImageBlob } = asImage ? await import('../lib/docs/image.js') : {};
       const out = async (list) => { const b = await pdfBlob(list); return asImage ? pdfToImageBlob(b) : b; };
       const ext = asImage ? 'png' : 'pdf'; const what = asImage ? 'ảnh' : 'tệp PDF';
@@ -160,7 +109,7 @@ function BatchExport({ deliveryId, pay, ds, beforeExport }) {
         for (const doc of docs) await saveFile(doc.filename.replace(/\.pdf$/i, '.' + ext), await out(doc));
         toast(`Đã tạo ${docs.length} ${what}`);
       }
-    } catch (e) { toast(`Không tạo được ${asImage ? 'ảnh' : 'PDF'}: ` + e.message, 'err'); } finally { setBusy(false); setImgBusy(false); }
+    } catch (e) { toast(`Không ${asImage === 'print' ? 'in được' : `tạo được ${asImage ? 'ảnh' : 'PDF'}`}: ` + e.message, 'err'); } finally { setBusy(false); setImgBusy(false); }
   };
   return (
     <div className="card doc-batch">
@@ -173,6 +122,7 @@ function BatchExport({ deliveryId, pay, ds, beforeExport }) {
       <div className="row">
         <Btn kind="primary" icon="dl" busy={busy} disabled={!chosen.length || imgBusy} onClick={() => run(false)}>
           {chosen.length ? `Tải ${chosen.length} chứng từ` : 'Chọn chứng từ'}</Btn>
+        <Btn icon="print" disabled={!chosen.length || busy || imgBusy} onClick={() => run('print')}>In</Btn>
         {can('owner') && <Btn icon="dl" busy={imgBusy} disabled={!chosen.length || busy} onClick={() => run(true)}>Tải ảnh</Btn>}
       </div>
     </div>
@@ -192,6 +142,9 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
   const [data, setData] = useState(null); const [err, setErr] = useState(null);
   const [edit, setEdit] = useState({}); const [busy, setBusy] = useState(false); const [reload, setReload] = useState(0);
   const [showForm, setShowForm] = useState(true);
+  // Mẫu in chọn cho từng loại chứng từ (nhớ lần chọn trước trên máy này)
+  const [tplPick, setTplPick] = useState(() => { try { return JSON.parse(localStorage.getItem('gomsu.tpl_pick') || '{}') || {}; } catch (e) { return {}; } });
+  const pickTpl = (t, v) => setTplPick((s) => { const n = { ...s, [t]: v }; try { localStorage.setItem('gomsu.tpl_pick', JSON.stringify(n)); } catch (e) { /* bỏ qua */ } return n; });
   const srcKey = `${src.kind}:${src.id}`;
   useEffect(() => {
     let alive = true; setErr(null);
@@ -217,7 +170,8 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
   const fields = ready ? editableFields(type, data) : [];
   const saved = ready ? currentInfo(type, data) || {} : {};
   const info = ready ? { ...defaults(type, data, ds), ...saved, ...edit } : null;
-  const doc = useMemo(() => { if (!ready) return null; try { return buildDoc(type, data, ds, info); } catch (e) { return { error: e.message }; } }, [ready, type, data, ds, JSON.stringify(info)]);
+  const doc = useMemo(() => { if (!ready) return null; try { return buildPrintDoc(type, data, ds, info, tplPick[type]); } catch (e) { return { error: e.message }; } }, [ready, type, data, ds, JSON.stringify(info), tplPick[type]]);
+  const tpls = templatesFor(ds, type);
   const dirty = Object.keys(edit).length > 0;
   const canSave = data?.kind === 'payment' ? can('thu_chi') : can('ban_hang');
   const subtitle = !data ? null : data.kind === 'payment' ? `Phiếu ${data.p.code}` : data.kind === 'quote' ? `Báo giá ${data.q.code} · ${data.q.customer_name}` : data.kind === 'contract' ? `Hợp đồng ${data.k.code} · ${data.o.customer_name}` : null;
@@ -242,6 +196,12 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
     } catch (e) { toast('Không tạo được PDF: ' + e.message, 'err'); } finally { setBusy(false); }
   };
 
+  const printNow = async () => {
+    if (!doc || doc.error) return;
+    setBusy(true);
+    try { await save(); const { printDocs } = await import('../lib/docs/pdf.js'); await printDocs(doc); } catch (e) { toast('Không in được: ' + e.message, 'err'); } finally { setBusy(false); }
+  };
+
   // Chỉ quản trị (chủ sổ) xuất được ảnh PNG để gửi khách
   const downloadImage = async () => {
     if (!doc || doc.error) return;
@@ -255,13 +215,14 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
   };
 
   const dels = data?.dels || [];
-  const title = withPay ? 'Phiếu thu & chứng từ giao hàng' : 'Xuất chứng từ PDF';
+  const title = withPay ? 'Phiếu thu & chứng từ giao hàng' : 'In / xuất chứng từ';
   const sub = subtitle ?? (data?.o ? `Đơn ${data.o.code} · ${data.o.customer_name || ''}` : '');
   const footer = <>
-    <span className="muted small grow">{dirty ? 'Có thay đổi chưa lưu — bấm Tải PDF sẽ tự lưu.' : 'Khổ A4 · chữ trong PDF chọn và sao chép được.'}</span>
+    <span className="muted small grow">{dirty ? 'Có thay đổi chưa lưu — bấm In / Tải PDF sẽ tự lưu.' : `${PAPERS[doc?.paper]?.label || 'Khổ A4'} · chữ trong PDF chọn và sao chép được.`}</span>
     <Btn onClick={onClose}>Đóng</Btn>
     {canSave && <Btn disabled={!dirty} onClick={async () => { if (await save()) toast('Đã lưu thông tin chứng từ'); }}>Lưu thông tin</Btn>}
     {can('owner') && <Btn icon="dl" busy={busy} disabled={!doc || !!doc?.error} onClick={downloadImage}>Tải ảnh</Btn>}
+    <Btn icon="print" busy={busy} disabled={!doc || !!doc?.error} onClick={printNow}>In</Btn>
     <Btn kind="primary" icon="dl" busy={busy} disabled={!doc || !!doc?.error} onClick={download}>Tải PDF</Btn>
   </>;
   const content = (
@@ -276,6 +237,12 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
               <Field label="Lập theo">
                 <Select value={src.kind === 'delivery' ? src.id : ''} onChange={(v) => setSrc(v ? { kind: 'delivery', id: v } : { kind: 'order', id: data.o.id })}
                   options={[{ value: '', label: 'Cả đơn (hàng còn trong đơn)' }, ...dels.map((d) => ({ value: d.id, label: `Phiếu giao ${d.code} · ${dmy(d.delivery_date)}` }))]} />
+              </Field>
+            )}
+            {ready && (tpls.length > 1 || can('owner')) && (
+              <Field label="Mẫu in">
+                {tpls.length > 1 && <Select value={doc?.tplId || ''} onChange={(v) => pickTpl(type, v)} options={tpls.map((t) => ({ value: t.id, label: `${t.name}${t.is_default ? ' (mặc định)' : ''}` }))} />}
+                {can('owner') && <button className="link-btn small" onClick={() => openTemplateEditor({ book: book.id, type, tpl: (ds.templates[type] || []).length ? doc?.tplId : '' })}>Sửa mẫu in này (mở tab mới)</button>}
               </Field>
             )}
             <button className="link-btn small" onClick={() => setShowForm((x) => !x)}>{showForm ? '▾' : '▸'} Thông tin trên chứng từ</button>
@@ -300,7 +267,7 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
               })}
               {!canSave && <div className="muted small">Bạn không có quyền lưu thay đổi; nội dung sửa ở đây chỉ dùng cho lần tải này.</div>}
               {type === 'hoa_don' && <div className="muted small">Nợ cũ tự tính = công nợ hiện tại của khách trừ phần của đơn này. Tổng số hộp tự tính từ quy cách đóng gói của sản phẩm (hộp lẻ tính 1 hộp).</div>}
-              <div className="muted small">Đơn vị phát hành, logo, ghi chú chính sách: Cài đặt → Mẫu chứng từ.</div>
+              <div className="muted small">Đơn vị phát hành, logo, nội dung và cách trình bày: Cài đặt → Mẫu in.</div>
             </div>}
           </div>
           <div className="doc-main">{doc && !doc.error ? <DocPreview doc={doc} /> : !doc?.error && <Loading />}</div>
@@ -320,19 +287,19 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
 
 function FontLoader() { useDocFonts(); return null; }
 
-// ---------- Cài đặt → Mẫu chứng từ ----------
+// ---------- Cài đặt → Mẫu in ----------
 const PROFILE_FIELDS = [
   ['name', 'Tên in đầu trang (IN HOA)', true], ['legal_name', 'Tên dùng trong nội dung', true], ['address', 'Địa chỉ', true], ['phone', 'Điện thoại'], ['email', 'Email'],
   ['website', 'Website'], ['tax_code', 'Mã số thuế'], ['bank_line', 'Dòng số tài khoản (sau chữ “STK:”)', true], ['representative', 'Người đại diện'], ['rep_title', 'Chức danh người đại diện'],
 ];
-const TEXT_FIELDS = {
-  hoa_don: [['invoice_notes', 'Ghi chú / chính sách đổi trả (in cuối hóa đơn)', 12, 'Mỗi dòng một ý. Bọc chữ trong **hai dấu sao** để in đậm. Thụt đầu dòng bằng dấu cách để lùi vào.']],
-  don_dat_hang: [['order_footer', 'Dòng cuối đơn đặt hàng', 2]],
-  bao_gia: [['quote_ngoi', 'Lưu ý mặc định - mẫu ngói', 8], ['quote_mosaic', 'Lưu ý mặc định - mẫu tranh mosaic', 8]],
-  bien_ban: [['handover_closing', 'Đoạn cam kết cuối biên bản', 3], ['goods_condition', 'Tình trạng hàng hóa mặc định', 1]],
-  phieu_xuat_kho: [['form_xuat', 'Mẫu số (góc phải)', 3]],
-  phieu_thu: [['form_thu', 'Mẫu số phiếu thu', 3], ['form_chi', 'Mẫu số phiếu chi', 3]],
-};
+// Nhóm loại chứng từ ở cột trái (giống "Quản lý mẫu in" của KiotViet)
+const TYPE_GROUPS = [
+  ['Bán hàng', ['hoa_don', 'don_dat_hang', 'bao_gia']],
+  ['Giao hàng', ['bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen']],
+  ['Hợp đồng', ['de_nghi_tam_ung', 'doi_chieu_sl', 'doi_chieu_tt', 'de_nghi_tt']],
+  ['Sổ quỹ', ['phieu_thu']],
+];
+const QUOTE_TEXTS = [['quote_ngoi', 'Lưu ý mặc định - báo giá mẫu ngói', 8], ['quote_mosaic', 'Lưu ý mặc định - báo giá tranh mosaic', 8]];
 
 async function resizeLogo(file) {
   if (!/^image\//.test(file.type)) throw new Error('Chọn tệp ảnh (PNG, JPG)');
@@ -345,8 +312,98 @@ async function resizeLogo(file) {
     return c.toDataURL('image/png');
   } finally { URL.revokeObjectURL(url); }
 }
+// Phần "docs" gửi lên máy chủ (không kèm mẫu in — mẫu lưu riêng nên không bị ghi đè)
+const docsPayload = (f) => ({
+  profiles: f.profiles, font: f.font,
+  types: Object.fromEntries(Object.entries(f.types).map(([k, t]) => [k, { profile: t.profile, sep: t.sep, show_price: t.show_price, show_form: t.show_form,
+    text: Object.fromEntries(Object.entries(t.text || {}).filter(([, v]) => v !== undefined && v !== null)) }])),
+});
 
 export function DocTemplateSettings() {
+  const [tab, setTab] = useState(() => { try { return localStorage.getItem('gomsu.tpl_tab') || 'mau'; } catch (e) { return 'mau'; } });
+  const pick = (v) => { setTab(v); try { localStorage.setItem('gomsu.tpl_tab', v); } catch (e) { /* bỏ qua */ } };
+  return (
+    <div className="stack-l">
+      <Tabs value={tab} onChange={pick} tabs={[{ value: 'mau', label: 'Quản lý mẫu in' }, { value: 'don-vi', label: 'Đơn vị phát hành & phông chữ' }]} />
+      {tab === 'mau' ? <TemplateManager /> : <IssuerSettings />}
+    </div>
+  );
+}
+
+// Danh sách mẫu theo loại chứng từ + xem trước + sửa (tab mới), nhân bản, đặt mặc định, xóa
+function TemplateManager() {
+  const { book, settings, rpc, loadBooks, toast } = useApp();
+  const ds = useMemo(() => docSettings(book, settings), [book, settings]);
+  const [type, setType] = useState(() => { try { const t = localStorage.getItem('gomsu.tpl_type'); return DOC_TYPES[t] ? t : 'hoa_don'; } catch (e) { return 'hoa_don'; } });
+  const chooseType = (t) => { setType(t); setSel(null); try { localStorage.setItem('gomsu.tpl_type', t); } catch (e) { /* bỏ qua */ } };
+  const saved = ds.templates[type] || [];
+  const list = templatesFor(ds, type);
+  const [sel, setSel] = useState(null);
+  const cur = list.find((t) => t.id === sel) || list.find((t) => t.is_default) || list[0];
+  const [busy, setBusy] = useState(false);
+  const data = useMemo(() => sampleData(type), [type]);
+  const doc = useMemo(() => { try { return buildPrintDoc(type, data, ds, defaults(type, data, ds), cur.id); } catch (e) { return { error: e.message }; } }, [type, ds, cur.id, data]);
+  const persist = async (next, msg) => {
+    setBusy(true);
+    try { await rpc('save_print_templates', { doc_type: type, templates: next }); await loadBooks(); toast(msg); return true; } catch (e) { toast(e.message, 'err'); return false; } finally { setBusy(false); }
+  };
+  const strip = ({ builtin, ...t }) => t;
+  // Mẫu gốc chưa lưu lần nào: lưu nó vào danh sách trước khi nhân bản / thêm mẫu khác
+  const base = saved.length ? saved : [strip(cur)];
+  const duplicate = async () => {
+    const id = 't' + Date.now().toString(36);
+    if (await persist([...base, { ...strip(cur), id, name: `${cur.name} (bản sao)`, is_default: false }], 'Đã nhân bản mẫu in')) setSel(id);
+  };
+  const makeDefault = () => persist(base.map((t) => ({ ...t, is_default: t.id === cur.id })), `Đã đặt "${cur.name}" làm mẫu mặc định`);
+  const remove = () => persist(saved.filter((t) => t.id !== cur.id), saved.length > 1 ? 'Đã xóa mẫu in' : 'Đã xóa — dùng lại mẫu gốc của hệ thống').then((ok) => ok && setSel(null));
+  const edit = (tpl) => openTemplateEditor({ book: book.id, type, tpl });
+  const setProfile = async (v) => {
+    try {
+      const f = { profiles: ds.profiles, font: ds.font, types: { ...ds.types, [type]: { ...ds.types[type], profile: v } } };
+      await rpc('update_book_settings', { settings: { docs: docsPayload(f) } }); await loadBooks(); toast('Đã đổi đơn vị phát hành');
+    } catch (e) { toast(e.message, 'err'); }
+  };
+  return (
+    <div className="tm">
+      <nav className="tm-nav" aria-label="Loại chứng từ">
+        {TYPE_GROUPS.map(([g, ts]) => (
+          <div key={g} className="tm-group">
+            <div className="tm-glabel">{g}</div>
+            {ts.map((t) => <button type="button" key={t} className={`tm-item${t === type ? ' on' : ''}`} onClick={() => chooseType(t)}>
+              <span>{DOC_TYPES[t].label}</span>{(ds.templates[t] || []).length > 0 && <span className="tm-count">{ds.templates[t].length}</span>}
+            </button>)}
+          </div>
+        ))}
+      </nav>
+      <div className="tm-main">
+        <div className="tm-head">
+          <div className="tm-tabs" role="tablist">
+            {list.map((t) => <button type="button" role="tab" aria-selected={t.id === cur.id} key={t.id} className={t.id === cur.id ? 'on' : ''} onClick={() => setSel(t.id)}>
+              {t.name}{t.is_default && list.length > 1 && <span className="pill pill-ok tm-def">Mặc định</span>}{t.builtin && <span className="muted small"> · mẫu gốc</span>}
+            </button>)}
+          </div>
+          <Btn small kind="soft" icon="plus" onClick={() => edit('new')}>Tạo mẫu in</Btn>
+        </div>
+        <div className="tm-actions">
+          <Btn kind="primary" icon="edit" onClick={() => edit(saved.length ? cur.id : '')}>Sửa</Btn>
+          <Btn icon="copy" busy={busy} onClick={duplicate}>Nhân bản</Btn>
+          {list.length > 1 && !cur.is_default && <Btn icon="check" busy={busy} onClick={makeDefault}>Đặt làm mặc định</Btn>}
+          {!cur.builtin && <ConfirmBtn icon="trash" confirmText={saved.length > 1 ? 'Bấm lần nữa để xóa mẫu' : 'Xóa và dùng lại mẫu gốc?'} onConfirm={remove}>Xóa</ConfirmBtn>}
+          <span className="grow" />
+          <span className="small muted">{PAPERS[cur.paper || 'A4']?.label} · {cur.orient === 'landscape' ? 'khổ ngang' : 'khổ dọc'}</span>
+          {ds.profiles.length > 1 && <label className="tm-profile small">Đơn vị phát hành
+            <select className="input" value={ds.types[type].profile} onChange={(e) => setProfile(e.target.value)}>{ds.profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+          </label>}
+        </div>
+        <div className="small muted">Xem trước với dữ liệu mẫu. Bấm <b>Sửa</b> để mở trình sửa mẫu ở tab mới: sửa chữ trực tiếp, chèn thông tin, bảng, ảnh, chọn khổ giấy rồi bấm Lưu mẫu.</div>
+        {doc.error ? <ErrorBox error={doc.error} /> : <DocPreview doc={doc} />}
+      </div>
+    </div>
+  );
+}
+
+// Đơn vị phát hành (tên, địa chỉ, logo…), phông chữ chung, lưu ý mặc định của báo giá mới
+function IssuerSettings() {
   const { book, settings, rpc, loadBooks, refresh, toast } = useApp();
   const [f, setF] = useState(null); const [busy, setBusy] = useState(false); const [err, setErr] = useState(null);
   useEffect(() => {
@@ -357,7 +414,6 @@ export function DocTemplateSettings() {
   }, [book.id]);
   if (!f) return <Loading />;
   const setP = (i, k, v) => setF((s) => ({ ...s, profiles: s.profiles.map((p, j) => (j === i ? { ...p, [k]: v } : p)) }));
-  const setT = (t, k, v) => setF((s) => ({ ...s, types: { ...s.types, [t]: { ...s.types[t], [k]: v } } }));
   const setTxt = (t, k, v) => setF((s) => ({ ...s, types: { ...s.types, [t]: { ...s.types[t], text: { ...s.types[t].text, [k]: v } } } }));
   const addProfile = () => setF((s) => ({ ...s, profiles: [...s.profiles, { ...profileFromBook(book, settings), id: 'p' + Date.now().toString(36), name: 'ĐƠN VỊ MỚI' }] }));
   const delProfile = (i) => setF((s) => {
@@ -368,17 +424,14 @@ export function DocTemplateSettings() {
   const save = async () => {
     setBusy(true); setErr(null);
     try {
-      const size = JSON.stringify(f).length;
-      if (size > 900000) throw new Error('Logo quá lớn — chọn ảnh nhỏ hơn');
-      const types = Object.fromEntries(Object.entries(f.types).map(([k, t]) => [k, { profile: t.profile, sep: t.sep, show_price: t.show_price, show_form: t.show_form,
-        text: Object.fromEntries(Object.entries(t.text || {}).filter(([, v]) => v !== undefined && v !== null)) }]));
-      await rpc('update_book_settings', { settings: { docs: { profiles: f.profiles, types, font: f.font } } });
-      await loadBooks(); refresh(); toast('Đã lưu mẫu chứng từ');
+      if (JSON.stringify(f).length > 900000) throw new Error('Logo quá lớn — chọn ảnh nhỏ hơn');
+      await rpc('update_book_settings', { settings: { docs: docsPayload(f) } });
+      await loadBooks(); refresh(); toast('Đã lưu đơn vị phát hành và phông chữ');
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
   return (
     <div className="stack-l" style={{ maxWidth: 920 }}>
-      <Note>Hóa đơn bán hàng, đơn đặt hàng, biên bản bàn giao, phiếu xuất kho và phiếu thu/chi được xuất ra PDF khổ A4 từ màn hình chi tiết đơn hàng, phiếu giao và phiếu thu. Mỗi loại chứng từ chọn một <b>đơn vị phát hành</b> (ví dụ hóa đơn do hộ kinh doanh xuất, biên bản bàn giao do công ty xuất).</Note>
+      <Note>Thông tin đơn vị phát hành được chèn vào mẫu in qua các thông tin như <b>Tên đơn vị</b>, <b>Địa chỉ đơn vị</b>, <b>Logo đơn vị</b>. Mỗi loại chứng từ chọn một đơn vị phát hành ở thẻ Quản lý mẫu in (ví dụ hóa đơn do hộ kinh doanh xuất, biên bản bàn giao do công ty xuất).</Note>
       <ErrorBox error={err} />
       <Section title="Đơn vị phát hành" actions={<Btn small kind="soft" icon="plus" onClick={addProfile}>Thêm đơn vị</Btn>}>
         <div className="stack-l">
@@ -390,7 +443,7 @@ export function DocTemplateSettings() {
               </div>
               <div className="grid">
                 {PROFILE_FIELDS.map(([k, label, wide]) => <Field key={k} label={label} wide={wide}><Input value={p[k] || ''} onChange={(v) => setP(i, k, k === 'name' ? v.toUpperCase() : v)} /></Field>)}
-                <Field label="Logo (in ở góc trái biên bản / đầu trang)" wide>
+                <Field label="Logo (in ở đầu trang chứng từ)" wide>
                   <div className="row gap-s" style={{ alignItems: 'center' }}>
                     {p.logo ? <img src={p.logo} alt="Logo" style={{ height: 56, border: '1px solid var(--line)', borderRadius: 6, background: '#fff' }} /> : <span className="muted small">Chưa có logo</span>}
                     <label className="btn btn-ghost btn-sm"><input type="file" accept="image/*" hidden onChange={async (e) => { const file = e.target.files?.[0]; e.target.value = ''; if (!file) return;
@@ -406,7 +459,7 @@ export function DocTemplateSettings() {
       <FontLoader />
       <Section title="Phông chữ">
         <div className="grid">
-          <Field label="Phông chữ cho tất cả chứng từ" hint="Hóa đơn, đơn đặt hàng, biên bản, phiếu xuất kho và phiếu thu/chi dùng chung phông này. Phông được nhúng sẵn trong PDF nên máy nào mở cũng giống nhau.">
+          <Field label="Phông chữ mặc định của mẫu in" hint="Dùng cho chữ chưa chọn phông riêng trong mẫu. Phông được nhúng sẵn trong PDF nên máy nào mở cũng giống nhau.">
             <Select value={f.font} onChange={(v) => setF((s) => ({ ...s, font: v }))} options={[{ value: 'Arimo', label: 'Arial (Arimo) — chữ không chân' }, { value: 'Tinos', label: 'Times New Roman (Tinos) — chữ có chân' }]} />
           </Field>
           <div className="row gap" style={{ alignItems: 'center' }}>
@@ -415,31 +468,20 @@ export function DocTemplateSettings() {
           </div>
         </div>
       </Section>
-      <Section title="Từng loại chứng từ">
-        <div className="stack-l">
-          {Object.entries(DOC_TYPES).map(([k, t]) => (
-            <div key={k} className="card stack-s">
-              <b>{t.label}</b>
-              <div className="grid">
-                <Field label="Đơn vị phát hành"><Select value={f.types[k].profile} onChange={(v) => setT(k, 'profile', v)} options={f.profiles.map((p) => ({ value: p.id, label: p.name }))} /></Field>
-                <Field label="Dấu phân cách hàng nghìn"><Select value={f.types[k].sep} onChange={(v) => setT(k, 'sep', v)} options={[{ value: ',', label: '24,000,000 (dấu phẩy)' }, { value: '.', label: '24.000.000 (dấu chấm)' }]} /></Field>
-              </div>
-              {k === 'phieu_xuat_kho' && <Check checked={f.types[k].show_price} onChange={(v) => setT(k, 'show_price', v)}>In đơn giá và thành tiền trên phiếu xuất kho</Check>}
-              {(k === 'phieu_xuat_kho' || k === 'phieu_thu') && <Check checked={f.types[k].show_form} onChange={(v) => setT(k, 'show_form', v)}>In dòng “Mẫu số … Thông tư 88/2021/TT-BTC” ở góc phải</Check>}
-              {(TEXT_FIELDS[k] || []).map(([tk, label, rows, hint]) => {
-                const cur = f.types[k].text?.[tk];
-                return (
-                  <Field key={tk} label={label} hint={hint} wide>
-                    <TextArea rows={rows} value={cur ?? DEFAULT_TEXTS[tk]} onChange={(v) => setTxt(k, tk, v)} />
-                    {cur !== undefined && cur !== DEFAULT_TEXTS[tk] && <button className="link-btn small" onClick={() => setTxt(k, tk, undefined)}>Dùng lại nội dung mặc định</button>}
-                  </Field>
-                );
-              })}
-            </div>
-          ))}
+      <Section title="Lưu ý mặc định của báo giá mới">
+        <div className="stack-s">
+          {QUOTE_TEXTS.map(([tk, label, rows]) => {
+            const cur = f.types.bao_gia.text?.[tk];
+            return (
+              <Field key={tk} label={label} hint="Tự điền vào ô Lưu ý khi tạo báo giá mới. Bọc chữ trong **hai dấu sao** để in đậm." wide>
+                <TextArea rows={rows} value={cur ?? DEFAULT_TEXTS[tk]} onChange={(v) => setTxt('bao_gia', tk, v)} />
+                {cur !== undefined && cur !== DEFAULT_TEXTS[tk] && <button className="link-btn small" onClick={() => setTxt('bao_gia', tk, undefined)}>Dùng lại nội dung mặc định</button>}
+              </Field>
+            );
+          })}
         </div>
       </Section>
-      <div><Btn kind="primary" busy={busy} onClick={save}>Lưu mẫu chứng từ</Btn></div>
+      <div><Btn kind="primary" busy={busy} onClick={save}>Lưu</Btn></div>
     </div>
   );
 }
