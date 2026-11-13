@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "lucide-react": "^1.65.0",
+    "pdfjs-dist": "^4.10.38",
     "pdfmake": "^0.2.20",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",

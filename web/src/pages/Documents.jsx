@@ -133,31 +133,34 @@ const BATCH_TYPES = [['hd_van_chuyen', 'Hợp đồng vận chuyển'], ['hoa_do
 const BATCH_KEY = 'gomsu.doc_batch';
 function readBatch() { try { const v = JSON.parse(localStorage.getItem(BATCH_KEY) || 'null'); return v && typeof v === 'object' ? v : null; } catch (e) { return null; } }
 function BatchExport({ deliveryId, pay, ds, beforeExport }) {
-  const { q, rpc, settings, toast } = useApp();
+  const { q, rpc, settings, toast, can } = useApp();
   const opts = [...BATCH_TYPES, ...(pay ? [['phieu_thu', 'Phiếu thu']] : [])];
   const saved = readBatch();
   const [pick, setPick] = useState(() => Object.fromEntries(opts.map(([t]) => [t, saved?.pick?.[t] ?? true])));
   const [merge, setMerge] = useState(saved?.merge ?? true);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(false); const [imgBusy, setImgBusy] = useState(false);
   const chosen = opts.filter(([t]) => pick[t]).map(([t]) => t);
   const load = async (src) => { const d = await loadDocData(q, rpc, src); return { ...d, prods: Object.fromEntries(Object.entries(d.prods || {}).map(([k, p]) => [k, packView(p, settings)])) }; };
-  const run = async () => {
+  const run = async (asImage) => {
     if (!chosen.length) return;
     try { localStorage.setItem(BATCH_KEY, JSON.stringify({ pick, merge })); } catch (e) { /* bỏ qua */ }
-    setBusy(true);
+    (asImage ? setImgBusy : setBusy)(true);
     try {
       if (beforeExport && !(await beforeExport())) return;
       const [dd, pd] = await Promise.all([load({ kind: 'delivery', id: deliveryId }), pay && chosen.includes('phieu_thu') ? load({ kind: 'payment', id: pay }) : null]);
       const docs = chosen.map((t) => { const data = t === 'phieu_thu' ? pd : dd; return buildDoc(t, data, ds, { ...defaults(t, data, ds), ...(currentInfo(t, data) || {}) }); });
       const { pdfBlob } = await import('../lib/docs/pdf.js');
+      const { pdfToImageBlob } = asImage ? await import('../lib/docs/image.js') : {};
+      const out = async (list) => { const b = await pdfBlob(list); return asImage ? pdfToImageBlob(b) : b; };
+      const ext = asImage ? 'png' : 'pdf'; const what = asImage ? 'ảnh' : 'tệp PDF';
       if (merge && docs.length > 1) {
-        const name = `chung-tu-giao-hang_${dd.d.code}.pdf`;
-        if (await saveFile(name, await pdfBlob(docs))) toast(`Đã tạo ${name} (${docs.length} chứng từ)`);
+        const name = `chung-tu-giao-hang_${dd.d.code}.${ext}`;
+        if (await saveFile(name, await out(docs))) toast(`Đã tạo ${name} (${docs.length} chứng từ)`);
       } else {
-        for (const doc of docs) await saveFile(doc.filename, await pdfBlob(doc));
-        toast(`Đã tạo ${docs.length} tệp PDF`);
+        for (const doc of docs) await saveFile(doc.filename.replace(/\.pdf$/i, '.' + ext), await out(doc));
+        toast(`Đã tạo ${docs.length} ${what}`);
       }
-    } catch (e) { toast('Không tạo được PDF: ' + e.message, 'err'); } finally { setBusy(false); }
+    } catch (e) { toast(`Không tạo được ${asImage ? 'ảnh' : 'PDF'}: ` + e.message, 'err'); } finally { setBusy(false); setImgBusy(false); }
   };
   return (
     <div className="card doc-batch">
@@ -166,9 +169,12 @@ function BatchExport({ deliveryId, pay, ds, beforeExport }) {
       <div className="doc-batch-list">
         {opts.map(([t, label]) => <Check key={t} checked={!!pick[t]} onChange={(v) => setPick((s) => ({ ...s, [t]: v }))}>{label}</Check>)}
       </div>
-      {chosen.length > 1 && <Check checked={merge} onChange={setMerge}>Gộp vào một tệp PDF</Check>}
-      <Btn kind="primary" icon="dl" busy={busy} disabled={!chosen.length} onClick={run}>
-        {chosen.length ? `Tải ${chosen.length} chứng từ` : 'Chọn chứng từ'}</Btn>
+      {chosen.length > 1 && <Check checked={merge} onChange={setMerge}>Gộp vào một tệp (PDF / ảnh)</Check>}
+      <div className="row">
+        <Btn kind="primary" icon="dl" busy={busy} disabled={!chosen.length || imgBusy} onClick={() => run(false)}>
+          {chosen.length ? `Tải ${chosen.length} chứng từ` : 'Chọn chứng từ'}</Btn>
+        {can('owner') && <Btn icon="dl" busy={imgBusy} disabled={!chosen.length || busy} onClick={() => run(true)}>Tải ảnh</Btn>}
+      </div>
     </div>
   );
 }
@@ -236,6 +242,18 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
     } catch (e) { toast('Không tạo được PDF: ' + e.message, 'err'); } finally { setBusy(false); }
   };
 
+  // Chỉ quản trị (chủ sổ) xuất được ảnh PNG để gửi khách
+  const downloadImage = async () => {
+    if (!doc || doc.error) return;
+    setBusy(true);
+    try {
+      await save();
+      const [{ pdfBlob }, { pdfToImageBlob }] = await Promise.all([import('../lib/docs/pdf.js'), import('../lib/docs/image.js')]);
+      const name = doc.filename.replace(/\.pdf$/i, '') + '.png';
+      if (await saveFile(name, await pdfToImageBlob(await pdfBlob(doc)))) toast(`Đã tạo ${name}`);
+    } catch (e) { toast('Không tạo được ảnh: ' + e.message, 'err'); } finally { setBusy(false); }
+  };
+
   const dels = data?.dels || [];
   const title = withPay ? 'Phiếu thu & chứng từ giao hàng' : 'Xuất chứng từ PDF';
   const sub = subtitle ?? (data?.o ? `Đơn ${data.o.code} · ${data.o.customer_name || ''}` : '');
@@ -243,6 +261,7 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
     <span className="muted small grow">{dirty ? 'Có thay đổi chưa lưu — bấm Tải PDF sẽ tự lưu.' : 'Khổ A4 · chữ trong PDF chọn và sao chép được.'}</span>
     <Btn onClick={onClose}>Đóng</Btn>
     {canSave && <Btn disabled={!dirty} onClick={async () => { if (await save()) toast('Đã lưu thông tin chứng từ'); }}>Lưu thông tin</Btn>}
+    {can('owner') && <Btn icon="dl" busy={busy} disabled={!doc || !!doc?.error} onClick={downloadImage}>Tải ảnh</Btn>}
     <Btn kind="primary" icon="dl" busy={busy} disabled={!doc || !!doc?.error} onClick={download}>Tải PDF</Btn>
   </>;
   const content = (
