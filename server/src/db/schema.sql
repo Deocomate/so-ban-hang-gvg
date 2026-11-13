@@ -914,3 +914,139 @@ create table if not exists order_events (
   detail text                                 -- các dòng chi tiết, mỗi thay đổi một dòng (JSON mảng chuỗi)
 );
 create index if not exists order_events_order_idx on order_events (order_id, at);
+
+-- ---------- THIẾT LẬP KIỂU KIOTVIET ----------
+-- Bảo hành, sửa chữa: phiếu tiếp nhận hàng khách mang tới bảo hành / sửa
+create table if not exists warranty_claims (
+  id text primary key,
+  book_id text not null references books(id) on delete cascade,
+  code text not null,
+  customer_id text references customers(id),
+  product_id text references products(id),
+  delivery_line_id text,
+  issue text not null,
+  received_date text not null,
+  promise_date text,
+  status text not null default 'tiep_nhan' check (status in ('tiep_nhan','dang_sua','da_sua','da_tra','huy')),
+  in_warranty integer not null default 0,
+  fee real not null default 0 check (fee >= 0),
+  note text,
+  created_by text, created_at text not null, done_at text
+);
+create index if not exists warranty_claims_book_idx on warranty_claims (book_id, status);
+
+-- Kết ca: thu ngân mở ca với tiền đầu ca, cuối ca đếm tiền và nộp báo cáo bàn giao
+create table if not exists cash_shifts (
+  id text primary key,
+  book_id text not null references books(id) on delete cascade,
+  code text not null,
+  user_id text not null,
+  fund_id text not null references funds(id),
+  opened_at text not null,
+  opening_cash real not null default 0,
+  closed_at text,
+  cash_in real, cash_out real, expected_cash real, counted_cash real, diff real,
+  note text
+);
+create index if not exists cash_shifts_book_idx on cash_shifts (book_id, opened_at);
+
+-- Tích điểm: mỗi dòng là một lần cộng / trừ điểm của khách
+create table if not exists point_moves (
+  id integer primary key autoincrement,
+  book_id text not null references books(id) on delete cascade,
+  customer_id text not null references customers(id),
+  move_date text not null,
+  points real not null,
+  kind text not null check (kind in ('tich','doi','tra_hang','huy','dieu_chinh')),
+  doc_type text, doc_id text, doc_code text, note text,
+  created_by text, created_at text not null
+);
+create index if not exists point_moves_cust_idx on point_moves (customer_id);
+create index if not exists point_moves_doc_idx on point_moves (doc_id);
+
+-- Chương trình khuyến mại: giảm theo tổng đơn hoặc theo hàng hóa / nhóm hàng
+create table if not exists promotions (
+  id text primary key,
+  book_id text not null references books(id) on delete cascade,
+  code text not null,
+  name text not null,
+  kind text not null check (kind in ('order','product')),
+  min_amount real not null default 0,
+  discount_pct real not null default 0 check (discount_pct >= 0 and discount_pct <= 100),
+  discount_amount real not null default 0 check (discount_amount >= 0),
+  max_discount real,
+  product_ids text not null default '[]',
+  categories text not null default '[]',
+  start_date text not null, end_date text not null,
+  active integer not null default 1,
+  note text,
+  created_at text not null
+);
+
+-- Voucher (phiếu mua hàng): mỗi mã một mệnh giá, dùng một lần
+create table if not exists vouchers (
+  id text primary key,
+  book_id text not null references books(id) on delete cascade,
+  code text not null,
+  batch text,
+  value real not null check (value > 0),
+  min_amount real not null default 0,
+  customer_id text references customers(id),
+  issue_date text not null,
+  expiry_date text,
+  status text not null default 'moi' check (status in ('moi','da_dung','huy')),
+  used_order_id text, used_at text,
+  note text,
+  created_at text not null
+);
+create unique index if not exists vouchers_code_uq on vouchers (book_id, upper(code));
+
+-- Coupon (mã giảm giá): một mã dùng nhiều lần đến giới hạn
+create table if not exists coupons (
+  id text primary key,
+  book_id text not null references books(id) on delete cascade,
+  code text not null,
+  name text,
+  discount_pct real not null default 0 check (discount_pct >= 0 and discount_pct <= 100),
+  discount_amount real not null default 0 check (discount_amount >= 0),
+  max_discount real,
+  min_amount real not null default 0,
+  usage_limit integer,
+  start_date text not null, end_date text not null,
+  active integer not null default 1,
+  created_at text not null
+);
+create unique index if not exists coupons_code_uq on coupons (book_id, upper(code));
+
+-- Giảm giá đã áp dụng trên đơn (khuyến mại, voucher, coupon, đổi điểm); tổng nằm trong sales_orders.discount
+create table if not exists order_promos (
+  id integer primary key autoincrement,
+  order_id text not null references sales_orders(id) on delete cascade,
+  book_id text not null,
+  kind text not null check (kind in ('promo','voucher','coupon','points')),
+  ref_id text, code text, label text,
+  points real,
+  amount real not null check (amount >= 0)
+);
+create index if not exists order_promos_order_idx on order_promos (order_id);
+
+-- Thiết bị đã xác thực 2 lớp (nhớ 30 ngày)
+create table if not exists user_devices (
+  id text primary key,
+  user_id text not null references users(id) on delete cascade,
+  token_hash text not null,
+  label text,
+  created_at text not null,
+  expires_at text not null
+);
+
+-- Xóa dữ liệu cũ của sổ: lịch xóa và kết quả
+create table if not exists purge_jobs (
+  id text primary key,
+  book_id text not null references books(id) on delete cascade,
+  cutoff text not null,
+  run_at text not null,
+  status text not null default 'cho' check (status in ('cho','xong','loi','huy')),
+  result text,
+  created_by text, created_at text not null, done_at text
+);

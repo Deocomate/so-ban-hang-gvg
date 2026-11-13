@@ -1,6 +1,9 @@
 // Danh sách hàm ứng dụng được gọi qua POST /api/rpc/:fn (tên và tham số giữ nguyên như bản Supabase cũ).
 // Mỗi lời gọi chạy trong 1 giao dịch: hoặc thành công trọn vẹn, hoặc không ghi gì.
-import { ctx, AppError } from '../lib/context.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { ctx, AppError, today } from '../lib/context.js';
+import { config } from '../config.js';
 import { setUser } from './access.js';
 import * as books from './books.js';
 import * as catalog from './catalog.js';
@@ -24,6 +27,11 @@ import * as priceBooks from './price-books.js';
 import * as users from './users.js';
 import * as receivables from './receivables.js';
 import { import_book } from './import-backup.js';
+import * as costing from './costing.js';
+import * as warranty from './warranty.js';
+import * as loyalty from './loyalty.js';
+import * as shifts from './shifts.js';
+import * as purge from './purge.js';
 
 const pick = (mod, names) => Object.fromEntries(names.map((n) => {
   if (typeof mod[n] !== 'function') throw new Error(`Thiếu hàm ${n}`);
@@ -52,14 +60,32 @@ export const RPC = {
     'create_paysheet', 'recalc_paysheet', 'adjust_paysheet_line', 'close_paysheet', 'cancel_paysheet', 'rpt_staff']),
   ...pick(groups, ['save_customer_group', 'delete_customer_group', 'set_customer_group', 'refresh_customer_groups']),
   ...pick(priceBooks, ['save_price_book', 'delete_price_book', 'save_price_book_items', 'import_price_book_items', 'apply_price_formula']),
-  ...pick(users, ['admin_overview', 'admin_save_user', 'admin_resend_invite', 'admin_send_reset', 'admin_set_status', 'admin_logout_user',
+  ...pick(users, ['admin_reset_2fa', 'admin_overview', 'admin_save_user', 'admin_resend_invite', 'admin_send_reset', 'admin_set_status', 'admin_logout_user',
     'admin_save_role', 'admin_delete_role', 'admin_security_log']),
+  ...pick(costing, ['cost_method_info', 'cost_method_preview', 'change_cost_method']),
+  ...pick(warranty, ['warranty_lookup', 'save_warranty_claim', 'set_warranty_status', 'warranty_claims']),
+  ...pick(loyalty, ['adjust_points', 'point_history', 'save_promotion', 'save_coupon', 'issue_vouchers', 'cancel_voucher', 'loyalty_lists', 'preview_promos', 'active_promotions', 'order_promos']),
+  ...pick(shifts, ['current_shift', 'open_shift', 'close_shift', 'shift_list']),
+  ...pick(purge, ['purge_preview', 'schedule_purge', 'cancel_purge', 'purge_jobs']),
+  ...pick(books, ['save_currency_rates', 'verify_my_password', 'book_staff', 'save_member_categories']),
   import_book,
 };
+
+// Thao tác sửa hàng loạt dữ liệu cũ: sao lưu nguyên CSDL trước (ngoài giao dịch, vì VACUUM INTO không chạy trong giao dịch)
+const BACKUP_FIRST = { change_cost_method: 'truoc-doi-gia-von', schedule_purge: 'truoc-xoa-du-lieu' };
+function backupBefore(label) {
+  const file = ctx.db.pragma('database_list').find((d) => d.name === 'main')?.file;
+  if (!file) return null;
+  fs.mkdirSync(config.backupDir, { recursive: true });
+  const out = path.join(config.backupDir, `gomsu-${today()}-${label}-${Date.now()}.db`);
+  ctx.db.prepare('vacuum into ?').run(out);
+  return out;
+}
 
 export function callRpc(uid, fn, p) {
   if (!Object.hasOwn(RPC, fn)) throw new AppError(`Không có chức năng "${fn}"`, 404);
   const params = p && typeof p === 'object' && !Array.isArray(p) ? p : {};
+  if (BACKUP_FIRST[fn] && params.confirm === true) params.backup_file = backupBefore(BACKUP_FIRST[fn]);
   setUser(uid);
   try {
     return ctx.db.transaction(() => RPC[fn](params))();

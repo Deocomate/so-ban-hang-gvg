@@ -11,7 +11,7 @@ import { addAnamtileBook, defaultDocs, VARIANTS } from '../domain/books.js';
 import { DEFAULT_ROLES } from '../lib/labels.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const SCHEMA_VERSION = 10;
+const SCHEMA_VERSION = 11;
 
 // Bảng ghi nhật ký chỉnh sửa; cột bỏ qua khi so sánh UPDATE (do hệ thống tự cập nhật)
 const AUDIT_TABLES = {
@@ -20,9 +20,9 @@ const AUDIT_TABLES = {
   purchase_order_lines: 'received_qty,returned_qty', goods_receipts: '', supplier_returns: '', stock_adjustments: '', productions: '', payments: '',
   payment_allocations: '', expenses: '', drivers: '', driver_trips: '', quotes: '', contracts: '', tax_invoices: '', employees: '', paysheets: '', commission_tables: '',
   shipments: 'status,status_at,status_detail,last_sync_at,tracking_registered_at,cod_status,cod_settled_at,cod_payment_ids',
-  bank_txns: '', product_units: '', price_books: '',
+  bank_txns: '', product_units: '', price_books: '', warranty_claims: '', promotions: '', vouchers: '', coupons: '', cash_shifts: '',
 };
-const JSON_TEXT_COLS = new Set(['pay', 'rules', 'settings', 'perms', 'notify', 'cod_payment_ids', 'candidate_books', 'payment_ids', 'raw', 'data', 'payload', 'extra', 'body', 'images', 'prices', 'formula', 'cust_groups', 'user_ids']);
+const JSON_TEXT_COLS = new Set(['owner_ids', 'extra_costs', 'pay', 'rules', 'settings', 'perms', 'notify', 'cod_payment_ids', 'candidate_books', 'payment_ids', 'raw', 'data', 'payload', 'extra', 'body', 'images', 'prices', 'formula', 'cust_groups', 'user_ids']);
 
 function registerFunctions(db) {
   db.function('today', () => today());
@@ -65,6 +65,19 @@ export function auditTriggers(db) {
 
 // CSDL tạo từ bản cũ: thêm các cột mới (dữ liệu cũ giữ nguyên, cột mới để trống)
 const ADDED_COLUMNS = [
+  ['products', 'fixed_cost', 'real check (fixed_cost is null or fixed_cost >= 0)'],
+  ['stock_moves', 'src_value', 'real'],
+  ['stock_moves', 'anchor_id', 'real'],
+  ['products', 'barcode', 'text'],
+  ['products', 'warranty_months', 'integer check (warranty_months is null or warranty_months >= 0)'],
+  ['products', 'maintenance_months', 'integer check (maintenance_months is null or maintenance_months >= 0)'],
+  ['customers', 'owner_ids', "text not null default '[]'"],
+  ['customers', 'supplier_id', 'text'],
+  ['book_members', 'categories', "text not null default '[]'"],
+  ['users', 'totp_secret', 'text'],
+  ['users', 'totp_enabled', 'integer not null default 0'],
+  ['goods_receipts', 'extra_costs', "text not null default '[]'"],
+  ['goods_receipt_lines', 'extra_cost', 'real not null default 0'],
   ['payments', 'ref_no', 'text'],
   ['sales_returns', 'fee', 'real not null default 0 check (fee >= 0)'],
   ['sales_return_lines', 'fee', 'real not null default 0 check (fee >= 0)'],
@@ -245,6 +258,15 @@ function migrate(db, from) {
   if (from > 0 && from < 7) applyBookProfiles(db);
   if (from > 0 && from < 8) upgradeAccounts(db);
   if (from < 8) seedRoles(db);
+  if (from > 0 && from < 11) keepSourceValues(db);
+  db.exec(`create unique index if not exists products_barcode_uq on products (book_id, barcode) where barcode is not null and barcode <> ''`);
+}
+
+// Giữ giá trị gốc của các dòng nhập có giá trước khi có phương pháp giá vốn cố định (sổ cũ luôn tính bình quân)
+function keepSourceValues(db) {
+  db.exec(`update stock_moves set src_value = value where src_value is null and (
+    (doc_type in ('nhap', 'dau_ky', 'dieu_chinh') and qty > 0)
+    or (doc_type = 'tra_ncc' and qty < 0 and line_id in (select id from supplier_return_lines where receipt_line_id is not null)))`);
 }
 
 // Tài khoản có trước khi có phân quyền mới: coi như đã xác thực email; chủ sổ thành Tổng quản trị;

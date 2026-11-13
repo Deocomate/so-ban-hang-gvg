@@ -38,7 +38,13 @@ export function buildWorkbook(sheets) {
   return new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
 
-export async function exportXlsx(filename, sheets) { return saveFile(filename, buildWorkbook(sheets)); }
+// Thiết lập "Xác thực khi xuất file": ứng dụng gắn hàm hỏi lại mật khẩu; trả về false thì không xuất
+let exportGuard = null;
+export const setExportGuard = (fn) => { exportGuard = fn; };
+export async function exportXlsx(filename, sheets) {
+  if (exportGuard && !(await exportGuard())) return null;
+  return saveFile(filename, buildWorkbook(sheets));
+}
 
 // Excel lưu CSV theo bảng mã Windows nếu không chọn UTF-8
 const decodeCsv = (buf) => {

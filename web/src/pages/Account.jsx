@@ -1,6 +1,7 @@
 // Tài khoản: đăng nhập, quên mật khẩu, trang mở từ link trong email (nhận lời mời / đặt lại mật khẩu / xác thực email),
 // bắt đổi mật khẩu, và "Tài khoản của tôi" trong Cài đặt.
 import React, { useEffect, useState } from 'react';
+import { qrSvg } from '../lib/vietqr.js';
 import { useApp } from '../lib/store.jsx';
 import { Btn, Field, Input, Note, Section, KV, Pill, Loading, Check } from '../components/ui.jsx';
 
@@ -34,10 +35,16 @@ export function Login() {
   const [mode, setMode] = useState('in');
   const [email, setEmail] = useState(''); const [pw, setPw] = useState(''); const [remember, setRemember] = useState(true);
   const [err, setErr] = useState(''); const [sent, setSent] = useState(''); const [busy, setBusy] = useState(false);
+  const [tf, setTf] = useState(null); const [otp, setOtp] = useState(''); const [qr, setQr] = useState('');
+  useEffect(() => { if (tf?.otpauth) qrSvg(tf.otpauth, 180).then(setQr).catch(() => setQr('')); }, [tf?.otpauth]);
   const submit = async () => {
     setErr(''); setBusy(true);
     try {
-      if (mode === 'in') { await backend.signIn(email, pw, remember); setSession(await backend.getSession()); }
+      if (mode === 'in') {
+        const need = await backend.signIn(email, pw, remember, tf ? otp : null);
+        if (need) { setTf(need); setOtp(''); return; }
+        setSession(await backend.getSession());
+      }
       else { await backend.forgot(email); setSent(email); }
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
@@ -48,11 +55,19 @@ export function Login() {
       {mode === 'forgot' && !sent && <div className="muted small">Nhập email đăng nhập, hệ thống gửi link đặt mật khẩu mới (hạn 60 phút).</div>}
       {sent ? <Note tone="good">Nếu <b>{sent}</b> có tài khoản, link đặt lại mật khẩu đã được gửi tới hộp thư. Hãy kiểm tra cả mục Thư rác / Quảng cáo.</Note> : <>
         <Field label="Email"><Input id="email" type="email" required value={email} onChange={setEmail} autoComplete="email" /></Field>
-        {mode === 'in' && <Field label="Mật khẩu"><Input id="pw" type="password" required value={pw} onChange={setPw} autoComplete="current-password" /></Field>}
-        {mode === 'in' && <Check checked={remember} onChange={setRemember}>Ghi nhớ đăng nhập trên máy này (30 ngày)</Check>}
+        {mode === 'in' && !tf && <Field label="Mật khẩu"><Input id="pw" type="password" required value={pw} onChange={setPw} autoComplete="current-password" /></Field>}
+        {tf?.need === 'enroll' && <div className="stack-s">
+          <Note>Sổ của bạn yêu cầu <b>xác thực 2 lớp</b>. Cài ứng dụng Google Authenticator (hoặc Microsoft Authenticator) trên điện thoại, quét mã QR dưới đây rồi nhập mã 6 số ứng dụng hiện ra.</Note>
+          {qr && <div className="qr" style={{ width: 180, height: 180, margin: '0 auto' }} dangerouslySetInnerHTML={{ __html: qr }} role="img" aria-label="Mã QR cài xác thực 2 lớp" />}
+          <div className="muted small c">Không quét được: nhập khóa <code style={{ userSelect: 'all' }}>{tf.secret}</code></div>
+        </div>}
+        {tf && <Field label="Mã xác thực 6 số" hint={tf.need === 'otp' ? 'Mở ứng dụng xác thực trên điện thoại để lấy mã. Máy này sẽ được nhớ 30 ngày.' : ''}>
+          <Input id="otp" value={otp} onChange={(v) => setOtp(v.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" autoFocus required /></Field>}
+        {mode === 'in' && !tf && <Check checked={remember} onChange={setRemember}>Ghi nhớ đăng nhập trên máy này (30 ngày)</Check>}
         {mode === 'in' && !remember && <div className="muted small">Máy dùng chung: đóng trình duyệt là đăng xuất, phiên tự hết sau 12 giờ.</div>}
         {err && <Note tone="bad">{err}</Note>}
-        <Submit busy={busy}>{mode === 'in' ? 'Đăng nhập' : 'Gửi link đặt lại mật khẩu'}</Submit>
+        <Submit busy={busy}>{mode === 'in' ? (tf ? 'Xác thực' : 'Đăng nhập') : 'Gửi link đặt lại mật khẩu'}</Submit>
+        {tf && <a href="#" className="small" onClick={linkTo(() => { setTf(null); setOtp(''); })}>Đăng nhập bằng tài khoản khác</a>}
       </>}
       <div className="row gap small">
         {mode === 'in' ? <a href="#" onClick={linkTo(() => switchTo('forgot'))}>Quên mật khẩu?</a> : <a href="#" onClick={linkTo(() => switchTo('in'))}>Quay lại đăng nhập</a>}

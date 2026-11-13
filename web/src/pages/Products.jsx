@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp, useQ, useAction } from '../lib/store.jsx';
 import { money, qty as fq, match, dmy, todayVN } from '../lib/format.js';
+import { printLabels, barcodeSvg } from '../lib/barcode.js';
 import { useProducts, productLabel, productSub, PRODUCT_TYPES, typeLabel } from '../lib/lookups.js';
 import { exportXlsx } from '../lib/excel.js';
 import { bookProfile } from '../lib/book-profile.js';
@@ -107,11 +108,12 @@ export function ProductsPage() {
 
 // ---------- CHI TIẾT HÀNG HÓA ----------
 export function ProductDetail({ id, onClose }) {
-  const { open, can, settings } = useApp();
+  const { open, can, settings, toast, book } = useApp();
   const q = useQ('products', [['id', 'eq', id]]);
   const { run, busy } = useAction();
   const [tab, setTab] = useState('info');
   const [img, setImg] = useState(0);
+  const [labels, setLabels] = useState(null);
   const p = q.data?.[0];
   const pn = settings.price_names || [];
   const prof = bookProfile(settings);
@@ -127,10 +129,18 @@ export function ProductDetail({ id, onClose }) {
         {can('danh_muc') && <Btn icon="copy" onClick={() => { onClose(); open('product', { copy_of: p.id }); }}>Sao chép</Btn>}
         {can('danh_muc') && <Btn busy={busy} onClick={() => run('save_product', { ...p, thumb: p.image_url, active: !p.active }, p.active ? `Đã ngừng kinh doanh ${p.sku}` : `${p.sku} kinh doanh trở lại`)}>{p.active ? 'Ngừng kinh doanh' : 'Kinh doanh lại'}</Btn>}
         <span className="grow" />
+        {settings.use_barcode && <Btn icon="print" onClick={() => setLabels(1)}>In tem mã vạch</Btn>}
         {!svc && !p.is_kit && <Btn icon="history" onClick={() => open('stockcard', { product_id: p.id })}>Thẻ kho</Btn>}
         {!svc && !p.is_kit && can('nhap_hang') && <Btn icon="truck" onClick={() => open('po-form', { mode: 'nhap', product_id: p.id })}>Nhập hàng</Btn>}
         {can('danh_muc') && <Btn kind="primary" icon="edit" onClick={() => open('product', { id: p.id })}>Chỉnh sửa</Btn>}
       </>}>
+      {labels != null && <Modal title="In tem mã vạch" size="sm" onClose={() => setLabels(null)} footer={<><Btn onClick={() => setLabels(null)}>Hủy</Btn>
+        <Btn kind="primary" icon="print" onClick={() => { if (!printLabels([{ product: p, count: labels, price: p.price1 }], { shop: book.name })) toast('Trình duyệt chặn cửa sổ in — hãy cho phép cửa sổ bật lên', 'err'); setLabels(null); }}>In</Btn></>}>
+        <div className="bc-preview" dangerouslySetInnerHTML={{ __html: barcodeSvg(p.barcode || p.sku) }} />
+        <div className="c small">{p.barcode || p.sku}{!p.barcode && ' (chưa có mã vạch, in theo mã hàng)'}</div>
+        <Field label="Số tem"><NumInput money={false} min={1} max={500} value={labels} onChange={(v) => setLabels(v || 1)} /></Field>
+        <div className="muted small">Khổ tem 50 × 30 mm, mỗi tem có tên, mã vạch, mã số và {(settings.price_names || [])[0] || 'giá bán'}.</div>
+      </Modal>}
       <Tabs value={tab} onChange={setTab} tabs={[{ value: 'info', label: 'Thông tin' }, { value: 'desc', label: 'Mô tả, ghi chú' }, ...(comps?.length ? [{ value: 'comp', label: 'Hàng thành phần', count: comps.length }] : [])]} />
       {tab === 'info' && <div className="row gap" style={{ alignItems: 'flex-start', marginTop: 12 }}>
         <div className="stack" style={{ gap: 6, width: 200 }}>
@@ -140,7 +150,8 @@ export function ProductDetail({ id, onClose }) {
         </div>
         <div className="grow stack">
           <KV items={[
-            ['Mã hàng', p.sku], ['Nhóm hàng', p.category || '—'], prof.has('brand') && ['Thương hiệu', p.brand || '—'],
+            ['Mã hàng', p.sku], settings.use_barcode && ['Mã vạch', p.barcode || '—'], ['Nhóm hàng', p.category || '—'], prof.has('brand') && ['Thương hiệu', p.brand || '—'],
+            settings.warranty && !svc && ['Bảo hành / bảo trì', [p.warranty_months ? `bảo hành ${p.warranty_months} tháng` : '', p.maintenance_months ? `bảo trì ${p.maintenance_months} tháng/lần` : ''].filter(Boolean).join(' · ') || '—'],
             ...(svc ? [] : [['Tồn kho', `${fq(p.on_hand)} ${p.unit}`], ['Khách đặt', fq(p.reserved)], ['Có thể bán', fq(p.available), p.is_low ? 'warn strong' : ''],
               ['Định mức tồn', `${fq(p.low_stock)} – ${p.max_stock ? fq(p.max_stock) : 'không giới hạn'}`], ['Dự kiến hết hàng', p.days_left == null ? '—' : `${fq(p.days_left)} ngày (bán ${fq(p.sold_30d)} trong 30 ngày)`]]),
             cost && ['Giá vốn', money(p.avg_cost)], cost && p.last_in_cost != null && ['Giá nhập cuối', money(p.last_in_cost)],
@@ -316,7 +327,12 @@ export function ProductForm({ id, copy_of, type: type0, onClose, onSaved }) {
         <div className="row gap" style={{ alignItems: 'flex-start' }}>
           <div className="grid grow">
             <Field label="Mã hàng" hint={id ? '' : 'Để trống: hệ thống tự cấp'}><Input value={f.sku} onChange={(v) => set('sku', v)} placeholder="Tự động" disabled={isNew && !!variants?.rows?.length} /></Field>
-            <Field label="Tên hàng" required wide><Input value={f.name} onChange={(v) => set('name', v)} placeholder="Bắt buộc" /></Field>
+            <Field label="Tên hàng" required wide><Input value={f.name} onChange={(v) => set('name', v)} placeholder="Bắt buộc" />
+              {isNew && settings.product_suggest && <Suggest name={f.name} items={all.data} onPick={(x) => setF((s) => ({ ...s, category: x.category || s.category, brand: x.brand || s.brand, unit: x.unit || s.unit,
+                size: x.size || s.size, color: x.color || s.color, pattern: x.pattern || s.pattern, material: x.material || s.material, description: x.description || s.description,
+                price1: x.price1, price2: x.price2, price3: x.price3, price4: x.price4, price5: x.price5, units_per_pack: x.units_per_pack ?? s.units_per_pack, pack_unit: x.pack_unit || s.pack_unit,
+                unit_weight: x.unit_weight ?? s.unit_weight, pack_weight: x.pack_weight ?? s.pack_weight }))} />}</Field>
+            {settings.use_barcode && t !== 'dich_vu' && <Field label="Mã vạch" hint="Quét bằng máy đọc mã vạch hoặc gõ số in trên bao bì"><Input value={f.barcode} onChange={(v) => set('barcode', v.trim())} inputMode="numeric" /></Field>}
             <Field label="Nhóm hàng"><Input value={f.category} onChange={(v) => set('category', v)} list="cats" /><datalist id="cats">{[...new Set([...(settings.categories || []), ...(all.data || []).map((p) => p.category).filter(Boolean)])].map((c) => <option key={c} value={c} />)}</datalist></Field>
             {prof.has('brand') && <Field label="Thương hiệu"><Input value={f.brand} onChange={(v) => set('brand', v)} list="brands" /><datalist id="brands">{brands.map((c) => <option key={c} value={c} />)}</datalist></Field>}
           </div>
@@ -350,7 +366,9 @@ export function ProductForm({ id, copy_of, type: type0, onClose, onSaved }) {
           <div className="grid">
             {can('xem_gia_von') && (svc || (isNew && t === 'hang'))
               && <Field label="Giá vốn" hint={svc ? 'Tính vào giá vốn mỗi lần bán dịch vụ' : 'Giá vốn của tồn kho ban đầu'}><NumInput min={0} value={f.cost} onChange={(v) => set('cost', v)} /></Field>}
-            {can('xem_gia_von') && !isNew && stocked && <Field label="Giá vốn bình quân" hint="Tự tính theo nhập xuất kho"><Input value={money(f.avg_cost)} onChange={() => {}} disabled /></Field>}
+            {can('xem_gia_von') && !isNew && stocked && (settings.cost_method === 'fixed'
+              ? <Field label="Giá vốn cố định" hint="Sửa thì tồn kho được đánh giá lại theo giá mới từ hôm nay; đơn đã giao giữ nguyên"><NumInput min={0} value={f.fixed_cost} onChange={(v) => set('fixed_cost', v)} /></Field>
+              : <Field label="Giá vốn trung bình" hint="Tự tính theo nhập xuất kho"><Input value={money(f.avg_cost)} onChange={() => {}} disabled /></Field>)}
             {pn.map((label, i) => <Field key={label} label={label}><NumInput min={0} value={f[`price${i + 1}`]} onChange={(v) => set(`price${i + 1}`, v)} /></Field>)}
           </div>
         </Section>
@@ -367,6 +385,8 @@ export function ProductForm({ id, copy_of, type: type0, onClose, onSaved }) {
 
         <Section title={svc ? 'Kích thước, trọng lượng' : 'Vị trí, trọng lượng, kích thước'}>
           <div className="grid">
+            {settings.warranty && !svc && <Field label="Bảo hành" hint="Để trống: không bảo hành"><NumInput money={false} min={0} value={f.warranty_months} onChange={(v) => set('warranty_months', v)} suffix="tháng" /></Field>}
+            {settings.warranty && !svc && <Field label="Bảo trì định kỳ" hint="Nhắc bảo trì sau mỗi"><NumInput money={false} min={0} value={f.maintenance_months} onChange={(v) => set('maintenance_months', v)} suffix="tháng" /></Field>}
             {!svc && <Field label="Vị trí"><Input value={f.location} onChange={(v) => set('location', v)} list="locs" placeholder="vd. Kệ A1, Kho sau" /><datalist id="locs">{locs.map((c) => <option key={c} value={c} />)}</datalist></Field>}
             <Field label={`Trọng lượng 1 ${unitLc} (kg)`} hint="Dùng để tính tổng trọng lượng đơn"><NumInput money={false} min={0} step={0.05} suffix="kg" value={f.unit_weight} onChange={(v) => set('unit_weight', v)} /></Field>
             <Field label="Kích thước (rộng × dài)">
@@ -425,5 +445,21 @@ export function ProductForm({ id, copy_of, type: type0, onClose, onSaved }) {
         </Section>
       </div>}
     </Modal>
+  );
+}
+
+// Gợi ý thông tin hàng hóa: hàng đã có tên gần giống, bấm để chép nhóm, đơn vị, kích thước, giá
+function Suggest({ name, items, onPick }) {
+  const words = String(name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/\s+/).filter((w) => w.length > 1);
+  if (words.length < 1 || !items) return null;
+  const fold = (x) => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const list = items.map((p) => ({ p, n: words.filter((w) => fold(p.name).includes(w)).length })).filter((x) => x.n >= Math.min(2, words.length))
+    .sort((a, b) => b.n - a.n).slice(0, 5);
+  if (!list.length) return null;
+  return (
+    <div className="suggest">
+      <span className="muted small">Gợi ý từ hàng đã có:</span>
+      {list.map(({ p }) => <button key={p.id} type="button" className="chip" onClick={() => onPick(p)} title="Chép nhóm, đơn vị, kích thước, giá">{p.sku} · {p.name}</button>)}
+    </div>
   );
 }

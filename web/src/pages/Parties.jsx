@@ -240,3 +240,4 @@ function OpeningDebtForm({ type, partyId, onDone }) {
     </div>
   );
 }
+

@@ -1,6 +1,7 @@
 // Sổ, thiết lập, thành viên & quyền, tài khoản nhận tiền, xuất dữ liệu sao lưu.
 import { ctx, fail, one, all, run, insert, uuid, nowIso, json, num, nz, outRows } from '../lib/context.js';
 import { requirePerm, requireAdmin, loadMembers, bookSettings, effectivePerms } from './access.js';
+import { checkMyPassword } from '../lib/auth.js';
 
 export const DEFAULT_EXPENSE_CATS = [
   { group: 'Mặt bằng', items: ['Thuê nhà / cửa hàng', 'Thuê kho', 'Phí dịch vụ, an ninh, vệ sinh'] },
@@ -197,4 +198,45 @@ export function export_book(p) {
   r.exported_at = nowIso();
   r.format = 'gomsu-backup-v1';
   return r;
+}
+
+// ---------- Tiền tệ: ngoại tệ, tỷ giá và lịch sử đổi tỷ giá (Thiết lập → Cửa hàng → Quản lý tiền tệ) ----------
+// currencies = [{code, name, rate}] — rate: số đồng cho 1 đơn vị ngoại tệ. price_decimals: số chữ số thập phân của giá bán, giá vốn (0–2).
+export function save_currency_rates(p) {
+  const b = p.book_id; requirePerm(b, 'owner');
+  const s = bookSettings(b); const old = new Map((s.currencies || []).map((c) => [c.code, c]));
+  const list = (Array.isArray(p.currencies) ? p.currencies : []).map((c) => ({ code: String(c.code ?? '').trim().toUpperCase(), name: String(c.name ?? '').trim(), rate: num(c.rate) }));
+  const seen = new Set();
+  for (const c of list) {
+    if (!/^[A-Z]{3}$/.test(c.code)) fail('Mã ngoại tệ gồm 3 chữ cái, vd. USD, EUR, CNY');
+    if (c.code === 'VND') fail('VND là tiền mặc định, không thêm làm ngoại tệ');
+    if (seen.has(c.code)) fail(`Ngoại tệ ${c.code} bị lặp`); seen.add(c.code);
+    if (!(c.rate > 0)) fail(`Nhập tỷ giá ${c.code}`);
+  }
+  const dec = p.price_decimals === undefined ? s.price_decimals ?? 0 : Number(p.price_decimals);
+  if (![0, 1, 2].includes(dec)) fail('Số chữ số thập phân chỉ từ 0 đến 2');
+  const hist = [...(s.fx_history || [])];
+  for (const c of list) if (old.get(c.code)?.rate !== c.rate) hist.push({ at: nowIso(), by: ctx.uid, code: c.code, rate: c.rate });
+  run(`update books set settings = ? where id = ?`, JSON.stringify({ ...s, currencies: list, price_decimals: dec, fx_history: hist.slice(-500) }), b);
+  return { currencies: list, price_decimals: dec };
+}
+
+// Xác thực khi xuất file: nhập lại mật khẩu trước khi tải danh sách ra Excel
+export function verify_my_password(p) {
+  requirePerm(p.book_id, null);
+  if (!checkMyPassword(ctx.uid, p.password)) fail('Mật khẩu không đúng', 403);
+  return { ok: true };
+}
+
+// Phân quyền theo nhóm hàng: nhóm hàng nhân viên được xem / bán (rỗng = mọi nhóm)
+export function book_staff(p) {
+  requirePerm(p.book_id, 'owner');
+  return all(`select m.user_id, m.role, m.categories, coalesce(m.display_name, u.name, u.email) as name, u.email from book_members m join users u on u.id = m.user_id
+    where m.book_id = ? order by m.role desc, name`, p.book_id).map((m) => ({ ...m, categories: json(m.categories, []) }));
+}
+export function save_member_categories(p) {
+  requirePerm(p.book_id, 'owner');
+  const cats = [...new Set((Array.isArray(p.categories) ? p.categories : []).map((c) => String(c).trim()).filter(Boolean))];
+  if (!run(`update book_members set categories = ? where book_id = ? and user_id = ? and role = 'staff'`, JSON.stringify(cats), p.book_id, p.user_id).changes) fail('Không tìm thấy nhân viên của sổ');
+  return { categories: cats };
 }

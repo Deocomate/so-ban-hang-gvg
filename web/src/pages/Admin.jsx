@@ -87,6 +87,7 @@ function UserForm({ u, ov, onClose }) {
           {u.status === 'invited' && <Btn busy={busy === 'inv'} onClick={() => call('inv', 'admin_resend_invite', { user_id: u.id }, 'Đã gửi lại thư mời', false)}>Gửi lại lời mời</Btn>}
           {u.status === 'active' && <Btn busy={busy === 'rs'} onClick={() => call('rs', 'admin_send_reset', { user_id: u.id }, 'Đã gửi email đặt lại mật khẩu', false)}>Gửi email đặt lại mật khẩu</Btn>}
           {u.status === 'active' && <ConfirmBtn busy={busy === 'out'} onConfirm={() => call('out', 'admin_logout_user', { user_id: u.id }, 'Đã đăng xuất người này khỏi mọi thiết bị', false)}>Đăng xuất mọi thiết bị</ConfirmBtn>}
+          {!!u.totp_enabled && <ConfirmBtn busy={busy === '2fa'} confirmText="Bấm lần nữa: người này cài lại xác thực 2 lớp" onConfirm={() => call('2fa', 'admin_reset_2fa', { user_id: u.id }, 'Đã đặt lại xác thực 2 lớp — lần đăng nhập sau sẽ cài lại', false)}>Đặt lại xác thực 2 lớp</ConfirmBtn>}
           <ConfirmBtn kind={u.status === 'disabled' ? 'ghost' : 'danger'} busy={busy === 'st'} onConfirm={() => call('st', 'admin_set_status', { user_id: u.id, disabled: u.status !== 'disabled' }, u.status === 'disabled' ? 'Đã mở khóa' : 'Đã khóa tài khoản')}>
             {u.status === 'disabled' ? 'Mở khóa' : 'Khóa tài khoản'}</ConfirmBtn>
         </>}

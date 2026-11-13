@@ -4,7 +4,7 @@ import { ctx, fail, one, all, run, insert, uuid, nowIso, json, nz, trimNz, int, 
 import { requireAdmin, loadMembers } from './access.js';
 import { setMembership } from './books.js';
 import { PERM_GROUPS, PERM_KEYS } from '../lib/labels.js';
-import { inviteUser, resendInvite, sendResetFor, syncAdminBooks, secLog, normEmail } from '../lib/auth.js';
+import { inviteUser, resendInvite, sendResetFor, syncAdminBooks, secLog, normEmail, reset2fa } from '../lib/auth.js';
 
 const ACCESS = ['none', 'owner', 'staff'];
 const userRow = (id) => { const u = one(`select * from users where id = ?`, id); if (!u) fail('Không tìm thấy tài khoản'); return u; };
@@ -15,7 +15,7 @@ const membershipsOf = (uid) => Object.fromEntries(all(`select book_id, role, rol
 // Mọi thứ trang Quản trị cần trong 1 lần gọi
 export function admin_overview() {
   requireAdmin();
-  const users = all(`select id, email, name, phone, status, is_admin, email_verified_at, must_change_password, last_login_at, created_at from users
+  const users = all(`select id, email, name, phone, status, is_admin, email_verified_at, must_change_password, last_login_at, created_at, totp_enabled from users
     order by is_admin desc, status = 'disabled', coalesce(name, email)`).map((u) => ({ ...u, is_admin: !!u.is_admin, must_change_password: !!u.must_change_password,
     books: membershipsOf(u.id) }));
   const roles = all(`select r.*, (select count(*) from book_members m where m.role_id = r.id) as used from roles r order by r.name`)
@@ -62,6 +62,14 @@ export function admin_resend_invite(p) { requireAdmin(); resendInvite(p.user_id)
 export function admin_send_reset(p) { requireAdmin(); sendResetFor(p.user_id); return { ok: true }; }
 
 // Khóa / mở khóa. Khóa: đăng xuất mọi thiết bị, ngừng nhận thông báo điện thoại.
+// Nhân viên mất điện thoại / đổi ứng dụng xác thực: xóa cài đặt xác thực 2 lớp, lần đăng nhập sau cài lại
+export function admin_reset_2fa(p) {
+  requireAdmin();
+  userRow(p.user_id);
+  reset2fa(p.user_id);
+  return { ok: true };
+}
+
 export function admin_set_status(p) {
   requireAdmin();
   const u = userRow(p.user_id);

@@ -63,7 +63,15 @@ export function createApiBackend(base = '/api') {
     },
     async getSession() { return token ? { user } : null; },
     onAuth(cb) { listeners.add(cb); return { data: { subscription: { unsubscribe: () => listeners.delete(cb) } } }; },
-    async signIn(email, password, remember = true) { setSession(await request('/auth/login', { email, password, remember }, { auth: false })); },
+    // Xác thực 2 lớp: máy chủ trả {two_factor} khi cần mã 6 số; thiết bị đã xác thực giữ mã thiết bị 30 ngày
+    async signIn(email, password, remember = true, otp = null) {
+      let device = null; try { device = localStorage.getItem('gomsu.device'); } catch (e) { /* bỏ qua */ }
+      const r = await request('/auth/login', { email, password, remember, otp, device_token: device, device_label: navigator.userAgent.slice(0, 120) }, { auth: false });
+      if (r.two_factor) return r.two_factor;
+      if (r.device_token) { try { localStorage.setItem('gomsu.device', r.device_token); } catch (e) { /* bỏ qua */ } }
+      setSession(r);
+      return null;
+    },
     // Chưa đăng nhập: quên mật khẩu, xem / dùng link trong email
     forgot(email) { return request('/auth/forgot', { email }, { auth: false }); },
     linkInfo(token) { return request('/auth/link-info', { token }, { auth: false }); },

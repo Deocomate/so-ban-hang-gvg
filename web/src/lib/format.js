@@ -2,7 +2,10 @@
 const nf = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const nf2 = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
 
-export const money = (v) => (v === null || v === undefined || v === '' || Number.isNaN(Number(v)) ? '—' : nf.format(Math.round(Number(v))));
+// Thiết lập "Định dạng tiền tệ": hiển thị giá với tối đa 0–2 chữ số thập phân
+let nfm = nf; let dec = 0;
+export function setPriceDecimals(n) { const d = [0, 1, 2].includes(Number(n)) ? Number(n) : 0; if (d !== dec) { dec = d; nfm = d ? new Intl.NumberFormat('en-US', { maximumFractionDigits: d }) : nf; } }
+export const money = (v) => (v === null || v === undefined || v === '' || Number.isNaN(Number(v)) ? '—' : dec ? nfm.format(Number(v)) : nf.format(Math.round(Number(v))));
 export const moneyD = (v) => (v === null || v === undefined || v === '' ? '—' : nf.format(Math.round(Number(v))) + ' đ');
 export const qty = (v) => (v === null || v === undefined || v === '' ? '—' : nf2.format(Number(v)));
 export const pct = (v) => (v === null || v === undefined ? '—' : nf2.format(Number(v) * 100) + '%');

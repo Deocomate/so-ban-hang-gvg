@@ -1,5 +1,6 @@
 // Thu chi tiền (phiếu thu/chi, phân bổ vào chứng từ, phí sàn), hủy phiếu, chi phí phân nhóm + phân bổ dần.
 import { ctx, fail, one, all, run, insert, uuid, nowIso, num, int, bool, nz, trimNz, rnd, asDate, today, json, vnd } from '../lib/context.js';
+import { checkTxnDate } from './order-rules.js';
 import { requirePerm, checkDate, nextCode, once, bookSettings, setting } from './access.js';
 import { DEFAULT_EXPENSE_CATS } from './books.js';
 import { logOrder } from './order-log.js';
@@ -106,11 +107,23 @@ export function doPayment(book, p) {
   return { id: payId, code, allocated: tot, unallocated: amt - tot };
 }
 
+// Thu / chi bằng ngoại tệ: số tiền quy đổi ra đồng theo tỷ giá (mặc định tỷ giá đang khai ở Thiết lập → Quản lý tiền tệ)
+function withFx(b, p) {
+  if (!p.fx) return p;
+  const code = String(p.fx.code ?? '').toUpperCase();
+  const cur = (bookSettings(b).currencies || []).find((c) => c.code === code);
+  if (!cur) fail(`Chưa khai ngoại tệ ${code} (Thiết lập → Quản lý tiền tệ)`);
+  const amt = num(p.fx.amount); const rate = num(p.fx.rate) ?? cur.rate;
+  if (!(amt > 0) || !(rate > 0)) fail('Nhập số tiền ngoại tệ và tỷ giá');
+  const note = `${amt.toLocaleString('vi-VN')} ${code} × ${rate.toLocaleString('vi-VN')}`;
+  return { ...p, amount: rnd(amt * rate), note: p.note ? `${p.note} (${note})` : note };
+}
+
 export function create_payment(p) {
   const b = p.book_id;
   requirePerm(b, 'thu_chi');
   if (['gop_von', 'rut_von', 'chuyen_quy'].includes(p.kind)) requirePerm(b, 'owner');
-  return once(p, b, 'create_payment', () => doPayment(b, p));
+  return once(p, b, 'create_payment', () => { checkTxnDate(b, 'thu_chi', asDate(p.date) || today()); return doPayment(b, withFx(b, p)); });
 }
 
 export function void_payment(p) {

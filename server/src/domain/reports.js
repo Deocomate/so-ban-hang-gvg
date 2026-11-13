@@ -266,7 +266,7 @@ export function rpt_stock(p) {
   const OPEN = `(m.move_date < @d1 or (m.doc_type = 'dau_ky' and m.move_date <= @d2))`;
   const IN = `(m.doc_type in ('nhap','tra_ncc') and m.move_date between @d1 and @d2)`;
   const SOLDF = `(m.doc_type in ('giao','tra_hang') and m.move_date between @d1 and @d2)`;
-  const ADJ = `(m.doc_type in ('dieu_chinh','san_xuat','chenh_lech') and m.move_date between @d1 and @d2)`;
+  const ADJ = `(m.doc_type in ('dieu_chinh','san_xuat','chenh_lech','danh_gia_lai') and m.move_date between @d1 and @d2)`;
   const CLOSE = `(m.move_date <= @d2)`;
   const rows = allN(`select p.id, p.sku, p.name, p.unit, p.category,
       coalesce(sum(m.qty) filter (where ${OPEN}), 0) as open_qty, coalesce(sum(m.qty) filter (where ${IN}), 0) as in_qty,

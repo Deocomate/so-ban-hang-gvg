@@ -27,7 +27,8 @@ export function QrBox({ amount, content, size = 200, caption = true }) {
   );
 }
 
-export function BankSettings() {
+// part: 'account' — tài khoản nhận tiền (Sổ quỹ); 'payment' — xem thử QR và nhận tiền tự động (Tiện ích → Thanh toán)
+export function BankSettings({ part = 'account' }) {
   const { settings, rpc, loadBooks, toast, book, refresh } = useApp();
   const funds = useQ('funds', [['active', 'eq', 'true']], 'sort', 50);
   const b0 = settings.bank || {};
@@ -41,7 +42,7 @@ export function BankSettings() {
   };
   return (
     <div className="stack-l" style={{ maxWidth: 860 }}>
-      <Section title="Tài khoản nhận chuyển khoản">
+      {part === 'account' && <Section title="Tài khoản nhận chuyển khoản">
         <div className="muted small">Dùng để in mã QR trên đơn và phiếu (khách quét là tự điền số tiền + nội dung), và để nhận giao dịch tự động từ SePay. Hai sổ có thể dùng chung 1 tài khoản — phần mềm phân biệt bằng mã sổ trong nội dung ({orderTransferContent(book, 'DH00012')}).</div>
         <div className="grid">
           <Field label="Ngân hàng"><Select value={f.bin} onChange={(v) => set('bin', v)} options={BANKS.map((x) => ({ value: x.bin, label: x.name }))} /></Field>
@@ -50,14 +51,15 @@ export function BankSettings() {
           <Field label="Ghi tiền về vào quỹ"><Select value={f.fund_id} onChange={(v) => set('fund_id', v)} placeholder="Tự chọn quỹ “Tài khoản ngân hàng”" options={(funds.data || []).map((x) => ({ value: x.id, label: x.name }))} /></Field>
         </div>
         <div><Btn kind="primary" busy={busy} onClick={save}>Lưu tài khoản</Btn></div>
-      </Section>
-      {settings.bank && <Section title="Xem thử mã QR">
+      </Section>}
+      {part === 'payment' && !settings.bank && <Note>Chưa có tài khoản nhận chuyển khoản. Thêm ở <b>Sổ quỹ → Tài khoản ngân hàng</b> để in mã QR.</Note>}
+      {part === 'payment' && settings.bank && <Section title="Xem thử mã QR">
         <div className="row gap" style={{ alignItems: 'flex-start' }}>
           <QrBox amount={1250000} content={orderTransferContent(book, 'DH00012')} />
           <div className="muted small" style={{ maxWidth: 360 }}>Ví dụ QR cho đơn DH00012 còn phải trả 1.250.000 đ. Mỗi đơn và phiếu in có QR riêng với đúng số tiền còn phải trả. Hãy quét thử bằng app ngân hàng (không cần chuyển) để kiểm tra tên tài khoản hiện đúng.</div>
         </div>
       </Section>}
-      <Section title="Nhận tiền về tự động (SePay)">
+      {part === 'payment' && <Section title="Nhận tiền về tự động (SePay)">
         <div className="small">Đã kết nối thì mỗi khoản tiền vào tài khoản sẽ được: <b>tự ghi phiếu thu và gạch nợ đúng đơn</b> nếu nội dung có mã đơn; khoản không có mã đơn vào mục <b>Tiền về TK → Chờ xử lý</b>; kèm thông báo lên điện thoại.</div>
         <ol className="small steps-list">
           <li>Đăng ký SePay (sepay.vn), thêm tài khoản Vietcombank hộ kinh doanh (SePay hỗ trợ VCB doanh nghiệp/hộ kinh doanh từ 06/2026).</li>
@@ -65,7 +67,7 @@ export function BankSettings() {
           <li>Đặt đúng API Key đó vào biến <code>SEPAY_API_KEY</code> của máy chủ (Coolify → Environment Variables) — chi tiết trong HUONG-DAN.md mục 7.</li>
         </ol>
         {book.is_demo && <Note>Bản chạy thử: vào <b>Tiền về TK → Giả lập tiền về</b> để xem phần mềm tự gạch nợ.</Note>}
-      </Section>
+      </Section>}
     </div>
   );
 }

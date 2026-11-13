@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQ } from './store.jsx';
 
 export const useProducts = (enabled = true) => useQ('products', [['active', 'eq', 'true']], 'sku', 5000, enabled);
@@ -32,7 +33,8 @@ export function priceOf(p, { tier = 1, book = null, unit = null } = {}) {
 export function usePriceBooks(enabled = true) {
   const books = useQ('price_books', [['in_effect', 'eq', 'true']], 'name', 200, enabled);
   const items = useQ('price_book_items', [], 'price_book_id', 10000, enabled && !!books.data?.length);
-  const data = books.data ? books.data.map((b) => ({ ...b, items: Object.fromEntries((items.data || []).filter((i) => i.price_book_id === b.id).map((i) => [i.product_id, i.price])) })) : null;
+  // Giữ nguyên đối tượng giữa các lần vẽ: màn bán hàng theo dõi bảng giá trong useEffect, tạo mới mỗi lần sẽ vẽ lại vô hạn
+  const data = useMemo(() => (books.data ? books.data.map((b) => ({ ...b, items: Object.fromEntries((items.data || []).filter((i) => i.price_book_id === b.id).map((i) => [i.product_id, i.price])) })) : null), [books.data, items.data]);
   return { data, loading: books.loading || items.loading };
 }
 // Bảng giá được dùng cho khách (theo nhóm khách) và người đang đăng nhập

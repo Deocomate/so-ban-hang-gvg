@@ -7,6 +7,8 @@ import { doPayment } from './cash.js';
 import { notifyOrderConfirmed } from './notify.js';
 import { saveOrderTrip } from './drivers.js';
 import { logOrder, orderSnapshot, describeChanges, deliveryLinesText } from './order-log.js';
+import { applyPromos, revertPromos, earnPoints, returnPoints, cancelPoints } from './loyalty.js';
+import { checkTxnDate, checkReturnLimit, checkEinvoiceLock } from './order-rules.js';
 
 export function availabilityWarnings(orderId) {
   return all(`select p.sku, p.name, max(p.on_hand - coalesce(rs.reserved, 0) + x.need, 0) as avail, x.need
@@ -22,6 +24,7 @@ export function doDeliver(orderId, date, lines, ship, note, override, depositUse
   if (o.status === 'nhap') fail(`Đơn ${o.code} đang là nháp — hãy xác nhận đơn trước khi giao`);
   if (o.status === 'huy') fail(`Đơn ${o.code} đã hủy`);
   checkDate(o.book_id, date);
+  checkTxnDate(o.book_id, 'ban_hang', date);
   // Sổ cho bán vượt tồn thì ai có quyền giao hàng cũng giao được, tồn có thể âm; override giữ lại để bản giao diện cũ gửi lên không lỗi
   const allow = bookSettings(o.book_id).allow_oversell === true;
 
@@ -102,6 +105,7 @@ export function doDeliver(orderId, date, lines, ship, note, override, depositUse
   const dd = one(`select shipping_fee from deliveries where id = ?`, dlv);
   logOrder(o.id, 'giao', `Giao hàng – phiếu ${dcode}, ngày ${date.split('-').reverse().join('/')}`, [
     ...deliveryLinesText(dlv), dd.shipping_fee ? `Phí vận chuyển: ${vnd(dd.shipping_fee)}` : null, dep ? `Khấu trừ tiền cọc: ${vnd(dep)}` : null, note ? `Ghi chú: ${note}` : null].filter(Boolean));
+  earnPoints(o.book_id, o.customer_id, one(`select coalesce(sum(revenue), 0) as r from delivery_lines where delivery_id = ?`, dlv).r, 'giao', dlv, dcode, date);
   return { id: dlv, code: dcode };
 }
 
@@ -146,6 +150,7 @@ export function save_sales_order(p) {
   return once(p, b, 'save_sales_order', () => {
     const d = asDate(p.order_date) || today();
     checkDate(b, d);
+    if (!nz(p.id)) checkTxnDate(b, 'ban_hang', d);
     const cust = one(`select * from customers where id = ? and book_id = ?`, p.customer_id, b);
     if (!cust) fail('Chưa chọn khách hàng');
     const kind = nz(p.kind) || 'ban_san';
@@ -170,6 +175,8 @@ export function save_sales_order(p) {
       if (!o) fail('Không tìm thấy đơn hàng');
       if (o.status === 'huy') fail('Đơn đã hủy, không thể sửa');
       checkDate(b, o.order_date);
+      checkTxnDate(b, 'ban_hang', d, o.order_date);
+      checkEinvoiceLock(o);
       // Đơn đã giao vẫn sửa được (sửa nhầm giá, thêm hàng, ghi chú…), nhưng phần hàng đã giao phải giữ nguyên:
       // không bỏ dòng, không đổi sang hàng khác, không giảm dưới số đã giao. Muốn sửa phần đã giao thì "Hủy đợt giao" trước.
       delivered = !!one(`select 1 from deliveries where order_id = ?`, o.id);
@@ -226,6 +233,8 @@ export function save_sales_order(p) {
       (select id from sales_order_lines where order_id = ? and id not in (select value from json_each(?)))`, o.id, ks);
     run(`delete from sales_order_lines where order_id = ? and id not in (select value from json_each(?))`, o.id, ks);
 
+    // Khuyến mại, voucher, coupon, đổi điểm: máy chủ tự tính, tổng giảm của đơn = giảm tay + các khoản này
+    if (p.promos !== undefined) { applyPromos(b, o, rnd(num(p.discount) ?? 0), Array.isArray(p.promos) ? p.promos : []); o = one(`select * from sales_orders where id = ?`, o.id); }
     if (delivered) repriceDelivered(o.id);
     if (before) {
       const ch = describeChanges(before, orderSnapshot(o.id));
@@ -275,11 +284,13 @@ export function cancel_sales_order(p) {
   if (!o) fail('Không tìm thấy đơn hàng');
   requirePerm(o.book_id, 'ban_hang');
   if (o.status === 'huy') return { ok: true };
+  checkEinvoiceLock(o);
   if (one(`select 1 from deliveries where order_id = ?`, o.id)) {
     fail(`Đơn ${o.code} đã giao hàng nên không hủy được. Phần đã giao: dùng "Trả hàng". Phần chưa giao: dùng "Hủy phần chưa giao".`);
   }
   if (!trimNz(p.reason)) fail('Hãy ghi lý do hủy đơn');
   run(`update sales_orders set status = 'huy', cancel_reason = ?, cancelled_at = ? where id = ?`, p.reason, nowIso(), o.id);
+  revertPromos(o.id);
   logOrder(o.id, 'huy', 'Hủy đơn', [`Lý do: ${p.reason}`]);
   run(`update sales_order_lines set po_line_id = null where order_id = ?`, o.id);
   run(`update purchase_order_lines set sales_order_line_id = null where sales_order_line_id in (select id from sales_order_lines where order_id = ?)`, o.id);
@@ -329,6 +340,7 @@ export function cancel_delivery(p) {
   return once(p, d.book_id, 'cancel_delivery', () => {
     if (!trimNz(p.reason)) fail('Hãy ghi lý do hủy đợt giao');
     checkDate(d.book_id, d.delivery_date);
+    checkEinvoiceLock(one(`select * from sales_orders where id = ?`, d.order_id));
     if (one(`select 1 from delivery_lines where delivery_id = ? and returned_qty > 0`, d.id)) fail(`Phiếu giao ${d.code} đã có hàng khách trả lại — không hủy được`);
     const text = deliveryLinesText(d.id);
     for (const x of all(`select * from delivery_lines where delivery_id = ?`, d.id)) {
@@ -340,6 +352,7 @@ export function cancel_delivery(p) {
     run(`update shipments set delivery_id = null where delivery_id = ?`, d.id);
     run(`update driver_trips set delivery_id = null where delivery_id = ?`, d.id);
     run(`delete from doc_info where ref_type = 'delivery' and ref_id = ?`, d.id);
+    cancelPoints(d.id, today());
     run(`delete from deliveries where id = ?`, d.id);
     logOrder(d.order_id, 'huy_giao', `Hủy phiếu giao ${d.code} (giao ngày ${d.delivery_date.split('-').reverse().join('/')})`,
       [`Lý do: ${p.reason}`, ...text, 'Hàng đã nhập lại kho, doanh thu đợt này đã bỏ']);
@@ -355,6 +368,7 @@ export function sales_return(p) {
   return once(p, o.book_id, 'sales_return', () => {
     const d = asDate(p.date) || today();
     checkDate(o.book_id, d);
+    checkTxnDate(o.book_id, 'tra_hang', d);
     const rc = nextCode(o.book_id, 'TL'); const rid = uuid();
     insert('sales_returns', { id: rid, book_id: o.book_id, code: rc, order_id: o.id, return_date: d, reason: p.reason ?? null, note: p.note ?? null,
       created_by: ctx.uid, created_at: nowIso() });
@@ -393,6 +407,7 @@ export function sales_return(p) {
       n++;
     }
     if (!n) fail('Chưa nhập số lượng trả');
+    checkReturnLimit(o.book_id, rid, d);
     // Phí trả hàng: cửa hàng giữ lại, khách được ghi giảm ít hơn. Trừ vào doanh thu giảm của từng dòng theo tỷ lệ,
     // nên doanh thu thuần, công nợ và báo cáo tự đúng mà không cần tính riêng khoản phí.
     const fee = rnd(num(p.fee) ?? 0);
@@ -409,6 +424,7 @@ export function sales_return(p) {
       });
       run(`update sales_returns set fee = ? where id = ?`, fee, rid);
     }
+    returnPoints(o.book_id, o.customer_id, one(`select coalesce(sum(revenue), 0) as r from sales_return_lines where return_id = ?`, rid).r, rid, rc, d);
     const adj = loss.length ? doAdjust(o.book_id, d, 'hang_tra_loi', 'Hàng khách trả bị lỗi, không nhập lại kho – phiếu ' + rc, loss, false) : null;
     let pay = null;
     const refund = num(p.refund?.amount) ?? 0;

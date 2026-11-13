@@ -14,6 +14,9 @@ import { CustomerGroupsPage } from './pages/CustomerGroups.jsx';
 import { EmployeesPage, SchedulePage, TimesheetPage, PaysheetsPage, CommissionPage, StaffSettingsPage } from './pages/Staff.jsx';
 import { ReportsPage } from './pages/Reports.jsx';
 import { SettingsPage } from './pages/Settings.jsx';
+import { GEAR_MENU, ALL_SECTIONS, canSee } from './lib/settings-nav.js';
+import { setExportGuard } from './lib/excel.js';
+import { setPriceDecimals } from './lib/format.js';
 import { ModalHost } from './pages/modals.jsx';
 import { ShippingPage } from './pages/Shipping.jsx';
 import { BankPage } from './pages/BankTxns.jsx';
@@ -25,6 +28,9 @@ import { ContractsPage } from './pages/Contracts.jsx';
 import { TaxPage, InputInvoicesPage } from './pages/Tax.jsx';
 import { Login, LinkPage, ForcePassword, isLinkPage } from './pages/Account.jsx';
 import { DocStandalone, readDocPage } from './pages/Documents.jsx';
+import { WarrantyPage } from './pages/Warranty.jsx';
+import { LoyaltyPage } from './pages/Loyalty.jsx';
+import { ShiftsPage } from './pages/Shifts.jsx';
 
 const PAGES = [
   { id: 'tong-quan', label: 'Tổng quan', icon: 'home', perm: 'xem_bao_cao', comp: Overview },
@@ -60,7 +66,10 @@ const PAGES = [
   { id: 'thiet-lap-nv', label: 'Thiết lập nhân viên', icon: 'gear', perm: 'owner', comp: StaffSettingsPage },
   { id: 'bao-cao', label: 'Báo cáo', icon: 'chart', perm: 'xem_bao_cao', comp: ReportsPage },
   { id: 'thue', label: 'Thuế HKD', icon: 'tax', perm: 'xem_bao_cao', comp: TaxPage },
-  { id: 'cai-dat', label: 'Cài đặt', icon: 'gear', comp: SettingsPage },
+  { id: 'bao-hanh', label: 'Bảo hành, sửa chữa', icon: 'wrench', perm: 'xem_ban_hang', on: ['warranty'], comp: WarrantyPage },
+  { id: 'khuyen-mai', label: 'Khuyến mại & voucher', icon: 'gift', on: ['promo_on', 'voucher_on', 'coupon_on'], comp: LoyaltyPage },
+  { id: 'ket-ca', label: 'Kết ca', icon: 'cash', perm: 'thu_chi', on: ['shift_on'], comp: ShiftsPage },
+  { id: 'cai-dat', label: 'Thiết lập', icon: 'gear', comp: SettingsPage },
 ];
 // Thanh menu ngang: liên kết thẳng ({ id }), menu thả xuống (items) hoặc mega-menu (groups: tiêu đề nhóm + danh sách).
 // Mỗi liên kết là id trang hoặc { id, sub (tab mở sẵn), label, perm, badge }.
@@ -80,10 +89,11 @@ const MENU = [
     { title: 'Đơn hàng', items: ['dat-rieng', 'ban-hang', 'tra-hang'] },
     { title: 'Giao hàng', items: ['van-chuyen', 'lai-xe'] },
     { title: 'Báo giá & hợp đồng', items: ['bao-gia', 'hop-dong'] },
+    { title: 'Sau bán hàng', items: ['bao-hanh'] },
   ] },
-  { label: 'Khách hàng', icon: 'users', groups: [{ title: 'Khách hàng', items: ['khach-hang', { id: 'nhom-khach', badge: 'Mới' }] }] },
+  { label: 'Khách hàng', icon: 'users', groups: [{ title: 'Khách hàng', items: ['khach-hang', { id: 'nhom-khach', badge: 'Mới' }, 'khuyen-mai'] }] },
   { label: 'Nhân viên', icon: 'users', items: ['nhan-vien', 'lich-lam-viec', 'cham-cong', 'bang-luong', 'hoa-hong', 'thiet-lap-nv'].map((id) => ({ id, badge: 'Mới' })) },
-  { label: 'Sổ quỹ', icon: 'wallet', items: ['thu-chi', 'tien-ve', 'chi-phi'] },
+  { label: 'Sổ quỹ', icon: 'wallet', items: ['thu-chi', 'tien-ve', 'chi-phi', 'ket-ca'] },
   { label: 'Báo cáo', icon: 'chart', groups: [
     { title: 'Bán hàng', items: [{ id: 'bao-cao', sub: 'eod', label: 'Cuối ngày', badge: 'Mới' }, { id: 'bao-cao', sub: 'pl', label: 'Lãi lỗ theo tháng' }, { id: 'bao-cao', sub: 'prod', label: 'Theo sản phẩm' },
       { id: 'bao-cao', sub: 'grp', label: 'Theo kênh / khách / nhóm' }, { id: 'bao-cao', sub: 'orders', label: 'Đặt hàng', badge: 'Mới' }, { id: 'bao-cao', sub: 'staff', label: 'Nhân viên', badge: 'Mới' }] },
@@ -100,7 +110,7 @@ function readHash() { const [id, sub = ''] = (location.hash || '').replace('#', 
 // Chỉ một menu hiện tại một thời điểm: mở menu khác thì menu cũ tắt ngay, không chạy hiệu ứng đóng.
 const DD_ENTER_MS = 110; const DD_LEAVE_MS = 240; const DD_EXIT_MS = 130;
 let activeDropdown = null; // ref tới hàm đóng của menu đang mở
-function Dropdown({ label, icon, active, align = 'left', className = '', btnClass = 'mnav', menuClass = '', children }) {
+function Dropdown({ label, icon, active, align = 'left', className = '', btnClass = 'mnav', menuClass = '', noCaret, children }) {
   const [phase, setPhase] = useState('closed'); // closed → open → closing → closed
   const [side, setSide] = useState(align);
   const menuRef = useRef(null); const ref = useRef(null); const timer = useRef(null); const closeRef = useRef(null);
@@ -151,7 +161,7 @@ function Dropdown({ label, icon, active, align = 'left', className = '', btnClas
   return (
     <div className={`dd ${className}`} ref={ref} onMouseEnter={hover ? hoverIn : undefined} onMouseLeave={hover ? hoverOut : undefined}>
       <button type="button" className={`${btnClass}${active ? ' on' : ''}`} aria-haspopup="menu" aria-expanded={show} onClick={() => (hover || !show ? openNow() : close())}>
-        {icon && <Icon name={icon} size={17} />}{label}<Icon name="down" size={14} className="dd-caret" />
+        {icon && <Icon name={icon} size={17} />}{label}{!noCaret && <Icon name="down" size={14} className="dd-caret" />}
       </button>
       {phase !== 'closed' && <div ref={menuRef} className={`dd-menu dd-${side} ${menuClass}${show ? '' : ' closing'}`} role="menu" onClick={close}>{children}</div>}
     </div>
@@ -231,14 +241,34 @@ function MenuBar({ menu, isOn, go }) {
   );
 }
 
-const BRAND_LOGOS = { TH: 'th', VG: 'vg', AN: 'an' };
+// Bánh răng trên thanh trên cùng như KiotViet: các nhóm thiết lập kèm mô tả ngắn, cuối menu là "Xem tất cả thiết lập"
+function GearMenu({ active, go }) {
+  const { can, session } = useApp();
+  const who = { owner: can('owner'), admin: !!session?.user?.is_admin };
+  const secs = Object.fromEntries(ALL_SECTIONS.map((s) => [s.id, s]));
+  const items = who.owner ? GEAR_MENU.filter((m) => canSee(secs[m.to], who))
+    : [{ to: 'thong-bao', label: 'Thông báo', icon: 'bell', sub: 'Thông báo trên điện thoại' }, { to: 'tai-khoan', label: 'Tài khoản của tôi', icon: 'users', sub: 'Đổi mật khẩu' }];
+  return (
+    <Dropdown className="hdr-gear-dd" btnClass={`icon-btn hdr-gear${active ? ' on' : ''}`} align="right" menuClass="gear-menu" label={<><Icon name="gear" size={20} /><span className="sr-only">Thiết lập</span></>} noCaret>
+      {items.map((m) => (
+        <button key={m.to} role="menuitem" className="dd-item gear-item" onClick={() => go('cai-dat', m.to)}>
+          <Icon name={m.icon} size={20} /><span className="gear-text"><span className="gear-label">{m.label}</span><span className="gear-sub">{m.sub}</span></span>
+        </button>
+      ))}
+      <div className="gear-foot"><button className="btn btn-ghost gear-all" onClick={() => go('cai-dat')}>Xem tất cả thiết lập</button></div>
+    </Dropdown>
+  );
+}
+
+const BRAND_LOGOS ={ TH: 'th', VG: 'vg', AN: 'an' };
 function BrandMark({ book }) {
   const logo = BRAND_LOGOS[book.short_name];
   return logo ? <img className="seal seal-img" src={`/logos/${logo}.png`} alt={book.name} /> : <div className="seal">{book.short_name}</div>;
 }
 
 function Shell() {
-  const { book, books, setBookId, can, open, closeAll, toasts, bootError, backend, session, setSession } = useApp();
+  const { book, books, setBookId, can, open, closeAll, toasts, bootError, backend, session, setSession, settings } = useApp();
+  setPriceDecimals(settings?.price_decimals ?? 0);
   const [route, setRoute] = useState(() => readHash() || { id: 'tong-quan', sub: '' });
   const { id: page, sub } = route;
   const [moreOpen, setMoreOpen] = useState(false);
@@ -257,7 +287,7 @@ function Shell() {
     setTimeout(() => openLink(l, { open, go }), 50);
   }, [pendingOpen, books, book?.id]);
   useEffect(() => { const h = () => { const r = readHash(); if (r) setRoute(r); }; window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h); }, []);
-  const visible = PAGES.filter((p) => !p.perm || can(p.perm));
+  const visible = PAGES.filter((p) => (!p.perm || can(p.perm)) && (!p.on || p.on.some((k) => settings?.[k])));
   const byId = Object.fromEntries(visible.map((p) => [p.id, p]));
   const cur = byId[page] || byId['ban-hang'] || visible[0];
   const go = (id, s = '') => { setRoute({ id, sub: s }); setMoreOpen(false); window.scrollTo(0, 0); };
@@ -266,6 +296,12 @@ function Shell() {
   useEffect(() => { try { history.replaceState(null, '', '#' + page + (sub ? '/' + sub : '')); } catch (e) { /* bỏ qua */ } }, [page, sub]);
   const signOut = () => backend.signOut().then(() => setSession(null));
   const switchBook = (id) => { closeAll(); setBookId(id); };
+  // Xác thực khi xuất file: hỏi lại mật khẩu trước mỗi lần tải Excel
+  const [pwAsk, setPwAsk] = useState(null);
+  useEffect(() => {
+    setExportGuard(settings?.export_auth ? () => new Promise((resolve) => setPwAsk({ resolve })) : null);
+    return () => setExportGuard(null);
+  }, [settings?.export_auth]);
   // Màu giao diện theo logo của sổ đang mở
   useEffect(() => { const r = document.documentElement; if (book?.short_name) r.dataset.book = book.short_name; return () => { delete r.dataset.book; }; }, [book?.short_name]);
 
@@ -314,11 +350,11 @@ function Shell() {
           )}
           {can('ban_hang') && <button className="sell-btn hdr-action" onClick={() => open('order-form', {})}><Icon name="cart" size={18} />Bán hàng</button>}
           <Bell data={notif.data} onOpen={() => setNotifyOpen(true)} />
-          {byId['cai-dat'] && <button className={`icon-btn hdr-gear${cur.id === 'cai-dat' ? ' on' : ''}`} onClick={() => go('cai-dat')} aria-label="Cài đặt" title="Cài đặt"><Icon name="gear" size={20} /></button>}
+          {byId['cai-dat'] && <GearMenu active={cur.id === 'cai-dat'} go={go} />}
           <Dropdown className="hdr-user" btnClass="user-btn" align="right" icon="users" label={<span className="user-name">{userName}</span>}>
             <div className="dd-info"><b>{userName}</b>{session?.user?.email && <span className="muted small">{session.user.email}</span>}</div>
-            <button className="dd-item" role="menuitem" onClick={() => go('cai-dat', 'me')}><Icon name="users" size={16} />Tài khoản của tôi (đổi mật khẩu)</button>
-            <button className="dd-item" role="menuitem" onClick={() => go('cai-dat')}><Icon name="gear" size={16} />Cài đặt</button>
+            <button className="dd-item" role="menuitem" onClick={() => go('cai-dat', 'tai-khoan')}><Icon name="users" size={16} />Tài khoản của tôi (đổi mật khẩu)</button>
+            <button className="dd-item" role="menuitem" onClick={() => go('cai-dat')}><Icon name="gear" size={16} />Thiết lập</button>
             <button className="dd-item" role="menuitem" onClick={signOut}><Icon name="logout" size={16} />Đăng xuất</button>
           </Dropdown>
         </div>
@@ -353,9 +389,23 @@ function Shell() {
         </Modal>
       )}
       <ModalHost />
+      {pwAsk && <ExportAuth onDone={(ok) => { pwAsk.resolve(ok); setPwAsk(null); }} />}
       {notifyOpen && <NotifyPanel data={notif.data} reload={notif.reload} onClose={() => setNotifyOpen(false)} go={go} />}
       <div className="toasts" aria-live="polite">{toasts.map((t) => <div key={t.id} className={`toast${t.kind === 'err' ? ' err' : ''}`}><Icon name={t.kind === 'err' ? 'alert' : 'check'} /> <span>{t.text}</span></div>)}</div>
     </div>
+  );
+}
+
+function ExportAuth({ onDone }) {
+  const { rpc } = useApp();
+  const [pw, setPw] = useState(''); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
+  const go = async () => { setBusy(true); setErr(''); try { await rpc('verify_my_password', { password: pw }); onDone(true); } catch (e) { setErr(e.message); } finally { setBusy(false); } };
+  return (
+    <Modal title="Xác thực trước khi xuất file" size="sm" onClose={() => onDone(false)}
+      footer={<><Btn onClick={() => onDone(false)}>Hủy</Btn><Btn kind="primary" busy={busy} onClick={go}>Xuất file</Btn></>}>
+      <Field label="Nhập lại mật khẩu đăng nhập"><Input type="password" value={pw} onChange={setPw} autoFocus autoComplete="current-password" onKeyDown={(e) => e.key === 'Enter' && go()} /></Field>
+      {err && <Note tone="bad">{err}</Note>}
+    </Modal>
   );
 }
 

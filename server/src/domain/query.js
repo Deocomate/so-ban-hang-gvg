@@ -1,6 +1,6 @@
 // Đọc dữ liệu chung: p = {view, book_id, filters:[[cột, phép, giá trị]...], order:'cột desc', limit}
-import { fail, all, outRows } from '../lib/context.js';
-import { requirePerm } from './access.js';
+import { ctx, fail, all, one, json, outRows } from '../lib/context.js';
+import { requirePerm, isOwner, bookSettings } from './access.js';
 
 // view → quyền cần có ('' = chỉ cần là thành viên sổ)
 const VIEWS = {
@@ -22,11 +22,25 @@ function value(col, v) {
   return s;
 }
 
+// Giới hạn theo thiết lập: nhân viên chỉ thấy hàng thuộc nhóm hàng được giao, khách mình phụ trách
+export function scope(v, b, where, args) {
+  if (isOwner(b) || !ctx.uid) return;
+  const s = bookSettings(b);
+  if (v === 'products' && s.category_perm) {
+    const cats = json(one(`select categories from book_members where book_id = ? and user_id = ?`, b, ctx.uid)?.categories, []);
+    if (cats.length) { where.push(`category in (${cats.map(() => '?').join(', ')})`); args.push(...cats); }
+  }
+  if (v === 'customers' && s.customer_owner && s.customer_owner_only) {
+    where.push(`exists (select 1 from json_each(owner_ids) where value = ?)`); args.push(ctx.uid);
+  }
+}
+
 export function q(p) {
   const v = p.view;
   if (!Object.hasOwn(VIEWS, v)) fail(`Không có bảng dữ liệu "${v ?? ''}"`);
   requirePerm(p.book_id, VIEWS[v] || null);
   const where = ['book_id = ?']; const args = [p.book_id];
+  scope(v, p.book_id, where, args);
   for (const f of p.filters || []) {
     const [col, op0, raw] = f; const op = op0 || 'eq';
     if (!IDENT.test(String(col))) fail('Cột không hợp lệ');

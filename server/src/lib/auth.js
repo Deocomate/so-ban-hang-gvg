@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 import { ctx, fail, one, all, run, insert, uuid, nowIso, trimNz } from './context.js';
 import { createDefaultBooks, demoFlag } from '../domain/books.js';
 import { queueMail, requireMail, appLink } from './mail.js';
+import { newSecret, verifyTotp, otpauthUri } from './totp.js';
 
 export const SAMPLE_STAFF_EMAIL = 'lan.nhanvien@demo.vn';
 // Tài khoản thử theo từng vai trò mẫu (chỉ có trong dữ liệu mẫu), vd. "Thủ kho" → thu-kho.mau@demo.vn
@@ -157,6 +158,38 @@ export function signIn({ email, password }) {
   secLog('login_ok', u.id);
   return u;
 }
+// ---------- Xác thực 2 lớp cho nhân viên (Thiết lập → Bảo mật) ----------
+// Nhân viên của sổ bật "Xác thực 2 lớp" phải nhập mã 6 số từ ứng dụng xác thực khi đăng nhập trên thiết bị lạ.
+// Thiết bị đã xác thực được nhớ 30 ngày (trình duyệt giữ mã thiết bị, CSDL chỉ giữ bản băm).
+const sha256 = (s) => crypto.createHash('sha256').update(String(s)).digest('hex');
+export const needs2fa = (u) => !u.is_admin && !!one(`select 1 from book_members m join books b on b.id = m.book_id
+  where m.user_id = ? and m.role = 'staff' and json_extract(b.settings, '$.staff_2fa') in (1, 'true')`, u.id);
+export function secondFactor(u, b) {
+  if (!needs2fa(u)) return {};
+  const dt = String(b.device_token || '');
+  if (dt && one(`select 1 from user_devices where user_id = ? and token_hash = ? and expires_at > ?`, u.id, sha256(dt), nowIso())) return {};
+  const fresh = one(`select totp_secret, totp_enabled from users where id = ?`, u.id);
+  let secret = fresh.totp_secret;
+  if (!fresh.totp_enabled) {
+    if (!secret) { secret = newSecret(); run(`update users set totp_secret = ? where id = ?`, secret, u.id); }
+    if (!b.otp) return { pending: { need: 'enroll', secret, otpauth: otpauthUri(secret, u.email) } };
+  } else if (!b.otp) return { pending: { need: 'otp' } };
+  if (!verifyTotp(secret, b.otp)) fail('Mã xác thực không đúng hoặc đã hết hạn', 401);
+  if (!fresh.totp_enabled) { run(`update users set totp_enabled = 1 where id = ?`, u.id); secLog('2fa_enabled', u.id); }
+  const token = b64u(crypto.randomBytes(32));
+  insert('user_devices', { id: uuid(), user_id: u.id, token_hash: sha256(token), label: trimNz(b.device_label), created_at: nowIso(),
+    expires_at: new Date(Date.now() + 30 * 86400e3).toISOString() });
+  run(`delete from user_devices where user_id = ? and expires_at <= ?`, u.id, nowIso());
+  return { device_token: token };
+}
+export function reset2fa(userId) {
+  run(`update users set totp_secret = null, totp_enabled = 0 where id = ?`, userId);
+  run(`delete from user_devices where user_id = ?`, userId);
+  secLog('2fa_reset', userId);
+}
+
+export const checkMyPassword = (uid, pw) => { const u = one(`select password_hash from users where id = ?`, uid); return !!u && verifyPassword(String(pw ?? ''), u.password_hash); };
+
 export const loginFailed = (email, reason) => secLog('login_fail', userByEmail(email)?.id ?? null, { email: String(email ?? '').slice(0, 200), reason });
 
 // ---------- Quên mật khẩu ----------

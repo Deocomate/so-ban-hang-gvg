@@ -6,6 +6,7 @@ import { config } from '../config.js';
 import { ctx, today } from '../lib/context.js';
 import { callService } from '../domain/rpc.js';
 import { runScheduled } from '../domain/notify.js';
+import { runDuePurges } from '../domain/purge.js';
 import { flushPush } from './push.js';
 import { flushMail } from '../lib/mail.js';
 
@@ -27,6 +28,8 @@ const JOBS = [
   { name: 'daily_report', hour: 21, run: () => console.log('báo cáo ngày', callService(runScheduled, { kind: 'daily_report' })) },
   { name: 'debt_reminder', hour: 8, run: () => console.log('nhắc công nợ', callService(runScheduled, { kind: 'debt_reminder' })) },
   { name: 'backup', hour: 3, run: () => backupNow().then((f) => console.log('đã sao lưu', f)) },
+  // Lịch xóa dữ liệu cũ đặt "tối nay": chạy lúc 23 giờ, sao lưu trước
+  { name: 'purge', hour: 23, run: async () => { if (ctx.db.prepare(`select 1 from purge_jobs where status = 'cho' and run_at <= ?`).get(new Date().toISOString())) { await backupNow('truoc-xoa-du-lieu'); runDuePurges(); } } },
 ];
 
 async function tick() {

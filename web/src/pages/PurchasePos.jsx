@@ -8,6 +8,7 @@ import { packing } from '../lib/docs/model.js';
 import { packView } from '../lib/book-profile.js';
 import { loadSheets, readLineFile, exportXlsx, LINE_FILE_COLUMNS } from '../lib/excel.js';
 import { Icon, Select, DateInput, NumInput, Loading, Picker } from '../components/ui.jsx';
+import { ExtraCosts } from '../components/ExtraCosts.jsx';
 
 let seq = 0;
 const METHODS = ['Tiền mặt', 'Chuyển khoản'];
@@ -253,7 +254,7 @@ export function PurchasePos({ id, copy_id, mode: mode0, kind: kind0, sales_order
     const r = await run('save_purchase_order', {
       id: id || null, mode: f.mode, kind: f.kind, supplier_id: f.supplier_id, order_date: f.order_date, expected_date: f.expected_date || null,
       sales_order_id: f.sales_order_id || null, prod_step: f.prod_step || null, invoice_no: f.invoice_no, discount: num(f.discount), note: f.note,
-      status: action === 'draft' ? 'nhap' : 'xac_nhan', receive_now: action === 'receive',
+      status: action === 'draft' ? 'nhap' : 'xac_nhan', receive_now: action === 'receive', extra_costs: action === 'receive' ? f.extra_costs || [] : undefined,
       lines: lines.map((l) => ({ id: l.id || null, product_id: l.product_id, qty: baseQty(l), unit_price: num(l.unit_price) / (l.conv || 1), discount: num(l.discount) / (l.conv || 1),
         unit_name: (l.conv || 1) !== 1 ? l.unit : null, sales_order_line_id: l.sales_order_line_id || null, note: (l.note || '').trim() || null })),
       deposit: payAmt > 0 && action !== 'draft' ? { amount: payAmt, fund_id: f.pay.fund_id, method: f.pay.method } : null,
@@ -317,6 +318,7 @@ export function PurchasePos({ id, copy_id, mode: mode0, kind: kind0, sales_order
     {can('thu_chi') && <PayBox label={isNhap ? 'Tiền trả NCC' : 'Đặt cọc cho NCC'} amount={f.pay.amount} onAmount={(v) => setPay('amount', v)} full={need}
       fundId={f.pay.fund_id} onFund={(v) => setPay('fund_id', v)} method={f.pay.method} onMethod={(v) => setPay('method', v)} funds={funds.data}
       restLabel={isNhap ? 'Tính vào công nợ' : 'Còn lại khi nhận hàng'} rest={need - payAmt} />}
+    {isNhap && <ExtraCosts value={f.extra_costs} onChange={(v) => set('extra_costs', v)} />}
     <textarea className="inp" rows={2} value={f.note} onChange={(e) => set('note', e.target.value)} placeholder="Ghi chú" maxLength={1000} />
     <span className="grow" />
     {isNhap ? (

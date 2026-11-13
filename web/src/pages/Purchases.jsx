@@ -11,6 +11,7 @@ import {
   Btn, Icon, Pill, Field, Input, DateInput, NumInput, Check, Search, Loading,
   ErrorBox, Note, Table, Modal, ConfirmBtn, KV, Section, ListPage, FilterBox, RadioList,
 } from '../components/ui.jsx';
+import { ExtraCosts } from '../components/ExtraCosts.jsx';
 
 const TONE = { 'Phiếu tạm': 'warn', 'Đã nhập hàng': 'good', 'Hoàn thành': 'good', 'Đã trả hàng': 'good', 'Đã xác nhận NCC': 'info', 'Nhập một phần': 'info', 'Đã hủy': 'mute' };
 const StatusTag = ({ label }) => <Pill tone={TONE[label] || 'neutral'}>{label}</Pill>;
@@ -293,13 +294,13 @@ export function ReceiveDialog({ po, onClose }) {
   const lines = useQ('purchase_order_lines', [['po_id', 'eq', po.id]], 'line_no');
   const { run, busy } = useAction();
   const [q, setQ] = useState({}); const [c, setC] = useState({});
-  const [date, setDate] = useState(todayVN()); const [note, setNote] = useState('');
+  const [date, setDate] = useState(todayVN()); const [note, setNote] = useState(''); const [extra, setExtra] = useState([]);
   useEffect(() => { if (lines.data) { setQ(Object.fromEntries(lines.data.filter((l) => l.remaining_qty > 0).map((l) => [l.id, l.remaining_qty]))); setC(Object.fromEntries(lines.data.map((l) => [l.id, Math.round(l.unit_cost)]))); } }, [lines.data]);
   const total = (lines.data || []).reduce((s, l) => s + (Number(q[l.id]) || 0) * (Number(c[l.id]) || 0), 0);
   return (
     <Modal title={`Nhận hàng – ${po.code}`} subtitle={po.supplier_name} onClose={onClose} size="lg"
       footer={<><Btn onClick={onClose}>Thôi</Btn><Btn kind="primary" icon="in" busy={busy} onClick={async () => {
-        const r = await run('receive', { po_id: po.id, date, note, lines: Object.entries(q).map(([k, v]) => ({ po_line_id: k, qty: Number(v) || 0, unit_cost: c[k] })) }, (x) => `Đã nhập kho – phiếu ${x.code}`);
+        const r = await run('receive', { po_id: po.id, date, note, extra_costs: extra, lines: Object.entries(q).map(([k, v]) => ({ po_line_id: k, qty: Number(v) || 0, unit_cost: c[k] })) }, (x) => `Đã nhập kho – phiếu ${x.code}`);
         if (r) onClose();
       }}>Nhập kho</Btn></>}>
       <Note>Số lượng tự điền theo phần còn chờ của đơn đặt; sửa theo số thực nhận (nhận được nhiều đợt). Giá vốn bình quân tính lại ngay sau khi nhập.</Note>
@@ -312,8 +313,9 @@ export function ReceiveDialog({ po, onClose }) {
       <div className="grid">
         <Field label="Ngày nhận"><DateInput value={date} onChange={setDate} max={todayVN()} /></Field>
         <Field label="Ghi chú"><Input value={note} onChange={setNote} placeholder="vd. Đợt 1, 2 viên nứt đã trả lại xưởng" /></Field>
-        <Field label="Giá trị nhập lần này (tăng nợ NCC)"><Input value={money(total)} readOnly /></Field>
+        <Field label="Giá trị nhập lần này (tăng nợ NCC)"><Input value={money(total + extra.filter((x) => x.payer === 'ncc').reduce((t, x) => t + (Number(x.amount) || 0), 0))} readOnly /></Field>
       </div>
+      <ExtraCosts value={extra} onChange={setExtra} />
     </Modal>
   );
 }

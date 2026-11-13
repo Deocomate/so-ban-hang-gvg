@@ -136,12 +136,13 @@ select b.id, b.book_id, b.sku, b.name, b.category, b.pattern, b.size, b.color, b
   case when can_cost(b.book_id) then
     case when b.is_kit then coalesce(kit.avg_cost, 0) else case when b.on_hand > 0 then b.stock_value / b.on_hand else b.last_cost end end end as avg_cost,
   case when can_cost(b.book_id) then case when b.is_kit then 0 else b.stock_value end end as stock_value,
+  case when can_cost(b.book_id) then b.fixed_cost end as fixed_cost,
   coalesce(kit.components, '[]') as components,
   (not b.is_kit and b.product_type <> 'dich_vu' and b.active and b.on_hand - b.reserved <= b.low_stock) as is_low,
   b.pack_unit, b.units_per_pack, b.pack_weight, b.unit_weight, b.material, b.norm_m2, b.norm_m,
   coalesce(b.unit_weight, round(b.pack_weight / nullif(b.units_per_pack, 0), 4)) as weight_per_unit,
   b.product_type, b.product_type = 'dich_vu' as is_service, b.description, b.order_note, b.max_stock, b.location, b.width, b.length, b.dim_unit,
-  b.sell_direct, b.images, case when can_cost(b.book_id) then b.last_cost end as last_cost,
+  b.sell_direct, b.images, b.barcode, b.warranty_months, b.maintenance_months, case when can_cost(b.book_id) then b.last_cost end as last_cost,
   case when can_cost(b.book_id) then (select g.unit_cost from goods_receipt_lines g join goods_receipts r on r.id = g.receipt_id
     where g.product_id = b.id and r.cancelled_at is null order by r.receipt_date desc, r.created_at desc limit 1) end as last_in_cost,
   coalesce(units.units, '[]') as units, coalesce(bom.bom, '[]') as bom,
@@ -410,7 +411,7 @@ select m.id, m.book_id, m.product_id, p.sku, p.name as product_name, p.unit, m.m
   case m.doc_type when 'dau_ky' then 'Tồn đầu kỳ' when 'nhap' then 'Nhập hàng' when 'tra_ncc' then 'Trả nhà cung cấp'
     when 'giao' then 'Giao hàng (bán)' when 'tra_hang' then 'Khách trả hàng' when 'dieu_chinh' then 'Điều chỉnh kho'
     when 'san_xuat' then case when m.qty > 0 then 'Sản xuất (thành phẩm)' else 'Sản xuất (xuất nguyên liệu)' end
-    when 'chenh_lech' then 'Chênh lệch giá vốn' else m.doc_type end as doc_label,
+    when 'chenh_lech' then 'Chênh lệch giá vốn' when 'danh_gia_lai' then 'Đánh giá lại tồn kho' else m.doc_type end as doc_label,
   m.doc_id, m.doc_code, m.line_id, m.note, m.created_at,
   coalesce(so.code, po.code) as order_code, so.id as order_id, po.id as po_id, coalesce(c.name, s.name) as party_name, sa.reason as adj_reason
 from stock_moves m join products p on p.id = m.product_id
@@ -485,7 +486,8 @@ with od as (
 )
 select id, book_id, code, name, phone, address, contact, kind, price_tier, credit_days, credit_limit, note, active, created_at, extra, stage,
   opening, delivered, paid, balance, max(balance, 0) as receivable, max(-balance, 0) as prepaid,
-  min(overdue_raw, max(balance, 0)) as overdue, max_overdue_days, open_orders, open_value, total_bought, last_order_date
+  min(overdue_raw, max(balance, 0)) as overdue, max_overdue_days, open_orders, open_value, total_bought, last_order_date,
+  owner_ids, supplier_id, coalesce((select sum(pm.points) from point_moves pm where pm.customer_id = t.id), 0) as points
 from t;
 
 create view v_expenses as

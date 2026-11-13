@@ -1,8 +1,13 @@
 // Danh mục: sản phẩm (kể cả bộ), khách hàng, nhà cung cấp, quỹ tiền, nợ đầu kỳ, nhập danh sách từ Excel.
 import { ctx, fail, one, run, insert, uuid, nowIso, num, int, bool, nz, trimNz, rnd, asDate, today, coalesce, PRICE_KEYS } from '../lib/context.js';
-import { requirePerm, newMasterCode, nextCode, once } from './access.js';
+import { requirePerm, newMasterCode, nextCode, once, bookSettings } from './access.js';
+import { json } from '../lib/context.js';
 import { doAdjust, saveUnits } from './stock.js';
+import { setFixedCost } from './costing.js';
 
+// Trường thông tin khách hàng có thể đặt bắt buộc (Thiết lập → Khách hàng)
+export const CUSTOMER_FIELDS = { phone: 'Điện thoại', address: 'Địa chỉ', contact: 'Người liên hệ', kind: 'Nhóm khách', email: 'Email', birthday: 'Ngày sinh',
+  gender: 'Giới tính', tax_code: 'Mã số thuế', tax_name: 'Tên đơn vị xuất hóa đơn', tax_address: 'Địa chỉ xuất hóa đơn' };
 export const PRODUCT_TYPES = { hang: 'Hàng hóa', dich_vu: 'Dịch vụ', combo: 'Combo - đóng gói', san_xuat: 'Hàng sản xuất' };
 const nonNeg = (v, msg) => { const x = num(v); if ((x ?? 0) < 0) fail(msg); return x; };
 
@@ -41,7 +46,12 @@ export function save_product(p) {
     product_type: type, description: p.description ?? null, order_note: trimNz(p.order_note), max_stock: svc ? null : max, location: svc ? null : trimNz(p.location),
     width: nonNeg(p.width, 'Kích thước không được âm'), length: nonNeg(p.length, 'Kích thước không được âm'), dim_unit: dimUnit,
     sell_direct: (bool(p.sell_direct) ?? true) ? 1 : 0, updated_at: nowIso(),
+    // Chỉ ghi khi phía gọi có gửi (sửa nhanh từ màn khác không làm mất mã vạch, bảo hành)
+    ...('barcode' in p ? { barcode: trimNz(p.barcode) } : {}),
+    ...('warranty_months' in p ? { warranty_months: svc ? null : int(nonNeg(p.warranty_months, 'Thời hạn bảo hành không được âm')) } : {}),
+    ...('maintenance_months' in p ? { maintenance_months: svc ? null : int(nonNeg(p.maintenance_months, 'Chu kỳ bảo trì không được âm')) } : {}),
   };
+  if (fields.barcode && one(`select 1 from products where book_id = ? and barcode = ? and id <> ?`, b, fields.barcode, pid || '')) fail(`Mã vạch "${fields.barcode}" đã dùng cho hàng hóa khác`);
   fields.images = images.length ? images : fields.image_url ? [fields.image_url] : [];
   if (!pid) {
     if (!s) s = newMasterCode(b, 'SP', 'products');
@@ -70,6 +80,8 @@ export function save_product(p) {
     run(`update products set sku = ?, ${keys.map((k) => `${k} = ?`).join(', ')} where id = ?`, s, ...keys.map((k) => fields[k]), pid);
     if (svc && cost != null) run(`update products set last_cost = ? where id = ?`, cost, pid);
   }
+  // Giá vốn cố định (dùng khi sổ chọn phương pháp giá vốn cố định); sổ đang dùng thì tồn kho đánh giá lại theo giá mới
+  if (p.fixed_cost !== undefined && p.fixed_cost !== null && p.fixed_cost !== '' && !kit && !svc) setFixedCost(b, pid, p.fixed_cost);
   if (kit) {
     run(`delete from kit_items where kit_id = ?`, pid);
     let n = 0;
@@ -148,6 +160,29 @@ export function save_party(p) {
     credit_days: int(p.credit_days) ?? 0, note: p.note ?? null };
   if (k === 'kh' && p.stage != null && !['moi', 'tu_van'].includes(p.stage)) fail('Giai đoạn khách hàng không hợp lệ');
   const extra = k === 'kh' ? { kind: p.kind ?? null, price_tier: int(p.price_tier) ?? 1, credit_limit: num(p.credit_limit) ?? 0, extra: p.extra && typeof p.extra === 'object' ? p.extra : {}, stage: p.stage || 'moi' } : {};
+  if (k === 'kh') {
+    const st = bookSettings(b);
+    // Thông tin bắt buộc theo thiết lập sổ
+    if (st.customer_required_on) {
+      const ex = extra.extra;
+      const val = (f) => (['phone', 'address', 'contact', 'kind'].includes(f) ? (f === 'kind' ? extra.kind : common[f]) : ex[f]);
+      const miss = (st.customer_required || []).filter((f) => CUSTOMER_FIELDS[f] && !String(val(f) ?? '').trim());
+      if (miss.length) fail(`Còn thiếu thông tin bắt buộc: ${miss.map((f) => CUSTOMER_FIELDS[f]).join(', ')}`);
+    }
+    // Người phụ trách: thành viên của sổ
+    if ('owner_ids' in p) {
+      const ids = [...new Set((Array.isArray(p.owner_ids) ? p.owner_ids : []).filter(Boolean))];
+      for (const u of ids) if (!one(`select 1 from book_members where book_id = ? and user_id = ?`, b, u)) fail('Người phụ trách phải là người dùng của sổ');
+      extra.owner_ids = JSON.stringify(ids);
+    }
+    // Khách hàng đồng thời là nhà cung cấp
+    if ('supplier_id' in p) {
+      const sid = nz(p.supplier_id);
+      if (sid && !one(`select 1 from suppliers where id = ? and book_id = ?`, sid, b)) fail('Không tìm thấy nhà cung cấp');
+      if (sid && one(`select 1 from customers where book_id = ? and supplier_id = ? and id is not ?`, b, sid, pid)) fail('Nhà cung cấp này đã gắn với khách hàng khác');
+      extra.supplier_id = sid;
+    }
+  }
   if (!pid) {
     pid = uuid();
     insert(tbl, { id: pid, book_id: b, code: c, ...common, ...extra, created_at: nowIso() });

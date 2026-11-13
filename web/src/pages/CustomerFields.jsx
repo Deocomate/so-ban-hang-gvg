@@ -1,10 +1,16 @@
-// Biểu mẫu khách hàng (thông tin chung, xuất hóa đơn, giao hàng) và cài đặt mục tiêu kinh doanh.
+// Biểu mẫu khách hàng (thông tin chung, xuất hóa đơn, giao hàng).
 import React, { useState } from 'react';
-import { useApp, useAction } from '../lib/store.jsx';
-import { Btn, Field, Input, TextArea, Select, DateInput, NumInput, Check, Tabs, Section } from '../components/ui.jsx';
+import { useApp, useRpcData } from '../lib/store.jsx';
+import { useSuppliers } from '../lib/lookups.js';
+import { Field, Input, TextArea, Select, DateInput, NumInput, Check, Tabs, Section, Picker } from '../components/ui.jsx';
 
 export function CustomerFields({ f, set, id }) {
-  const { settings } = useApp();
+  const { settings, can } = useApp();
+  // Thông tin bắt buộc theo Thiết lập → Khách hàng
+  const req = (k) => !!settings.customer_required_on && (settings.customer_required || []).includes(k);
+  const staff = useRpcData('book_staff', {}, !!settings.customer_owner && can('owner'));
+  const sups = useSuppliers();
+  const owners = Array.isArray(f.owner_ids) ? f.owner_ids : [];
   const [tab, setTab] = useState('chung');
   const x = f.extra || {};
   const setX = (k, v) => set('extra', { ...(f.extra || {}), [k]: v });
@@ -16,33 +22,37 @@ export function CustomerFields({ f, set, id }) {
     <>
       <Tabs value={tab} onChange={setTab} tabs={[{ value: 'chung', label: 'Thông tin chung' }, { value: 'hd', label: 'Thông tin xuất hóa đơn' }]} />
       {tab === 'hd' && <div className="grid">
-        <Field label="Tên đơn vị" wide><Input value={x.tax_name} onChange={(v) => setX('tax_name', v)} /></Field>
-        <Field label="Mã số thuế"><Input value={x.tax_code} onChange={(v) => setX('tax_code', v)} /></Field>
+        <Field label="Tên đơn vị" wide required={req('tax_name')}><Input value={x.tax_name} onChange={(v) => setX('tax_name', v)} /></Field>
+        <Field label="Mã số thuế" required={req('tax_code')}><Input value={x.tax_code} onChange={(v) => setX('tax_code', v)} /></Field>
         <Field label="Email nhận hóa đơn"><Input value={x.tax_email} onChange={(v) => setX('tax_email', v)} /></Field>
-        <Field label="Địa chỉ xuất hóa đơn" wide><Input value={x.tax_address} onChange={(v) => setX('tax_address', v)} /></Field>
+        <Field label="Địa chỉ xuất hóa đơn" wide required={req('tax_address')}><Input value={x.tax_address} onChange={(v) => setX('tax_address', v)} /></Field>
       </div>}
       {tab === 'chung' && <>
         <div className="cust-tabs-grid">
           <Section title="Thông tin khách hàng"><div className="grid">
             <Field label="Mã khách hàng" hint={id ? '' : 'Để trống: tự cấp'}><Input value={f.code} onChange={(v) => set('code', v)} /></Field>
             <Field label="Tên khách hàng" required><Input value={f.name} onChange={(v) => set('name', v)} autoFocus /></Field>
-            <Field label="Điện thoại"><Input value={f.phone} onChange={(v) => set('phone', v)} inputMode="tel" /></Field>
-            <Field label="Người liên hệ"><Input value={f.contact} onChange={(v) => set('contact', v)} /></Field>
-            <Field label="Địa chỉ khách hàng" wide><Input value={f.address} onChange={(v) => set('address', v)} /></Field>
+            <Field label="Điện thoại" required={req('phone')}><Input value={f.phone} onChange={(v) => set('phone', v)} inputMode="tel" /></Field>
+            <Field label="Người liên hệ" required={req('contact')}><Input value={f.contact} onChange={(v) => set('contact', v)} /></Field>
+            <Field label="Địa chỉ khách hàng" wide required={req('address')}><Input value={f.address} onChange={(v) => set('address', v)} /></Field>
             <Field label="Khu vực (Tỉnh/TP)"><Input value={x.province} onChange={(v) => setX('province', v)} /></Field>
             <Field label="Phường/Xã"><Input value={x.ward} onChange={(v) => setX('ward', v)} /></Field>
           </div></Section>
           <Section title="Thông tin bổ sung"><div className="grid">
-            <Field label="Nhóm khách"><Input value={f.kind} onChange={(v) => set('kind', v)} list="cust-groups" placeholder="Chọn hoặc gõ nhóm mới" /><datalist id="cust-groups">{groups.map((g) => <option key={g} value={g} />)}</datalist></Field>
+            <Field label="Nhóm khách" required={req('kind')}><Input value={f.kind} onChange={(v) => set('kind', v)} list="cust-groups" placeholder="Chọn hoặc gõ nhóm mới" /><datalist id="cust-groups">{groups.map((g) => <option key={g} value={g} />)}</datalist></Field>
             <Field label="Loại khách"><Select value={x.customer_type || ''} onChange={(v) => setX('customer_type', v)} options={['Cá nhân', 'Công ty']} placeholder="Chọn" /></Field>
             <Field label="Mức giá áp dụng"><Select value={String(f.price_tier)} onChange={(v) => set('price_tier', Number(v))} options={pn.map((n, i) => ({ value: String(i + 1), label: n }))} /></Field>
             <Field label="Giai đoạn"><Select value={f.stage || 'moi'} onChange={(v) => set('stage', v)} options={[{ value: 'moi', label: 'Khách mới' }, { value: 'tu_van', label: 'Đã tư vấn' }]} /></Field>
-            <Field label="Ngày sinh"><DateInput value={x.birthday || ''} onChange={(v) => setX('birthday', v)} /></Field>
-            <Field label="Giới tính"><Select value={x.gender || ''} onChange={(v) => setX('gender', v)} options={['Nam', 'Nữ']} placeholder="Chọn" /></Field>
-            <Field label="Email"><Input value={x.email} onChange={(v) => setX('email', v)} /></Field>
+            <Field label="Ngày sinh" required={req('birthday')}><DateInput value={x.birthday || ''} onChange={(v) => setX('birthday', v)} /></Field>
+            <Field label="Giới tính" required={req('gender')}><Select value={x.gender || ''} onChange={(v) => setX('gender', v)} options={['Nam', 'Nữ']} placeholder="Chọn" /></Field>
+            <Field label="Email" required={req('email')}><Input value={x.email} onChange={(v) => setX('email', v)} /></Field>
             <Field label="Facebook"><Input value={x.facebook} onChange={(v) => setX('facebook', v)} /></Field>
             <Field label="Số ngày được nợ" hint="Hạn trả = ngày giao + số ngày này"><NumInput money={false} min={0} suffix="ngày" value={f.credit_days} onChange={(v) => set('credit_days', v || 0)} /></Field>
             <Field label="Hạn mức nợ" hint="0 = không giới hạn"><NumInput value={f.credit_limit} onChange={(v) => set('credit_limit', v || 0)} /></Field>
+            {settings.customer_supplier && <Field label="Đồng thời là nhà cung cấp" wide hint="Công nợ phải thu và phải trả hiện cùng nhau để bù trừ">
+              <Picker items={sups.data} value={f.supplier_id || null} onChange={(v) => set('supplier_id', v)} getLabel={(s) => s.name} getSub={(s) => s.code} placeholder="Không" /></Field>}
+            {settings.customer_owner && can('owner') && <Field label="Người phụ trách" wide>
+              <div className="taglist">{(staff.data || []).map((m) => <Check key={m.user_id} checked={owners.includes(m.user_id)} onChange={(v) => set('owner_ids', v ? [...owners, m.user_id] : owners.filter((u) => u !== m.user_id))}>{m.name}</Check>)}</div></Field>}
             <Field label="Ghi chú" wide><TextArea value={f.note} onChange={(v) => set('note', v)} /></Field>
           </div></Section>
         </div>
@@ -59,22 +69,5 @@ export function CustomerFields({ f, set, id }) {
         </div>
       </>}
     </>
-  );
-}
-
-export function BusinessTargets() {
-  const { settings, loadBooks } = useApp();
-  const { run, busy } = useAction();
-  const [target, setTarget] = useState(settings.monthly_target || 0); const [vat, setVat] = useState(settings.default_vat ?? 8);
-  const [groups, setGroups] = useState((settings.customer_groups || []).join(', '));
-  return (
-    <Section title="Mục tiêu & mặc định kinh doanh">
-      <div className="grid">
-        <Field label="Mục tiêu doanh thu mỗi tháng" hint="Dùng cho thẻ Doanh thu / Mục tiêu ở Tổng quan"><NumInput value={target} onChange={(v) => setTarget(v || 0)} /></Field>
-        <Field label="VAT mặc định trên hóa đơn, báo giá"><NumInput money={false} min={0} max={100} suffix="%" value={vat} onChange={setVat} /></Field>
-        <Field label="Nhóm khách hàng" hint="Cách nhau bằng dấu phẩy" wide><Input value={groups} onChange={setGroups} /></Field>
-      </div>
-      <div><Btn kind="primary" busy={busy} onClick={async () => { if (await run('update_book_settings', { settings: { monthly_target: Number(target) || 0, default_vat: Number(vat) || 0, customer_groups: groups.split(',').map((s) => s.trim()).filter(Boolean) } }, 'Đã lưu')) loadBooks(); }}>Lưu</Btn></div>
-    </Section>
   );
 }

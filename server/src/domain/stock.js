@@ -1,6 +1,8 @@
 // Kho: ghi sổ kho (giá vốn bình quân gia quyền di động), phiếu điều chỉnh / xuất hủy / xuất dùng nội bộ, phiếu sản xuất, nhập hàng hóa từ Excel kèm tồn đầu kỳ.
 import { ctx, fail, one, run, insert, uuid, nowIso, rnd, num, bool, nz, trimNz, coalesce, asDate, today, PRICE_KEYS } from '../lib/context.js';
 import { requirePerm, checkDate, nextCode, newMasterCode, once } from './access.js';
+import { costMethod, fixedCostOf } from './costing.js';
+import { checkTxnDate } from './order-rules.js';
 
 const qty6 = (x) => rnd(x, 6);
 export const avgCost = (p) => (p.on_hand > 0 ? p.stock_value / p.on_hand : p.last_cost);
@@ -15,6 +17,19 @@ export function postMove(book, pid, date, q, unitCost, docType, docId, docCode, 
   if (p.product_type === 'dich_vu') fail(`"${p.name}" là dịch vụ — không quản lý tồn kho`);
   if (!q) return 0;
   let v, nq, nv, adj = 0, inflow = null;
+  // Giá trị gốc của dòng nhập có giá (nhập hàng, tồn đầu kỳ, điều chỉnh có đơn giá) hoặc trả NCC theo giá nhập:
+  // giữ lại để đổi phương pháp giá vốn qua lại không mất giá nhập thật
+  const src = q > 0 ? (value != null ? rnd(value) : unitCost != null ? rnd(q * unitCost) : null) : value != null ? -Math.abs(rnd(value)) : null;
+  const move = (o) => insert('stock_moves', { book_id: book, product_id: pid, move_date: date, doc_id: docId, doc_code: docCode, line_id: lineId,
+    created_by: ctx.uid, created_at: nowIso(), ...o });
+  // Giá vốn cố định: mọi biến động tính theo số lượng × giá vốn cố định, tồn kho luôn bằng số lượng × giá vốn cố định
+  if (costMethod(book) === 'fixed') {
+    const f = fixedCostOf(p);
+    v = rnd(q * f); nq = qty6(p.on_hand + q); nv = rnd(nq * f);
+    move({ qty: q, value: v, unit_cost: f, doc_type: docType, balance_qty: nq, balance_value: nv, note, src_value: src });
+    run(`update products set on_hand = ?, stock_value = ?, last_cost = ?, fixed_cost = ?, updated_at = ? where id = ?`, nq, nv, f, f, nowIso(), pid);
+    return v;
+  }
   if (q > 0) {
     v = value != null ? rnd(value) : rnd(q * coalesce(unitCost, avgCost(p)));
     inflow = v / q;
@@ -30,9 +45,7 @@ export function postMove(book, pid, date, q, unitCost, docType, docId, docCode, 
     nv = p.stock_value + v;
     if (nq === 0 && nv !== 0) { adj = -nv; nv = 0; }                     // hết hàng mà còn lẻ giá trị: chuyển phần lẻ vào giá vốn
   }
-  const move = (o) => insert('stock_moves', { book_id: book, product_id: pid, move_date: date, doc_id: docId, doc_code: docCode, line_id: lineId,
-    created_by: ctx.uid, created_at: nowIso(), ...o });
-  move({ qty: q, value: v, unit_cost: Math.abs(v / q), doc_type: docType, balance_qty: nq, balance_value: nv - adj, note });
+  move({ qty: q, value: v, unit_cost: Math.abs(v / q), doc_type: docType, balance_qty: nq, balance_value: nv - adj, note, src_value: src });
   if (adj !== 0) {
     move({ qty: 0, value: adj, unit_cost: 0, doc_type: 'chenh_lech', balance_qty: nq, balance_value: nv,
       note: 'Chênh lệch làm tròn / âm kho được tính vào giá vốn' });
@@ -93,6 +106,7 @@ export function adjust_stock(p) {
     const purpose = reason === 'noi_bo' ? trimNz(p.purpose) : null;
     if (reason === 'noi_bo' && !INTERNAL_PURPOSES.includes(purpose)) fail('Chọn loại xuất dùng nội bộ');
     if (['khac', 'kiem_ke'].includes(reason) && !trimNz(p.note)) fail('Hãy ghi rõ lý do điều chỉnh');
+    if (reason !== 'dau_ky') checkTxnDate(b, 'kho', asDate(p.date) || today());
     return doAdjust(b, asDate(p.date) || today(), reason, p.note ?? null, p.lines || [], true, purpose);
   });
 }
@@ -106,6 +120,7 @@ export function save_production(p) {
   return once(p, b, 'save_production', () => {
     const d = asDate(p.date) || today();
     checkDate(b, d);
+    checkTxnDate(b, 'kho', d);
     const pr = one(`select * from products where id = ? and book_id = ?`, p.product_id, b);
     if (!pr) fail('Chọn mặt hàng sản xuất');
     if (pr.is_kit) fail(`"${pr.name}" là bộ — không sản xuất thành hàng tồn riêng`);

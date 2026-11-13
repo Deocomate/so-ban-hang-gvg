@@ -114,7 +114,12 @@ async function route(req, res) {
     const keys = [['login:' + ip, 20], ['login-email:' + String(b.email ?? '').trim().toLowerCase(), 8]];
     for (const [k, max] of keys) tooMany(k, max);
     ctx.ip = ip;
-    try { return send(res, 200, session(tx(() => auth.signIn(b)), b.remember !== false)); }
+    try {
+      const u = tx(() => auth.signIn(b));
+      const f = tx(() => auth.secondFactor(u, b));
+      if (f.pending) return send(res, 200, { two_factor: f.pending });
+      return send(res, 200, { ...session(u, b.remember !== false), device_token: f.device_token ?? null });
+    }
     catch (e) { if (e instanceof AppError) { keys.forEach(([k]) => countFail(k)); tx(() => auth.loginFailed(b.email, e.message)); } throw e; }
     finally { ctx.ip = null; }
   }

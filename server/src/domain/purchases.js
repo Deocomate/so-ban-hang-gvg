@@ -1,19 +1,41 @@
 // Mua hàng theo kiểu KiotViet: phiếu nhập hàng (PN, lưu tạm hoặc hoàn thành là vào kho), đặt hàng nhập / đặt xưởng (DN, nhận nhiều đợt),
 // giảm giá dòng và cả phiếu, hủy phiếu nhập, trả hàng nhập theo phiếu hoặc lập riêng theo nhà cung cấp.
 import { ctx, fail, one, all, run, val, insert, uuid, nowIso, num, bool, nz, trimNz, rnd, asDate, today, vnd } from '../lib/context.js';
-import { requirePerm, checkDate, nextCode, once, setting } from './access.js';
+import { checkTxnDate } from './order-rules.js';
+import { requirePerm, checkDate, nextCode, once, setting, bookSettings } from './access.js';
 import { postMove, lineUnit, avgCost } from './stock.js';
 import { doPayment } from './cash.js';
 
-export function doReceive(poId, date, lines, note) {
+// Chi phí nhập hàng (phí vận chuyển, bốc xếp, lưu kho…): [{name, amount, payer: 'ncc' | 'khac'}].
+// Chia vào từng dòng theo giá trị hàng → cộng vào giá vốn nhập kho. Phần NCC thu hộ cộng vào công nợ phải trả NCC;
+// phần trả bên khác ghi bằng phiếu chi riêng (không tính hai lần vào chi phí).
+function extraCostsOf(b, list) {
+  const items = (Array.isArray(list) ? list : []).map((x) => ({ name: trimNz(x.name), amount: rnd(num(x.amount) ?? 0), payer: x.payer === 'ncc' ? 'ncc' : 'khac' })).filter((x) => x.amount);
+  if (!items.length) return [];
+  if (!bookSettings(b).po_costs) fail('Sổ chưa bật Quản lý chi phí nhập hàng (Thiết lập → Mua hàng)');
+  for (const x of items) { if (!x.name) fail('Ghi tên khoản chi phí nhập hàng'); if (x.amount < 0) fail('Chi phí nhập hàng không được âm'); }
+  return items;
+}
+
+export function doReceive(poId, date, lines, note, extraCosts) {
   const po = one(`select * from purchase_orders where id = ?`, poId);
   if (!po) fail('Không tìm thấy đơn nhập');
   if (po.status === 'nhap') fail(`Đơn ${po.code} đang là nháp — hãy xác nhận trước khi nhận hàng`);
   if (po.status === 'huy') fail(`Đơn ${po.code} đã hủy`);
   checkDate(po.book_id, date);
+  checkTxnDate(po.book_id, 'nhap_hang', date);
   const gc = nextCode(po.book_id, 'NK'); const gid = uuid();
-  insert('goods_receipts', { id: gid, book_id: po.book_id, code: gc, po_id: po.id, receipt_date: date, note: note ?? null, created_by: ctx.uid, created_at: nowIso() });
-  let n = 0;
+  const extras = extraCostsOf(po.book_id, extraCosts);
+  insert('goods_receipts', { id: gid, book_id: po.book_id, code: gc, po_id: po.id, receipt_date: date, note: note ?? null, created_by: ctx.uid, created_at: nowIso(),
+    extra_costs: JSON.stringify(extras) });
+  // Chia chi phí theo giá trị từng dòng; dòng cuối nhận phần lẻ
+  const rows = (lines || []).map((ln) => ({ ln, q: num(ln.qty) ?? 0 })).filter((r) => r.q > 0);
+  const pls = rows.map((r) => one(`select * from purchase_order_lines where id = ? and po_id = ?`, r.ln.po_line_id, po.id));
+  const vals = rows.map((r, i) => r.q * (num(r.ln.unit_cost) ?? pls[i]?.unit_cost ?? 0));
+  const gross = vals.reduce((s, v) => s + v, 0);
+  const share = (tot) => { let acc = 0; return vals.map((v, i) => { const x = i === vals.length - 1 ? rnd(tot - acc) : rnd(gross ? tot * v / gross : tot / vals.length); acc += x; return x; }); };
+  const allX = share(extras.reduce((s, x) => s + x.amount, 0)); const nccX = share(extras.filter((x) => x.payer === 'ncc').reduce((s, x) => s + x.amount, 0));
+  let n = 0; let ri = -1;
   for (const ln of lines || []) {
     const q = num(ln.qty) ?? 0;
     if (q < 0) fail('Số lượng nhận không được âm');
@@ -23,9 +45,10 @@ export function doReceive(poId, date, lines, note) {
     if (q > pl.qty - pl.cancelled_qty - pl.received_qty) fail(`Nhận vượt số lượng còn chờ (dòng ${pl.line_no}: còn ${pl.qty - pl.cancelled_qty - pl.received_qty})`);
     const uc = num(ln.unit_cost) ?? pl.unit_cost;
     if (uc < 0) fail('Giá nhập không được âm');
-    const lid = uuid();
-    insert('goods_receipt_lines', { id: lid, receipt_id: gid, book_id: po.book_id, po_line_id: pl.id, product_id: pl.product_id, qty: q, unit_cost: uc, value: rnd(q * uc) });
-    postMove(po.book_id, pl.product_id, date, q, uc, 'nhap', gid, gc, lid, null, rnd(q * uc));
+    const lid = uuid(); ri++;
+    const ex = allX[ri] ?? 0; const exN = nccX[ri] ?? 0;
+    insert('goods_receipt_lines', { id: lid, receipt_id: gid, book_id: po.book_id, po_line_id: pl.id, product_id: pl.product_id, qty: q, unit_cost: uc, value: rnd(q * uc) + exN, extra_cost: ex });
+    postMove(po.book_id, pl.product_id, date, q, uc, 'nhap', gid, gc, lid, null, rnd(q * uc) + ex);
     run(`update purchase_order_lines set received_qty = received_qty + ? where id = ?`, q, pl.id);
     n++;
   }
@@ -133,7 +156,7 @@ export function save_purchase_order(p) {
     }
     if (receiveNow) {
       const rem = all(`select id as po_line_id, qty - cancelled_qty - received_qty as qty from purchase_order_lines where po_id = ?`, po.id);
-      rcv = doReceive(po.id, asDate(p.receive_date) || d, rem, null);
+      rcv = doReceive(po.id, asDate(p.receive_date) || d, rem, null, p.extra_costs);
     }
     return { id: po.id, code: po.code, payment_code: dep?.code ?? null, receipt_code: rcv?.code ?? null };
   });
@@ -157,7 +180,7 @@ function doCancelReceipt(g, reason) {
   for (const l of all(`select * from goods_receipt_lines where receipt_id = ?`, g.id)) {
     const pr = one(`select sku, on_hand from products where id = ?`, l.product_id);
     if (pr.on_hand < l.qty) fail(`Tồn kho của ${pr.sku} chỉ còn ${pr.on_hand}, không đủ để hủy phiếu nhập ${g.code} (đã nhập ${l.qty})`);
-    postMove(g.book_id, l.product_id, today(), -l.qty, null, 'nhap', g.id, g.code, l.id, 'Hủy phiếu nhập ' + g.code, l.value);
+    postMove(g.book_id, l.product_id, today(), -l.qty, null, 'nhap', g.id, g.code, l.id, 'Hủy phiếu nhập ' + g.code, rnd(l.qty * l.unit_cost) + l.extra_cost);
     run(`update purchase_order_lines set received_qty = received_qty - ? where id = ?`, l.qty, l.po_line_id);
   }
   run(`update goods_receipts set cancelled_at = ?, cancel_reason = ? where id = ?`, nowIso(), reason, g.id);
@@ -213,7 +236,7 @@ export function set_prod_step(p) {
 export function receive(p) {
   const po = getPo(p.po_id);
   requirePerm(po.book_id, 'nhap_hang');
-  return once(p, po.book_id, 'receive', () => doReceive(po.id, asDate(p.date) || today(), p.lines || [], p.note ?? null));
+  return once(p, po.book_id, 'receive', () => doReceive(po.id, asDate(p.date) || today(), p.lines || [], p.note ?? null, p.extra_costs));
 }
 
 // Trả hàng nhập: theo phiếu nhập (po_id, mỗi dòng chọn receipt_line_id, xuất kho đúng giá đã nhập)
@@ -228,6 +251,7 @@ export function supplier_return(p) {
   return once(p, b, 'supplier_return', () => {
     const d = asDate(p.date) || today();
     checkDate(b, d);
+    checkTxnDate(b, 'tra_ncc', d);
     const used = {}; const items = [];
     for (const ln of p.lines || []) {
       const q = num(ln.qty) ?? 0;

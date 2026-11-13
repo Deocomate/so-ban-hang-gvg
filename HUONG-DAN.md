@@ -140,7 +140,7 @@ Nếu bản mới đổi cấu trúc dữ liệu, máy chủ tự sao lưu rồi
 |---|---|
 | Đơn **nháp** | Không giữ hàng, không tính doanh thu |
 | Đơn **đã xác nhận** | Giữ hàng (giảm "có thể bán"), chưa tính doanh thu |
-| **Giao hàng** | Trừ kho, ghi doanh thu và giá vốn (bình quân gia quyền tại lúc giao, lưu cố định), phát sinh công nợ |
+| **Giao hàng** | Trừ kho, ghi doanh thu và giá vốn (theo phương pháp đang chọn, lưu cố định), phát sinh công nợ |
 | **Tiền cọc** | Không phải doanh thu; hiện là "khách trả trước" |
 | **Đặt hàng nhập / đặt xưởng** | Không tăng kho. Chỉ khi **nhận hàng** (hoặc bấm Hoàn thành ở phiếu nhập hàng) mới tăng kho và giá vốn bình quân |
 | **Giảm giá khi nhập** | Giảm giá từng dòng và giảm giá cả phiếu đều trừ vào giá nhập, nên giá vốn và nợ nhà cung cấp tính theo số đã giảm |
@@ -152,7 +152,7 @@ Nếu bản mới đổi cấu trúc dữ liệu, máy chủ tự sao lưu rồi
 | **TikTok** | Phí sàn ghi vào phiếu thu → tự tạo chi phí "Phí sàn TMĐT"; quỹ nhận số tiền thực về |
 | Xóa / sửa | Không xóa lịch sử. Phiếu sai thì **hủy** (vẫn lưu, có lý do) rồi lập lại. Mọi thay đổi ghi vào Nhật ký |
 | Bấm lưu 2 lần | Không ghi trùng (mỗi lần bấm có một mã yêu cầu) |
-| Bán vượt tồn | Bị chặn (có thể mở trong Cài đặt) |
+| Bán vượt tồn | Bị chặn (có thể mở trong Thiết lập) |
 | Khóa sổ | Đặt "Khóa sổ đến ngày" sau khi chốt tháng; không ai ghi được chứng từ vào kỳ đã khóa |
 
 Thuế GTGT 1% và thuế TNCN 17% trong phần mềm là **số ước tính để quản trị**, không thay tờ khai. Quy định thuế hộ kinh doanh có thể thay đổi, anh nên đối chiếu với kế toán.
@@ -403,3 +403,18 @@ Menu **Mua hàng** có ba màn giống KiotViet. Màn tạo phiếu mở toàn m
 - **Chi tiết phiếu** có In, Xuất file, **Sao chép** (mở phiếu mới cùng hàng và giá), Trả tiền NCC, Trả hàng nhập và **Hủy** (bắt buộc ghi lý do).
 - **Sổ Thanh Hải** hiện quy cách thùng trên từng dòng nhập; sổ Vũ Gia và Anamtile thì không.
 - **Máy chủ đang chạy bản cũ:** khi cập nhật, máy chủ tự sao lưu rồi nâng cấp cơ sở dữ liệu. Đơn cũ đã nhập kho ngay lúc lập được chuyển thành phiếu nhập hàng; phiếu trả hàng NCC cũ giữ nguyên số liệu, giá trả lại bằng giá nhập.
+
+## 15. Thiết lập (bánh răng trên thanh trên cùng)
+
+Bấm bánh răng cạnh chuông để mở nhanh một nhóm thiết lập, hoặc **Xem tất cả thiết lập**. Trang Thiết lập chia như KiotViet: cột trái là danh mục (Quản lý · Tiện ích · Cửa hàng · Dữ liệu), giữa là các dòng thiết lập, phải là mục lục. Ô **Tìm kiếm thiết lập** gõ không dấu cũng được. Công tắc lưu ngay khi bật/tắt.
+
+- **Phương pháp tính giá vốn** (Hàng hóa): giá vốn trung bình hoặc giá vốn cố định (mặc định là giá nhập đầu tiên, sửa được ở từng hàng hóa). Khi đổi, chọn *tính lại từ một ngày* hoặc *chỉ chứng từ mới*, bấm **Xem trước thay đổi** để thấy chênh lệch giá vốn, lãi gộp, lợi nhuận từng tháng và từng mã, tích xác nhận rồi mới đổi. Máy chủ tự sao lưu CSDL trước khi đổi (thư mục `backups`, tên có `truoc-doi-gia-von`). Không tính lại được trước ngày khóa sổ.
+- **Mã vạch, gợi ý thông tin hàng hóa, bảo hành – bảo trì, phân quyền theo nhóm hàng** (Hàng hóa). Bảo hành bật thì có trang *Đơn hàng → Bảo hành, sửa chữa* để tra hạn bảo hành và lập phiếu sửa chữa; in tem mã vạch ở chi tiết hàng hóa.
+- **Chi phí nhập hàng** (Mua hàng): khi nhận hàng thêm phí vận chuyển, bốc xếp…; chia vào giá vốn theo giá trị từng dòng. Phần "NCC thu hộ" cộng vào nợ NCC; phần "Trả bên khác" hãy ghi phiếu chi.
+- **Đơn hàng**: xác nhận trước khi hoàn thành đơn, giới hạn số ngày được trả hàng, không cho đổi ngày giao dịch (chọn loại giao dịch), kết ca làm việc (*Sổ quỹ → Kết ca*), chặn sửa/hủy đơn đã có hóa đơn điện tử.
+- **Khách hàng**: người phụ trách (có thể cho nhân viên chỉ xem khách của mình), khách đồng thời là NCC, thông tin bắt buộc, tích điểm và đổi điểm, khuyến mại, voucher, coupon (*Khách hàng → Khuyến mại & voucher*). Giảm giá trên đơn do máy chủ tính lại khi lưu.
+- **Thuế & Kế toán → Hóa đơn điện tử**: khai thông tin người bán, mẫu số, ký hiệu. Chưa nối thẳng nhà cung cấp HĐĐT: phát hành trên trang nhà cung cấp rồi ghi số hóa đơn ở *Thuế & Kế toán → Hóa đơn đầu ra*.
+- **Cửa hàng → Quản lý tiền tệ**: ngoại tệ và tỷ giá (phiếu thu chi nhập bằng ngoại tệ tự quy đổi), số chữ số thập phân của giá.
+- **Bảo mật**: xác thực khi xuất file (nhập lại mật khẩu trước khi tải Excel), xác thực 2 lớp cho nhân viên (ứng dụng Google/Microsoft Authenticator; Tổng quản trị đặt lại được khi nhân viên mất điện thoại).
+- **Dữ liệu → Xóa dữ liệu gian hàng**: xóa chứng từ đã khép lại đến hết một ngày đã khóa sổ; công nợ, tồn kho, số dư quỹ, điểm được giữ nguyên dưới dạng số dư đầu kỳ. Xóa ngay hoặc đặt lịch 23 giờ; máy chủ sao lưu trước khi xóa.
+

@@ -6,10 +6,11 @@ import { useApp, useAction, useQ } from '../lib/store.jsx';
 import { money, qty as fq, todayVN, match } from '../lib/format.js';
 import { useProducts, useCustomers, useFunds, productSub, priceOf, unitsOf, findUnit, usePriceBooks, booksFor, autoBookFor } from '../lib/lookups.js';
 import { packing, weightOf, fmtKg } from '../lib/docs/model.js';
-import { Btn, Icon, Input, Select, DateInput, NumInput, Loading, Picker } from '../components/ui.jsx';
+import { Btn, Icon, Input, Select, DateInput, NumInput, Loading, Picker, Modal } from '../components/ui.jsx';
 import { ChargesDialog } from './Charges.jsx';
 import { packView } from '../lib/book-profile.js';
 import { SourceFields, sourcePoPayload, sourceReady, kindLabel } from './OrderSource.jsx';
+import { PromoDialog, usePromoQuote, loyaltyOn } from './PosPromos.jsx';
 
 let seq = 0;
 const METHODS = ['Tiền mặt', 'Chuyển khoản', 'Thẻ / POS', 'TikTok Shop', 'COD'];
@@ -22,7 +23,7 @@ function ProductSearch({ products, tier, book, onPick, inputRef }) {
   const boxRef = useRef(null); const listRef = useRef(null);
   const list = useMemo(() => {
     if (!q.trim()) return products.slice(0, 40);
-    return products.filter((p) => match(`${p.sku} ${p.name} ${p.size || ''} ${p.color || ''} ${p.pattern || ''} ${p.category || ''}`, q)).slice(0, 60);
+    return products.filter((p) => match(`${p.sku} ${p.barcode || ''} ${p.name} ${p.size || ''} ${p.color || ''} ${p.pattern || ''} ${p.category || ''}`, q)).slice(0, 60);
   }, [products, q]);
   useEffect(() => {
     const h = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false); };
@@ -41,7 +42,8 @@ function ProductSearch({ products, tier, book, onPick, inputRef }) {
           else if (e.key === 'ArrowUp') { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)); }
           else if (e.key === 'Enter') {
             e.preventDefault();
-            const exact = products.find((p) => p.sku.toLowerCase() === q.trim().toLowerCase());
+            const k = q.trim().toLowerCase();
+            const exact = products.find((p) => p.sku.toLowerCase() === k || (p.barcode && p.barcode.toLowerCase() === k));
             if (exact) pick(exact); else if (open && list[hi]) pick(list[hi]);
           } else if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); }
         }} />
@@ -80,6 +82,7 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
   const [loaded, setLoaded] = useState(!id && !quote_id);
   const [armClose, setArmClose] = useState(false);
   const [showCharges, setShowCharges] = useState(false);
+  const [promos, setPromos] = useState([]); const [showPromo, setShowPromo] = useState(false); const [ask, setAsk] = useState(null);
   // Đơn đặt: chọn luôn nơi sản xuất / mua, tạo đơn nhập ngay khi xác nhận đơn
   const [source, setSource] = useState({ kind: '', supplier_id: '', expected_date: '' });
   const [f, setF] = useState({
@@ -96,8 +99,11 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
       const [o] = await rpc('q', { view: 'sales_orders', filters: [['id', 'eq', id]] });
       const ls = await rpc('q', { view: 'sales_order_lines', filters: [['order_id', 'eq', id]], order: 'line_no' });
       const trip = (await rpc('q', { view: 'driver_trips', filters: [['order_id', 'eq', id]] })).find((t) => !t.delivery_id);
+      const op = await rpc('order_promos', { order_id: id });
+      setPromos(op.map((x) => (x.kind === 'promo' ? { kind: 'promo', id: x.ref_id } : x.kind === 'points' ? { kind: 'points', points: x.points } : { kind: x.kind, code: x.code })));
+      const promoSum = op.reduce((t, x) => t + x.amount, 0);
       setF((s) => ({ ...s, kind: o.kind, customer_id: o.customer_id, channel: o.channel || '', order_date: o.order_date, due_date: o.due_date || '', staff: o.staff || '',
-        note: o.note || '', discount: o.discount, shipping_fee: o.shipping_fee, vat_rate: o.vat_rate || 0, price_book_id: o.price_book_id || '', transport: trip ? { driver_id: trip.driver_id, amount: trip.amount, payer: trip.payer, collect: trip.collect, note: trip.note || '' } : null, status0: o.status, code: o.code, delivery_count: o.delivery_count || 0, paid_net: o.paid_net || 0,
+        note: o.note || '', discount: Math.max(0, (o.discount || 0) - promoSum), shipping_fee: o.shipping_fee, vat_rate: o.vat_rate || 0, price_book_id: o.price_book_id || '', transport: trip ? { driver_id: trip.driver_id, amount: trip.amount, payer: trip.payer, collect: trip.collect, note: trip.note || '' } : null, status0: o.status, code: o.code, delivery_count: o.delivery_count || 0, paid_net: o.paid_net || 0,
         lines: ls.filter((l) => l.qty - (l.cancelled_qty || 0) > 0 || l.delivered_qty > 0).map((l) => { const c = l.unit_conv || 1; return { key: ++seq, id: l.id, product_id: l.product_id,
           qty: (l.qty - (l.cancelled_qty || 0)) / c, unit_price: l.unit_price * c, unit: l.unit_name || l.unit, conv: c, delivered: l.delivered_qty || 0,
           discount_pct: l.discount_pct, po_line_id: l.po_line_id, note: l.note || '', manual: true }; }) }));
@@ -184,7 +190,11 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
   const boxSum = f.lines.reduce((s, l) => { const p = pmap[l.product_id]; return s + (p ? packing(baseQty(l), p.units_per_pack, p.pack_unit, p.unit).boxes : 0); }, 0);
   const packUnits = [...new Set(f.lines.map((l) => pmap[l.product_id]).filter((p) => p && p.units_per_pack).map((p) => p.pack_unit || 'hộp'))];
   const boxLabel = packUnits.length === 1 ? packUnits[0] : 'kiện';
-  const goods = Math.max(0, Math.round(gross - (Number(f.discount) || 0)));
+  const promoLines = f.lines.filter((l) => l.product_id && Number(l.qty) > 0).map((l) => ({ product_id: l.product_id, qty: baseQty(l), unit_price: (Number(l.unit_price) || 0) / (l.conv || 1), discount_pct: Number(l.discount_pct) || 0 }));
+  const promoOn = loyaltyOn(settings) || promos.length > 0;
+  const quote = usePromoQuote({ promos: promoOn ? promos : [], lines: promoLines, customerId: f.customer_id, date: f.order_date, orderId: id });
+  const promoAmt = promos.length ? quote.total : 0;
+  const goods = Math.max(0, Math.round(gross - (Number(f.discount) || 0) - promoAmt));
   const vatAmt = Math.round(goods * (Number(f.vat_rate) || 0) / 100);
   const total = goods + vatAmt + (Number(f.shipping_fee) || 0);
   const payAmt = Number(f.pay.amount) || 0;
@@ -207,15 +217,18 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
   useEffect(() => { if (!armClose) return undefined; const t = setTimeout(() => setArmClose(false), 4000); return () => clearTimeout(t); }, [armClose]);
   const tryClose = () => { if (f.lines.length && !armClose) { setArmClose(true); return; } onClose(); };
 
-  const submit = async (mode, print) => {
+  const submit = async (mode, print, confirmed) => {
     const lines = f.lines.filter((l) => l.product_id && Number(l.qty) > 0);
     if (!lines.length) { toast('Đơn hàng chưa có sản phẩm — gõ tên hàng vào ô tìm kiếm', 'err'); searchRef.current?.focus(); return; }
+    if (promos.length && quote.error) { toast(quote.error, 'err'); return; }
+    // Thiết lập "Hiển thị xác nhận trước khi hoàn thành đơn hàng": thu ngân xem lại tiền trước khi hoàn thành
+    if (settings.confirm_complete && mode === 'deliver' && !confirmed) { setAsk({ print }); return; }
     const placeSource = isDat && can('nhap_hang') && mode !== 'draft' && !!source.kind;
     if (placeSource && !sourceReady(source)) { toast(source.kind === 'dat_sx' ? 'Chưa chọn xưởng sản xuất' : 'Chưa chọn nhà cung cấp', 'err'); return; }
     lsSet('gomsu.staff', f.staff || '');
     const p = {
       id: id || null, kind: f.kind, customer_id: f.customer_id, channel: f.channel, order_date: f.order_date, due_date: f.due_date || null, staff: f.staff,
-      note: f.note, discount: Number(f.discount) || 0, shipping_fee: Number(f.shipping_fee) || 0, vat_rate: Number(f.vat_rate) || 0, transport: f.transport, quote_id: quote_id || null,
+      note: f.note, discount: Number(f.discount) || 0, ...(promoOn ? { promos } : {}), shipping_fee: Number(f.shipping_fee) || 0, vat_rate: Number(f.vat_rate) || 0, transport: f.transport, quote_id: quote_id || null,
       price_book_id: f.price_book_id || null,
       status: mode === 'draft' ? 'nhap' : 'xac_nhan', deliver_now: mode === 'deliver',
       lines: lines.map((l) => ({ id: l.id || null, product_id: l.product_id, qty: baseQty(l), unit_price: (Number(l.unit_price) || 0) / (l.conv || 1),
@@ -264,6 +277,16 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
 
       {showCharges && <ChargesDialog goods={goods} vatRate={f.vat_rate} shippingFee={f.shipping_fee} transport={f.transport} onClose={() => setShowCharges(false)}
         onApply={(r) => setF((s) => ({ ...s, vat_rate: r.vat_rate, shipping_fee: r.shipping_fee, transport: r.transport }))} />}
+      {showPromo && <PromoDialog promos={promos} setPromos={setPromos} quote={quote} date={f.order_date} customer={cust} onClose={() => setShowPromo(false)} />}
+      {ask && <Modal title="Xác nhận hoàn thành đơn" size="sm" onClose={() => setAsk(null)}
+        footer={<><Btn onClick={() => setAsk(null)}>Quay lại</Btn><Btn kind="primary" busy={busy} onClick={() => { const a = ask; setAsk(null); submit('deliver', a.print, true); }}>Hoàn thành</Btn></>}>
+        <div className="pos-sum">
+          <span>Khách hàng</span><b className="r">{cust?.name}</b>
+          <span>Khách cần trả</span><b className="r">{money(total)}</b>
+          <span>Khách thanh toán</span><b className="r">{money(payAmt)}</b>
+          <span>{payAmt >= total ? 'Tiền thừa trả khách' : 'Ghi nợ khách'}</span><b className={`r${payAmt < total ? ' bad' : ''}`}>{money(Math.abs(total - payAmt))}</b>
+        </div>
+      </Modal>}
       <div className="pos-body">
         <div className="pos-left">
           <div className="pos-lines">
@@ -359,6 +382,8 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
               <b className="r">{fmtKg(weightSum)}{noWeight > 0 && <div className="small muted" style={{ fontWeight: 400 }}>thiếu {noWeight} mặt hàng chưa khai</div>}</b></>}
             <span>Tổng tiền hàng <span className="pos-count">{fq(qtySum)}</span></span><b className="r">{money(gross)}</b>
             <span>Giảm giá</span><NumInput suffix={false} min={0} value={f.discount} onChange={(v) => set('discount', v)} className="pos-uline" aria-label="Giảm giá" />
+            {promoOn && <><button className="link-btn pos-charge" onClick={() => setShowPromo(true)}>Khuyến mại, mã giảm giá{promos.length ? ` (${promos.length})` : ''} ›</button>
+              <b className={`r${quote.error && promos.length ? ' bad' : ''}`}>{quote.error && promos.length ? 'lỗi' : promoAmt ? '−' + money(promoAmt) : '0'}</b></>}
             <button className="link-btn pos-charge" onClick={() => setShowCharges(true)}>Thu khác ›</button><b className="r">{money(vatAmt + (Number(f.shipping_fee) || 0))}</b>
             {f.vat_rate > 0 && <><span className="muted small">VAT {fq(f.vat_rate)}%</span><span className="r muted small">{money(vatAmt)}</span></>}
             {Number(f.shipping_fee) > 0 && <><span className="muted small">Tiền vận chuyển</span><span className="r muted small">{money(f.shipping_fee)}</span></>}

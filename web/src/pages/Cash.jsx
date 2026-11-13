@@ -24,7 +24,11 @@ export const PAY_KINDS = [
 const DOC_LABEL = { don_ban: 'Đơn bán', don_mua: 'Đơn nhập', chi_phi: 'Chi phí', no_dau_ky: 'Nợ đầu kỳ' };
 
 export function PaymentForm({ kind: kind0 = 'thu_khach', party_id: party0, alloc, onClose }) {
-  const { can, open, toast } = useApp();
+  const { can, open, toast, settings } = useApp();
+  // Thu / chi bằng ngoại tệ (Thiết lập → Cửa hàng → Quản lý tiền tệ): số tiền đồng = ngoại tệ × tỷ giá
+  const curs = settings.currencies || [];
+  const [fx, setFx] = useState({ code: '', amount: null, rate: null });
+  const fxCur = curs.find((c) => c.code === fx.code);
   const customers = useCustomers(); const suppliers = useSuppliers(); const funds = useFunds();
   const { run, busy } = useAction();
   const [kind, setKind] = useState(kind0);
@@ -59,7 +63,8 @@ export function PaymentForm({ kind: kind0 = 'thu_khach', party_id: party0, alloc
   const partyRow = partyList?.find((p) => p.id === party);
   const submit = async () => {
     const allocations = Object.entries(al).filter(([, v]) => Number(v) > 0).map(([doc_id, v]) => ({ doc_id, doc_type: docs.find((d) => d.doc_id === doc_id)?.doc_type || alloc?.doc_type, amount: Number(v) }));
-    const r = await run('create_payment', { kind, date, fund_id: fund, to_fund_id: toFund || null, party_id: party || null, amount, fee, method, ref_no: refNo, note, allocations },
+    const fxp = fxCur ? { fx: { code: fx.code, amount: fx.amount, rate: fx.rate ?? fxCur.rate } } : {};
+    const r = await run('create_payment', { kind, date, fund_id: fund, to_fund_id: toFund || null, party_id: party || null, amount, fee, method, ref_no: refNo, note, allocations, ...fxp },
       (x) => `Đã lập ${def.dir === 'thu' ? 'phiếu thu' : def.dir === 'chi' ? 'phiếu chi' : 'phiếu chuyển quỹ'} ${x.code}`);
     if (r) onClose();
   };
@@ -73,7 +78,10 @@ export function PaymentForm({ kind: kind0 = 'thu_khach', party_id: party0, alloc
         {def?.party && <Field label={def.party === 'kh' ? 'Khách hàng' : 'Nhà cung cấp'} required hint={partyRow ? (def.party === 'kh' ? `Đang nợ ${money(partyRow.receivable)} · trả trước ${money(partyRow.prepaid)}` : `Mình đang nợ ${money(partyRow.payable)} · đã trả trước ${money(partyRow.prepaid)}`) : null}>
           <Picker items={partyList || []} value={party} onChange={setParty} getLabel={(p) => p.name} getSub={(p) => p.code + (p.phone ? ' · ' + p.phone : '')} />
         </Field>}
-        <Field label="Số tiền" required><NumInput value={amount} onChange={setAmount} placeholder="0" /></Field>
+        {curs.length > 0 && <Field label="Tiền tệ"><Select value={fx.code} onChange={(v) => { setFx({ code: v, amount: null, rate: null }); }} options={[{ value: '', label: 'VND' }, ...curs.map((c) => ({ value: c.code, label: `${c.code} · ${c.name}` }))]} /></Field>}
+        {fxCur && <Field label={`Số tiền ${fxCur.code}`} required><NumInput money={false} min={0} value={fx.amount} onChange={(v) => { setFx((s) => ({ ...s, amount: v })); setAmount(Math.round((Number(v) || 0) * (Number(fx.rate ?? fxCur.rate) || 0))); }} /></Field>}
+        {fxCur && <Field label="Tỷ giá" hint={`Mặc định ${money(fxCur.rate)} đ/${fxCur.code}`}><NumInput min={0} value={fx.rate ?? fxCur.rate} onChange={(v) => { setFx((s) => ({ ...s, rate: v })); setAmount(Math.round((Number(fx.amount) || 0) * (Number(v) || 0))); }} /></Field>}
+        <Field label={fxCur ? 'Quy đổi ra đồng' : 'Số tiền'} required><NumInput value={amount} onChange={setAmount} placeholder="0" disabled={!!fxCur} /></Field>
         {kind === 'thu_khach' && <Field label="Phí sàn / thu hộ bị trừ" hint="vd. TikTok trừ phí trước khi chuyển tiền. Ghi tự động vào chi phí."><NumInput value={fee} onChange={setFee} placeholder="0" /></Field>}
         <Field label={def?.dir === 'thu' ? 'Vào quỹ' : 'Từ quỹ'}><Select value={fund} onChange={setFund} options={(funds.data || []).map((f) => ({ value: f.id, label: `${f.name} (${money(f.balance)})` }))} /></Field>
         {kind === 'chuyen_quy' && <Field label="Sang quỹ"><Select value={toFund} onChange={setToFund} placeholder="Chọn quỹ nhận" options={(funds.data || []).filter((f) => f.id !== fund).map((f) => ({ value: f.id, label: f.name }))} /></Field>}

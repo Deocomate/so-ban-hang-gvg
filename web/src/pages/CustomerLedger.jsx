@@ -23,7 +23,7 @@ const stop = (fn) => (e) => { e.stopPropagation(); fn(); };
 
 // Hộp chi tiết khách hàng mở đè lên danh sách: số liệu công nợ, tab Sổ công nợ / Chi tiết đơn, nút Ghi phiếu thu luôn ở chân hộp
 export function CustomerDetail({ id, onClose }) {
-  const { open, can } = useApp();
+  const { open, can, settings } = useApp();
   const seeLedger = can('xem_thu_chi');
   const cq = useQ('customers', [['id', 'eq', id]]);
   const led = useRpcData('customer_ledger', { customer_id: id }, seeLedger);
@@ -47,6 +47,10 @@ export function CustomerDetail({ id, onClose }) {
           {c.overdue > 0 && <span className="kpi-sub bad">Quá hạn {money(c.overdue)}, lâu nhất {c.max_overdue_days} ngày</span>}</div>
         {c.prepaid > 0 && <div className="kpi"><span className="kpi-label">Khách trả trước</span><span className="kpi-value good">{money(c.prepaid)}</span></div>}
       </div>
+      {(settings.points_on || c.supplier_id) && <div className="row gap-l small">
+        {settings.points_on && <span><span className="muted">Điểm tích lũy: </span><PointsCell c={c} /></span>}
+        {c.supplier_id && <span><span className="muted">Đồng thời là nhà cung cấp — </span><DualDebt c={c} /></span>}
+      </div>}
       <ErrorBox error={led.error} />
       <Tabs value={tab} onChange={setTab} tabs={[...(seeLedger ? [{ value: 'ledger', label: 'Sổ công nợ' }] : []), { value: 'orders', label: 'Chi tiết đơn' }]} />
       {tab === 'ledger' && <LedgerTab id={id} />}
@@ -247,5 +251,25 @@ export function ReceiptForm({ customer_id, round = 1, onClose }) {
       )}
       {err && <Note tone="warn">{err}</Note>}
     </Modal>
+  );
+}
+
+// Khách kiêm nhà cung cấp: hiện phải trả NCC để bù trừ với phải thu khách
+function DualDebt({ c }) {
+  const s = useQ('suppliers', [['id', 'eq', c.supplier_id]]).data?.[0];
+  if (!s) return '…';
+  const net = (c.receivable || 0) - (c.prepaid || 0) - (s.payable || 0);
+  return <span>{s.name}: mình nợ {money(s.payable || 0)} · <b>bù trừ: {net >= 0 ? `khách còn nợ ${money(net)}` : `mình còn nợ ${money(-net)}`}</b></span>;
+}
+
+function PointsCell({ c }) {
+  const { can } = useApp();
+  const { run } = useAction();
+  const [n, setN] = useState(null);
+  return (
+    <span className="row gap-s" style={{ display: 'inline-flex' }}><b>{money(c.points || 0)} điểm</b>
+      {can('owner') && <><span style={{ width: 110 }}><NumInput money={false} value={n} onChange={setN} placeholder="+/− điểm" aria-label="Điều chỉnh điểm" /></span>
+        <Btn small disabled={!n} onClick={async () => { if (await run('adjust_points', { customer_id: c.id, points: n, note: 'Điều chỉnh tay' }, 'Đã điều chỉnh điểm')) setN(null); }}>Điều chỉnh</Btn></>}
+    </span>
   );
 }
