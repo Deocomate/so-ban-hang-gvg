@@ -156,6 +156,14 @@ export function PriceBookForm({ id, onClose, onSaved }) {
             <div className="seg"><button className={!f.formula.pct ? 'on' : ''} onClick={() => setFm('pct', false)}>VND</button><button className={f.formula.pct ? 'on' : ''} onClick={() => setFm('pct', true)}>%</button></div>
           </>}
         </div>
+        {f.formula.base && <div className="row gap" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
+          <span>Làm tròn</span>
+          <div style={{ minWidth: 200 }}><Select value={String(f.formula.round ?? 0)} onChange={(v) => setFm('round', v === 'auto' ? 'auto' : Number(v))} options={[
+            { value: '0', label: 'Không làm tròn' }, { value: 'auto', label: 'Tự động theo mức giá' },
+            ...[100, 500, 1000, 5000, 10000, 50000, 100000].map((s) => ({ value: String(s), label: `Bước ${money(s)}` }))]} /></div>
+          {f.formula.round ? <div className="seg">{[['up', 'Lên'], ['nearest', 'Gần nhất'], ['down', 'Xuống']].map(([k, l]) => <button key={k} className={(f.formula.round_mode || 'up') === k ? 'on' : ''} onClick={() => setFm('round_mode', k)}>{l}</button>)}</div> : null}
+          {f.formula.round === 'auto' && <span className="muted small">dưới 100 nghìn → 1.000 · dưới 1 triệu → 5.000 · dưới 10 triệu → 10.000 · từ 10 triệu → 100.000</span>}
+        </div>}
       </Section>
       <Section title="Khi thu ngân lên đơn với bảng giá này">
         <RadioList value={f.allow_others ? 'yes' : 'no'} onChange={(v) => set('allow_others', v === 'yes')} options={[{ value: 'yes', label: 'Được phép thêm hàng hóa không có trong bảng giá (lấy giá chung)' }, { value: 'no', label: 'Chỉ được thêm hàng hóa có trong bảng giá này' }]} />

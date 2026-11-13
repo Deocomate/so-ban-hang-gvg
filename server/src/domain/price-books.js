@@ -24,11 +24,14 @@ export function save_price_book(p) {
   if (base && base === `book:${p.id}`) fail('Công thức giá không được lấy chính bảng giá này');
   if (f.op && !['+', '-'].includes(f.op)) fail('Công thức giá: phép tính chỉ là cộng hoặc trừ');
   if ((num(f.value) ?? 0) < 0) fail('Công thức giá: giá trị không được âm');
+  const round = f.round === 'auto' ? 'auto' : num(f.round) || 0;
+  if (round !== 'auto' && !ROUND_STEPS.includes(round)) fail('Công thức giá: bước làm tròn không hợp lệ');
+  if (f.round_mode && !['up', 'nearest', 'down'].includes(f.round_mode)) fail('Công thức giá: cách làm tròn không hợp lệ');
   const groups = list(p.cust_groups); const users = list(p.user_ids);
   if (groups && !groups.length) fail('Chọn ít nhất một nhóm khách hàng, hoặc chọn "Tất cả"');
   if (users && !users.length) fail('Chọn ít nhất một người tạo giao dịch, hoặc chọn "Tất cả"');
   const row = { name, valid_from: from, valid_to: to, active: (bool(p.active) ?? true) ? 1 : 0,
-    formula: base ? { base, op: f.op || '+', value: num(f.value) ?? 0, pct: !!f.pct } : {},
+    formula: base ? { base, op: f.op || '+', value: num(f.value) ?? 0, pct: !!f.pct, round, round_mode: f.round_mode || 'up' } : {},
     allow_others: (bool(p.allow_others) ?? true) ? 1 : 0, warn_others: (bool(p.warn_others) ?? false) ? 1 : 0, cust_groups: groups, user_ids: users, updated_at: nowIso() };
   if (one(`select 1 from price_books where book_id = ? and lower(name) = lower(?) and id is not ?`, b, name, nz(p.id))) fail(`Đã có bảng giá "${name}"`);
   let id = nz(p.id);
@@ -97,6 +100,15 @@ export function import_price_book_items(p) {
 }
 
 // Tính giá theo công thức của bảng cho các hàng đã chọn (hoặc mọi hàng đang kinh doanh) rồi ghi vào bảng
+// Làm tròn giá theo bước: 'auto' chọn bước theo mức giá (dưới 100 nghìn → 1.000, dưới 1 triệu → 5.000, dưới 10 triệu → 10.000, từ 10 triệu → 100.000)
+export const ROUND_STEPS = [0, 100, 500, 1000, 5000, 10000, 50000, 100000];
+export function roundPrice(v, round, mode = 'up') {
+  const step = round === 'auto' ? (v < 1e5 ? 1000 : v < 1e6 ? 5000 : v < 1e7 ? 10000 : 100000) : Number(round) || 0;
+  if (!step) return v;
+  const f = mode === 'down' ? Math.floor : mode === 'nearest' ? Math.round : Math.ceil;
+  return f(v / step) * step;
+}
+
 export function apply_price_formula(p) {
   const b = p.book_id;
   requirePerm(b, 'danh_muc');
@@ -116,7 +128,7 @@ export function apply_price_formula(p) {
     else base = one(`select price from price_book_items where price_book_id = ? and product_id = ?`, f.base.slice(5), pid)?.price ?? null;
     if (base == null) { skipped++; continue; }
     const delta = f.pct ? base * (num(f.value) ?? 0) / 100 : num(f.value) ?? 0;
-    const price = Math.max(0, rnd(f.op === '-' ? base - delta : base + delta));
+    const price = roundPrice(Math.max(0, rnd(f.op === '-' ? base - delta : base + delta)), f.round, f.round_mode);
     run(`insert into price_book_items (price_book_id, product_id, price) values (?, ?, ?)
       on conflict (price_book_id, product_id) do update set price = excluded.price`, pb.id, pid, price);
     n++;

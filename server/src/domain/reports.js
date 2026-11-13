@@ -421,3 +421,39 @@ export function rpt_end_of_day(p) {
     sales: sales.map((x) => ({ ...x, cogs: cost ? x.cogs : null })), returns, products, orders, payments, funds: Object.values(funds),
   };
 }
+
+// ---------- HÒA VỐN & KỊCH BẢN GIÁ BÁN ----------
+// Số liệu thật của một tháng chia theo mô hình chi phí biến đổi / cố định (cách tính dùng chung cho báo cáo từng sổ và so sánh các thương hiệu)
+const BE_GROUPS = { Marketing: 'ads', 'Chi phí bán hàng': 'other_var', 'Nhân sự': 'staff', 'Mặt bằng': 'rent', 'Điện, nước, internet': 'utilities', 'Công cụ dụng cụ': 'tools' };
+export const DEFAULT_MULTIPLIERS = [2, 2.2, 2.5, 3];
+function beInputs(b, d1, d2) {
+  const pl = calcPl(b, d1, d2);
+  const o = { b, d1, d2 };
+  const parts = { ads: 0, other_var: 0, staff: 0, rent: 0, utilities: 0, tools: 0, other_fixed: 0 };
+  for (const g of allN(`select expense_group as grp, sum(amount) as amount from v_expense_alloc where book_id = @b and alloc_date between @d1 and @d2 group by 1`, o)) {
+    parts[BE_GROUPS[g.grp] || 'other_fixed'] += g.amount;
+  }
+  const orders = oneN(`select count(distinct order_id) as v from deliveries where book_id = @b and delivery_date between @d1 and @d2`, o).v;
+  return { revenue: pl.revenue_net, orders, cogs: pl.cogs, damage: pl.stock_loss, ...parts };
+}
+const monthOf = (p) => { const d1 = monthStart(asDate(p.month) || today()); return { d1, d2: addDays(addMonths(d1, 1), -1) }; };
+const multipliers = (b) => { const m = bookSettings(b).price_multipliers; return Array.isArray(m) && m.length ? m : DEFAULT_MULTIPLIERS; };
+
+// p = {book_id, month}
+export function rpt_break_even(p) {
+  const b = p.book_id;
+  requirePerm(b, 'xem_bao_cao');
+  needCost(b);
+  const { d1, d2 } = monthOf(p);
+  return { month: d1, from: d1, to: d2, ...beInputs(b, d1, d2), multipliers: multipliers(b) };
+}
+
+// So sánh các thương hiệu (sổ) người dùng được xem báo cáo và giá vốn — cùng loại sổ thật / sổ thử với sổ đang mở
+export function rpt_brands(p) {
+  requirePerm(p.book_id, 'xem_bao_cao');
+  const { d1, d2 } = monthOf(p);
+  const demo = one(`select is_demo from books where id = ?`, p.book_id)?.is_demo ?? 0;
+  const books = all(`select id, name, short_name from books where is_demo = ? order by created_at, rowid`, demo)
+    .filter((x) => can(x.id, 'xem_bao_cao') && can(x.id, 'xem_gia_von'));
+  return { month: d1, from: d1, to: d2, brands: books.map((x) => ({ book_id: x.id, name: x.name, short_name: x.short_name, ...beInputs(x.id, d1, d2) })) };
+}

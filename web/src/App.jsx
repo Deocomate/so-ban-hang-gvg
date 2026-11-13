@@ -98,7 +98,8 @@ const MENU = [
     { title: 'Bán hàng', items: [{ id: 'bao-cao', sub: 'eod', label: 'Cuối ngày', badge: 'Mới' }, { id: 'bao-cao', sub: 'pl', label: 'Lãi lỗ theo tháng' }, { id: 'bao-cao', sub: 'prod', label: 'Theo sản phẩm' },
       { id: 'bao-cao', sub: 'grp', label: 'Theo kênh / khách / nhóm' }, { id: 'bao-cao', sub: 'orders', label: 'Đặt hàng', badge: 'Mới' }, { id: 'bao-cao', sub: 'staff', label: 'Nhân viên', badge: 'Mới' }] },
     { title: 'Mua hàng & kho', items: [{ id: 'bao-cao', sub: 'factory', label: 'Đơn đặt xưởng' }, { id: 'bao-cao', sub: 'stock', label: 'Nhập – xuất – tồn' }] },
-    { title: 'Tài chính', items: [{ id: 'bao-cao', sub: 'debt', label: 'Công nợ' }, { id: 'bao-cao', sub: 'exp', label: 'Chi phí', perm: 'xem_gia_von' }] },
+    { title: 'Tài chính', items: [{ id: 'bao-cao', sub: 'debt', label: 'Công nợ' }, { id: 'bao-cao', sub: 'exp', label: 'Chi phí', perm: 'xem_gia_von' },
+      { id: 'bao-cao', sub: 'be', label: 'Hòa vốn & kịch bản giá', perm: 'xem_gia_von', badge: 'Mới' }, { id: 'bao-cao', sub: 'brands', label: 'So sánh thương hiệu', perm: 'xem_gia_von', badge: 'Mới' }] },
   ] },
   { label: 'Thuế & Kế toán', icon: 'tax', items: [{ id: 'thue', sub: 'tong', label: 'Tổng quan thuế' }, { id: 'thue', sub: 'vao', label: 'Hóa đơn đầu vào' }, { id: 'thue', sub: 'ra', label: 'Hóa đơn đầu ra' }, { id: 'thue', sub: 'so', label: 'Sổ sách & hồ sơ' }] },
 ];

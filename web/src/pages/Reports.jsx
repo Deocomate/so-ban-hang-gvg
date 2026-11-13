@@ -8,6 +8,7 @@ import { PeriodPicker, usePeriod } from '../components/Period.jsx';
 import { StockReport } from './Inventory.jsx';
 import { FactoryReport } from './Tax.jsx';
 import { StaffReport } from './Staff.jsx';
+import { BreakEvenReport, BrandsReport } from './BreakEven.jsx';
 
 const PL_ROWS = [
   ['revenue_goods', 'Tiền hàng đã giao'], ['revenue_shipping', '+ Phí vận chuyển thu khách'], ['revenue_returns', '− Hàng khách trả lại'],
@@ -20,14 +21,15 @@ const PL_ROWS = [
 export function ReportsPage(nav) {
   const { can } = useApp();
   const cost = can('xem_gia_von');
-  const [tab, setTab] = usePageTab(nav, 'pl', ['eod', 'pl', 'prod', 'grp', 'orders', 'staff', 'factory', 'stock', 'debt', ...(cost ? ['exp'] : [])]);
+  const [tab, setTab] = usePageTab(nav, 'pl', ['eod', 'pl', 'prod', 'grp', 'orders', 'staff', 'factory', 'stock', 'debt', ...(cost ? ['exp', 'be', 'brands'] : [])]);
   return (
     <>
-      <div className="page-head"><div className="grow"><h1 className="page-title">Báo cáo</h1></div></div>
+      <div className="page-head"><div className="grow"><h1 className="page-title">Báo cáo</h1>
+</div></div>
       <Tabs value={tab} onChange={setTab} tabs={[
         { value: 'eod', label: 'Cuối ngày' }, { value: 'pl', label: 'Lãi lỗ theo tháng' }, { value: 'prod', label: 'Theo sản phẩm' }, { value: 'grp', label: 'Theo kênh / khách / nhóm' },
         { value: 'orders', label: 'Đặt hàng' }, { value: 'staff', label: 'Nhân viên' },
-        { value: 'factory', label: 'Đơn đặt xưởng' }, { value: 'stock', label: 'Nhập – xuất – tồn' }, { value: 'debt', label: 'Công nợ' }, ...(cost ? [{ value: 'exp', label: 'Chi phí' }] : []),
+        { value: 'factory', label: 'Đơn đặt xưởng' }, { value: 'stock', label: 'Nhập – xuất – tồn' }, { value: 'debt', label: 'Công nợ' }, ...(cost ? [{ value: 'exp', label: 'Chi phí' }, { value: 'be', label: 'Hòa vốn & kịch bản giá' }, { value: 'brands', label: 'So sánh thương hiệu' }] : []),
       ]} />
       {tab === 'eod' && <EndOfDayReport />}
       {tab === 'orders' && <OrdersReport />}
@@ -39,6 +41,8 @@ export function ReportsPage(nav) {
       {tab === 'stock' && <StockReport />}
       {tab === 'debt' && <DebtReport />}
       {tab === 'exp' && <ExpenseReport />}
+      {tab === 'be' && <BreakEvenReport />}
+      {tab === 'brands' && <BrandsReport />}
     </>
   );
 }

@@ -109,6 +109,8 @@ export function update_book_settings(p) {
   requirePerm(b, 'owner');
   if ('vat_rate' in s && (num(s.vat_rate) < 0 || num(s.vat_rate) > 0.2)) fail('Thuế suất GTGT không hợp lệ');
   if ('packaging' in s && typeof s.packaging !== 'boolean') fail('Thiết lập đóng gói không hợp lệ');
+  if ('price_multipliers' in s && (!Array.isArray(s.price_multipliers) || s.price_multipliers.length < 1 || s.price_multipliers.length > 8
+    || s.price_multipliers.some((x) => typeof x !== 'number' || !(x > 1) || x > 20))) fail('Hệ số giá phải là số lớn hơn 1 và không quá 20 (tối đa 8 hệ số)');
   if ('hide_fields' in s && (!Array.isArray(s.hide_fields) || s.hide_fields.some((f) => typeof f !== 'string'))) fail('Danh sách trường ẩn không hợp lệ');
   if ('price_names' in s && (!Array.isArray(s.price_names) || s.price_names.length < 3 || s.price_names.length > 5)) fail('Cần từ 3 đến 5 tên mức giá');
   if ('price_names' in s && s.price_names.some((x) => typeof x !== 'string' || !x.trim())) fail('Tên mức giá không được để trống ở giữa');
