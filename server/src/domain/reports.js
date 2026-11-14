@@ -52,8 +52,11 @@ export function calcPl(b, d1, d2) {
   const cgx = oneN(`select coalesce(-sum(value), 0) as v from stock_moves where book_id = @b and doc_type = 'chenh_lech' and move_date between @d1 and @d2`, o).v;
   // Chi phí theo kỳ: khoản phân bổ dần (công cụ dụng cụ, tiền nhà trả trước…) chỉ tính phần của từng tháng
   const ex = oneN(`select coalesce(sum(amount), 0) as v from v_expense_alloc where book_id = @b and alloc_date between @d1 and @d2`, o).v;
-  const loss = oneN(`select coalesce(-sum(l.value), 0) as v from stock_adjustment_lines l join stock_adjustments a on a.id = l.adjustment_id
-    where a.book_id = @b and a.reason <> 'dau_ky' and a.adj_date between @d1 and @d2`, o).v;
+  // Điều chỉnh kho tách hai chiều: dòng giảm là hao hụt (chi phí), dòng tăng (kiểm kê thừa) ghi riêng là chênh lệch kiểm kho tăng
+  const adj = oneN(`select coalesce(-sum(l.value) filter (where l.value < 0), 0) as loss, coalesce(sum(l.value) filter (where l.value > 0), 0) as gain
+    from stock_adjustment_lines l join stock_adjustments a on a.id = l.adjustment_id
+    where a.book_id = @b and a.reason <> 'dau_ky' and a.adj_date between @d1 and @d2`, o);
+  const loss = adj.loss; const gain = adj.gain;
   const cin = oneN(`select coalesce(sum(amount - fee), 0) as ci, coalesce(sum(amount - fee) filter (where kind = 'thu_khach'), 0) as cic
     from payments where book_id = @b and voided = 0 and direction = 'thu' and pay_date between @d1 and @d2`, o);
   const co = oneN(`select coalesce(sum(amount), 0) as v from payments where book_id = @b and voided = 0 and direction = 'chi' and pay_date between @d1 and @d2`, o).v;
@@ -61,17 +64,17 @@ export function calcPl(b, d1, d2) {
   const vat = rnd(rev * vatRate);
   const cg = del.cg - ret.cg + cgx;
   const gp = rev - vat - cg;
-  const pf = gp - ex - loss;
+  const pf = gp - ex - loss + gain;
   const pit = rnd(Math.max(pf, 0) * pitRate);
   return {
     revenue_goods: del.rg, revenue_shipping: rs, revenue_returns: ret.rr, revenue: rev, vat, vat_rate: vatRate,
     revenue_net: rev - vat, cogs: cg, gross_profit: gp, gross_margin: rev - vat !== 0 ? rnd(gp / (rev - vat), 4) : null,
-    expenses: ex, stock_loss: loss, opex: ex + loss, profit: pf, pit_rate: pitRate, pit, profit_after_tax: pf - pit,
+    expenses: ex, stock_loss: loss, stock_gain: gain, opex: ex + loss, profit: pf, pit_rate: pitRate, pit, profit_after_tax: pf - pit,
     cash_in: cin.ci, cash_in_customers: cin.cic, cash_out: co, net_cash: cin.ci - co,
   };
 }
 
-const COST_KEYS = ['cogs', 'gross_profit', 'gross_margin', 'stock_loss', 'opex', 'profit', 'pit', 'profit_after_tax', 'inventory_value', 'expenses'];
+const COST_KEYS = ['cogs', 'gross_profit', 'gross_margin', 'stock_loss', 'stock_gain', 'opex', 'profit', 'pit', 'profit_after_tax', 'inventory_value', 'expenses'];
 export function mask(b, r) {
   if (can(b, 'xem_gia_von')) return r;
   for (const k of COST_KEYS) if (k in r) r[k] = null;
@@ -115,7 +118,7 @@ export function rpt_drill(p) {
   const { b, d1, d2 } = period(p); const m = p.metric;
   requirePerm(b, 'xem_bao_cao');
   const cost = can(b, 'xem_gia_von');
-  if (['cogs', 'gross_profit', 'opex', 'inventory', 'profit'].includes(m) && !cost) needCost(b);
+  if (['cogs', 'gross_profit', 'opex', 'stock_loss', 'stock_gain', 'inventory', 'profit'].includes(m) && !cost) needCost(b);
   const vat = rates(b).vat;
   const o = { b, d1, d2 };
   if (['revenue', 'revenue_net', 'vat', 'cogs', 'gross_profit', 'profit'].includes(m)) {
@@ -140,17 +143,21 @@ export function rpt_drill(p) {
       return { ...s, amount };
     });
   }
-  if (['opex', 'expenses', 'stock_loss'].includes(m)) {
+  if (['opex', 'expenses', 'stock_loss', 'stock_gain'].includes(m)) {
     return allN(`select * from (
         select ea.alloc_date as date, ea.code, ea.expense_group || ' · ' || ea.category
             || case when ea.alloc_months > 1 then ' (phân bổ ' || ea.part_no || '/' || ea.alloc_months || ')' else '' end as label,
           coalesce(ea.supplier_name, ea.description) as party, ea.description as ref, 'chi_phi' as doc_type, ea.expense_id as doc_id, ea.amount
-        from v_expense_alloc ea where ea.book_id = @b and ea.alloc_date between @d1 and @d2 and @m <> 'stock_loss' and (@g is null or ea.expense_group = @g)
+        from v_expense_alloc ea where ea.book_id = @b and ea.alloc_date between @d1 and @d2 and @m not in ('stock_loss', 'stock_gain') and (@g is null or ea.expense_group = @g)
         union all
-        select a.adj_date, a.code, case when a.reason = 'noi_bo' then 'Xuất dùng nội bộ: ' || coalesce(a.purpose, '') else 'Hao hụt kho: ' || v.reason_label end,
-          null, a.note, 'dieu_chinh', a.id, -coalesce(v.value, 0)
+        select a.adj_date, a.code, case when @m = 'stock_gain' then 'Kiểm kho tăng: ' || v.reason_label when a.reason = 'noi_bo' then 'Xuất dùng nội bộ: ' || coalesce(a.purpose, '')
+            else 'Hao hụt kho: ' || v.reason_label end,
+          null, a.note, 'dieu_chinh', a.id, case when @m = 'stock_gain' then x.gain else x.loss end
         from stock_adjustments a join v_adjustments v on v.id = a.id
+        join (select adjustment_id, coalesce(-sum(value) filter (where value < 0), 0) as loss, coalesce(sum(value) filter (where value > 0), 0) as gain
+          from stock_adjustment_lines group by adjustment_id) x on x.adjustment_id = a.id
         where a.book_id = @b and a.reason <> 'dau_ky' and a.adj_date between @d1 and @d2 and @m <> 'expenses' and @cost
+          and (case when @m = 'stock_gain' then x.gain else x.loss end) > 0
           and (@g is null or @g = case when a.reason = 'noi_bo' then 'Xuất dùng nội bộ' else 'Hao hụt kho' end)
       ) order by date, code`, { ...o, m, cost, g: p.group || null });
   }
@@ -294,7 +301,7 @@ export function rpt_expenses(p) {
         union all
         select case when a.reason = 'noi_bo' then 'Xuất dùng nội bộ' else 'Hao hụt kho' end, date(a.adj_date, 'start of month'), -sum(l.value)
           from stock_adjustment_lines l join stock_adjustments a on a.id = l.adjustment_id
-         where a.book_id = @b and a.reason <> 'dau_ky' and a.adj_date between @d1 and @d2 group by 1, 2
+         where a.book_id = @b and a.reason <> 'dau_ky' and l.value < 0 and a.adj_date between @d1 and @d2 group by 1, 2
       ) order by grp, month`, { b, d1, d2 });
   }
   return outRows(allN(`select x.*, sum(x.amount) over (partition by x.grp) as grp_amount from (
@@ -303,11 +310,11 @@ export function rpt_expenses(p) {
       union all
       select 'Hao hụt kho', 'Vỡ, lỗi, thất thoát, hàng trả lỗi', coalesce(-sum(l.value), 0), count(distinct a.id), 0
         from stock_adjustment_lines l join stock_adjustments a on a.id = l.adjustment_id
-       where a.book_id = @b and a.reason not in ('dau_ky', 'noi_bo') and a.adj_date between @d1 and @d2 having count(*) > 0
+       where a.book_id = @b and a.reason not in ('dau_ky', 'noi_bo') and l.value < 0 and a.adj_date between @d1 and @d2 having count(*) > 0
       union all
       select 'Xuất dùng nội bộ', coalesce(a.purpose, 'Khác'), -sum(l.value), count(distinct a.id), 0
         from stock_adjustment_lines l join stock_adjustments a on a.id = l.adjustment_id
-       where a.book_id = @b and a.reason = 'noi_bo' and a.adj_date between @d1 and @d2 group by 2
+       where a.book_id = @b and a.reason = 'noi_bo' and l.value < 0 and a.adj_date between @d1 and @d2 group by 2
     ) x order by grp_amount desc, grp, amount desc`, { b, d1, d2 }));
 }
 
@@ -360,7 +367,7 @@ export function rpt_dashboard(p) {
       (select count(*) from v_suppliers where book_id = @b and payable > 0) as payable_count,
       (select coalesce(sum(unpaid), 0) from v_drivers where book_id = @b) as driver_payable`, o);
   const growth = (k) => (prev[k] > 0 ? rnd((cur[k] - prev[k]) / prev[k], 4) : null);
-  return mask(b, { ...cur, from: d1, to: d2, target, break_even: margin > 0 ? rnd((cur.expenses + cur.stock_loss) / margin) : null,
+  return mask(b, { ...cur, from: d1, to: d2, target, break_even: margin > 0 ? rnd((cur.expenses + cur.stock_loss - cur.stock_gain) / margin) : null,
     growth_revenue: growth('revenue'), growth_profit: cost ? growth('profit') : null, growth_cash: growth('cash_in'),
     daily, cash, funnel, top_products, top_customers, costs, todo, ops,
     stock_value: cost ? oneN(`select coalesce(sum(stock_value), 0) as v from products where book_id = @b`, o).v : null, can_cost: cost });
@@ -435,7 +442,7 @@ function beInputs(b, d1, d2) {
     parts[BE_GROUPS[g.grp] || 'other_fixed'] += g.amount;
   }
   const orders = oneN(`select count(distinct order_id) as v from deliveries where book_id = @b and delivery_date between @d1 and @d2`, o).v;
-  return { revenue: pl.revenue_net, orders, cogs: pl.cogs, damage: pl.stock_loss, ...parts };
+  return { revenue: pl.revenue_net, orders, cogs: pl.cogs, damage: pl.stock_loss - pl.stock_gain, ...parts };
 }
 const monthOf = (p) => { const d1 = monthStart(asDate(p.month) || today()); return { d1, d2: addDays(addMonths(d1, 1), -1) }; };
 const multipliers = (b) => { const m = bookSettings(b).price_multipliers; return Array.isArray(m) && m.length ? m : DEFAULT_MULTIPLIERS; };

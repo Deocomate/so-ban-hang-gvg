@@ -28,6 +28,7 @@ export const METRICS = {
   open_pos: { label: 'Đơn nhập chờ hàng', how: 'Đơn đặt NCC / đặt xưởng đã xác nhận, chưa nhận đủ hàng.' },
   late_pos: { label: 'Đơn nhập trễ hẹn', how: 'Đơn nhập đã quá ngày hẹn nhận mà chưa nhận đủ.' },
   special_open: { label: 'Đơn đặt riêng đang làm', how: 'Đơn đặt hàng riêng đã xác nhận, chưa giao đủ.' },
+  stock_gain: { label: 'Chênh lệch kiểm kho tăng', how: 'Giá trị hàng kiểm kê thấy thừa so với sổ (phiếu kiểm kho ghi tăng). Không gồm tồn đầu kỳ.' },
   stock_loss: { label: 'Hao hụt kho', how: 'Giá vốn hàng vỡ, lỗi, thất thoát, hàng khách trả bị lỗi không nhập lại.' },
   expenses: { label: 'Chi phí', how: 'Các khoản chi phí ghi nhận trong kỳ (không gồm hao hụt kho).' },
 };
@@ -118,6 +119,7 @@ export default function Overview({ go }) {
                 <PLRow t label="Lợi nhuận gộp" v={data.gross_profit} />
                 <PLRow sub label="− Chi phí" v={cost ? -data.expenses : null} onClick={cost ? () => drill('opex') : null} />
                 <PLRow sub label="− Hao hụt kho" v={cost ? -data.stock_loss : null} />
+                {cost && data.stock_gain > 0 && <PLRow sub label="+ Chênh lệch kiểm kho tăng" v={data.stock_gain} onClick={() => drill('stock_gain')} />}
                 <PLRow t label="Lợi nhuận sau chi phí" v={data.profit} />
                 <PLRow sub label={`Thuế TNCN ước tính (${pct(data.pit_rate)} × lợi nhuận)`} v={cost ? -data.pit : null} />
                 <PLRow t label="Lợi nhuận sau thuế (ước tính)" v={data.profit_after_tax} />

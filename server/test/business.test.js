@@ -325,7 +325,7 @@ C('Giá trị tồn kho = tổng sổ kho', ov.inventory_value, inv[0].v);
 const invIdentity = await api.sql(`select
    (select coalesce(sum(value),0) from stock_moves where book_id=? and doc_type in ('dau_ky')) open_v,
    (select coalesce(sum(value),0) from stock_moves where book_id=? and doc_type in ('nhap','tra_ncc')) in_v`, [TH, TH]);
-C('Tồn cuối = Tồn đầu + Nhập − Giá vốn − Hao hụt', ov.inventory_value, invIdentity[0].open_v + invIdentity[0].in_v - ov.cogs - ov.stock_loss);
+C('Tồn cuối = Tồn đầu + Nhập − Giá vốn − Hao hụt + Kiểm kho tăng', ov.inventory_value, invIdentity[0].open_v + invIdentity[0].in_v - ov.cogs - ov.stock_loss + ov.stock_gain);
 const custSum = (await api.q('customers', TH)).reduce((s, c) => s + c.receivable, 0);
 C('Phải thu Tổng quan = tổng sổ khách hàng', ov.receivable, custSum);
 const supSum = (await api.q('suppliers', TH)).reduce((s, c) => s + c.payable, 0);

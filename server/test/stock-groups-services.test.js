@@ -61,6 +61,22 @@ C('NXT: sản xuất ghi vào cột điều chỉnh', [nxt.find((x) => x.id === 
 const moves = await api.q('stock_moves', TH, [['doc_id', 'eq', sx.id]]);
 C('Thẻ kho ghi nhãn sản xuất', [...new Set(moves.map((m) => m.doc_label))].sort(), ['Sản xuất (thành phẩm)', 'Sản xuất (xuất nguyên liệu)']);
 
+G('Kiểm kho tăng');
+const pA = await pl();
+const exA = await api.call('rpt_expenses', { book_id: TH, from: d, to: d });
+const kt = await api.call('adjust_stock', { book_id: TH, request_id: rid(), date: d, reason: 'kiem_ke', note: 'Kiểm kê thừa', lines: [{ product_id: dat, qty_delta: 10 }, { product_id: men, qty_delta: -1 }] });
+const pB = await pl();
+C('Dòng tăng ghi chênh lệch kiểm kho tăng, dòng giảm vẫn là hao hụt', [pB.stock_gain - pA.stock_gain > 0, pB.stock_loss - pA.stock_loss], [true, 2000]);
+C('Lợi nhuận = trước + phần tăng − phần giảm', pB.profit - pA.profit, (pB.stock_gain - pA.stock_gain) - 2000);
+const exB = await api.call('rpt_expenses', { book_id: TH, from: d, to: d });
+C('Báo cáo chi phí không gồm phần kiểm kho tăng', exB.find((x) => x.grp === 'Hao hụt kho').amount - exA.find((x) => x.grp === 'Hao hụt kho').amount, 2000);
+const dg = await api.call('rpt_drill', { book_id: TH, metric: 'stock_gain', from: d, to: d });
+C('Chi tiết kiểm kho tăng khớp tổng', dg.reduce((s, r) => s + r.amount, 0), pB.stock_gain);
+const dl = await api.call('rpt_drill', { book_id: TH, metric: 'stock_loss', from: d, to: d });
+C('Chi tiết hao hụt khớp tổng', dl.reduce((s, r) => s + r.amount, 0), pB.stock_loss);
+const op = await api.call('adjust_stock', { book_id: TH, request_id: rid(), date: d, reason: 'dau_ky', lines: [{ product_id: dat, qty_delta: 5, unit_cost: 1000 }] });
+C('Tồn đầu kỳ không vào lãi lỗ', [(await pl()).profit, !!op.id], [pB.profit, true]);
+
 G('Mua dịch vụ');
 const sup = (await api.call('save_party', { book_id: TH, type: 'ncc', name: 'Xe tải Minh' })).id;
 await E('Thiếu nhà cung cấp bị chặn', () => api.call('save_expense', { book_id: TH, service: true, date: d, category: 'Vận chuyển', amount: 500000 }), 'nhà cung cấp');

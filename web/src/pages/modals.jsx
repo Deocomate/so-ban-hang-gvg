@@ -61,8 +61,8 @@ function DrillDialog({ metric, label, how, from, to, group, onClose }) {
         let r;
         if (metric === 'profit') {
           // Lợi nhuận sau chi phí = lãi gộp từng phiếu giao − từng khoản chi phí / hao hụt
-          const [g, o] = await Promise.all([rpc('rpt_drill', { metric: 'gross_profit', from, to }), rpc('rpt_drill', { metric: 'opex', from, to })]);
-          r = [...g, ...o.map((x) => ({ ...x, amount: -x.amount }))].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+          const [g, o, k] = await Promise.all([rpc('rpt_drill', { metric: 'gross_profit', from, to }), rpc('rpt_drill', { metric: 'opex', from, to }), rpc('rpt_drill', { metric: 'stock_gain', from, to })]);
+          r = [...g, ...o.map((x) => ({ ...x, amount: -x.amount })), ...k].sort((a, b) => String(a.date).localeCompare(String(b.date)));
         } else r = await rpc('rpt_drill', { metric, from, to, ...(group ? { group } : {}) });
         if (alive) setRows(r);
       } catch (e) { if (alive) setErr(e.message); }

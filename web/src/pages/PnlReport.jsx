@@ -41,7 +41,7 @@ function buildModel(months, exp, settings, pitRate) {
     const admin = adminG.reduce((s, k) => s + g[k], 0);
     return { ...m, g, selling: m.cogs === null ? null : selling, admin: m.cogs === null ? null : admin };
   });
-  const NUM = ['revenue_goods', 'revenue_shipping', 'revenue_returns', 'revenue', 'vat', 'revenue_net', 'cogs', 'gross_profit', 'expenses', 'stock_loss', 'opex', 'profit',
+  const NUM = ['revenue_goods', 'revenue_shipping', 'revenue_returns', 'revenue', 'vat', 'revenue_net', 'cogs', 'gross_profit', 'expenses', 'stock_loss', 'stock_gain', 'opex', 'profit',
     'selling', 'admin', 'cash_in', 'cash_out', 'net_cash'];
   const sum = (k) => (rows.some((m) => m[k] === null || m[k] === undefined) ? null : rows.reduce((s, m) => s + n0(m[k]), 0));
   const total = { month: 'total', ...Object.fromEntries(NUM.map((k) => [k, sum(k)])), g: Object.fromEntries([...sellG, ...adminG].map((k) => [k, rows.reduce((s, m) => s + m.g[k], 0)])) };
@@ -72,6 +72,7 @@ function rowSpec(sellG, adminG, cost) {
     { k: 'admin', label: 'Tổng chi phí quản lý', type: 'sub', cost: true },
     { group: 'D. Lợi nhuận', cost: true },
     { k: 'opex', label: 'Tổng chi phí hoạt động (B + C)', drill: 'opex', cost: true },
+    { k: 'stock_gain', label: '+ Chênh lệch kiểm kho tăng', drill: 'stock_gain', cost: true },
     { k: 'profit', label: '04 · Lợi nhuận trước thuế', type: 'total', drill: 'profit', cost: true },
     { k: 'pm', label: 'Biên lợi nhuận trước thuế', type: 'ratio', get: (r) => div(r.profit, r.revenue_net), cost: true },
     { k: 'pit', label: '− Thuế TNCN ước tính', cost: true },
@@ -201,8 +202,9 @@ export function PnlReport({ onGo }) {
 
         <div className="pnl-guide">
           <b>Cách tính:</b> Doanh thu thuần = tiền hàng đã giao + phí vận chuyển thu khách − hàng trả lại − thuế GTGT ước tính. Lợi nhuận gộp = doanh thu thuần − giá vốn.
-          Chi phí bán hàng gồm nhóm Marketing, Chi phí bán hàng và hao hụt kho; các nhóm chi phí còn lại (kể cả nhóm tự đặt và xuất dùng nội bộ) là chi phí quản lý & vận hành.
-          Khoản chi phí phân bổ nhiều tháng (tiền nhà trả trước, công cụ dụng cụ…) chỉ tính phần của từng tháng. Lợi nhuận trước thuế = lợi nhuận gộp − chi phí bán hàng − chi phí quản lý.
+          Chi phí bán hàng gồm nhóm Marketing, Chi phí bán hàng và hao hụt kho (chỉ phần hàng kiểm kê bị thiếu, vỡ, lỗi); các nhóm chi phí còn lại (kể cả nhóm tự đặt và xuất dùng nội bộ) là chi phí quản lý & vận hành.
+          Khoản chi phí phân bổ nhiều tháng (tiền nhà trả trước, công cụ dụng cụ…) chỉ tính phần của từng tháng. Hàng kiểm kê thấy thừa ghi riêng ở dòng “Chênh lệch kiểm kho tăng”; tồn đầu kỳ (kể cả phần tồn chuyển từ KiotViet) không tính vào lãi lỗ.
+          Lợi nhuận trước thuế = lợi nhuận gộp − chi phí bán hàng − chi phí quản lý + chênh lệch kiểm kho tăng.
           Dòng tiền là tiền thực thu, chi trong kỳ để đối chiếu, không tham gia tính lãi lỗ.
         </div>
         {cost && onGo && <div className="pnl-link pnl-noprint"><span>Muốn thử kịch bản: tăng quảng cáo, giảm tiền nhà, đổi hệ số giá… và xem điểm hòa vốn?</span><Btn onClick={() => onGo('be')}>Mở Hòa vốn & kịch bản giá →</Btn></div>}
@@ -242,7 +244,8 @@ function Waterfall({ T }) {
     ['Giá vốn', '', T.revenue_net, T.gross_profit, 'var(--gold)', neg(T.cogs)],
     ['Lợi nhuận', 'gộp', 0, T.gross_profit, 'var(--celadon)', T.gross_profit],
     ['CP bán', 'hàng', T.gross_profit, T.gross_profit - T.selling, '#d9844f', neg(T.selling)],
-    ['CP quản lý', '& vận hành', T.gross_profit - T.selling, T.profit, '#b9805c', neg(T.admin)],
+    ['CP quản lý', '& vận hành', T.gross_profit - T.selling, T.gross_profit - T.selling - T.admin, '#b9805c', neg(T.admin)],
+    ...(T.stock_gain ? [['Kiểm kho', 'tăng', T.gross_profit - T.selling - T.admin, T.profit, 'var(--celadon)', T.stock_gain]] : []),
     ['LN trước', 'thuế', 0, T.profit, T.profit < 0 ? 'var(--bad)' : 'var(--info)', T.profit],
     ['Thuế', 'TNCN', T.profit, T.profit_after_tax, '#8a96a8', neg(T.pit)],
     ['LN sau', 'thuế', 0, T.profit_after_tax, T.profit_after_tax < 0 ? 'var(--bad)' : 'var(--good)', T.profit_after_tax],

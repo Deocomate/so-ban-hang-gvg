@@ -44,7 +44,7 @@ const K = {
   },
   products: [
     { Id: P1, Code: '1AD27-DC01', FullName: 'Ngói âm 27 đỏ cờ - L180 x W190 (Viên)', Unit: 'Viên', CategoryName: 'Ngói', TradeMarkName: 'Thanh Hải', BasePrice: 17000, Cost: 12000, OnHand: 74, isActive: true, AllowsSale: true, CreatedDate: at(40) },
-    { Id: P2, Code: 'SP000001', FullName: 'Gạch hoa (Viên)', Unit: 'Viên', BasePrice: 20000, Cost: 0, OnHand: 5, isActive: true, AllowsSale: true, CreatedDate: at(40) },
+    { Id: P2, Code: 'SP000001', FullName: 'Gạch hoa (Viên)', Unit: 'Viên', BasePrice: 20000, Cost: 0, OnHand: 9, isActive: true, AllowsSale: true, CreatedDate: at(40) },
   ],
   productDetails: { [P1]: { ProductAttributes: [{ Name: 'KT', Value: 'L180 x W190' }, { Name: 'KG', Value: '0.94' }] } },
   customers: [
@@ -77,7 +77,9 @@ const K = {
   returns: [{ Id: 501, Code: 'TH000001', ReturnDate: at(15), CreatedDate: at(15), InvoiceId: 402, CustomerId: KH2, Status: 1, ReturnFee: 4000, TotalReturn: 36000,
     Details: [{ Id: 5011, ProductId: P1, Quantity: 2, Price: 18000, InvoiceDetailId: 4021 }] }],
   stockTakes: [{ Id: 801, Code: 'KK000001', CreatedDate: at(10), AdjustmentDate: at(10), Status: 1, Description: 'Kiểm kho cuối tháng',
-    Details: [{ ProductId: P2, AdjustmentValue: 6, Cost: 60000 }, { ProductId: P1, AdjustmentValue: 0 }] }],
+    Details: [{ ProductId: P2, AdjustmentValue: 6, Cost: 60000 }, { ProductId: P1, AdjustmentValue: 0 }] },
+    { Id: 802, Code: 'KK000002', CreatedDate: at(9), AdjustmentDate: at(9), Status: 1, Description: 'Phiếu kiểm kho được tạo tự động khi thêm mới Hàng hóa SP000001',
+      Details: [{ ProductId: P2, AdjustmentValue: 4, Cost: 40000 }] }],
   damageItems: [], internalUses: [], manufacturing: [],
   cashflow: [
     { Id: 9003, Code: 'TTDH000001', TransDate: at(20), Amount: 100000, PartnerType: 'C', PartnerId: KH1, Method: 'Cash', StatusValue: 'Đã thanh toán' },
@@ -146,8 +148,8 @@ const tr = (await api.sql(`select code, fee from sales_returns where book_id = ?
 C('Trả hàng giữ mã và phí trả hàng', [tr.code, tr.fee], ['TH000001', 4000]);
 const pays = await api.sql(`select code, voided from payments where book_id = ? order by code`, [TH]);
 C('Phiếu thu chi giữ mã KiotViet, phiếu hủy được hủy', pays.map((x) => `${x.code}${x.voided ? '*' : ''}`), ['PCPN000001', 'TT000001', 'TT000002*', 'TTDH000001', 'TTHD000001', 'TTTH000001']);
-const kk = await api.sql(`select code, reason from stock_adjustments where book_id = ? and code = 'KK000001'`, [TH]);
-C('Kiểm kho giữ mã KK', kk.map((x) => x.reason), ['kiem_ke']);
+const kk = await api.sql(`select code, reason from stock_adjustments where book_id = ? and code like 'KK%' order by code`, [TH]);
+C('Kiểm kho giữ mã KK; phiếu tự tạo khi thêm mới hàng là tồn đầu kỳ', kk.map((x) => x.reason), ['kiem_ke', 'dau_ky']);
 const nx = await api.call('save_purchase_order', { book_id: TH, request_id: rid(), mode: 'nhap', supplier_id: ncc.id, order_date: d, receive_now: true, lines: [{ product_id: p.id, qty: 1, unit_price: 1 }] });
 C('Phiếu nhập mới không trùng mã PN cũ', nx.code > 'PN000002' || !nx.code.startsWith('PN0000'), true);
 
@@ -185,7 +187,7 @@ C('Mã 1AD27-DC01 là hàng của file mới, không mang lịch sử KiotViet',
 const lines4 = await api.sql(`select p.sku from sales_order_lines l join products p on p.id = l.product_id join sales_orders o on o.id = l.order_id where o.code = 'HD000002' order by l.line_no`);
 C('Lịch sử bán của mã KiotViet đã ghép chuyển sang mã mới', lines4.map((x) => x.sku), ['NGOI-01', 'GACH01{DEL}']);
 const old = await api.one('products', TH, [['sku', 'eq', 'SP000001']]);
-C('Mã KiotViet chưa ghép: giữ mã cũ, ngừng kinh doanh, giữ tồn KiotViet', [old.active, old.on_hand], [false, 5]);
+C('Mã KiotViet chưa ghép: giữ mã cũ, ngừng kinh doanh, giữ tồn KiotViet', [old.active, old.on_hand], [false, 9]);
 const pbs = await api.q('price_books', TH);
 const pbi = await api.q('price_book_items', TH);
 const hb = await api.one('customers', TH, [['code', 'eq', 'KH000002']]);

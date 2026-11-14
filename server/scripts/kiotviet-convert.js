@@ -410,7 +410,9 @@ export function convertKiotViet(K0, { today, ledger = null, hidden = null, catal
     }));
     if (!lines.length) { report.skipped.push(`${s.Code}: phiếu kiểm kho không có chênh lệch, không cần nhập`); return; }
     const note = s.Description || 'Kiểm kho trên KiotViet';
-    const r = direct(() => doAdjust(B, kvDate(s.AdjustmentDate || s.CreatedDate), 'kiem_ke', note, lines, false));
+    // KiotViet tự lập phiếu kiểm kho khi thêm mới hàng hóa có sẵn tồn: đó là tồn đầu kỳ của mặt hàng, không phải kiểm kê thừa (không tính vào lãi lỗ)
+    const reason = /tạo tự động khi thêm mới hàng hóa/i.test(note) ? 'dau_ky' : 'kiem_ke';
+    const r = direct(() => doAdjust(B, kvDate(s.AdjustmentDate || s.CreatedDate), reason, note, lines, false));
     setCode('stock_adjustments', r.id, s.Code, s.CreatedDate);
   }
 
@@ -541,7 +543,8 @@ export function convertKiotViet(K0, { today, ledger = null, hidden = null, catal
     report.adjustments.stock.push({ code: x.sku, kiotviet: 0, he_thong: x.on_hand, bu: -x.on_hand, ghi_chu: 'hàng đã xóa' });
   }
   if (stockFix.length) {
-    const r = direct(() => doAdjust(B, at, 'kiem_ke', 'Chênh lệch tồn kho khi chuyển từ KiotViet (để khớp tồn KiotViet ngày xuất dữ liệu)', stockFix, false));
+    // Bù cho khớp tồn KiotViet là phần tồn chuyển sang, không phải lãi/lỗ kinh doanh: ghi là tồn đầu kỳ
+    const r = direct(() => doAdjust(B, at, 'dau_ky', 'Chênh lệch tồn kho khi chuyển từ KiotViet (để khớp tồn KiotViet ngày xuất dữ liệu)', stockFix, false));
     report.adjustments.stock_doc = r.code;
   }
 
