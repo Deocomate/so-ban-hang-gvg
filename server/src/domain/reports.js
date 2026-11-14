@@ -145,13 +145,14 @@ export function rpt_drill(p) {
         select ea.alloc_date as date, ea.code, ea.expense_group || ' · ' || ea.category
             || case when ea.alloc_months > 1 then ' (phân bổ ' || ea.part_no || '/' || ea.alloc_months || ')' else '' end as label,
           coalesce(ea.supplier_name, ea.description) as party, ea.description as ref, 'chi_phi' as doc_type, ea.expense_id as doc_id, ea.amount
-        from v_expense_alloc ea where ea.book_id = @b and ea.alloc_date between @d1 and @d2 and @m <> 'stock_loss'
+        from v_expense_alloc ea where ea.book_id = @b and ea.alloc_date between @d1 and @d2 and @m <> 'stock_loss' and (@g is null or ea.expense_group = @g)
         union all
         select a.adj_date, a.code, case when a.reason = 'noi_bo' then 'Xuất dùng nội bộ: ' || coalesce(a.purpose, '') else 'Hao hụt kho: ' || v.reason_label end,
           null, a.note, 'dieu_chinh', a.id, -coalesce(v.value, 0)
         from stock_adjustments a join v_adjustments v on v.id = a.id
         where a.book_id = @b and a.reason <> 'dau_ky' and a.adj_date between @d1 and @d2 and @m <> 'expenses' and @cost
-      ) order by date, code`, { ...o, m, cost });
+          and (@g is null or @g = case when a.reason = 'noi_bo' then 'Xuất dùng nội bộ' else 'Hao hụt kho' end)
+      ) order by date, code`, { ...o, m, cost, g: p.group || null });
   }
   if (['cash_in', 'cash_out'].includes(m)) {
     return allN(`select pay_date as date, code, kind_label as label, coalesce(party_name, note) as party, fund_name as ref, 'thu_chi' as doc_type, id as doc_id,

@@ -9,32 +9,28 @@ import { StockReport } from './Inventory.jsx';
 import { FactoryReport } from './Tax.jsx';
 import { StaffReport } from './Staff.jsx';
 import { BreakEvenReport, BrandsReport } from './BreakEven.jsx';
-
-const PL_ROWS = [
-  ['revenue_goods', 'Tiền hàng đã giao'], ['revenue_shipping', '+ Phí vận chuyển thu khách'], ['revenue_returns', '− Hàng khách trả lại'],
-  ['revenue', 'Doanh thu', 'b'], ['vat', '− Thuế GTGT ước tính'], ['revenue_net', 'Doanh thu thuần', 'b'], ['cogs', '− Giá vốn hàng bán', 'c'],
-  ['gross_profit', 'Lợi nhuận gộp', 'bc'], ['expenses', '− Chi phí'], ['stock_loss', '− Hao hụt kho', 'c'], ['profit', 'Lợi nhuận sau chi phí', 'bc'],
-  ['pit', '− Thuế TNCN ước tính', 'c'], ['profit_after_tax', 'Lợi nhuận sau thuế (ước tính)', 'bc'],
-  ['cash_in', 'Tiền thực thu'], ['cash_out', 'Tiền thực chi'], ['net_cash', 'Chênh lệch tiền', 'b'],
-];
+import { PnlReport } from './PnlReport.jsx';
 
 export function ReportsPage(nav) {
   const { can } = useApp();
   const cost = can('xem_gia_von');
-  const [tab, setTab] = usePageTab(nav, 'pl', ['eod', 'pl', 'prod', 'grp', 'orders', 'staff', 'factory', 'stock', 'debt', ...(cost ? ['exp', 'be', 'brands'] : [])]);
+  const [tab, setTab] = usePageTab(nav, 'pl', ['pl', ...(cost ? ['exp'] : []), 'debt', ...(cost ? ['be', 'brands'] : []), 'eod', 'prod', 'grp', 'orders', 'staff', 'factory', 'stock']);
+  // Thứ tự tab theo nhóm như menu Báo cáo: Lãi lỗ & tài chính → Bán hàng → Mua hàng & kho
   return (
     <>
       <div className="page-head"><div className="grow"><h1 className="page-title">Báo cáo</h1>
 </div></div>
       <Tabs value={tab} onChange={setTab} tabs={[
-        { value: 'eod', label: 'Cuối ngày' }, { value: 'pl', label: 'Lãi lỗ theo tháng' }, { value: 'prod', label: 'Theo sản phẩm' }, { value: 'grp', label: 'Theo kênh / khách / nhóm' },
+        { value: 'pl', label: 'Lãi lỗ (P&L)' }, ...(cost ? [{ value: 'exp', label: 'Chi phí' }] : []), { value: 'debt', label: 'Công nợ' },
+        ...(cost ? [{ value: 'be', label: 'Hòa vốn & kịch bản giá' }, { value: 'brands', label: 'So sánh thương hiệu' }] : []),
+        { value: 'eod', label: 'Cuối ngày' }, { value: 'prod', label: 'Theo sản phẩm' }, { value: 'grp', label: 'Theo kênh / khách / nhóm' },
         { value: 'orders', label: 'Đặt hàng' }, { value: 'staff', label: 'Nhân viên' },
-        { value: 'factory', label: 'Đơn đặt xưởng' }, { value: 'stock', label: 'Nhập – xuất – tồn' }, { value: 'debt', label: 'Công nợ' }, ...(cost ? [{ value: 'exp', label: 'Chi phí' }, { value: 'be', label: 'Hòa vốn & kịch bản giá' }, { value: 'brands', label: 'So sánh thương hiệu' }] : []),
+        { value: 'factory', label: 'Đơn đặt xưởng' }, { value: 'stock', label: 'Nhập – xuất – tồn' },
       ]} />
       {tab === 'eod' && <EndOfDayReport />}
       {tab === 'orders' && <OrdersReport />}
       {tab === 'staff' && <StaffReport />}
-      {tab === 'pl' && <MonthlyPL />}
+      {tab === 'pl' && <PnlReport onGo={setTab} />}
       {tab === 'factory' && <FactoryReport />}
       {tab === 'prod' && <ProductReport />}
       {tab === 'grp' && <GroupReport />}
@@ -118,46 +114,6 @@ function OrdersReport() {
         { key: 'p', label: 'Đã thu', align: 'right', render: (o) => money(o.paid_net) },
         { key: 's', label: 'Tình trạng', render: (o) => <>{o.is_late ? <Pill tone="bad">Trễ hẹn</Pill> : waiting(o) ? <Pill tone="warn">Chờ giao</Pill> : o.status === 'nhap' ? <Pill tone="neutral">Nháp</Pill> : <Pill tone="good">Đã giao đủ</Pill>}</> },
       ]} />
-    </div>
-  );
-}
-
-function MonthlyPL() {
-  const { settings, can } = useApp();
-  const t = todayVN();
-  const [range, setRange] = useState({ from: monthStart(addMonths(t, -5)), to: monthEnd(t) });
-  const r = useRpcData('rpt_monthly', range);
-  const rows = r.data || [];
-  const cost = can('xem_gia_von');
-  const lines = PL_ROWS.filter(([, , f]) => cost || !String(f || '').includes('c'));
-  const sumK = (k) => (rows.some((m) => m[k] === null || m[k] === undefined) ? null : rows.reduce((s, m) => s + Number(m[k] || 0), 0));
-  // Thuế TNCN của cả giai đoạn tính trên tổng lợi nhuận (tháng lỗ được bù cho tháng lãi), không cộng thuế từng tháng
-  const total = (k) => {
-    if (k === 'pit' || k === 'profit_after_tax') { const pr = sumK('profit'); if (pr === null) return null; const pit = Math.round(Math.max(0, pr) * (settings.pit_rate || 0)); return k === 'pit' ? pit : pr - pit; }
-    return sumK(k);
-  };
-  return (
-    <div className="stack">
-      <div className="row gap">
-        <label className="row gap-s small">Từ tháng <MonthInput value={range.from.slice(0, 7)} max={range.to.slice(0, 7)} onChange={(v) => setRange((x) => ({ ...x, from: v + '-01' }))} aria-label="Từ tháng" /></label>
-        <label className="row gap-s small">đến <MonthInput value={range.to.slice(0, 7)} min={range.from.slice(0, 7)} onChange={(v) => setRange((x) => ({ ...x, to: monthEnd(v + '-01') }))} aria-label="Đến tháng" /></label>
-        <span className="grow" />
-        <Btn icon="dl" onClick={() => exportXlsx(`lai-lo_${range.from}_${range.to}.xlsx`, [{ name: 'Lãi lỗ', rows: lines.map(([k, label]) => ({ label, ...Object.fromEntries(rows.map((m) => [m.month, m[k]])), total: total(k) })),
-          columns: [{ key: 'label', label: 'Chỉ tiêu' }, ...rows.map((m) => ({ key: m.month, label: monthLabel(m.month) })), { key: 'total', label: 'Cộng' }] }])}>Xuất Excel</Btn>
-      </div>
-      <Note>Thuế GTGT {pct(settings.vat_rate || 0)} trên doanh thu, thuế TNCN {pct(settings.pit_rate || 0)} trên lợi nhuận — số ước tính để quản trị, không thay tờ khai thuế. Cột “Cộng” tính thuế TNCN trên tổng lợi nhuận cả giai đoạn.{!cost && ' Bạn chưa có quyền xem giá vốn nên các dòng giá vốn và lợi nhuận bị ẩn.'}</Note>
-      <ErrorBox error={r.error} />
-      <div className="table-wrap">
-        <table className="tbl dense">
-          <thead><tr><th>Chỉ tiêu</th>{rows.map((m) => <th key={m.month} className="r">{monthLabel(m.month)}</th>)}<th className="r">Cộng</th></tr></thead>
-          <tbody>{lines.map(([k, label, f]) => (
-            <tr key={k} className={String(f || '').includes('b') ? 'row-strong' : ''}>
-              <td>{label}</td>
-              {rows.map((m) => <td key={m.month} className={`r num ${m[k] < 0 ? 'bad' : ''}`}>{money(m[k])}</td>)}
-              <td className="r num strong">{money(total(k))}</td>
-            </tr>))}</tbody>
-        </table>
-      </div>
     </div>
   );
 }

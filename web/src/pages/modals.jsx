@@ -50,7 +50,7 @@ export function ModalHost() {
 }
 
 // ---------- Xem chi tiết một con số trên Tổng quan ----------
-function DrillDialog({ metric, label, how, from, to, onClose }) {
+function DrillDialog({ metric, label, how, from, to, group, onClose }) {
   const { rpc, open, toast } = useApp();
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState(null);
@@ -63,12 +63,12 @@ function DrillDialog({ metric, label, how, from, to, onClose }) {
           // Lợi nhuận sau chi phí = lãi gộp từng phiếu giao − từng khoản chi phí / hao hụt
           const [g, o] = await Promise.all([rpc('rpt_drill', { metric: 'gross_profit', from, to }), rpc('rpt_drill', { metric: 'opex', from, to })]);
           r = [...g, ...o.map((x) => ({ ...x, amount: -x.amount }))].sort((a, b) => String(a.date).localeCompare(String(b.date)));
-        } else r = await rpc('rpt_drill', { metric, from, to });
+        } else r = await rpc('rpt_drill', { metric, from, to, ...(group ? { group } : {}) });
         if (alive) setRows(r);
       } catch (e) { if (alive) setErr(e.message); }
     })();
     return () => { alive = false; };
-  }, [metric, from, to]);
+  }, [metric, from, to, group]);
   const total = (rows || []).reduce((s, x) => s + Number(x.amount || 0), 0);
   const isQty = metric === 'low_stock';
   const go = (x) => {

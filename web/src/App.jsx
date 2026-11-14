@@ -79,13 +79,13 @@ const MENU = [
   { id: 'tong-quan' },
   { label: 'Hàng hóa', icon: 'vase', groups: [
     { title: 'Hàng hóa', items: ['san-pham', { id: 'bang-gia', label: 'Thiết lập giá' }] },
-    { title: 'Kho hàng', items: [{ id: 'san-xuat', badge: 'Mới' }, { id: 'kho', sub: 'adj', label: 'Kiểm kho' }, { id: 'xuat-noi-bo', badge: 'Mới' }, { id: 'xuat-huy', badge: 'Mới' },
+    { title: 'Kho hàng', items: ['san-xuat', { id: 'kho', sub: 'adj', label: 'Kiểm kho' }, 'xuat-noi-bo', 'xuat-huy',
       { id: 'kho', sub: 'stock', label: 'Tồn kho' }, { id: 'kho', sub: 'nxt', label: 'Nhập – xuất – tồn' }] },
   ] },
   { label: 'Mua hàng', icon: 'truck', groups: [
     { title: 'Nhà cung cấp', items: ['nha-cung-cap', 'hoa-don-vao'] },
     { title: 'Mua hàng', items: ['nhap-hang', 'tra-nhap', 'dat-hang-nhap'] },
-    { title: 'Mua dịch vụ', items: [{ id: 'mua-dich-vu', badge: 'Mới' }] },
+    { title: 'Mua dịch vụ', items: ['mua-dich-vu'] },
   ] },
   { label: 'Đơn hàng', icon: 'order', groups: [
     { title: 'Đơn hàng', items: ['dat-rieng', 'ban-hang', 'tra-hang'] },
@@ -93,15 +93,16 @@ const MENU = [
     { title: 'Báo giá & hợp đồng', items: ['bao-gia', 'hop-dong'] },
     { title: 'Sau bán hàng', items: ['bao-hanh'] },
   ] },
-  { label: 'Khách hàng', icon: 'users', groups: [{ title: 'Khách hàng', items: ['khach-hang', { id: 'nhom-khach', badge: 'Mới' }, 'khuyen-mai'] }] },
-  { label: 'Nhân viên', icon: 'users', items: ['nhan-vien', 'lich-lam-viec', 'cham-cong', 'bang-luong', 'hoa-hong', 'thiet-lap-nv'].map((id) => ({ id, badge: 'Mới' })) },
+  { label: 'Khách hàng', icon: 'users', groups: [{ title: 'Khách hàng', items: ['khach-hang', 'nhom-khach', 'khuyen-mai'] }] },
+  { label: 'Nhân viên', icon: 'users', items: ['nhan-vien', 'lich-lam-viec', 'cham-cong', 'bang-luong', 'hoa-hong', 'thiet-lap-nv'] },
   { label: 'Sổ quỹ', icon: 'wallet', items: ['thu-chi', 'tien-ve', 'chi-phi', 'ket-ca'] },
   { label: 'Báo cáo', icon: 'chart', groups: [
-    { title: 'Bán hàng', items: [{ id: 'bao-cao', sub: 'eod', label: 'Cuối ngày', badge: 'Mới' }, { id: 'bao-cao', sub: 'pl', label: 'Lãi lỗ theo tháng' }, { id: 'bao-cao', sub: 'prod', label: 'Theo sản phẩm' },
-      { id: 'bao-cao', sub: 'grp', label: 'Theo kênh / khách / nhóm' }, { id: 'bao-cao', sub: 'orders', label: 'Đặt hàng', badge: 'Mới' }, { id: 'bao-cao', sub: 'staff', label: 'Nhân viên', badge: 'Mới' }] },
+    { title: 'Lãi lỗ & tài chính', items: [{ id: 'bao-cao', sub: 'pl', label: 'Lãi lỗ (P&L)' }, { id: 'bao-cao', sub: 'exp', label: 'Chi phí', perm: 'xem_gia_von' },
+      { id: 'bao-cao', sub: 'debt', label: 'Công nợ' }, { id: 'bao-cao', sub: 'be', label: 'Hòa vốn & kịch bản giá', perm: 'xem_gia_von' },
+      { id: 'bao-cao', sub: 'brands', label: 'So sánh thương hiệu', perm: 'xem_gia_von' }] },
+    { title: 'Bán hàng', items: [{ id: 'bao-cao', sub: 'eod', label: 'Cuối ngày' }, { id: 'bao-cao', sub: 'prod', label: 'Theo sản phẩm' },
+      { id: 'bao-cao', sub: 'grp', label: 'Theo kênh / khách / nhóm' }, { id: 'bao-cao', sub: 'orders', label: 'Đặt hàng' }, { id: 'bao-cao', sub: 'staff', label: 'Nhân viên' }] },
     { title: 'Mua hàng & kho', items: [{ id: 'bao-cao', sub: 'factory', label: 'Đơn đặt xưởng' }, { id: 'bao-cao', sub: 'stock', label: 'Nhập – xuất – tồn' }] },
-    { title: 'Tài chính', items: [{ id: 'bao-cao', sub: 'debt', label: 'Công nợ' }, { id: 'bao-cao', sub: 'exp', label: 'Chi phí', perm: 'xem_gia_von' },
-      { id: 'bao-cao', sub: 'be', label: 'Hòa vốn & kịch bản giá', perm: 'xem_gia_von', badge: 'Mới' }, { id: 'bao-cao', sub: 'brands', label: 'So sánh thương hiệu', perm: 'xem_gia_von', badge: 'Mới' }] },
   ] },
   { label: 'Thuế & Kế toán', icon: 'tax', items: [{ id: 'thue', sub: 'tong', label: 'Tổng quan thuế' }, { id: 'thue', sub: 'vao', label: 'Hóa đơn đầu vào' }, { id: 'thue', sub: 'ra', label: 'Hóa đơn đầu ra' }, { id: 'thue', sub: 'so', label: 'Sổ sách & hồ sơ' }] },
 ];
