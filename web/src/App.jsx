@@ -82,11 +82,6 @@ const MENU = [
     { title: 'Kho hàng', items: ['san-xuat', { id: 'kho', sub: 'adj', label: 'Kiểm kho' }, 'xuat-noi-bo', 'xuat-huy',
       { id: 'kho', sub: 'stock', label: 'Tồn kho' }, { id: 'kho', sub: 'nxt', label: 'Nhập – xuất – tồn' }] },
   ] },
-  { label: 'Mua hàng', icon: 'truck', groups: [
-    { title: 'Nhà cung cấp', items: ['nha-cung-cap', 'hoa-don-vao'] },
-    { title: 'Mua hàng', items: ['nhap-hang', 'tra-nhap', 'dat-hang-nhap'] },
-    { title: 'Mua dịch vụ', items: ['mua-dich-vu'] },
-  ] },
   { label: 'Đơn hàng', icon: 'order', groups: [
     { title: 'Đơn hàng', items: ['dat-rieng', 'ban-hang', 'tra-hang'] },
     { title: 'Giao hàng', items: ['van-chuyen', 'lai-xe'] },
@@ -94,8 +89,13 @@ const MENU = [
     { title: 'Sau bán hàng', items: ['bao-hanh'] },
   ] },
   { label: 'Khách hàng', icon: 'users', groups: [{ title: 'Khách hàng', items: ['khach-hang', 'nhom-khach', 'khuyen-mai'] }] },
-  { label: 'Nhân viên', icon: 'users', items: ['nhan-vien', 'lich-lam-viec', 'cham-cong', 'bang-luong', 'hoa-hong', 'thiet-lap-nv'] },
+  { label: 'Mua hàng', icon: 'truck', groups: [
+    { title: 'Nhà cung cấp', items: ['nha-cung-cap', 'hoa-don-vao'] },
+    { title: 'Mua hàng', items: ['nhap-hang', 'tra-nhap', 'dat-hang-nhap'] },
+    { title: 'Mua dịch vụ', items: ['mua-dich-vu'] },
+  ] },
   { label: 'Sổ quỹ', icon: 'wallet', items: ['thu-chi', 'tien-ve', 'chi-phi', 'ket-ca'] },
+  { label: 'Nhân viên', icon: 'users', items: ['nhan-vien', 'lich-lam-viec', 'cham-cong', 'bang-luong', 'hoa-hong', 'thiet-lap-nv'] },
   { label: 'Báo cáo', icon: 'chart', groups: [
     { title: 'Lãi lỗ & tài chính', items: [{ id: 'bao-cao', sub: 'pl', label: 'Lãi lỗ (P&L)' }, { id: 'bao-cao', sub: 'exp', label: 'Chi phí', perm: 'xem_gia_von' },
       { id: 'bao-cao', sub: 'debt', label: 'Công nợ' }, { id: 'bao-cao', sub: 'be', label: 'Hòa vốn & kịch bản giá', perm: 'xem_gia_von' },

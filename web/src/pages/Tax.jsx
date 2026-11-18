@@ -3,16 +3,59 @@ import React, { useMemo, useState } from 'react';
 import { useApp, useQ, useRpcData, useAction } from '../lib/store.jsx';
 import { money, qty as fq, dmy, match, todayVN, monthLabel } from '../lib/format.js';
 import { useSuppliers } from '../lib/lookups.js';
-import { docSettings } from '../lib/docs/model.js';
+import { docSettings, custExtra } from '../lib/docs/model.js';
 import { exportXlsx } from '../lib/excel.js';
-import { Btn, Pill, Field, Input, Select, DateInput, NumInput, Search, ErrorBox, Note, Table, Modal, Tabs, usePageTab, ConfirmBtn, Loading } from '../components/ui.jsx';
+import { Btn, Pill, Field, Input, Select, DateInput, NumInput, Search, ErrorBox, Note, Table, Modal, Tabs, usePageTab, ConfirmBtn, Loading, Picker } from '../components/ui.jsx';
 import { Attachments } from './Contracts.jsx';
 
 const LABEL = { vao: 'Hóa đơn đầu vào', ra: 'Hóa đơn đầu ra' };
 
+const notVoided = [['voided', 'eq', 'false']];
+const sameNo = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+
+// Nguồn để điền nhanh hóa đơn: đầu ra lấy từ hóa đơn bán (Đơn hàng › Hóa đơn), đầu vào lấy từ phiếu nhập hàng / mua dịch vụ có ghi số hóa đơn đầu vào.
+// Mỗi mục: {id, label, sub, fill(): Promise<các trường điền sẵn>}
+function useInvoiceSources(direction, enabled) {
+  const { can, q } = useApp();
+  const ra = direction === 'ra';
+  const taxed = useQ('tax_invoices', [['direction', 'eq', direction], ...notVoided], 'inv_date desc', 5000, enabled);
+  const orders = useQ('sales_orders', [['status', 'neq', 'huy']], 'created_at desc', 5000, enabled && ra && can('xem_ban_hang'));
+  const pos = useQ('purchase_orders', [['mode', 'eq', 'nhap'], ['status', 'neq', 'huy'], ['invoice_no', 'not_null']], 'order_date desc', 5000, enabled && !ra && can('xem_nhap_hang'));
+  const exps = useQ('expenses', [...notVoided, ['invoice_no', 'not_null']], 'exp_date desc', 5000, enabled && !ra && can('xem_chi_phi'));
+  return useMemo(() => {
+    const done = taxed.data || [];
+    if (ra) {
+      return (orders.data || []).filter((o) => o.status !== 'nhap' && (o.kind !== 'dat_hang' || o.delivery_count > 0)).map((o) => {
+        // Tiền trước thuế của hàng đã giao (đơn chưa giao thì lấy cả đơn), trừ phần đã ghi hóa đơn
+        const need = o.delivered_value > 0 ? o.delivered_value - o.vat_net : o.order_total - (o.vat_total || 0);
+        const invoiced = done.filter((t) => t.order_id === o.id).reduce((s, t) => s + t.amount, 0);
+        const left = Math.max(Math.round(need - invoiced), 0);
+        return { id: o.id, label: `${o.code} · ${o.customer_name}`, sub: `${dmy(o.order_date)} · ${money(o.order_total)}${invoiced ? ` · đã ghi HĐ ${money(invoiced)}` : ''}`,
+          fill: async () => {
+            const [c] = o.customer_id ? await q('customers', [['id', 'eq', o.customer_id]]) : [];
+            const x = custExtra(c);
+            return { order_id: o.id, party_name: x.tax_name || o.customer_name || '', party_tax: x.tax_code || '', amount: left || null, ...(Number(o.vat_rate) > 0 ? { vat_rate: Number(o.vat_rate) } : {}), note: `Hóa đơn bán ${o.code}` };
+          } };
+      });
+    }
+    const fresh = (no, sid) => !done.some((t) => sameNo(t.inv_no, no) && (!t.supplier_id || !sid || t.supplier_id === sid));
+    const fromPo = (pos.data || []).filter((o) => String(o.invoice_no || '').trim() && fresh(o.invoice_no, o.supplier_id)).map((o) => ({
+      id: `po:${o.id}`, label: `HĐ ${o.invoice_no} · ${o.supplier_name || ''}`, sub: `Nhập hàng ${o.code} · ${dmy(o.order_date)} · ${money(o.order_total)}`, date: o.order_date,
+      fill: async () => ({ inv_no: o.invoice_no.trim(), inv_date: o.order_date, supplier_id: o.supplier_id || '', party_name: o.supplier_name || '', amount: o.order_total || null, category: 'Hàng hóa', note: `Phiếu nhập ${o.code}` }),
+    }));
+    const fromExp = (exps.data || []).filter((e) => String(e.invoice_no || '').trim() && fresh(e.invoice_no, e.supplier_id)).map((e) => ({
+      id: `ex:${e.id}`, label: `HĐ ${e.invoice_no} · ${e.supplier_name || e.category}`, sub: `${e.code} · ${e.category} · ${dmy(e.exp_date)} · ${money(e.amount)}`, date: e.exp_date,
+      fill: async () => ({ inv_no: e.invoice_no.trim(), inv_date: e.exp_date, supplier_id: e.supplier_id || '', party_name: e.supplier_name || '', amount: e.amount || null, category: e.category, note: `${e.code}${e.description ? ' · ' + e.description : ''}` }),
+    }));
+    return [...fromPo, ...fromExp].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  }, [ra, taxed.data, orders.data, pos.data, exps.data]);
+}
+
 // preset: điền sẵn theo đơn bán (nhắc xuất hóa đơn VAT) — {order_id, order_code, party_name, party_tax, amount, vat_rate}
 export function TaxInvoiceForm({ direction, preset, onClose }) {
   const { book, settings } = useApp();
+  const sources = useInvoiceSources(direction, !preset);
+  const [src, setSrc] = useState('');
   const suppliers = useSuppliers();
   const { run, busy } = useAction();
   const ds = useMemo(() => docSettings(book, settings), [book, settings]);
@@ -26,6 +69,13 @@ export function TaxInvoiceForm({ direction, preset, onClose }) {
     <Modal title={`Thêm ${LABEL[direction].toLowerCase()}`} onClose={onClose}
       footer={<><Btn onClick={onClose}>Thôi</Btn><Btn kind="primary" busy={busy} onClick={async () => { const r = await run('save_tax_invoice', { ...f, direction }, 'Đã lưu hóa đơn'); if (r) setSaved(r.id); }}>Lưu</Btn></>}>
       {preset?.order_code && <Note>Hóa đơn VAT đã xuất cho đơn <b>{preset.order_code}</b>. Nhập số hóa đơn và tiền trước thuế đúng như trên hóa đơn điện tử.</Note>}
+      {!preset && (
+        <Field label={vao ? 'Lấy từ phiếu nhập hàng / mua dịch vụ' : 'Lấy từ hóa đơn bán (Đơn hàng › Hóa đơn)'}
+          hint={src ? 'Đã điền sẵn từ chứng từ đã chọn. Kiểm tra lại tiền trước thuế và thuế suất cho đúng hóa đơn.' : vao ? 'Chỉ hiện phiếu có ghi số hóa đơn đầu vào và chưa ghi nhận ở đây.' : 'Chọn đơn để điền sẵn bên mua, mã số thuế và tiền chưa xuất hóa đơn.'}>
+          <Picker items={sources} value={src} getLabel={(x) => x.label} getSub={(x) => x.sub} placeholder={vao ? 'Tìm số hóa đơn, phiếu, nhà cung cấp…' : 'Tìm mã đơn, khách hàng…'}
+            onChange={async (id, x) => { setSrc(id); const v = await x.fill(); setF((s) => ({ ...s, order_id: undefined, ...v })); }} />
+        </Field>
+      )}
       <div className="grid">
         <Field label="Số hóa đơn" required><Input value={f.inv_no} onChange={(v) => set('inv_no', v)} autoFocus /></Field>
         <Field label="Ngày hóa đơn"><DateInput value={f.inv_date} onChange={(v) => set('inv_date', v)} /></Field>
