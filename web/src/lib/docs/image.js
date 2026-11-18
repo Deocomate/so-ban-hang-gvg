@@ -10,12 +10,12 @@ function loadPdfjs() {
 
 const GAP = 24; // khoảng cách giữa các trang (px)
 
-// pdfBlob → PNG (Blob). scale 3 ≈ 216 dpi: A4 rộng khoảng 1785 px; nhiều trang thì giảm bớt để ảnh không quá lớn.
-export async function pdfToImageBlob(pdfBlob) {
+// pdfBlob → mỗi trang một canvas; scale(số trang) chọn độ nét
+export async function pdfPages(pdfBlob, scaleOf = () => 2) {
   const pdfjs = await loadPdfjs();
   const pdf = await pdfjs.getDocument({ data: new Uint8Array(await pdfBlob.arrayBuffer()) }).promise;
   try {
-    const scale = pdf.numPages > 3 ? 2 : 3;
+    const scale = scaleOf(pdf.numPages);
     const pages = [];
     for (let n = 1; n <= pdf.numPages; n++) {
       const page = await pdf.getPage(n);
@@ -25,13 +25,19 @@ export async function pdfToImageBlob(pdfBlob) {
       await page.render({ canvasContext: g, viewport: vp }).promise;
       pages.push(c);
     }
-    const out = pages.length === 1 ? pages[0] : (() => {
-      const o = document.createElement('canvas'); o.width = Math.max(...pages.map((p) => p.width));
-      o.height = pages.reduce((s, p) => s + p.height, 0) + GAP * (pages.length - 1);
-      const g = o.getContext('2d'); g.fillStyle = '#d9d9d9'; g.fillRect(0, 0, o.width, o.height);
-      let y = 0; for (const p of pages) { g.drawImage(p, 0, y); y += p.height + GAP; }
-      return o;
-    })();
-    return await new Promise((res, rej) => out.toBlob((b) => (b ? res(b) : rej(new Error('Không tạo được ảnh'))), 'image/png'));
+    return pages;
   } finally { pdf.destroy(); }
+}
+
+// pdfBlob → PNG (Blob). scale 3 ≈ 216 dpi: A4 rộng khoảng 1785 px; nhiều trang thì giảm bớt để ảnh không quá lớn.
+export async function pdfToImageBlob(pdfBlob) {
+  const pages = await pdfPages(pdfBlob, (n) => (n > 3 ? 2 : 3));
+  const out = pages.length === 1 ? pages[0] : (() => {
+    const o = document.createElement('canvas'); o.width = Math.max(...pages.map((p) => p.width));
+    o.height = pages.reduce((s, p) => s + p.height, 0) + GAP * (pages.length - 1);
+    const g = o.getContext('2d'); g.fillStyle = '#d9d9d9'; g.fillRect(0, 0, o.width, o.height);
+    let y = 0; for (const p of pages) { g.drawImage(p, 0, y); y += p.height + GAP; }
+    return o;
+  })();
+  return new Promise((res, rej) => out.toBlob((b) => (b ? res(b) : rej(new Error('Không tạo được ảnh'))), 'image/png'));
 }

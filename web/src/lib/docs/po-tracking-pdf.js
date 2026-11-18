@@ -4,7 +4,7 @@ import { qty, dmy } from '../format.js';
 import { trackOf, pctText, TRACK_RANK, SOON_DAYS } from '../po-tracking.js';
 import { pdfFromDef } from './pdf.js';
 
-// Màu theo trạng thái hạn giao: nền nhóm dòng · chữ · thanh tiến độ
+// Màu theo trạng thái hạn giao: nền nhóm dòng · thanh tiến độ (chữ để đen; chỉ cột Còn SX và ngày đặt / giao màu đỏ)
 const C = {
   late: { fill: '#fde4e1', ink: '#c0392b', bar: '#d64532' },
   soon: { fill: '#fff3d6', ink: '#a86300', bar: '#e09a12' },
@@ -22,7 +22,7 @@ function bar(p, w, color, h) {
   if (fillW > 0) shapes.push({ type: 'rect', x: 0, y: 0, w: Math.max(fillW, h), h, r: h / 2, color });
   return { canvas: shapes, width: w };
 }
-const barWithPct = (p, w, color) => ({ columns: [bar(p, w, color, 5), { text: pctText(p), width: '*', fontSize: 8.5, bold: true, color, margin: [4, -1.5, 0, 0] }], columnGap: 0 });
+const barWithPct = (p, w, color) => ({ columns: [bar(p, w, color, 5), { text: pctText(p), width: '*', fontSize: 8.5, bold: true, margin: [4, -1.5, 0, 0] }], columnGap: 0 });
 
 const unitOf = (l) => l.unit || '';
 const dm = (iso) => `${Number(iso.slice(8, 10))}/${Number(iso.slice(5, 7))}`; // 22/9 như bảng tính
@@ -37,13 +37,13 @@ const legend = () => ({
 function dueCell(o, t, rs) {
   const col = C[t.key] || C.nodate;
   const stack = [
-    { text: [{ text: 'Đặt: ', bold: true, color: RED }, dmy(o.order_date)], fontSize: 9.5 },
-    { text: [{ text: 'Giao: ', bold: true, color: RED }, { text: o.expected_date ? dmy(o.expected_date) : 'chưa hẹn', bold: true }], fontSize: 9.5, margin: [0, 2, 0, 4] },
-    { text: t.label, bold: true, color: col.ink, fontSize: 10 },
+    { text: [{ text: 'Đặt: ', bold: true }, dmy(o.order_date)], color: RED, fontSize: 9.5 },
+    { text: [{ text: 'Giao: ', bold: true }, { text: o.expected_date ? dmy(o.expected_date) : 'chưa hẹn', bold: true }], color: RED, fontSize: 9.5, margin: [0, 2, 0, 4] },
+    { text: t.label, bold: true, fontSize: 10 },
   ];
-  if (t.open && t.behind && t.key !== 'late') stack.push({ text: 'Chậm so với kế hoạch', color: C.soon.ink, fontSize: 8.5, bold: true });
-  if (t.open && t.perDay) stack.push({ text: `Cần giao ~${qty(t.perDay)}/ngày để kịp hạn`, fontSize: 8.5, color: '#333333', margin: [0, 2, 0, 0] });
-  if (t.open && t.key === 'late') stack.push({ text: `Còn ${qty(t.left)} chưa giao`, fontSize: 8.5, color: col.ink, margin: [0, 2, 0, 0] });
+  if (t.open && t.behind && t.key !== 'late') stack.push({ text: 'Chậm so với kế hoạch', fontSize: 8.5, bold: true });
+  if (t.open && t.perDay) stack.push({ text: `Cần giao ~${qty(t.perDay)}/ngày để kịp hạn`, fontSize: 8.5, margin: [0, 2, 0, 0] });
+  if (t.open && t.key === 'late') stack.push({ text: `Còn ${qty(t.left)} chưa giao`, fontSize: 8.5, margin: [0, 2, 0, 0] });
   return { stack, rowSpan: rs, alignment: 'center', fillColor: col.fill || undefined, margin: [0, 1, 0, 1] };
 }
 
@@ -77,13 +77,13 @@ export async function poTrackingPdf({ supplier, orders, lines, receipts = [], to
   // ---------- Cần chú ý: đơn quá hạn / sắp hạn / đang chậm ----------
   const watch = list.filter((o) => o.t.key === 'late' || o.t.key === 'soon' || (o.t.open && o.t.behind));
   if (watch.length) {
-    content.push({ text: 'CẦN CHÚ Ý', bold: true, fontSize: 11, color: RED, margin: [0, 4, 0, 3] });
+    content.push({ text: 'CẦN CHÚ Ý', bold: true, fontSize: 11, margin: [0, 4, 0, 3] });
     content.push({
       ul: watch.map((o) => {
-        const col = C[o.t.key] || C.nodate; const who = o.sales_customer_name ? `${o.sales_customer_name} (${o.code})` : o.code;
+        const who = o.sales_customer_name ? `${o.sales_customer_name} (${o.code})` : o.code;
         return { text: [
           { text: who, bold: true }, ': ',
-          { text: o.t.key === 'ok' ? 'chậm so với kế hoạch' : o.t.label.toLowerCase(), bold: true, color: col.ink },
+          { text: o.t.key === 'ok' ? 'chậm so với kế hoạch' : o.t.label.toLowerCase(), bold: true },
           ` — hạn giao ${dmy(o.expected_date)}, mới giao ${pctText(o.t.pct)} (${qty(o.t.got)}/${qty(o.t.eff)}), còn ${qty(o.t.left)} chưa giao`,
           o.t.perDay ? `, cần ~${qty(o.t.perDay)}/ngày` : '',
         ], fontSize: 9.5, margin: [0, 1, 0, 1] };
@@ -100,7 +100,7 @@ export async function poTrackingPdf({ supplier, orders, lines, receipts = [], to
   const PAD = 4; const WIDTHS = [110, '*', 52, 32, 180, 50, 66, 110];
   const inner = (w) => (w === '*' ? '*' : w - 2 * PAD);
   const hd = (text, color) => ({ text, bold: true, alignment: 'center', color, fillColor: '#f2f2f2', fontSize: 10.5, margin: [PAD, 3.5, PAD, 3.5] });
-  const body = [[hd('Tên KH'), hd('Tên sản phẩm'), hd('Số lượng đặt', RED), hd('ĐVT', RED), hd('Đã giao', RED), hd('Còn SX'), hd('Tiến độ'), hd('Ngày trả dự kiến')]];
+  const body = [[hd('Tên KH'), hd('Tên sản phẩm'), hd('Số lượng đặt'), hd('ĐVT'), hd('Đã giao'), hd('Còn SX', RED), hd('Tiến độ'), hd('Ngày trả dự kiến')]];
   const innerLayout = {
     hLineWidth: (i, node) => (i === 0 || i === node.table.body.length ? 0 : 0.6), vLineWidth: (i, node) => (i === 0 || i === node.table.widths.length ? 0 : 0.6),
     hLineColor: () => LINE, vLineColor: () => LINE, paddingLeft: () => PAD, paddingRight: () => PAD, paddingTop: () => 3.5, paddingBottom: () => 3.5,
@@ -117,7 +117,7 @@ export async function poTrackingPdf({ supplier, orders, lines, receipts = [], to
     const rows = [];
     if (head) {
       const sub = { text: '', fillColor: '#f7f7f7' };
-      rows.push([nameCell, sub, sub, sub, ...dv.cols.map((c) => ({ text: c.label, bold: true, color: RED, alignment: 'center', fontSize: 9.5, fillColor: '#f7f7f7' })), sub, sub, dueCell(o, t, rs)]);
+      rows.push([nameCell, sub, sub, sub, ...dv.cols.map((c) => ({ text: c.label, bold: true, alignment: 'center', fontSize: 9.5, fillColor: '#f7f7f7' })), sub, sub, dueCell(o, t, rs)]);
     }
     ls.forEach((l, i) => {
       const got = Math.min(l.received_qty || 0, l.eff_qty); const p = l.eff_qty > 0 ? got / l.eff_qty : 0; const left = Math.max(l.remaining_qty || 0, 0);
@@ -128,7 +128,7 @@ export async function poTrackingPdf({ supplier, orders, lines, receipts = [], to
         { text: qty(l.eff_qty), alignment: 'center', fillColor: fill },
         { text: unitOf(l), alignment: 'center', fillColor: fill },
         ...(head ? dv.cols.map((c) => { const v = dv.val(l.id, c); return { text: v ? qty(v) : '', alignment: 'center', fillColor: fill }; }) : [{ text: '', fillColor: fill }]),
-        { text: qty(left), alignment: 'center', bold: true, color: left > 0 ? '#000000' : C.done.ink, fillColor: left > 0 ? fill : C.done.fill },
+        { text: qty(left), alignment: 'center', bold: true, color: RED, fillColor: left > 0 ? fill : C.done.fill },
         { ...barWithPct(p, 32, (left <= 0 ? C.done : col).bar), fillColor: fill, margin: [0, 3, 0, 0] },
         first ? dueCell(o, t, rs) : {},
       ]);

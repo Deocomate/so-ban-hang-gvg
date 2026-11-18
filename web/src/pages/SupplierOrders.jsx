@@ -1,10 +1,11 @@
 // Tab "Đơn nhập" trong hộp nhà cung cấp: theo dõi đơn chưa giao (quá hạn / sắp hạn / tiến độ), tích chọn nhiều đơn và xuất một tệp PDF.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../lib/store.jsx';
 import { money, dmy, qty, todayVN } from '../lib/format.js';
 import { saveFile } from '../lib/excel.js';
 import { trackOf, pctText, TRACK_RANK, SOON_DAYS } from '../lib/po-tracking.js';
-import { Btn, Icon, Pill, StatusPill, RECEIVE, Loading } from '../components/ui.jsx';
+import { Btn, Icon, Pill, StatusPill, RECEIVE, Loading, ErrorBox, Modal } from '../components/ui.jsx';
 
 const TONE = { late: 'bad', soon: 'warn', ok: 'info', nodate: 'neutral', done: 'good', nhap: 'neutral', huy: 'mute' };
 const FILTERS = [
@@ -23,6 +24,37 @@ function Progress({ t }) {
       <div className={`po-prog-bar po-${t.key}`}><span style={{ width: `${Math.min(t.pct, 1) * 100}%` }} />{t.timePct != null && t.open && <i style={{ left: `${t.timePct * 100}%` }} title="Mốc thời gian đã trôi qua" />}</div>
       <div className="cell-sub">{pctText(t.pct)} · còn {qty(t.left)}</div>
     </div>
+  );
+}
+
+// Xem trước tệp PDF trước khi tải về: vẽ từng trang bằng pdf.js nên điện thoại cũng xem được
+function PdfPreview({ blob, name, count, onClose, onSave }) {
+  const box = useRef(null);
+  const [state, setState] = useState({ ready: false, error: null, pages: 0 });
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const { pdfPages } = await import('../lib/docs/image.js');
+        const pages = await pdfPages(blob, () => 2);
+        if (!alive || !box.current) return;
+        pages.forEach((c, i) => { c.className = 'pdf-page'; c.setAttribute('aria-label', `Trang ${i + 1}`); });
+        box.current.replaceChildren(...pages);
+        setState({ ready: true, error: null, pages: pages.length });
+      } catch (e) { if (alive) setState({ ready: false, error: e.message, pages: 0 }); }
+    })();
+    return () => { alive = false; };
+  }, [blob]);
+  return createPortal(
+    <Modal title="Xem trước PDF" subtitle={`${name} · ${count} đơn${state.pages ? ` · ${state.pages} trang` : ''}`} size="xl" onClose={onClose}
+      footer={<><Btn onClick={onClose}>Đóng</Btn><span className="grow" /><Btn kind="primary" icon="dl" busy={saving} disabled={!state.ready}
+        onClick={async () => { setSaving(true); try { await onSave(); } finally { setSaving(false); } }}>Tải PDF về</Btn></>}>
+      {!state.ready && !state.error && <Loading />}
+      {state.error && <ErrorBox error={'Không xem trước được: ' + state.error} />}
+      <div ref={box} className="pdf-preview" hidden={!state.ready} />
+    </Modal>,
+    document.body,
   );
 }
 
@@ -66,9 +98,13 @@ export function SupplierOrdersTab({ supplier, orders }) {
       ]);
       const { poTrackingPdf } = await import('../lib/docs/po-tracking-pdf.js');
       const blob = await poTrackingPdf({ supplier, orders: list, lines, receipts, today });
-      const name = `theo-doi-don-dat_${supplier.code || 'ncc'}_${today}.pdf`;
-      if (await saveFile(name, blob)) toast(`Đã tạo ${name} (${list.length} đơn)`);
+      setPreview({ blob, name: `theo-doi-don-dat_${supplier.code || 'ncc'}_${today}.pdf`, count: list.length });
     } catch (e) { toast('Không tạo được PDF: ' + e.message, 'err'); } finally { setBusy(null); }
+  };
+  const [preview, setPreview] = useState(null);
+  const savePreview = async () => {
+    const { blob, name, count } = preview;
+    if (await saveFile(name, blob)) { toast(`Đã tải ${name} (${count} đơn)`); setPreview(null); }
   };
 
   if (!orders.data) return <Loading />;
@@ -129,6 +165,7 @@ export function SupplierOrdersTab({ supplier, orders }) {
           </tbody>
         </table>
       </div>
+      {preview && <PdfPreview {...preview} onClose={() => setPreview(null)} onSave={savePreview} />}
       <p className="muted small">Vạch dọc trên thanh tiến độ là mốc thời gian đã trôi qua từ ngày đặt tới hạn giao — thanh xanh nằm sau vạch là đang giao chậm hơn kế hoạch.</p>
     </div>
   );
