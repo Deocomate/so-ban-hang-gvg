@@ -386,6 +386,10 @@ Ba phân hệ hoạt động độc lập; chứng từ con chỉ sinh trong t�
 
 **Hóa đơn.** Nút **Thu khác** trên màn bán hàng thêm VAT và tiền vận chuyển. Thuế suất VAT đặt theo từng đơn, mặc định ở **Cài đặt**. Doanh thu báo cáo không gồm VAT của đơn; công nợ khách có gồm VAT. Khi tạo đợt giao có thể nhập số **cọc khấu trừ** cho hóa đơn đợt đó.
 
+**Hóa đơn VAT cho khách công ty.** Khách được coi là công ty khi chọn loại khách **Công ty** hoặc đã khai mã số thuế ở thẻ **Thông tin xuất hóa đơn**. Với những khách này, sau khi in hoặc tải biên bản giao hàng, sổ bật hộp **Bước tiếp theo: xuất hóa đơn VAT**. Thẻ **Yêu cầu xuất hóa đơn VAT** trong hộp chứng từ in ra phiếu gửi kế toán: thông tin bên bán và bên mua, dòng hàng theo giá trước thuế, cước vận chuyển và chiết khấu tách dòng riêng, thuế suất, tiền thuế, tổng tiền và số tiền bằng chữ. Kế toán xuất hóa đơn trên phần mềm hóa đơn điện tử rồi bấm **Ghi nhận đã xuất hóa đơn** để nhập số hóa đơn vào sổ. Lời nhắc chỉ hết khi tổng tiền trước thuế đã ghi nhận bằng tiền hàng đã giao, hoặc khi bấm **Khách không lấy hóa đơn**. Đơn chưa xuất hóa đơn còn hiện trong chi tiết đơn và ở **Tổng quan → Cần xử lý**.
+
+**Tài liệu khách hàng.** Mở khách hàng, chọn thẻ **Tài liệu**. Mỗi khách có một kho riêng để lưu hợp đồng, biên bản, đối chiếu và bản vẽ. Có thể tạo thư mục lồng nhau, kéo thả tệp hoặc cả thư mục từ máy vào để tải lên (tối đa 15 MB mỗi tệp), kéo một mục thả vào thư mục khác hoặc lên thanh đường dẫn để di chuyển, và gắn link tài liệu ngoài. Ô **Google Drive của khách** lưu link thư mục Drive riêng của khách đó. Tệp được lưu trong cơ sở dữ liệu nên có trong bản sao lưu hằng đêm, nhưng không nằm trong tệp sao lưu JSON tải về.
+
 **Lái xe.** Khách trả cùng hóa đơn hoặc cửa hàng chịu phí thì phát sinh một khoản chi phí chưa trả cho lái xe. Khách trả trực tiếp cho lái xe thì không phát sinh công nợ. Trả tiền ở **Đơn hàng → Lái xe & công nợ**, phiếu chi được ghi vào sổ quỹ như mọi chi phí khác.
 
 **Pháp nhân.** Mỗi sổ khai 2 đơn vị đứng tên (Công ty Thanh Hải, HKD Mai Hiếu) ở **Cài đặt → Mẫu in**. Khi xuất chứng từ, đổi ở mục **Đơn vị đứng tên**.

@@ -1292,3 +1292,38 @@ body {
 .po-prog-bar.po-late span { background: var(--bad); } .po-prog-bar.po-soon span { background: var(--warn); } .po-prog-bar.po-done span { background: var(--good); }
 .po-due { margin-top: 3px; flex-wrap: wrap; }
 @media (max-width: 640px) { .po-track-head .btn-primary { width: 100%; justify-content: center; } }
+
+/* ---------- Kho tài liệu khách hàng ---------- */
+.cf-drive { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); flex-wrap: wrap; }
+.cf-drive .cf-url { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cf-drive > .grow { min-width: 0; }
+.cf-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cf-crumbs { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; min-width: 0; }
+.cf-crumb { border: 1px dashed transparent; background: none; font: inherit; font-weight: 600; color: var(--ink); padding: 4px 8px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.cf-crumb:hover { background: var(--surface-2); }
+.cf-crumb.drop { border-color: var(--accent); background: var(--accent-2); }
+.cf-selbar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 10px; background: var(--accent-2); flex-wrap: wrap; }
+.cf-zone { border: 2px dashed transparent; border-radius: var(--r); padding: 2px; transition: border-color .12s, background .12s; min-height: 160px; }
+.cf-zone.drop { border-color: var(--accent); background: var(--accent-2); }
+.cf-empty { display: grid; place-items: center; gap: 6px; text-align: center; padding: 36px 16px; color: var(--muted); }
+.cf-empty .strong { color: var(--ink); }
+.cf-hint { padding: 8px 4px 0; }
+.cf-tbl td { vertical-align: middle; }
+.cf-tbl tr.row-sel td { background: var(--accent-2); }
+.cf-tbl tr.cf-drop-row td { background: var(--accent-2); box-shadow: inset 0 0 0 1px var(--accent); }
+.cf-tbl tr[draggable="true"] { cursor: grab; }
+.cf-chk { width: 34px; }
+.cf-name, .tbl td.col-fill > .cf-name { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.cf-name-txt { min-width: 0; }
+.cf-name-txt .cell-main { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cf-ico { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; flex: none; background: var(--surface-2); color: var(--muted); }
+.cf-ico-folder { background: var(--warn-bg); color: var(--warn); }
+.cf-ico-link { background: var(--info-bg); color: var(--info); }
+.cf-meta { width: 130px; white-space: nowrap; }
+.cf-act { width: 1%; white-space: nowrap; text-align: right; }
+.cf-tree { display: flex; flex-direction: column; max-height: 50vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 4px; }
+.cf-tree-item { display: flex; align-items: center; gap: 8px; border: 0; background: none; font: inherit; color: var(--ink); text-align: left; padding: 7px 10px; border-radius: 8px; cursor: pointer; }
+.cf-tree-item:hover:not(:disabled) { background: var(--surface-2); }
+.cf-tree-item.on { background: var(--accent-2); font-weight: 600; }
+.cf-tree-item:disabled { opacity: .45; cursor: not-allowed; }
+@media (max-width: 640px) { .cf-meta { display: none; } }

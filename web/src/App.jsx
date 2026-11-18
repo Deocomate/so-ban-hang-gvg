@@ -427,7 +427,7 @@ function Gate() {
   if (linkKey) return <LinkPage key={linkKey} />;
   if (!session) return <Login />;
   if (session.user?.must_change_password) return <ForcePassword />;
-  if (docLink) return <DocStandalone link={docLink} />;
+  if (docLink) return <><DocStandalone link={docLink} /><ModalHost /></>;   // hộp thoại phụ (ghi nhận hóa đơn VAT…) mở ngay trên trang chứng từ
   if (editorLink) return <React.Suspense fallback={<div className="center-screen"><Loading text="Đang mở trình sửa mẫu in…" /></div>}><PrintEditorPage link={editorLink} /></React.Suspense>;
   return <Shell />;
 }

@@ -6,7 +6,9 @@ const REF_TABLES = { order: 'sales_orders', delivery: 'deliveries', payment: 'pa
 const FIELDS = ['recv_name', 'recv_phone', 'recv_address', 'driver_name', 'driver_phone', 'handover_rep', 'goods_condition', 'box_total', 'old_debt',
   'doc_date', 'note', 'place', 'reason', 'payer_name', 'payer_address', 'attach', 'recv_party', 'date_hoa_don', 'date_don_dat_hang', 'date_bien_ban',
   'date_phieu_xuat_kho', 'profile_hoa_don', 'profile_don_dat_hang', 'profile_bien_ban', 'profile_phieu_xuat_kho', 'profile_phieu_thu', 'profile_hd_van_chuyen', 'profile_de_nghi_tam_ung', 'profile_doi_chieu_sl', 'profile_doi_chieu_tt', 'profile_de_nghi_tt',
-  'date_hd_van_chuyen', 'date_de_nghi_tam_ung', 'date_doi_chieu_sl', 'date_doi_chieu_tt', 'date_de_nghi_tt', 'vehicle', 'id_no', 'transit_days', 'freight_note', 'pay_at', 'carrier_party', 'carrier_address'];
+  'date_hd_van_chuyen', 'date_de_nghi_tam_ung', 'date_doi_chieu_sl', 'date_doi_chieu_tt', 'date_de_nghi_tt', 'vehicle', 'id_no', 'transit_days', 'freight_note', 'pay_at', 'carrier_party', 'carrier_address',
+  // Phiếu yêu cầu xuất hóa đơn VAT; vat_skip = '1': đơn không cần xuất hóa đơn (tắt lời nhắc)
+  'date_yeu_cau_vat', 'profile_yeu_cau_vat', 'vat_buyer', 'vat_unit', 'vat_tax_code', 'vat_address', 'vat_email', 'vat_pay_method', 'vat_bank', 'vat_rate', 'vat_note', 'vat_skip'];
 
 function checkRef(book, type, id) {
   const t = REF_TABLES[type];

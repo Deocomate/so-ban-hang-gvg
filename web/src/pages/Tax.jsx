@@ -10,12 +10,14 @@ import { Attachments } from './Contracts.jsx';
 
 const LABEL = { vao: 'Hóa đơn đầu vào', ra: 'Hóa đơn đầu ra' };
 
-export function TaxInvoiceForm({ direction, onClose }) {
+// preset: điền sẵn theo đơn bán (nhắc xuất hóa đơn VAT) — {order_id, order_code, party_name, party_tax, amount, vat_rate}
+export function TaxInvoiceForm({ direction, preset, onClose }) {
   const { book, settings } = useApp();
   const suppliers = useSuppliers();
   const { run, busy } = useAction();
   const ds = useMemo(() => docSettings(book, settings), [book, settings]);
-  const [f, setF] = useState({ inv_no: '', inv_date: todayVN(), party_name: '', party_tax: '', profile_id: ds.profiles[0].id, amount: null, vat_rate: settings.default_vat ?? 8, supplier_id: '', category: '', note: '' });
+  const [f, setF] = useState({ inv_no: '', inv_date: todayVN(), party_name: '', party_tax: '', profile_id: ds.profiles[0].id, amount: null, vat_rate: settings.default_vat ?? 8, supplier_id: '', category: '', note: '',
+    ...(preset ? { order_id: preset.order_id, party_name: preset.party_name || '', party_tax: preset.party_tax || '', amount: preset.amount ?? null, vat_rate: Number(preset.vat_rate) > 0 ? Number(preset.vat_rate) : (settings.default_vat ?? 8) } : {}) });
   const [saved, setSaved] = useState(null);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
   const vao = direction === 'vao';
@@ -23,6 +25,7 @@ export function TaxInvoiceForm({ direction, onClose }) {
   return (
     <Modal title={`Thêm ${LABEL[direction].toLowerCase()}`} onClose={onClose}
       footer={<><Btn onClick={onClose}>Thôi</Btn><Btn kind="primary" busy={busy} onClick={async () => { const r = await run('save_tax_invoice', { ...f, direction }, 'Đã lưu hóa đơn'); if (r) setSaved(r.id); }}>Lưu</Btn></>}>
+      {preset?.order_code && <Note>Hóa đơn VAT đã xuất cho đơn <b>{preset.order_code}</b>. Nhập số hóa đơn và tiền trước thuế đúng như trên hóa đơn điện tử.</Note>}
       <div className="grid">
         <Field label="Số hóa đơn" required><Input value={f.inv_no} onChange={(v) => set('inv_no', v)} autoFocus /></Field>
         <Field label="Ngày hóa đơn"><DateInput value={f.inv_date} onChange={(v) => set('inv_date', v)} /></Field>

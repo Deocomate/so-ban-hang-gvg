@@ -72,6 +72,13 @@ export const TOKEN_GROUPS = [
     T('Bang_Doi_Chieu_Cong_No', 'Bảng đối chiếu công nợ', 'Bảng dựng sẵn: từng đợt giao, VAT, đã thanh toán, còn phải thanh toán'),
     T('Con_No_Doi_Chieu_Bang_Chu', 'Còn nợ đối chiếu bằng chữ'),
   ] },
+  { id: 'hoa_don_vat', label: 'Yêu cầu xuất hóa đơn VAT', icon: 'invoice', tokens: [
+    T('Can_Cu_Xuat_HD', 'Căn cứ xuất hóa đơn', '"Đơn hàng HD000456, phiếu giao GH000123"'),
+    T('Nguoi_Mua_Hang', 'Họ tên người mua hàng'), T('Ten_Don_Vi_Mua', 'Tên đơn vị mua hàng'), T('MST_Mua', 'Mã số thuế bên mua'),
+    T('Dia_Chi_Mua', 'Địa chỉ bên mua'), T('Email_Nhan_HD', 'Email nhận hóa đơn'), T('Hinh_Thuc_TT', 'Hình thức thanh toán', '"TM/CK"'), T('STK_Mua', 'Số tài khoản bên mua'),
+    T('Cong_Tien_Hang', 'Cộng tiền hàng (trước thuế)'), T('Thue_Suat_GTGT', 'Thuế suất GTGT', '"8"'), T('Tien_Thue_GTGT', 'Tiền thuế GTGT'),
+    T('Tong_Tien_Thanh_Toan_VAT', 'Tổng tiền thanh toán (gồm thuế)'), T('Tong_Tien_VAT_Bang_Chu', 'Tổng tiền thanh toán bằng chữ'), T('Ghi_Chu_Xuat_HD', 'Ghi chú cho kế toán'),
+  ] },
   { id: 'bao_gia', label: 'Báo giá', icon: 'quote', tokens: [
     T('Ma_Bao_Gia', 'Mã báo giá'), T('Kinh_Gui', 'Kính gửi (khách)'), T('Dia_Chi_Bao_Gia', 'Địa chỉ khách'), T('Dia_Diem_Cong_Trinh', 'Địa điểm công trình'),
     T('Bang_Bao_Gia', 'Bảng báo giá', 'Bảng dựng sẵn: nhóm hàng, hình ảnh, định mức, tổng tiền'), T('Luu_Y_Bao_Gia', 'Lưu ý báo giá', 'Mục "LƯU Ý" của báo giá'),
@@ -87,6 +94,7 @@ export const GROUPS_FOR = {
   de_nghi_tam_ung: ['don_vi', 'chung_tu', 'khach_hang', 'hop_dong'], de_nghi_tt: ['don_vi', 'chung_tu', 'khach_hang', 'hop_dong'],
   doi_chieu_sl: ['don_vi', 'chung_tu', 'khach_hang', 'hop_dong'], doi_chieu_tt: ['don_vi', 'chung_tu', 'khach_hang', 'hop_dong', 'tong'],
   bao_gia: ['don_vi', 'chung_tu', 'bao_gia'],
+  yeu_cau_vat: ['don_vi', 'chung_tu', 'khach_hang', 'hoa_don_vat', 'hang_hoa'],
 };
 
 export const ALL_TOKENS = Object.fromEntries(TOKEN_GROUPS.flatMap((g) => g.tokens.map((t) => [t.k, { ...t, group: g.id, item: !!g.item }])));
@@ -205,6 +213,7 @@ export function tokenValues(type, data, ds, info, sep = ',') {
     Tong_Trong_Luong_Kem: tk.kg > 0 ? ` · Tổng trọng lượng: ${fmtKg(tk.kg, sep)}${tk.missing ? ` (chưa gồm ${tk.missing} mặt hàng chưa khai)` : ''}` : '',
   });
   const goods = g.reduce((s, l) => s + l.total, 0);
+  if (type === 'yeu_cau_vat') return { v: vatRequest(v, items, data, info, N, goods), items };
   const isInv = type === 'hoa_don'; const perDel = PER_DELIVERY.includes(type) && !!data.d;
   const vat = perDel ? Number(data.d.vat || 0) : Number(o.vat_total || 0);
   const ship = perDel ? Number(data.d.shipping_fee || 0) : Math.max(0, Number(o.order_total || 0) - Number(o.goods_total || 0) - vat);
@@ -220,6 +229,28 @@ export function tokenValues(type, data, ds, info, sep = ',') {
     Con_Thanh_Toan: N(due), Con_Thanh_Toan_Bang_Chu: moneyWords(due),
   });
   return { v, items, due };
+}
+
+// Phiếu yêu cầu xuất hóa đơn VAT: dòng hàng theo giá trước thuế (giá trên đơn chưa gồm VAT), thêm dòng cước vận chuyển / chiết khấu
+// của đơn nếu có, rồi tính thuế theo thuế suất trên phiếu — đúng các con số kế toán cần gõ vào phần mềm hóa đơn điện tử.
+function vatRequest(v, items, data, info, N, goods) {
+  const o = data.o; const perDel = !!data.d;
+  const vatOrder = perDel ? Number(data.d.vat || 0) : Number(o.vat_total || 0);
+  const ship = perDel ? Number(data.d.shipping_fee || 0) : Math.max(0, Number(o.order_total || 0) - Number(o.goods_total || 0) - vatOrder);
+  const disc = perDel ? 0 : Math.max(0, goods - Number(o.goods_total || 0));
+  const extra = (name, amount) => items.push({ STT: String(items.length + 1), Ma_Hang: '', Ten_Hang: name, Ghi_Chu_Hang: '', Quy_Cach: '', Quy_Cach_Ghi_Chu: '',
+    So_Luong: N(1), Don_Vi_Tinh: '', Don_Vi_Tinh_Thuong: '', Don_Gia: N(amount), Thanh_Tien: N(amount), So_Hop: '', Kg_Moi_Hop: '', Trong_Luong: '' });
+  if (ship > 0) extra('Cước vận chuyển', ship);
+  if (disc > 0) extra('Chiết khấu thương mại', -disc);
+  const base = goods + ship - disc;
+  const rate = Number(String(info.vat_rate ?? '').replace(',', '.')) || 0;
+  const tax = Math.round(base * rate / 100); const total = base + tax;
+  return Object.assign(v, {
+    Can_Cu_Xuat_HD: `Đơn hàng ${o.code}${perDel ? `, phiếu giao ${data.d.code}` : ''}`,
+    Nguoi_Mua_Hang: info.vat_buyer || '', Ten_Don_Vi_Mua: info.vat_unit || '', MST_Mua: info.vat_tax_code || '', Dia_Chi_Mua: info.vat_address || '',
+    Email_Nhan_HD: info.vat_email || '', Hinh_Thuc_TT: info.vat_pay_method || '', STK_Mua: info.vat_bank || '', Ghi_Chu_Xuat_HD: info.vat_note || '',
+    Cong_Tien_Hang: N(base), Thue_Suat_GTGT: fmtNum(rate, '.'), Tien_Thue_GTGT: N(tax), Tong_Tien_Thanh_Toan_VAT: N(total), Tong_Tien_VAT_Bang_Chu: `${moneyWords(total)}.`,
+  });
 }
 
 // ---------- Bảng dựng sẵn ----------

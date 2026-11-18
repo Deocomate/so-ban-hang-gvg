@@ -139,6 +139,32 @@ const BUILDERS = {
       + lines(String(textOf(ds, 'bien_ban', 'handover_closing') || '').split('\n').filter(Boolean).join('\n'), 'font-size:11pt; margin-top:4pt; line-height:1.35')
       + sign([{ title: 'ĐẠI DIỆN BÊN GIAO', name: '{Dai_Dien_Ben_Giao}' }, { title: 'LÁI XE', name: '{Lai_Xe}' }, { title: 'ĐẠI DIỆN BÊN NHẬN' }], { size: 11, space: 4, mt: 24 });
   },
+  // Phiếu yêu cầu xuất hóa đơn GTGT: đủ các mục như trên hóa đơn VAT để kế toán gõ lại vào phần mềm hóa đơn điện tử
+  yeu_cau_vat() {
+    const s = 'font-size:10.5pt; margin-top:3pt';
+    const sumRow = (label, tok, bold) => [{ h: bold ? B(label) : label, span: 5, pst: right }, { h: bold ? B(tok) : tok, pst: right }];
+    return P(`<span style="font-size:12pt">${B('{Ten_Phap_Ly_In_Hoa}')}</span>`, 'margin-bottom:2pt')
+      + P('Mã số thuế: {Ma_So_Thue_Don_Vi}', 'font-size:10pt') + P('Địa chỉ: {Dia_Chi_Don_Vi}', 'font-size:10pt') + P('Điện thoại: {Dien_Thoai_Don_Vi}', 'font-size:10pt')
+      + P('Số tài khoản: {So_Tai_Khoan_Don_Vi}', 'font-size:10pt') + '<hr>'
+      + P(`<span style="font-size:15pt">${B('PHIẾU YÊU CẦU XUẤT HÓA ĐƠN GIÁ TRỊ GIA TĂNG')}</span>`, `${center}; margin-top:10pt`)
+      + P(I('{Ngay_Thang_Nam}'), `${center}; font-size:10.5pt`) + P('Số: {So_Chung_Tu} · Căn cứ: {Can_Cu_Xuat_HD}', `${center}; font-size:10pt; margin-bottom:8pt`)
+      + P(`${B('Kính gửi:')} Bộ phận kế toán — đề nghị xuất hóa đơn GTGT cho khách hàng theo nội dung dưới đây.`, s)
+      + P(B('THÔNG TIN NGƯỜI MUA HÀNG'), 'font-size:10.5pt; margin-top:8pt')
+      + P('Họ tên người mua hàng: {Nguoi_Mua_Hang}', s) + P(`Tên đơn vị: ${B('{Ten_Don_Vi_Mua}')}`, s) + P(`Mã số thuế: ${B('{MST_Mua}')}`, s)
+      + P('Địa chỉ: {Dia_Chi_Mua}', s) + P('Email nhận hóa đơn: {Email_Nhan_HD}', s)
+      + P('Hình thức thanh toán: {Hinh_Thuc_TT}', s) + P('Số tài khoản: {STK_Mua}', s) + P('Đồng tiền thanh toán: VND', `${s}; margin-bottom:6pt`)
+      + table([28, '*', 52, 62, 66, 84], [
+        head(['STT', 'Tên hàng hóa, dịch vụ', 'Đơn vị tính', 'Số lượng', 'Đơn giá', 'Thành tiền']),
+        [C('{STT}'), L('{Ten_Hang}'), C('{Don_Vi_Tinh_Thuong}'), R('{So_Luong}'), R('{Don_Gia}'), R('{Thanh_Tien}')],
+        sumRow('Cộng tiền hàng:', '{Cong_Tien_Hang}', true),
+        [{ h: `Thuế suất GTGT: ${B('{Thue_Suat_GTGT} %')}`, span: 2 }, { h: 'Tiền thuế GTGT:', span: 3, pst: right }, { h: B('{Tien_Thue_GTGT}'), pst: right }],
+        sumRow('Tổng tiền thanh toán:', '{Tong_Tien_Thanh_Toan_VAT}', true),
+        [{ h: `Số tiền viết bằng chữ: ${B(I('{Tong_Tien_VAT_Bang_Chu}'))}`, span: 6 }],
+      ], { size: 10 })
+      + P(`${B('Ghi chú:')} {Ghi_Chu_Xuat_HD}`, 'font-size:10.5pt; margin-top:6pt')
+      + sign([{ title: 'NGƯỜI ĐỀ NGHỊ', note: '(Ký, ghi rõ họ tên)' }, { title: 'KẾ TOÁN', note: '(Ký, ghi rõ họ tên)' }], { size: 10.5, space: 4, mt: 14 })
+      + P(I('Phần kế toán ghi sau khi xuất: Hóa đơn số .................... Ký hiệu .................... Ngày ...../...../.........'), 'font-size:10pt; margin-top:14pt');
+  },
   phieu_xuat_kho(ds) {
     const cfg = ds?.types?.phieu_xuat_kho || {}; const showPrice = cfg.show_price !== false; const showForm = cfg.show_form !== false;
     const s = 'font-size:11pt; margin-top:2pt';
@@ -414,7 +440,8 @@ export function unknownTokens(html) {
 
 // ---------- Chứng từ in hoàn chỉnh ----------
 const FILE_PREFIX = { hoa_don: 'hoa-don', don_dat_hang: 'don-dat-hang', bien_ban: 'bien-ban-ban-giao', phieu_xuat_kho: 'phieu-xuat-kho', hd_van_chuyen: 'hop-dong-van-chuyen',
-  de_nghi_tam_ung: 'de-nghi-tam-ung', de_nghi_tt: 'de-nghi-thanh-toan', doi_chieu_sl: 'doi-chieu-so-luong', doi_chieu_tt: 'doi-chieu-cong-no', bao_gia: 'bao-gia' };
+  de_nghi_tam_ung: 'de-nghi-tam-ung', de_nghi_tt: 'de-nghi-thanh-toan', doi_chieu_sl: 'doi-chieu-so-luong', doi_chieu_tt: 'doi-chieu-cong-no', bao_gia: 'bao-gia',
+  yeu_cau_vat: 'yeu-cau-xuat-hoa-don' };
 // Dựng chứng từ theo mẫu: { html, font, paper, orient, margin, filename, title, code, tplId }
 export function buildPrintDoc(type, data, ds, info, tplId) {
   const tpl = pickTemplate(ds, type, tplId);

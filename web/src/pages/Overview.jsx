@@ -77,6 +77,7 @@ export default function Overview({ go }) {
   const low = useQ('products', [['is_low', 'eq', 'true']], 'available', 20);
   const latePo = useQ('purchase_orders', [['is_late', 'eq', 'true']], 'expected_date', 20, can('xem_nhap_hang'));
   const shipProb = useQ('shipments', [['status', 'in', ['giao_that_bai', 'dang_hoan', 'su_co']]], 'status_at', 20, can('xem_ban_hang'));
+  const vatTodo = useRpcData('vat_invoice_todo', {}, can('xem_ban_hang'));
   const bankWait = useQ('bank_txns', [['status', 'eq', 'cho_xu_ly'], ['direction', 'eq', 'in']], 'txn_at desc', 20, can('xem_thu_chi'));
   const drill = (k) => open('drill', { metric: METRICS[k].metric || k, label: METRICS[k].label, how: METRICS[k].how, from: period.from, to: period.to });
   const cost = data?.can_cost;
@@ -143,6 +144,9 @@ export default function Overview({ go }) {
               <TodoList title="Sắp hết hàng" q={low} empty="Không có mã nào dưới mức tối thiểu" render={(r) => <><span className="cell-main">{r.sku} · {r.name}</span><span className="cell-sub">Tối thiểu {r.low_stock} · đang về {r.incoming}</span></>} right={(r) => <Pill tone={r.available <= 0 ? 'bad' : 'warn'}>còn bán {r.available} {r.unit}</Pill>} onRow={(r) => open('stockcard', { product_id: r.id })} />
               {can('nhap_hang') && <TodoList title="Hàng đặt xưởng / NCC trễ hẹn" q={latePo} empty="Không có đơn nhập trễ" render={(r) => <><span className="cell-main">{r.code} · {r.supplier_name}</span><span className="cell-sub">Hẹn {dmy(r.expected_date)} · {r.progress}</span></>} right={() => <Pill tone="bad">trễ</Pill>} onRow={(r) => open('po', { id: r.id })} />}
               <TodoList title="Vận đơn có vấn đề" q={shipProb} empty="Không có vận đơn giao thất bại / hoàn hàng" render={(r) => <><span className="cell-main">{r.carrier === 'BEST' ? 'BEST' : r.carrier === 'SPX' ? 'SPX' : ''} {r.tracking_no} · {r.customer_name}</span><span className="cell-sub">Đơn {r.order_code} · {dmy(r.status_at)}{r.status_detail ? ' · ' + r.status_detail : ''}</span></>} right={(r) => <Pill tone={r.status === 'giao_that_bai' ? 'warn' : 'bad'}>{r.status_label}</Pill>} onRow={(r) => open('ship', { id: r.id })} />
+              {can('xem_ban_hang') && <TodoList title="Chưa xuất hóa đơn VAT (khách công ty)" q={vatTodo} empty="Đơn giao cho khách công ty đều đã ghi nhận hóa đơn VAT"
+                render={(r) => <><span className="cell-main">{r.code} · {r.tax_name || r.customer_name}</span><span className="cell-sub">{r.state === 'thieu' ? `Còn thiếu ${moneyD(r.missing)} trước thuế` : `Đã giao ${moneyD(r.need)} trước thuế`} · giao {dmy(r.last_delivery_date)}</span></>}
+                right={(r) => <Pill tone={r.days > 3 ? 'bad' : 'warn'}>{r.days > 0 ? `${r.days} ngày` : 'hôm nay'}</Pill>} onRow={(r) => open('order', { id: r.id })} />}
               {can('thu_chi') && <TodoList title="Tiền về chưa khớp đơn" q={bankWait} empty="Không có khoản nào chờ xử lý" render={(r) => <><span className="cell-main">{r.counter_name || 'Chuyển khoản'} · {dmy(r.txn_at)}</span><span className="cell-sub">{r.content}</span></>} right={(r) => <span className="good strong num">+{money(r.amount)}</span>} onRow={() => go('tien-ve')} />}
             </div>
           </Section>

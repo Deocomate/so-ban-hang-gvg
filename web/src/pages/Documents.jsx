@@ -4,14 +4,15 @@ import { packView } from '../lib/book-profile.js';
 import { dmy } from '../lib/format.js';
 import { saveFile } from '../lib/excel.js';
 import { Btn, Loading, ErrorBox, Note, Modal, Field, Input, TextArea, Select, DateInput, NumInput, Check, Section, Tabs, ConfirmBtn } from '../components/ui.jsx';
-import { DOC_TYPES, DEFAULT_TEXTS, docSettings, loadDocData, defaults, currentInfo, editableFields, infoRef, profileFor, profileFromBook, PER_DELIVERY } from '../lib/docs/model.js';
+import { DOC_TYPES, DEFAULT_TEXTS, docSettings, loadDocData, defaults, currentInfo, editableFields, infoRef, profileFor, profileFromBook, PER_DELIVERY, isCompany } from '../lib/docs/model.js';
+import { VatReminder, VatReminderPopup } from '../components/VatReminder.jsx';
 import { buildPrintDoc, templatesFor, pageSize, PAPERS, FONT_CSS } from '../lib/docs/templates.js';
 import { openTemplateEditor } from '../lib/docs/editor-link.js';
 import { sampleData } from '../lib/docs/tokens.js';
 
 import { useDocFonts } from '../lib/docs/fonts.js';
 
-const TYPES_FOR = { quote: ['bao_gia'], contract: ['de_nghi_tam_ung', 'doi_chieu_sl', 'doi_chieu_tt', 'de_nghi_tt'], order: ['hoa_don', 'don_dat_hang', 'bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen'], delivery: ['bien_ban', 'hoa_don', 'hd_van_chuyen', 'phieu_xuat_kho', 'don_dat_hang'], payment: ['phieu_thu'] };
+const TYPES_FOR = { quote: ['bao_gia'], contract: ['de_nghi_tam_ung', 'doi_chieu_sl', 'doi_chieu_tt', 'de_nghi_tt'], order: ['hoa_don', 'don_dat_hang', 'bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen', 'yeu_cau_vat'], delivery: ['bien_ban', 'hoa_don', 'hd_van_chuyen', 'phieu_xuat_kho', 'don_dat_hang', 'yeu_cau_vat'], payment: ['phieu_thu'] };
 
 // ---------- Bản xem trước: chứng từ dựng từ mẫu in (HTML), đúng khổ giấy và lề ----------
 export function DocPreview({ doc }) {
@@ -77,12 +78,13 @@ export function DocStandalone({ link }) {
 // ---------- Chọn chứng từ của một đợt giao để tải cùng lúc ----------
 // Sau khi giao: hợp đồng vận chuyển, hóa đơn bán hàng, biên bản giao hàng (và phiếu thu nếu thu luôn) — chọn 1 hoặc nhiều,
 // gộp vào một tệp PDF (mỗi chứng từ một trang mới) hoặc tải từng tệp. Dùng thông tin đã lưu của từng chứng từ.
+// Khách là công ty: thêm phiếu yêu cầu xuất hóa đơn VAT để gửi kế toán.
 const BATCH_TYPES = [['hd_van_chuyen', 'Hợp đồng vận chuyển'], ['hoa_don', 'Hóa đơn bán hàng'], ['bien_ban', 'Biên bản giao hàng']];
 const BATCH_KEY = 'gomsu.doc_batch';
 function readBatch() { try { const v = JSON.parse(localStorage.getItem(BATCH_KEY) || 'null'); return v && typeof v === 'object' ? v : null; } catch (e) { return null; } }
-function BatchExport({ deliveryId, pay, ds, beforeExport }) {
+function BatchExport({ deliveryId, pay, ds, beforeExport, company, onDone }) {
   const { q, rpc, settings, toast, can } = useApp();
-  const opts = [...BATCH_TYPES, ...(pay ? [['phieu_thu', 'Phiếu thu']] : [])];
+  const opts = [...BATCH_TYPES, ...(company ? [['yeu_cau_vat', 'Phiếu yêu cầu xuất hóa đơn VAT']] : []), ...(pay ? [['phieu_thu', 'Phiếu thu']] : [])];
   const saved = readBatch();
   const [pick, setPick] = useState(() => Object.fromEntries(opts.map(([t]) => [t, saved?.pick?.[t] ?? true])));
   const [merge, setMerge] = useState(saved?.merge ?? true);
@@ -98,7 +100,7 @@ function BatchExport({ deliveryId, pay, ds, beforeExport }) {
       const [dd, pd] = await Promise.all([load({ kind: 'delivery', id: deliveryId }), pay && chosen.includes('phieu_thu') ? load({ kind: 'payment', id: pay }) : null]);
       const docs = chosen.map((t) => { const data = t === 'phieu_thu' ? pd : dd; return buildPrintDoc(t, data, ds, { ...defaults(t, data, ds), ...(currentInfo(t, data) || {}) }); });
       const { pdfBlob, printDocs } = await import('../lib/docs/pdf.js');
-      if (asImage === 'print') { await printDocs(docs); return; }
+      if (asImage === 'print') { await printDocs(docs); onDone?.(chosen); return; }
       const { pdfToImageBlob } = asImage ? await import('../lib/docs/image.js') : {};
       const out = async (list) => { const b = await pdfBlob(list); return asImage ? pdfToImageBlob(b) : b; };
       const ext = asImage ? 'png' : 'pdf'; const what = asImage ? 'ảnh' : 'tệp PDF';
@@ -109,6 +111,7 @@ function BatchExport({ deliveryId, pay, ds, beforeExport }) {
         for (const doc of docs) await saveFile(doc.filename.replace(/\.pdf$/i, '.' + ext), await out(doc));
         toast(`Đã tạo ${docs.length} ${what}`);
       }
+      onDone?.(chosen);
     } catch (e) { toast(`Không ${asImage === 'print' ? 'in được' : `tạo được ${asImage ? 'ảnh' : 'PDF'}`}: ` + e.message, 'err'); } finally { setBusy(false); setImgBusy(false); }
   };
   return (
@@ -142,6 +145,7 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
   const [data, setData] = useState(null); const [err, setErr] = useState(null);
   const [edit, setEdit] = useState({}); const [busy, setBusy] = useState(false); const [reload, setReload] = useState(0);
   const [showForm, setShowForm] = useState(true);
+  const [remindVat, setRemindVat] = useState(false);   // hộp nhắc xuất hóa đơn VAT sau khi in biên bản giao hàng
   // Mẫu in chọn cho từng loại chứng từ (nhớ lần chọn trước trên máy này)
   const [tplPick, setTplPick] = useState(() => { try { return JSON.parse(localStorage.getItem('gomsu.tpl_pick') || '{}') || {}; } catch (e) { return {}; } });
   const pickTpl = (t, v) => setTplPick((s) => { const n = { ...s, [t]: v }; try { localStorage.setItem('gomsu.tpl_pick', JSON.stringify(n)); } catch (e) { /* bỏ qua */ } return n; });
@@ -163,7 +167,10 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
   useEffect(() => { setEdit({}); }, [type, src.kind, src.id]);
 
   // Đề nghị thanh toán chỉ lập sau khi đã hoàn tất đối chiếu
-  const tabTypes = types.filter((t) => t !== 'de_nghi_tt' || data?.k?.reconciled_at);
+  const company = !!data?.o && isCompany(data.cust);
+  const tabTypes = types.filter((t) => (t !== 'de_nghi_tt' || data?.k?.reconciled_at) && (t !== 'yeu_cau_vat' || company));
+  // In / tải xong biên bản giao hàng của khách công ty → nhắc bước xuất hóa đơn VAT
+  const afterExport = (done) => { if (company && done.includes('bien_ban')) setRemindVat(true); };
   // Chỉ dựng khi dữ liệu đã nạp khớp với thẻ đang chọn (đổi thẻ Phiếu thu ↔ Biên bản phải chờ nạp lại)
   const ready = data && data.srcKey === srcKey && (type === 'phieu_thu') === (data.kind === 'payment')
     && (['payment', 'contract', 'quote'].includes(data.kind) || !(perDelivery ? false : src.kind === 'delivery'));
@@ -192,14 +199,14 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
       const { pdfBlob } = await import('../lib/docs/pdf.js');
       const blob = await pdfBlob(doc);
       const ok = await saveFile(doc.filename, blob);
-      if (ok) toast(`Đã tạo ${doc.filename}`);
+      if (ok) { toast(`Đã tạo ${doc.filename}`); afterExport([type]); }
     } catch (e) { toast('Không tạo được PDF: ' + e.message, 'err'); } finally { setBusy(false); }
   };
 
   const printNow = async () => {
     if (!doc || doc.error) return;
     setBusy(true);
-    try { await save(); const { printDocs } = await import('../lib/docs/pdf.js'); await printDocs(doc); } catch (e) { toast('Không in được: ' + e.message, 'err'); } finally { setBusy(false); }
+    try { await save(); const { printDocs } = await import('../lib/docs/pdf.js'); await printDocs(doc); afterExport([type]); } catch (e) { toast('Không in được: ' + e.message, 'err'); } finally { setBusy(false); }
   };
 
   // Chỉ quản trị (chủ sổ) xuất được ảnh PNG để gửi khách
@@ -210,7 +217,7 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
       await save();
       const [{ pdfBlob }, { pdfToImageBlob }] = await Promise.all([import('../lib/docs/pdf.js'), import('../lib/docs/image.js')]);
       const name = doc.filename.replace(/\.pdf$/i, '') + '.png';
-      if (await saveFile(name, await pdfToImageBlob(await pdfBlob(doc)))) toast(`Đã tạo ${name}`);
+      if (await saveFile(name, await pdfToImageBlob(await pdfBlob(doc)))) { toast(`Đã tạo ${name}`); afterExport([type]); }
     } catch (e) { toast('Không tạo được ảnh: ' + e.message, 'err'); } finally { setBusy(false); }
   };
 
@@ -229,10 +236,12 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
     <>
       {types.length > 1 && <Tabs value={type} onChange={setType} tabs={tabTypes.map((t) => ({ value: t, label: DOC_TYPES[t].label }))} />}
       <ErrorBox error={err || doc?.error} />
+      {company && <VatReminder orderId={data.o.id} onShowRequest={type === 'yeu_cau_vat' ? null : () => setType('yeu_cau_vat')} />}
+      {remindVat && <VatReminderPopup orderId={data?.o?.id} onShowRequest={() => setType('yeu_cau_vat')} onClose={() => setRemindVat(false)} />}
       {!data ? !err && <Loading /> : (
         <div className="doc-wrap">
           <div className="doc-side">
-            {kind === 'delivery' && <BatchExport deliveryId={id} pay={withPay ? pay : null} ds={ds} beforeExport={save} />}
+            {kind === 'delivery' && <BatchExport deliveryId={id} pay={withPay ? pay : null} ds={ds} beforeExport={save} company={company} onDone={afterExport} />}
             {perDelivery && !['payment', 'contract', 'quote'].includes(data.kind) && (
               <Field label="Lập theo">
                 <Select value={src.kind === 'delivery' ? src.id : ''} onChange={(v) => setSrc(v ? { kind: 'delivery', id: v } : { kind: 'order', id: data.o.id })}
@@ -266,6 +275,7 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
                 );
               })}
               {!canSave && <div className="muted small">Bạn không có quyền lưu thay đổi; nội dung sửa ở đây chỉ dùng cho lần tải này.</div>}
+              {type === 'yeu_cau_vat' && <div className="muted small">Thông tin bên mua lấy từ thẻ "Thông tin xuất hóa đơn" của khách. Đơn giá là giá trước thuế; cước vận chuyển và chiết khấu của đơn được thêm thành dòng riêng.</div>}
               {type === 'hoa_don' && <div className="muted small">Nợ cũ tự tính = công nợ hiện tại của khách trừ phần của đơn này. Tổng số hộp tự tính từ quy cách đóng gói của sản phẩm (hộp lẻ tính 1 hộp).</div>}
               <div className="muted small">Đơn vị phát hành, logo, nội dung và cách trình bày: Cài đặt → Mẫu in.</div>
             </div>}
@@ -294,7 +304,7 @@ const PROFILE_FIELDS = [
 ];
 // Nhóm loại chứng từ ở cột trái (giống "Quản lý mẫu in" của KiotViet)
 const TYPE_GROUPS = [
-  ['Bán hàng', ['hoa_don', 'don_dat_hang', 'bao_gia']],
+  ['Bán hàng', ['hoa_don', 'don_dat_hang', 'bao_gia', 'yeu_cau_vat']],
   ['Giao hàng', ['bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen']],
   ['Hợp đồng', ['de_nghi_tam_ung', 'doi_chieu_sl', 'doi_chieu_tt', 'de_nghi_tt']],
   ['Sổ quỹ', ['phieu_thu']],

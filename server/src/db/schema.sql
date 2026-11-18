@@ -798,6 +798,20 @@ create table if not exists attachments (
 );
 create index if not exists attachments_ref_idx on attachments (ref_type, ref_id);
 
+-- ---------- KHO TÀI LIỆU RIÊNG CỦA TỪNG KHÁCH HÀNG (thư mục, tệp tải lên, link) ----------
+create table if not exists customer_files (
+  id text primary key,
+  book_id text not null references books(id) on delete cascade,
+  customer_id text not null references customers(id) on delete cascade,
+  parent_id text references customer_files(id) on delete cascade,   -- thư mục chứa; null = thư mục gốc của khách
+  kind text not null check (kind in ('folder','file','link')),
+  name text not null,
+  url text,                -- link
+  mime text, size integer, data blob,   -- tệp
+  created_by text, created_at text not null, updated_at text
+);
+create index if not exists customer_files_idx on customer_files (customer_id, parent_id);
+
 -- ---------- HÓA ĐƠN ĐẦU VÀO / ĐẦU RA (kho chứng từ dùng chung Mua hàng và Thuế) ----------
 create table if not exists tax_invoices (
   id text primary key,

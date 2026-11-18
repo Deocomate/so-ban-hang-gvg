@@ -17,6 +17,7 @@ import {
   Btn, Icon, Pill, StatusPill, DELIVERY, PAYMENT, Field, Input, TextArea, Select, DateInput, NumInput, Check, Tabs, Search, Loading,
   ErrorBox, Note, Table, Modal, ConfirmBtn, Picker, KV, Section, Empty, ListPage, FilterBox, RadioList,
 } from '../components/ui.jsx';
+import { VatReminder } from '../components/VatReminder.jsx';
 
 // ===================== DANH SÁCH ĐƠN BÁN =====================
 // Như KiotViet: hóa đơn gồm đơn bán ngay và đơn đặt hàng đã giao ít nhất một đợt (phiếu đặt chưa giao nằm ở trang Đặt hàng).
@@ -429,6 +430,7 @@ export function OrderDetail({ id, onClose }) {
           {d.overdue_days > 0 && <><span className="bad">Quá hạn thanh toán</span><span className="r bad">{d.overdue_days} ngày</span></>}
         </div></div>
       </div>
+      <VatReminder orderId={d.delivery_count > 0 ? id : null} onShowRequest={() => open('doc', { kind: 'order', id, type: 'yeu_cau_vat' })} />
       {d.status === 'xac_nhan' && d.eff_qty > 0 && <div className="deliv-bar"><span>Đã giao <b>{fq(d.delivered_qty)}</b> / {fq(d.eff_qty)}</span><div className="prog grow"><i style={{ width: `${Math.min(100, (d.delivered_qty / d.eff_qty) * 100)}%` }} /></div><b>{fq((d.delivered_qty / d.eff_qty) * 100)}%</b><span>Còn phải giao <b className="warn">{fq(d.remaining_qty)}</b></span></div>}
       <Section title="Hàng trong đơn">
         <Table dense rows={lines.data} columns={[

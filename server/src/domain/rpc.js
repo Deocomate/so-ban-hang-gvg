@@ -33,6 +33,8 @@ import * as loyalty from './loyalty.js';
 import * as shifts from './shifts.js';
 import * as purge from './purge.js';
 import * as recurring from './expense-recurring.js';
+import * as customerFiles from './customer-files.js';
+import * as reminders from './reminders.js';
 
 const pick = (mod, names) => Object.fromEntries(names.map((n) => {
   if (typeof mod[n] !== 'function') throw new Error(`Thiếu hàm ${n}`);
@@ -58,6 +60,9 @@ export const RPC = {
   ...pick(quotes, ['save_quote', 'set_quote_status']),
   ...pick(contracts, ['save_contract', 'set_contract_reconciled', 'upload_attachment', 'get_attachment', 'delete_attachment']),
   ...pick(tax, ['save_tax_invoice', 'void_tax_invoice', 'rpt_tax']),
+  ...pick(customerFiles, ['customer_files', 'create_customer_folder', 'upload_customer_file', 'add_customer_link', 'update_customer_item', 'move_customer_items',
+    'delete_customer_items', 'get_customer_file', 'set_customer_drive']),
+  ...pick(reminders, ['vat_invoice_todo']),
   ...pick(staff, ['save_employee', 'save_shift', 'save_schedule', 'save_timesheet', 'delete_timesheet', 'fill_timesheets', 'save_commission_table',
     'create_paysheet', 'recalc_paysheet', 'adjust_paysheet_line', 'close_paysheet', 'cancel_paysheet', 'rpt_staff']),
   ...pick(groups, ['save_customer_group', 'delete_customer_group', 'set_customer_group', 'refresh_customer_groups']),
