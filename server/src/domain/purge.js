@@ -5,45 +5,55 @@ import { ctx, fail, one, all, run, insert, uuid, nowIso, asDate, today, rnd, dmy
 import { requirePerm, bookSettings, nextCode } from './access.js';
 import { custBalances, suppBalances } from './reports.js';
 
-function pick(b, d) {
-  const orders = all(`select o.id from sales_orders o where o.book_id = ? and o.order_date <= ?
-      and (o.status = 'huy' or not exists (select 1 from sales_order_lines l where l.order_id = o.id and l.qty - l.cancelled_qty - l.delivered_qty > 0))
+// wide = ngắt dữ liệu ({kh, ncc}: bên nào giữ số dư): lấy cả chứng từ chưa khép (giao / nhận chưa đủ, chi phí chưa trả) và nợ đầu kỳ
+// của bên không giữ số dư; vẫn chừa chứng từ còn phát sinh (giao, trả, thu chi) sau ngày chọn để không làm hỏng dữ liệu đang dùng.
+function pick(b, d, wide = null) {
+  const doneSo = wide ? '' : `and (o.status = 'huy' or not exists (select 1 from sales_order_lines l where l.order_id = o.id and l.qty - l.cancelled_qty - l.delivered_qty > 0))`;
+  const donePo = wide ? '' : `and (o.status = 'huy' or not exists (select 1 from purchase_order_lines l where l.po_id = o.id and l.qty - l.cancelled_qty - l.received_qty > 0))`;
+  const orders = all(`select o.id from sales_orders o where o.book_id = ? and o.order_date <= ? ${doneSo}
       and not exists (select 1 from deliveries x where x.order_id = o.id and x.delivery_date > ?)
       and not exists (select 1 from sales_returns x where x.order_id = o.id and x.return_date > ?)
       and not exists (select 1 from contracts k where k.order_id = o.id)
       and not exists (select 1 from payment_allocations a join payments p on p.id = a.payment_id where a.doc_type = 'don_ban' and a.doc_id = o.id and p.pay_date > ?)`, b, d, d, d, d).map((r) => r.id);
-  const pos = all(`select o.id from purchase_orders o where o.book_id = ? and o.order_date <= ?
-      and (o.status = 'huy' or not exists (select 1 from purchase_order_lines l where l.po_id = o.id and l.qty - l.cancelled_qty - l.received_qty > 0))
+  const pos = all(`select o.id from purchase_orders o where o.book_id = ? and o.order_date <= ? ${donePo}
       and not exists (select 1 from goods_receipts x where x.po_id = o.id and x.receipt_date > ?)
       and not exists (select 1 from supplier_returns x where x.po_id = o.id and x.return_date > ?)
       and not exists (select 1 from payment_allocations a join payments p on p.id = a.payment_id where a.doc_type = 'don_mua' and a.doc_id = o.id and p.pay_date > ?)`, b, d, d, d, d).map((r) => r.id);
   const exps = all(`select e.id from v_expenses e where e.book_id = ? and e.exp_date <= ? and coalesce(e.alloc_end, e.exp_date) <= ?
-      and (e.voided = 1 or e.unpaid = 0) and not exists (select 1 from paysheet_lines l where l.expense_id = e.id)
+      ${wide ? '' : 'and (e.voided = 1 or e.unpaid = 0)'} and not exists (select 1 from paysheet_lines l where l.expense_id = e.id)
       and not exists (select 1 from payment_allocations a join payments p on p.id = a.payment_id where a.doc_type = 'chi_phi' and a.doc_id = e.id and p.pay_date > ?)`, b, d, d, d).map((r) => r.id);
-  const gone = new Set([...orders, ...pos, ...exps]);
+  const dropTypes = wide ? ['kh', 'ncc'].filter((t) => !wide[t]) : [];
+  const debts = dropTypes.length ? all(`select o.id from opening_debts o where o.book_id = ? and o.debt_date <= ? and o.party_type in (select value from json_each(?))
+      and not exists (select 1 from payment_allocations a join payments p on p.id = a.payment_id where a.doc_type = 'no_dau_ky' and a.doc_id = o.id and p.pay_date > ?)`,
+  b, d, JSON.stringify(dropTypes), d).map((r) => r.id) : [];
+  const gone = new Set([...orders, ...pos, ...exps, ...debts]);
   // Phiếu thu chi: trước ngày xóa và mọi chứng từ được phân bổ đều bị xóa (hoặc không phân bổ cho chứng từ nào)
   const pays = all(`select p.id, (select json_group_array(a.doc_id) from payment_allocations a where a.payment_id = p.id) as docs from payments p
       where p.book_id = ? and p.pay_date <= ? and not exists (select 1 from expenses e where e.settled_payment_id = p.id and e.exp_date > ?)`, b, d, d)
     .filter((p) => json(p.docs, []).every((x) => gone.has(x))).map((p) => p.id);
   const sret = all(`select r.id from supplier_returns r where r.book_id = ? and r.return_date <= ? and r.po_id is null`, b, d).map((r) => r.id);
-  return { orders, pos, exps, pays, sret,
+  return { orders, pos, exps, pays, sret, debts,
     adjs: all(`select id from stock_adjustments where book_id = ? and adj_date <= ? and id not like 'xoa-du-lieu-%'`, b, d).map((r) => r.id),
     prods: all(`select id from productions where book_id = ? and prod_date <= ?`, b, d).map((r) => r.id),
     moves: one(`select count(*) as n from stock_moves where book_id = ? and move_date <= ?`, b, d).n };
 }
+export const pickOld = pick;
 
 const LABELS = { orders: 'Đơn bán (kèm phiếu giao, trả hàng)', pos: 'Đơn nhập (kèm phiếu nhập, trả hàng nhập)', exps: 'Chi phí', pays: 'Phiếu thu, chi',
   sret: 'Phiếu trả hàng nhập lập riêng', adjs: 'Phiếu điều chỉnh, xuất hủy, xuất dùng nội bộ', prods: 'Phiếu sản xuất', moves: 'Dòng sổ kho' };
-const checkCutoff = (b, d) => {
-  if (!d) fail('Chọn ngày'); if (d >= today()) fail('Chỉ xóa được dữ liệu trước hôm nay');
-  const lk = bookSettings(b).lock_date; if (!lk || d > lk) fail(`Hãy khóa sổ đến ngày ${dmy(d)} trước khi xóa dữ liệu đến ngày đó (Thiết lập → Khóa sổ)`);
+export const LABELS_DETACH = { ...LABELS, debts: 'Nợ đầu kỳ của khách / NCC' };
+export const countsOf = (x, labels = LABELS) => Object.fromEntries(Object.keys(labels).map((k) => [k, Array.isArray(x[k]) ? x[k].length : x[k]]));
+export const checkCutoff = (b, d, verb = 'xóa') => {
+  if (!d) fail('Chọn ngày'); if (d >= today()) fail(`Chỉ ${verb} được dữ liệu trước hôm nay`);
+  const lk = bookSettings(b).lock_date; if (!lk || d > lk) fail(`Hãy khóa sổ đến ngày ${dmy(d)} trước khi ${verb} dữ liệu đến ngày đó (Thiết lập → Khóa sổ)`);
 };
 
 export function purge_preview(p) {
   const b = p.book_id; requirePerm(b, 'owner');
   const d = asDate(p.cutoff); checkCutoff(b, d);
   const x = pick(b, d);
-  return { cutoff: d, items: Object.entries(LABELS).map(([k, label]) => ({ key: k, label, count: Array.isArray(x[k]) ? x[k].length : x[k] })) };
+  const n = countsOf(x);
+  return { cutoff: d, items: Object.entries(LABELS).map(([k, label]) => ({ key: k, label, count: n[k] })) };
 }
 
 export function schedule_purge(p) {
@@ -69,8 +79,16 @@ const balMap = (rows) => new Map(rows.map((r) => [r.party_id, r.balance]));
 export function runPurge(jobId) {
   const j = one(`select * from purge_jobs where id = ?`, jobId);
   if (!j || j.status !== 'cho') return { skipped: true };
-  const b = j.book_id; const d = j.cutoff;
-  const x = pick(b, d);
+  const x = pick(j.book_id, j.cutoff);
+  removeOld(j.book_id, j.cutoff, x, { kh: true, ncc: true }, j.id);
+  const result = countsOf(x);
+  run(`update purge_jobs set status = 'xong', done_at = ?, result = ? where id = ?`, nowIso(), JSON.stringify(result), j.id);
+  return { id: j.id, result };
+}
+
+// Xóa chứng từ đã chọn (pick) đến hết ngày d. Tồn kho, số dư quỹ, điểm luôn giữ nguyên (chuyển thành số đầu kỳ);
+// công nợ khách / NCC chỉ chuyển thành nợ đầu kỳ khi keep.kh / keep.ncc (ngắt dữ liệu thì có thể bỏ hẳn khoản nợ cũ).
+export function removeOld(b, d, x, keep, tag, word = 'đã xóa') {
   const c0 = balMap(custBalances(b, d)); const s0 = balMap(suppBalances(b, d)); const f0 = fundBal(b);
   const stock = all(`select product_id, sum(qty) as q, sum(value) as v from stock_moves where book_id = ? and move_date <= ? group by product_id`, b, d);
   const pts = all(`select customer_id, sum(points) as p from point_moves where book_id = ? and move_date <= ? group by customer_id`, b, d);
@@ -102,29 +120,27 @@ export function runPurge(jobId) {
   run(`delete from stock_adjustments where id in ${inList(x.adjs)}`);
   run(`delete from productions where id in ${inList(x.prods)}`);
   run(`delete from stock_moves where book_id = ? and move_date <= ?`, b, d);
-  const code = nextCode(b, 'DK'); const adjId = `xoa-du-lieu-${j.id}`;
+  const code = nextCode(b, 'DK'); const adjId = `xoa-du-lieu-${tag}`;
   for (const s of stock) {
     if (!s.q && !s.v) continue;
     insert('stock_moves', { book_id: b, product_id: s.product_id, move_date: d, qty: s.q, value: s.v, unit_cost: s.q ? Math.abs(s.v / s.q) : 0, doc_type: 'dau_ky', doc_id: adjId,
-      doc_code: code, balance_qty: s.q, balance_value: s.v, src_value: s.v, note: `Tồn đến ${dmy(d)} (dữ liệu cũ đã xóa)`, created_by: ctx.uid, created_at: nowIso() });
+      doc_code: code, balance_qty: s.q, balance_value: s.v, src_value: s.v, note: `Tồn đến ${dmy(d)} (dữ liệu cũ ${word})`, created_by: ctx.uid, created_at: nowIso() });
   }
+  if (x.debts?.length) run(`delete from opening_debts where id in ${inList(x.debts)}`);
   // Điểm
   run(`delete from point_moves where book_id = ? and move_date <= ?`, b, d);
-  for (const r of pts) if (r.p) insert('point_moves', { book_id: b, customer_id: r.customer_id, move_date: d, points: r.p, kind: 'dieu_chinh', note: `Điểm đến ${dmy(d)} (dữ liệu cũ đã xóa)`, created_by: ctx.uid, created_at: nowIso() });
+  for (const r of pts) if (r.p) insert('point_moves', { book_id: b, customer_id: r.customer_id, move_date: d, points: r.p, kind: 'dieu_chinh', note: `Điểm đến ${dmy(d)} (dữ liệu cũ ${word})`, created_by: ctx.uid, created_at: nowIso() });
   // Công nợ: phần chênh sau khi xóa thành nợ đầu kỳ tại ngày xóa
   const debt = (type, before, after) => {
     for (const id of new Set([...before.keys(), ...after.keys()])) {
       const diff = rnd((before.get(id) ?? 0) - (after.get(id) ?? 0));
       if (diff) insert('opening_debts', { id: uuid(), book_id: b, code: nextCode(b, 'NDK'), party_type: type, party_id: id, amount: diff, debt_date: d, due_date: d,
-        note: `Số dư đến ${dmy(d)} (dữ liệu cũ đã xóa)`, created_by: ctx.uid, created_at: nowIso() });
+        note: `Số dư đến ${dmy(d)} (dữ liệu cũ ${word})`, created_by: ctx.uid, created_at: nowIso() });
     }
   };
-  debt('kh', c0, balMap(custBalances(b, d)));
-  debt('ncc', s0, balMap(suppBalances(b, d)));
+  if (keep.kh) debt('kh', c0, balMap(custBalances(b, d)));
+  if (keep.ncc) debt('ncc', s0, balMap(suppBalances(b, d)));
   for (const [id, bal] of fundBal(b)) { const diff = rnd((f0.get(id) ?? 0) - bal); if (diff) run(`update funds set opening_balance = opening_balance + ? where id = ?`, diff, id); }
-  const result = Object.fromEntries(Object.keys(LABELS).map((k) => [k, Array.isArray(x[k]) ? x[k].length : x[k]]));
-  run(`update purge_jobs set status = 'xong', done_at = ?, result = ? where id = ?`, nowIso(), JSON.stringify(result), j.id);
-  return { id: j.id, result };
 }
 
 // Lịch tự động: chạy các lịch xóa đã đến giờ

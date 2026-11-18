@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dữ liệu đã ngắt</title>
+<style>
+:root { --bg:#f6f5f2; --card:#fff; --ink:#1d1d1b; --mute:#6b6a65; --line:#e4e2dc; --accent:#9a4a1f; --accent-soft:#f3e6dc; --good:#2f6b3a; --bad:#a3302a; --bar:#c98a5e; }
+@media (prefers-color-scheme: dark) { :root { --bg:#161513; --card:#201f1c; --ink:#eceae4; --mute:#a19f97; --line:#34322e; --accent:#e0a074; --accent-soft:#3a2a1f; --good:#7cc489; --bad:#ec8a83; --bar:#b9774b; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+.wrap { max-width:1200px; margin:0 auto; padding:24px 16px 64px; }
+h1 { font-size:22px; margin:0 0 4px; } h2 { font-size:16px; margin:28px 0 10px; }
+.mute { color:var(--mute); } .small { font-size:12px; }
+.head { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; align-items:flex-end; border-bottom:1px solid var(--line); padding-bottom:14px; }
+.range { display:inline-block; background:var(--accent-soft); color:var(--accent); padding:4px 10px; border-radius:999px; font-weight:600; margin-top:6px; }
+.cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:10px; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+.card b { display:block; font-size:18px; font-variant-numeric:tabular-nums; } .card span { color:var(--mute); font-size:12px; }
+.panel { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; overflow:auto; }
+table { border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums; }
+th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; white-space:nowrap; }
+th { font-size:12px; color:var(--mute); font-weight:600; position:sticky; top:0; background:var(--card); }
+td.num, th.num { text-align:right; }
+tr.click { cursor:pointer; } tr.click:hover td { background:var(--accent-soft); }
+tr.sub td { background:var(--bg); white-space:normal; }
+.bars { display:grid; gap:6px; }
+.bar { display:grid; grid-template-columns:52px 1fr 140px; gap:8px; align-items:center; font-variant-numeric:tabular-nums; }
+.bar i { display:block; height:14px; background:var(--bar); border-radius:3px; min-width:1px; }
+.tabs { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+.tabs button { border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:999px; padding:5px 12px; cursor:pointer; font:inherit; }
+.tabs button.on { background:var(--accent); border-color:var(--accent); color:var(--card); }
+.tools { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:8px; }
+input[type=search] { font:inherit; padding:6px 10px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--ink); min-width:240px; flex:1; max-width:420px; }
+.pager button { font:inherit; border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:6px; padding:3px 10px; cursor:pointer; }
+.up { color:var(--bad); } .down { color:var(--good); }
+.note { border-left:3px solid var(--accent); padding:8px 12px; background:var(--card); border-radius:0 8px 8px 0; }
+@media print { .tabs, .tools, .pager { display:none; } body { background:#fff; } }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><p>Đang mở dữ liệu…</p></div>
+<script src="du-lieu/du-lieu.js"></script>
+<script>
+(function () {
+  var A = window.ARCHIVE;
+  var app = document.getElementById('app');
+  if (!A) { app.innerHTML = '<p>Không đọc được tệp du-lieu/du-lieu.js. Hãy giải nén toàn bộ thư mục rồi mở lại index.html.</p>'; return; }
+  var T = A.tables || {}; var R = A.refs || {};
+
+  var TABLE_LABELS = {
+    sales_orders: 'Đơn bán', sales_order_lines: 'Dòng hàng đơn bán', deliveries: 'Phiếu giao hàng', delivery_lines: 'Dòng hàng phiếu giao',
+    sales_returns: 'Khách trả hàng', sales_return_lines: 'Dòng hàng khách trả', order_promos: 'Khuyến mại trên đơn', order_events: 'Lịch sử đơn bán',
+    purchase_orders: 'Đơn nhập', purchase_order_lines: 'Dòng hàng đơn nhập', goods_receipts: 'Phiếu nhập kho', goods_receipt_lines: 'Dòng hàng phiếu nhập',
+    supplier_returns: 'Trả hàng nhập', supplier_return_lines: 'Dòng hàng trả nhập', payments: 'Phiếu thu, chi', payment_allocations: 'Phân bổ thu chi',
+    expenses: 'Chi phí', opening_debts: 'Nợ đầu kỳ', stock_moves: 'Sổ kho', stock_adjustments: 'Phiếu điều chỉnh kho', stock_adjustment_lines: 'Dòng phiếu điều chỉnh',
+    productions: 'Phiếu sản xuất', production_lines: 'Dòng phiếu sản xuất', point_moves: 'Điểm tích lũy', shipments: 'Vận đơn', shipment_events: 'Hành trình vận đơn',
+    doc_info: 'Thông tin chứng từ'
+  };
+  var ORDER = Object.keys(TABLE_LABELS);
+  var COL = {
+    code: 'Mã', status: 'Trạng thái', kind: 'Loại', order_date: 'Ngày đặt', delivery_date: 'Ngày giao', return_date: 'Ngày trả', receipt_date: 'Ngày nhập',
+    pay_date: 'Ngày thu chi', exp_date: 'Ngày chi phí', adj_date: 'Ngày phiếu', prod_date: 'Ngày sản xuất', move_date: 'Ngày', debt_date: 'Ngày nợ', due_date: 'Hạn',
+    customer_id: 'Khách hàng', supplier_id: 'Nhà cung cấp', product_id: 'Hàng hóa', fund_id: 'Quỹ', to_fund_id: 'Sang quỹ', party_id: 'Đối tượng', party_type: 'Loại đối tượng',
+    order_id: 'Đơn bán', po_id: 'Đơn nhập', delivery_id: 'Phiếu giao', receipt_id: 'Phiếu nhập', return_id: 'Phiếu trả', payment_id: 'Phiếu thu chi',
+    qty: 'Số lượng', unit_price: 'Đơn giá', unit_cost: 'Giá vốn', unit_price_net: 'Đơn giá thực', discount: 'Giảm giá', discount_pct: '% giảm', revenue: 'Doanh thu', cogs: 'Giá vốn hàng bán',
+    value: 'Giá trị', amount: 'Số tiền', fee: 'Phí', shipping_fee: 'Phí giao', direction: 'Thu / chi', method: 'Hình thức', note: 'Ghi chú', description: 'Diễn giải', category: 'Hạng mục',
+    voided: 'Đã hủy', cancelled_qty: 'SL hủy', delivered_qty: 'SL đã giao', received_qty: 'SL đã nhận', returned_qty: 'SL trả', points: 'Điểm', doc_code: 'Chứng từ', doc_type: 'Loại chứng từ',
+    balance_qty: 'Tồn SL', balance_value: 'Tồn giá trị', vat_rate: '% VAT', channel: 'Kênh', staff: 'Nhân viên', created_at: 'Tạo lúc', cancel_reason: 'Lý do hủy', reason: 'Lý do', _total: 'Tổng tiền đơn'
+  };
+  var HIDE = { id: 1, book_id: 1, created_by: 1, user_id: 1, line_no: 1, src_value: 1, anchor_id: 1, price_book_id: 1, unit_conv: 1, doc_id: 1, line_id: 1 };
+  var MONEY = /^(unit_price|unit_cost|unit_price_net|discount|revenue|cogs|value|amount|fee|shipping_fee|balance_value|_total|deposit_used|cost_value|extra_cost|pl_amount)$/;
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function money(n) { n = Number(n) || 0; return Math.round(n).toLocaleString('vi-VN'); }
+  function dmy(d) { return d ? String(d).slice(8, 10) + '/' + String(d).slice(5, 7) + '/' + String(d).slice(0, 4) : ''; }
+  function rows(t) { return T[t] || []; }
+  function byId(list) { var m = {}; (list || []).forEach(function (x) { m[x.id] = x; }); return m; }
+  var CUS = byId(R.customers), SUP = byId(R.suppliers), PRO = byId(R.products), FUN = byId(R.funds);
+  var DOCS = {}; ['sales_orders', 'purchase_orders', 'deliveries', 'goods_receipts', 'sales_returns', 'supplier_returns', 'payments', 'expenses', 'stock_adjustments', 'productions'].forEach(function (t) { rows(t).forEach(function (r) { DOCS[r.id] = r.code; }); });
+  function party(type, id) { var x = (type === 'ncc' ? SUP : CUS)[id]; return x ? x.code + ' · ' + x.name : id; }
+  function show(t, c, r) {
+    var v = r[c]; if (v == null || v === '') return '';
+    if (c === 'customer_id') return party('kh', v);
+    if (c === 'supplier_id') return party('ncc', v);
+    if (c === 'party_id') return party(r.party_type, v);
+    if (c === 'product_id') { var p = PRO[v]; return p ? p.sku + ' · ' + p.name : v; }
+    if (c === 'fund_id' || c === 'to_fund_id') return FUN[v] ? FUN[v].name : v;
+    if (/_id$/.test(c) && DOCS[v]) return DOCS[v];
+    if (/_date$/.test(c) || c === 'created_at') return dmy(v);
+    if (MONEY.test(c)) return money(v);
+    return v;
+  }
+  function year(d) { return d ? String(d).slice(0, 4) : '?'; }
+
+  // Tổng tiền từng đơn bán tính lại từ dòng hàng
+  var lineTotal = {};
+  rows('sales_order_lines').forEach(function (l) { lineTotal[l.order_id] = (lineTotal[l.order_id] || 0) + l.qty * l.unit_price * (1 - (l.discount_pct || 0) / 100); });
+  rows('sales_orders').forEach(function (o) { o._total = (lineTotal[o.id] || 0) - (o.discount || 0) + (o.shipping_fee || 0); });
+
+  // Thống kê theo năm
+  var Y = {};
+  function add(y, k, v) { (Y[y] = Y[y] || { orders: 0, revenue: 0, cin: 0, cout: 0, exp: 0, buy: 0, debt: 0 })[k] += v; }
+  rows('sales_orders').forEach(function (o) { if (o.status !== 'huy') add(year(o.order_date), 'orders', 1); });
+  var DEL = byId(rows('deliveries'));
+  rows('delivery_lines').forEach(function (l) { var d = DEL[l.delivery_id]; if (d) add(year(d.delivery_date), 'revenue', l.revenue || 0); });
+  rows('deliveries').forEach(function (d) { add(year(d.delivery_date), 'revenue', d.shipping_fee || 0); });
+  rows('payments').forEach(function (p) { if (p.voided) return; if (p.direction === 'thu') add(year(p.pay_date), 'cin', p.amount); else if (p.direction === 'chi') add(year(p.pay_date), 'cout', p.amount); });
+  rows('expenses').forEach(function (e) { if (!e.voided) add(year(e.exp_date), 'exp', e.amount || 0); });
+  var GR = byId(rows('goods_receipts'));
+  rows('goods_receipt_lines').forEach(function (l) { var g = GR[l.receipt_id]; if (g && !g.cancelled_at) add(year(g.receipt_date), 'buy', l.value || 0); });
+  rows('opening_debts').forEach(function (d) { add(year(d.debt_date), 'debt', d.amount || 0); });
+  var years = Object.keys(Y).sort();
+  var tot = years.reduce(function (s, y) { Object.keys(Y[y]).forEach(function (k) { s[k] = (s[k] || 0) + Y[y][k]; }); return s; }, {});
+
+  // Dòng con của từng chứng từ (dòng hàng, phiếu giao, phân bổ…) theo các cột *_id
+  var NOT_LINK = { book_id: 1, product_id: 1, customer_id: 1, supplier_id: 1, fund_id: 1, to_fund_id: 1, party_id: 1, user_id: 1, created_by: 1, price_book_id: 1 };
+  var CHILD = {};
+  Object.keys(T).forEach(function (t) { rows(t).forEach(function (r) { Object.keys(r).forEach(function (c) { if (/_id$/.test(c) && !NOT_LINK[c] && r[c]) (CHILD[r[c]] = CHILD[r[c]] || []).push([t, r]); }); }); });
+
+  function cols(t) {
+    var seen = {}; rows(t).slice(0, 200).forEach(function (r) { Object.keys(r).forEach(function (c) { if (!HIDE[c]) seen[c] = 1; }); });
+    var list = Object.keys(seen);
+    var first = ['code', 'order_date', 'delivery_date', 'receipt_date', 'return_date', 'pay_date', 'exp_date', 'adj_date', 'prod_date', 'move_date', 'debt_date', 'customer_id', 'supplier_id', 'party_id', 'product_id', '_total', 'amount'];
+    return list.sort(function (a, b) { var i = first.indexOf(a), j = first.indexOf(b); return (i < 0 ? 99 : i) - (j < 0 ? 99 : j); });
+  }
+  function miniTable(t, list) {
+    var cs = cols(t).filter(function (c) { return list.some(function (r) { return r[c] != null && r[c] !== ''; }); });
+    return '<div class="small mute" style="margin:6px 0 2px">' + esc(TABLE_LABELS[t] || t) + '</div><table><tr>' + cs.map(function (c) { return '<th class="' + (MONEY.test(c) || typeof list[0][c] === 'number' ? 'num' : '') + '">' + esc(COL[c] || c) + '</th>'; }).join('') + '</tr>' +
+      list.map(function (r) { return '<tr>' + cs.map(function (c) { return '<td class="' + (typeof r[c] === 'number' ? 'num' : '') + '">' + esc(show(t, c, r)) + '</td>'; }).join('') + '</tr>'; }).join('') + '</table>';
+  }
+
+  var keep = A.keep || {};
+  var debt = A.debt || {};
+  function debtBox(label, d) {
+    if (!d) return '';
+    return '<div class="card"><span>' + label + '</span><b>' + money(d.before) + ' → ' + money(d.after) + '</b><span class="' + (d.after < d.before ? 'down' : 'mute') + '">' + (d.after < d.before ? 'Giảm ' + money(d.before - d.after) : 'Không đổi') + ' · ' + (d.changed || 0) + ' bên thay đổi</span></div>';
+  }
+  var present = ORDER.filter(function (t) { return rows(t).length; }).concat(Object.keys(T).filter(function (t) { return ORDER.indexOf(t) < 0 && rows(t).length; }));
+  var maxRev = Math.max.apply(null, years.map(function (y) { return Y[y].revenue; }).concat([1]));
+  var parties = [].concat((debt.kh && debt.kh.parties || []).map(function (p) { return ['Khách hàng', p]; }), (debt.ncc && debt.ncc.parties || []).map(function (p) { return ['Nhà cung cấp', p]; }));
+
+  app.innerHTML =
+    '<div class="head"><div><div class="mute small">' + esc(A.book && A.book.name) + ' · ' + esc(A.code) + '</div><h1>Dữ liệu đã ngắt khỏi sổ</h1>' +
+    '<span class="range">Từ ' + dmy(A.from_date) + ' đến hết ' + dmy(A.cutoff) + '</span></div>' +
+    '<div class="small mute">Ngắt lúc ' + esc(new Date(A.created_at).toLocaleString('vi-VN')) + (A.created_by ? ' · ' + esc(A.created_by) : '') + '<br>Công nợ khách: ' + (keep.kh ? 'giữ thành nợ đầu kỳ' : 'bỏ khỏi sổ') + ' · Công nợ NCC: ' + (keep.ncc ? 'giữ thành nợ đầu kỳ' : 'bỏ khỏi sổ') + '</div></div>' +
+    '<h2>Tổng quan</h2><div class="cards">' +
+      '<div class="card"><span>Đơn bán</span><b>' + money(rows('sales_orders').length) + '</b></div>' +
+      '<div class="card"><span>Doanh thu giao hàng</span><b>' + money(tot.revenue) + '</b></div>' +
+      '<div class="card"><span>Tiền thu</span><b>' + money(tot.cin) + '</b></div>' +
+      '<div class="card"><span>Tiền chi</span><b>' + money(tot.cout) + '</b></div>' +
+      '<div class="card"><span>Chi phí</span><b>' + money(tot.exp) + '</b></div>' +
+      '<div class="card"><span>Hàng nhập</span><b>' + money(tot.buy) + '</b></div>' +
+      '<div class="card"><span>Nợ đầu kỳ</span><b>' + money(tot.debt) + '</b></div>' +
+      debtBox('Phải thu khách (trước → sau khi ngắt)', debt.kh) + debtBox('Phải trả NCC (trước → sau khi ngắt)', debt.ncc) +
+    '</div>' +
+    (years.length ? '<h2>Doanh thu theo năm</h2><div class="panel bars">' + years.map(function (y) { return '<div class="bar"><span>' + y + '</span><i style="width:' + (Y[y].revenue / maxRev * 100).toFixed(1) + '%"></i><span class="small">' + money(Y[y].revenue) + '</span></div>'; }).join('') + '</div>' +
+      '<h2>Số liệu theo năm</h2><div class="panel"><table><tr><th>Năm</th><th class="num">Đơn bán</th><th class="num">Doanh thu</th><th class="num">Tiền thu</th><th class="num">Tiền chi</th><th class="num">Chi phí</th><th class="num">Hàng nhập</th><th class="num">Nợ đầu kỳ</th></tr>' +
+      years.map(function (y) { var x = Y[y]; return '<tr><td>' + y + '</td><td class="num">' + money(x.orders) + '</td><td class="num">' + money(x.revenue) + '</td><td class="num">' + money(x.cin) + '</td><td class="num">' + money(x.cout) + '</td><td class="num">' + money(x.exp) + '</td><td class="num">' + money(x.buy) + '</td><td class="num">' + money(x.debt) + '</td></tr>'; }).join('') + '</table></div>' : '') +
+    (parties.length ? '<h2>Công nợ thay đổi nhiều nhất</h2><div class="panel"><table><tr><th>Loại</th><th>Mã</th><th>Tên</th><th class="num">Trước khi ngắt</th><th class="num">Sau khi ngắt</th><th class="num">Chênh</th></tr>' +
+      parties.map(function (x) { var p = x[1]; return '<tr><td>' + x[0] + '</td><td>' + esc(p.code) + '</td><td>' + esc(p.name) + '</td><td class="num">' + money(p.before) + '</td><td class="num">' + money(p.after) + '</td><td class="num">' + money(p.after - p.before) + '</td></tr>'; }).join('') + '</table></div>' : '') +
+    '<h2>Chi tiết dữ liệu</h2><div class="tabs" id="tabs"></div><div class="tools"><input type="search" id="q" placeholder="Tìm theo mã, tên khách, hàng hóa, ghi chú…"><span class="small mute" id="cnt"></span><span class="pager" id="pager"></span></div>' +
+    '<div class="panel" id="grid"></div>' +
+    '<p class="small mute">Bấm vào một dòng để xem các dòng liên quan (dòng hàng, phiếu giao, phân bổ thu chi…). Dữ liệu gốc dạng JSON nằm trong thư mục du-lieu.</p>';
+
+  var cur = present[0], page = 0, open = {}, PER = 100;
+  var tabs = document.getElementById('tabs');
+  tabs.innerHTML = present.map(function (t) { return '<button data-t="' + t + '">' + esc(TABLE_LABELS[t] || t) + ' <span class="small">(' + money(rows(t).length) + ')</span></button>'; }).join('');
+  tabs.onclick = function (e) { var b = e.target.closest('button'); if (!b) return; cur = b.getAttribute('data-t'); page = 0; open = {}; render(); };
+  document.getElementById('q').oninput = function () { page = 0; render(); };
+  document.getElementById('pager').onclick = function (e) { var b = e.target.closest('button'); if (!b) return; page += Number(b.getAttribute('data-d')); render(); };
+  document.getElementById('grid').onclick = function (e) { var tr = e.target.closest('tr.click'); if (!tr) return; var id = tr.getAttribute('data-id'); open[id] = !open[id]; render(); };
+
+  function render() {
+    [].forEach.call(tabs.children, function (b) { b.className = b.getAttribute('data-t') === cur ? 'on' : ''; });
+    if (!cur) { document.getElementById('grid').innerHTML = '<p class="mute">Không có dữ liệu.</p>'; return; }
+    var q = document.getElementById('q').value.trim().toLowerCase(); var cs = cols(cur);
+    var list = rows(cur).filter(function (r) { return !q || cs.some(function (c) { return String(show(cur, c, r)).toLowerCase().indexOf(q) >= 0; }); });
+    var pages = Math.max(1, Math.ceil(list.length / PER)); page = Math.min(Math.max(page, 0), pages - 1);
+    document.getElementById('cnt').textContent = money(list.length) + ' dòng';
+    document.getElementById('pager').innerHTML = pages > 1 ? '<button data-d="-1">‹</button> Trang ' + (page + 1) + '/' + pages + ' <button data-d="1">›</button>' : '';
+    var nums = {}; cs.forEach(function (c) { nums[c] = MONEY.test(c) || list.slice(0, 50).some(function (r) { return typeof r[c] === 'number'; }); });
+    var html = '<table><tr>' + cs.map(function (c) { return '<th class="' + (nums[c] ? 'num' : '') + '">' + esc(COL[c] || c) + '</th>'; }).join('') + '</tr>';
+    list.slice(page * PER, page * PER + PER).forEach(function (r) {
+      var kids = CHILD[r.id] || [];
+      html += '<tr class="' + (kids.length ? 'click' : '') + '" data-id="' + esc(r.id) + '">' + cs.map(function (c) { return '<td class="' + (nums[c] ? 'num' : '') + '">' + esc(show(cur, c, r)) + '</td>'; }).join('') + '</tr>';
+      if (open[r.id] && kids.length) {
+        var g = {}; kids.forEach(function (k) { (g[k[0]] = g[k[0]] || []).push(k[1]); });
+        html += '<tr class="sub"><td colspan="' + cs.length + '">' + Object.keys(g).map(function (t) { return miniTable(t, g[t]); }).join('') + '</td></tr>';
+      }
+    });
+    document.getElementById('grid').innerHTML = html + '</table>';
+  }
+  render();
+})();
+</script>
+</body>
+</html>

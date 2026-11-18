@@ -32,6 +32,7 @@ import * as warranty from './warranty.js';
 import * as loyalty from './loyalty.js';
 import * as shifts from './shifts.js';
 import * as purge from './purge.js';
+import * as detach from './detach.js';
 import * as recurring from './expense-recurring.js';
 import * as customerFiles from './customer-files.js';
 import * as reminders from './reminders.js';
@@ -74,12 +75,13 @@ export const RPC = {
   ...pick(loyalty, ['adjust_points', 'point_history', 'save_promotion', 'save_coupon', 'issue_vouchers', 'cancel_voucher', 'loyalty_lists', 'preview_promos', 'active_promotions', 'order_promos']),
   ...pick(shifts, ['current_shift', 'open_shift', 'close_shift', 'shift_list']),
   ...pick(purge, ['purge_preview', 'schedule_purge', 'cancel_purge', 'purge_jobs']),
+  ...pick(detach, ['detach_preview', 'detach_data', 'data_archives', 'data_archive_get']),
   ...pick(books, ['save_currency_rates', 'verify_my_password', 'book_staff', 'save_member_categories']),
   import_book,
 };
 
 // Thao tác sửa hàng loạt dữ liệu cũ: sao lưu nguyên CSDL trước (ngoài giao dịch, vì VACUUM INTO không chạy trong giao dịch)
-const BACKUP_FIRST = { change_cost_method: 'truoc-doi-gia-von', schedule_purge: 'truoc-xoa-du-lieu' };
+const BACKUP_FIRST = { change_cost_method: 'truoc-doi-gia-von', schedule_purge: 'truoc-xoa-du-lieu', detach_data: 'truoc-ngat-du-lieu' };
 function backupBefore(label) {
   const file = ctx.db.pragma('database_list').find((d) => d.name === 'main')?.file;
   if (!file) return null;

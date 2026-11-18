@@ -20,7 +20,7 @@ import { backupNow } from './services/scheduler.js';
 const MAX_BODY = 25 * 1024 * 1024;   // tệp 15 MB gửi dạng base64 (~20 MB) kèm tham số
 const READ_ONLY = new Set(['q', 'my_books', 'rpt_overview', 'rpt_drill', 'rpt_monthly', 'rpt_products', 'rpt_groups', 'rpt_stock', 'rpt_expenses',
   'my_notifications', 'get_doc_info', 'carrier_webhook_log', 'export_book',
-  'customer_files', 'get_customer_file', 'vat_invoice_todo']);
+  'customer_files', 'get_customer_file', 'vat_invoice_todo', 'detach_preview', 'data_archives', 'data_archive_get']);
 
 function readBody(req) {
   return new Promise((resolve, reject) => {

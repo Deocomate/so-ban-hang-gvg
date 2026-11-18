@@ -150,6 +150,9 @@ export const SETTING_GROUPS = [
         { id: 'backup', title: 'Sao lưu dữ liệu sổ', desc: 'Tải toàn bộ dữ liệu ra Excel hoặc JSON; nhập bản sao lưu JSON.' },
         row('purge', 'Xóa dữ liệu gian hàng', 'Đặt lịch xóa dữ liệu cũ và nhận thông báo khi xóa xong.'),
       ] },
+      { id: 'ngat', title: 'Ngắt dữ liệu cũ', rows: [
+        row('detach', 'Ngắt dữ liệu cũ khỏi báo cáo', 'Bỏ chứng từ những năm đầu (nợ ảo, số liệu chưa đầy đủ) khỏi mọi báo cáo, công nợ; vẫn lưu trên hệ thống và tải về được dạng zip.'),
+      ] },
     ] },
   ] },
 ];

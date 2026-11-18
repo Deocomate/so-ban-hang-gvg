@@ -11,7 +11,7 @@ import { SettingsLayout, Card, Row, EditModal, ListEditor, scrollToId, useSaveSe
 import { Btn, Icon, Pill, Field, Input, Select, DateInput, NumInput, Check, Loading, ErrorBox, Note, Table, Modal, ConfirmBtn, Section } from '../components/ui.jsx';
 import { MyAccount } from './Account.jsx';
 import { CostMethodModal, COST_LABEL } from './CostMethod.jsx';
-import { CategoryPermModal, TxnLockModal, RequiredFieldsModal, PointsModal, EinvoiceModal, CurrencyModal, PurgeSection } from './SettingsMore.jsx';
+import { CategoryPermModal, TxnLockModal, RequiredFieldsModal, PointsModal, EinvoiceModal, CurrencyModal, PurgeSection, DetachSection } from './SettingsMore.jsx';
 import { AdminUsers, AdminRoles, SecurityLog } from './Admin.jsx';
 
 // Trang Thiết lập: địa chỉ #cai-dat/<mục>. Địa chỉ cũ theo tab (me, users, notify…) vẫn mở đúng mục mới.
@@ -403,7 +403,7 @@ function LockModal({ onClose }) {
 }
 
 const AuditPanel = () => <Card id="nhat-ky"><AuditLog /></Card>;
-const DataPanel = () => <><Card id="nhap"><ImportTools /></Card><Card id="sao-luu"><DataTools /><PurgeSection /></Card></>;
+const DataPanel = () => <><Card id="nhap"><ImportTools /></Card><Card id="sao-luu"><DataTools /><PurgeSection /></Card><Card id="ngat"><DetachSection /></Card></>;
 
 const PANELS = {
   'hang-hoa': ProductsPanel, 'mua-hang': PurchasePanel, 'don-hang': OrdersPanel, 'khach-hang': CustomersPanel, 'so-quy': CashPanel, thue: TaxPanel, 'mau-in': PrintPanel,

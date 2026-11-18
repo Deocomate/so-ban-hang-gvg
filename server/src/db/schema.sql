@@ -1087,3 +1087,18 @@ create table if not exists purge_jobs (
   result text,
   created_by text, created_at text not null, done_at text
 );
+
+-- Ngắt dữ liệu cũ: chứng từ đến hết ngày chọn được bỏ khỏi sổ (không còn trong báo cáo, công nợ...) nhưng giữ nguyên
+-- từng dòng ở đây (JSON nén gzip) để tải về xem lại
+create table if not exists data_archives (
+  id text primary key,
+  book_id text not null references books(id) on delete cascade,
+  code text not null,
+  from_date text, cutoff text not null,
+  keep text not null default '{}',      -- bên được giữ số dư công nợ {kh, ncc}
+  summary text not null default '{}',   -- số chứng từ theo loại, số dòng theo bảng, công nợ trước / sau
+  size integer not null default 0,
+  data blob not null,
+  created_by text, created_at text not null
+);
+create index if not exists data_archives_book_idx on data_archives (book_id, created_at);

@@ -184,3 +184,72 @@ export function PurgeSection() {
     </div>
   );
 }
+
+// Ngắt dữ liệu cũ: chứng từ đến hết ngày chọn rời khỏi mọi báo cáo, công nợ, thống kê; vẫn lưu trên hệ thống và tải về dạng zip
+const kb = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+function DebtChange({ label, d }) {
+  if (!d) return null;
+  return <div className="stack-s"><span className="muted small">{label}</span><b>{money(d.before)} → {money(d.after)}</b>
+    <span className="small">{d.after < d.before ? `Giảm ${money(d.before - d.after)}` : 'Không đổi'} · {d.changed} bên thay đổi</span></div>;
+}
+export function DetachSection() {
+  const { settings, rpc, refresh, toast } = useApp();
+  const list = useRpcData('data_archives', {});
+  const [cut, setCut] = useState(settings.lock_date || ''); const [keepKh, setKeepKh] = useState(false); const [keepNcc, setKeepNcc] = useState(false);
+  const [pv, setPv] = useState(null); const [err, setErr] = useState(''); const [ok, setOk] = useState(false); const [busy, setBusy] = useState('');
+  useEffect(() => { setPv(null); setOk(false); setErr(''); }, [cut, keepKh, keepNcc]);
+  const args = { cutoff: cut, keep_kh: keepKh, keep_ncc: keepNcc };
+  const preview = async () => { setBusy('pv'); setErr(''); try { setPv(await rpc('detach_preview', args)); } catch (e) { setErr(e.message); } finally { setBusy(''); } };
+  const go = async () => {
+    setBusy('go');
+    try { const r = await rpc('detach_data', { ...args, confirm: true }); toast(`Đã ngắt dữ liệu đến hết ${dmy(r.cutoff)} (${r.code}). Tải bản lưu trữ ở bảng bên dưới.`); setPv(null); setOk(false); refresh(); }
+    catch (e) { setErr(e.message); } finally { setBusy(''); }
+  };
+  const download = async (a) => {
+    setBusy(a.id);
+    try { const { downloadArchive } = await import('../lib/archive-export.js'); await downloadArchive(await rpc('data_archive_get', { id: a.id })); }
+    catch (e) { toast(e.message, 'err'); } finally { setBusy(''); }
+  };
+  const parties = pv ? [...pv.debt.kh.parties.map((x) => ({ ...x, t: 'Khách hàng' })), ...pv.debt.ncc.parties.map((x) => ({ ...x, t: 'Nhà cung cấp' }))] : [];
+  return (
+    <div className="stack">
+      <div className="muted small">Dùng khi những năm đầu dùng phần mềm nhập liệu chưa đủ (đã thu tiền nhưng không ghi, đơn treo…) làm báo cáo, công nợ ra số rất lớn.
+        Mọi chứng từ đến hết ngày chọn (đơn bán, đơn nhập, thu chi, chi phí, phiếu kho, nợ đầu kỳ) được bỏ khỏi sổ nên không còn trong báo cáo, công nợ, thống kê của mọi phân hệ.
+        Tồn kho, số dư quỹ, điểm tích lũy vẫn giữ đúng. Dữ liệu bị ngắt vẫn lưu trên hệ thống và tải về được (tệp zip có trang xem trực quan và dữ liệu JSON). Máy chủ tự sao lưu trước khi ngắt.</div>
+      <div className="row gap" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <Field label="Ngắt dữ liệu đến hết ngày" hint={settings.lock_date ? `Sổ đã khóa đến ${dmy(settings.lock_date)}` : 'Hãy khóa sổ trước'}><DateInput value={cut} onChange={setCut} max={settings.lock_date || undefined} /></Field>
+        <Btn icon="search" busy={busy === 'pv'} disabled={!cut} onClick={preview}>Xem trước</Btn>
+      </div>
+      <div className="stack-s">
+        <Check checked={keepKh} onChange={setKeepKh}>Giữ công nợ khách hàng đến ngày đó (chuyển thành nợ đầu kỳ)</Check>
+        <Check checked={keepNcc} onChange={setKeepNcc}>Giữ công nợ nhà cung cấp đến ngày đó (chuyển thành nợ đầu kỳ)</Check>
+        <span className="muted small">Không chọn: khoản nợ phát sinh từ dữ liệu cũ bị bỏ hẳn, công nợ chỉ còn tính từ chứng từ sau ngày ngắt.</span>
+      </div>
+      <ErrorBox error={err} />
+      {pv && <>
+        <div className="muted small">Dữ liệu từ {dmy(pv.from_date)} đến hết {dmy(pv.cutoff)}</div>
+        <Table dense rowKey="key" rows={pv.items.filter((x) => x.count)} columns={[{ key: 'l', label: 'Loại dữ liệu', render: (x) => x.label }, { key: 'n', label: 'Số lượng sẽ ngắt', align: 'right', render: (x) => <b>{money(x.count)}</b> }]} />
+        <div className="row gap" style={{ flexWrap: 'wrap' }}>
+          <DebtChange label="Phải thu khách (hôm nay)" d={pv.debt.kh} /><DebtChange label="Phải trả NCC (hôm nay)" d={pv.debt.ncc} />
+        </div>
+        {parties.length > 0 && <details><summary className="small">Công nợ thay đổi nhiều nhất ({parties.length})</summary>
+          <Table dense rows={parties} columns={[{ key: 't', label: 'Loại', render: (x) => x.t }, { key: 'n', label: 'Tên', render: (x) => `${x.code} · ${x.name}` },
+            { key: 'b', label: 'Trước', align: 'right', render: (x) => money(x.before) }, { key: 'a', label: 'Sau', align: 'right', render: (x) => money(x.after) }]} /></details>}
+        <Note tone="warn">Chứng từ đã ngắt không còn xem, sửa trong phần mềm (chỉ xem lại qua tệp tải về, hoặc khôi phục từ bản sao lưu của máy chủ).</Note>
+        <Check checked={ok} onChange={setOk}>Tôi hiểu, ngắt dữ liệu đến hết ngày {dmy(pv.cutoff)}.</Check>
+        <div><Btn kind="danger" busy={busy === 'go'} disabled={!ok} onClick={go}>Ngắt dữ liệu</Btn></div>
+      </>}
+      {(list.data || []).length > 0 && <>
+        <b className="small">Dữ liệu đã ngắt (lưu trên hệ thống)</b>
+        <Table dense rows={list.data} columns={[
+          { key: 'c', label: 'Mã', render: (a) => a.code },
+          { key: 'r', label: 'Dữ liệu', render: (a) => `Từ ${dmy(a.from_date)} đến hết ${dmy(a.cutoff)}` },
+          { key: 'n', label: 'Chứng từ', align: 'right', render: (a) => money((a.summary.items || []).filter((x) => x.key !== 'moves').reduce((s, x) => s + x.count, 0)) },
+          { key: 'k', label: 'Công nợ cũ', render: (a) => <span className="small">{a.keep.kh || a.keep.ncc ? `Giữ ${[a.keep.kh && 'khách', a.keep.ncc && 'NCC'].filter(Boolean).join(', ')}` : 'Đã bỏ'}</span> },
+          { key: 'a', label: 'Ngắt lúc', render: (a) => <span className="small">{dmyhm(a.created_at)}{a.created_by_name ? ` · ${a.created_by_name}` : ''}</span> },
+          { key: 'x', label: '', render: (a) => <Btn small icon="dl" busy={busy === a.id} onClick={() => download(a)}>Tải về .zip ({kb(a.size)})</Btn> },
+        ]} />
+      </>}
+    </div>
+  );
+}
