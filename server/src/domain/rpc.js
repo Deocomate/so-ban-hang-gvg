@@ -32,6 +32,7 @@ import * as warranty from './warranty.js';
 import * as loyalty from './loyalty.js';
 import * as shifts from './shifts.js';
 import * as purge from './purge.js';
+import * as recurring from './expense-recurring.js';
 
 const pick = (mod, names) => Object.fromEntries(names.map((n) => {
   if (typeof mod[n] !== 'function') throw new Error(`Thiếu hàm ${n}`);
@@ -43,6 +44,7 @@ export const RPC = {
   ...pick(catalog, ['save_product', 'create_product_variants', 'delete_product', 'save_party', 'save_prices', 'save_fund', 'save_opening_debt', 'delete_opening_debt', 'import_parties']),
   ...pick(stock, ['adjust_stock', 'save_production', 'import_products']),
   ...pick(cash, ['create_payment', 'void_payment', 'save_expense', 'void_expense']),
+  ...pick(recurring, ['save_recurring', 'delete_recurring', 'run_recurring']),
   ...pick(receivables, ['customer_ledger', 'preview_receipt', 'record_receipt', 'apply_prepaid']),
   ...pick(sales, ['save_sales_order', 'confirm_sales_order', 'cancel_sales_order', 'cancel_remaining', 'deliver', 'cancel_delivery', 'sales_return']),
   ...pick(purchases, ['save_purchase_order', 'confirm_purchase_order', 'cancel_purchase_order', 'cancel_po_remaining', 'set_prod_step', 'receive', 'supplier_return', 'cancel_receipt', 'cancel_supplier_return']),

@@ -10,7 +10,7 @@ import { auditTriggers, dropAuditTriggers } from '../db/index.js';
 const TABLES = ['funds', 'products', 'kit_items', 'product_units', 'price_books', 'price_book_items', 'customers', 'suppliers', 'opening_debts', 'sales_orders', 'sales_order_lines', 'deliveries',
   'delivery_lines', 'sales_returns', 'sales_return_lines', 'purchase_orders', 'purchase_order_lines', 'goods_receipts', 'goods_receipt_lines',
   'supplier_returns', 'supplier_return_lines', 'stock_adjustments', 'stock_adjustment_lines', 'productions', 'production_lines', 'bom_items', 'stock_moves', 'payments', 'payment_allocations',
-  'expenses', 'shipments', 'shipment_events', 'bank_txns', 'notifications', 'doc_info', 'doc_counters', 'drivers', 'driver_trips', 'quotes', 'contracts', 'tax_invoices',
+  'expenses', 'expense_recurring', 'shipments', 'shipment_events', 'bank_txns', 'notifications', 'doc_info', 'doc_counters', 'drivers', 'driver_trips', 'quotes', 'contracts', 'tax_invoices',
   'employees', 'shifts', 'work_schedules', 'timesheets', 'commission_tables', 'paysheets', 'paysheet_lines'];
 // Bảng có khóa số tự tăng: bỏ khóa cũ (tránh trùng với sổ khác), giữ thứ tự ghi
 const AUTO_ID = new Set(['stock_moves', 'shipment_events', 'notifications']);

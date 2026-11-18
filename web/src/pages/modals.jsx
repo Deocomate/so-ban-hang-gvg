@@ -7,6 +7,7 @@ import { OrderDetail, DeliverDialog, ReturnDialog } from './Sales.jsx';
 import { PoDetail, ReceiveDialog, SupplierReturnDetail, PurchaseSlip } from './Purchases.jsx';
 import { PurchasePos, ReturnPos } from './PurchasePos.jsx';
 import { PaymentForm, PaymentDetail, ExpenseForm } from './Cash.jsx';
+import { RecurringForm } from './RecurringExpenses.jsx';
 import { ProductionForm } from './StockDocs.jsx';
 import { CustomerGroupForm } from './CustomerGroups.jsx';
 import { EmployeeForm, ScheduleForm, TimesheetForm, PaysheetNewForm, PaysheetDetail, CommissionForm, ShiftForm } from './Staff.jsx';
@@ -29,7 +30,7 @@ import { orderTransferContent } from '../lib/vietqr.js';
 const MAP = {
   'order-form': OrderPos, order: OrderDetail, deliver: DeliverDialog, return: ReturnDialog,
   'po-form': PurchasePos, po: PoDetail, receive: ReceiveDialog, 'po-return': ReturnPos, sret: SupplierReturnDetail, 'po-print': PurchaseSlip,
-  payment: PaymentForm, 'pay-detail': PaymentDetail, expense: ExpenseForm, receipt: ReceiptForm,
+  payment: PaymentForm, 'pay-detail': PaymentDetail, expense: ExpenseForm, recurring: RecurringForm, receipt: ReceiptForm,
   product: ProductForm, 'product-detail': ProductDetail, 'price-book': PriceBookForm, 'price-book-import': PriceBookImport, stockcard: StockCard, adjust: AdjustForm, production: ProductionForm, 'customer-group': CustomerGroupForm,
   employee: EmployeeForm, schedule: ScheduleForm, timesheet: TimesheetForm, 'paysheet-new': PaysheetNewForm, paysheet: PaysheetDetail, commission: CommissionForm, shift: ShiftForm,
   party: PartyForm, 'party-detail': PartyDetail, import: ImportDialog,

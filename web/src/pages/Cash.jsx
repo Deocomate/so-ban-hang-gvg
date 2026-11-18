@@ -5,8 +5,10 @@ import { useCustomers, useSuppliers, useFunds } from '../lib/lookups.js';
 import { exportXlsx } from '../lib/excel.js';
 import { useTimeFilter, TimeFilter, dateFilters, CheckList } from '../components/DocFilters.jsx';
 import { cats, groupOf, GROUP_HINT, GROUP_COLORS } from '../lib/expenseCats.js';
+import { BrandSplit, SplitMini } from '../components/BrandSplit.jsx';
+import { RecurringPanel } from './RecurringExpenses.jsx';
 import {
-  Btn, Icon, Pill, Field, Input, TextArea, Select, DateInput, NumInput, Check, Tabs, Search, Loading, ErrorBox, Note, Table, Modal, ConfirmBtn, Picker, KV, Section, ListPage, FilterBox, RadioList,
+  Btn, Icon, Pill, Field, Input, TextArea, Select, DateInput, NumInput, Check, Tabs, usePageTab, Search, Loading, ErrorBox, Note, Table, Modal, ConfirmBtn, Picker, KV, Section, ListPage, FilterBox, RadioList,
 } from '../components/ui.jsx';
 
 export const PAY_KINDS = [
@@ -202,7 +204,7 @@ export function ExpenseForm({ id, service, onClose }) {
   const { run, busy } = useAction();
   const tree = cats(settings);
   const [f, setF] = useState({ date: todayVN(), group: tree[0].group, category: tree[0].items[0], custom: '', description: '', amount: null, alloc_months: 1,
-    supplier_id: '', note: '', payNow: !service, fund_id: '', method: 'Tiền mặt', invoice_no: '', pay_amount: null });
+    supplier_id: '', note: '', payNow: !service, fund_id: '', method: 'Tiền mặt', invoice_no: '', pay_amount: null, split: [] });
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
   useEffect(() => { if (!f.fund_id && funds.data?.length) set('fund_id', funds.data[0].id); }, [funds.data]);
   useEffect(() => {
@@ -210,7 +212,7 @@ export function ExpenseForm({ id, service, onClose }) {
       const g = e.expense_group || groupOf(settings, e.category) || tree[0].group;
       const known = tree.find((x) => x.group === g)?.items.includes(e.category);
       setF((s) => ({ ...s, date: e.exp_date, group: g, category: known ? e.category : '__other', custom: known ? '' : e.category, description: e.description || '',
-        amount: e.amount, alloc_months: e.alloc_months || 1, supplier_id: e.supplier_id || '', note: e.note || '', payNow: false, invoice_no: e.invoice_no || '' }));
+        amount: e.amount, alloc_months: e.alloc_months || 1, supplier_id: e.supplier_id || '', note: e.note || '', payNow: false, invoice_no: e.invoice_no || '', split: (e.split || []).map(({ book_id, pct }) => ({ book_id, pct })) }));
     });
   }, [id]);
   const items = tree.find((x) => x.group === f.group)?.items || [];
@@ -222,9 +224,9 @@ export function ExpenseForm({ id, service, onClose }) {
         : 'Chi phí vận hành tính vào lợi nhuận theo ngày phát sinh. Tiền nhập hàng KHÔNG ghi ở đây (đã nằm trong giá vốn).'}
       footer={<><Btn onClick={onClose}>Thôi</Btn><Btn kind="primary" busy={busy} onClick={async () => {
         const r = await run('save_expense', { id: id || null, service: !!service, date: f.date, expense_group: f.group, category, description: f.description, amount: f.amount,
-          alloc_months: Number(f.alloc_months) || 1, supplier_id: f.supplier_id || null, invoice_no: f.invoice_no, note: f.note,
+          alloc_months: Number(f.alloc_months) || 1, supplier_id: f.supplier_id || null, invoice_no: f.invoice_no, note: f.note, split: f.split,
           pay_now: f.payNow && can('thu_chi') ? { fund_id: f.fund_id, method: f.method, amount: service && f.pay_amount != null ? f.pay_amount : null } : null },
-        (x) => `Đã ghi ${service ? 'phiếu mua dịch vụ' : 'chi phí'} ${x.code} · ${x.expense_group}${x.payment_code ? ' · phiếu chi ' + x.payment_code : ''}`);
+        (x) => `Đã ghi ${service ? 'phiếu mua dịch vụ' : 'chi phí'} ${x.code} · ${x.expense_group}${x.split ? ` · chia ${x.split} thương hiệu` : ''}${x.payment_code ? ' · phiếu chi ' + x.payment_code : ''}`);
         if (r) onClose();
       }}>Lưu</Btn></>}>
       {service && <div className="grid">
@@ -248,6 +250,7 @@ export function ExpenseForm({ id, service, onClose }) {
         <Field label="Diễn giải" wide><Input value={f.description} onChange={(v) => set('description', v)} placeholder="vd. Tiền thuê showroom tháng 10 / Quảng cáo video bình hút lộc" /></Field>
         {!service && <Field label="Ghi nợ nhà cung cấp dịch vụ (nếu chưa trả)" wide><Select value={f.supplier_id} onChange={(v) => set('supplier_id', v)} placeholder="(không)" options={(suppliers.data || []).map((s) => ({ value: s.id, label: s.name }))} /></Field>}
       </div>
+      <BrandSplit value={f.split} onChange={(v) => set('split', v)} amount={f.amount} />
       {f.alloc_months > 1 && <Note>Tiền vẫn trả 1 lần {f.amount ? money(f.amount) + ' đ' : ''} (quỹ giảm ngay); chỉ phần tính vào lãi lỗ được chia đều {f.alloc_months} tháng, từ tháng {f.date.slice(5, 7)}/{f.date.slice(0, 4)}.</Note>}
       {!id && can('thu_chi') && <div className="row gap"><Check checked={f.payNow} onChange={(v) => set('payNow', v)}>{service ? 'Trả ngay' : 'Đã trả ngay'}</Check>
         {f.payNow && <Select value={f.fund_id} onChange={(v) => set('fund_id', v)} options={(funds.data || []).map((x) => ({ value: x.id, label: `${x.name} (${money(x.balance)})` }))} style={{ maxWidth: 260 }} />}
@@ -300,8 +303,9 @@ export function ServicePurchasesPage() {
   );
 }
 
-export function ExpensesPage() {
+export function ExpensesPage(nav) {
   const { open, can, settings } = useApp();
+  const [tab, setTab] = usePageTab(nav, 'list', ['list', 'dinh-ky']);
   const time = useTimeFilter('month');
   const [grp, setGrp] = useState(''); const [search, setSearch] = useState('');
   const q = useQ('expenses', dateFilters('exp_date', time), 'exp_date desc', 20000);
@@ -309,21 +313,24 @@ export function ExpensesPage() {
   const [voidId, setVoidId] = useState(null); const [reason, setReason] = useState('');
   const tree = cats(settings);
   const live = (q.data || []).filter((e) => !e.voided);
-  const byGrp = {}; for (const e of live) { const g = e.expense_group || 'Quản lý & khác'; byGrp[g] = (byGrp[g] || 0) + e.amount; }
+  const byGrp = {}; for (const e of live) { const g = e.expense_group || 'Quản lý & khác'; byGrp[g] = (byGrp[g] || 0) + e.pl_amount; }
   const order = [...tree.map((g) => g.group), ...Object.keys(byGrp).filter((g) => !tree.some((t) => t.group === g))];
   const rows = (q.data || []).filter((e) => (!grp || (e.expense_group || 'Quản lý & khác') === grp) && match(`${e.code} ${e.category} ${e.description || ''} ${e.supplier_name || ''}`, search));
   const total = rows.filter((e) => !e.voided).reduce((s, e) => s + e.amount, 0);
-  const all = live.reduce((s, e) => s + e.amount, 0);
+  const all = live.reduce((s, e) => s + e.pl_amount, 0);
   return (
     <ListPage title="Chi phí vận hành"
-      filters={<TimeFilter filter={time} />}
-      search={<Search value={search} onChange={setSearch} placeholder="Tìm khoản mục, diễn giải…" />}
+      filters={tab === 'list' ? <TimeFilter filter={time} /> : <div className="muted small">Các khoản chi lặp lại hằng tháng: thuê nhà, phần mềm AI, internet, lương… Kéo thẻ trên lịch để đổi ngày ghi.</div>}
+      search={tab === 'list' ? <Search value={search} onChange={setSearch} placeholder="Tìm khoản mục, diễn giải…" /> : <span className="grow" />}
       actions={<>
         <Btn icon="dl" onClick={() => exportXlsx('chi-phi.xlsx', [{ name: 'Chi phí', rows, columns: [{ key: 'code', label: 'Mã' }, { key: 'exp_date', label: 'Ngày', type: 'date' }, { key: 'expense_group', label: 'Nhóm' },
           { key: 'category', label: 'Khoản mục' }, { key: 'description', label: 'Diễn giải' }, { key: 'amount', label: 'Số tiền' }, { key: 'alloc_months', label: 'Phân bổ (tháng)' },
           { key: 'paid', label: 'Đã trả' }, { key: 'unpaid', label: 'Chưa trả' }, { key: 'supplier_name', label: 'Nợ NCC' }] }])}>Xuất Excel</Btn>
-        {can('chi_phi') && <Btn kind="primary" icon="plus" onClick={() => open('expense', {})}>Ghi chi phí</Btn>}
+        {can('chi_phi') && (tab === 'list' ? <Btn kind="primary" icon="plus" onClick={() => open('expense', {})}>Ghi chi phí</Btn>
+          : <Btn kind="primary" icon="plus" onClick={() => open('recurring', {})}>Khoản định kỳ mới</Btn>)}
       </>}>
+      <Tabs value={tab} onChange={setTab} tabs={[{ value: 'list', label: 'Khoản chi' }, { value: 'dinh-ky', label: 'Định kỳ hằng tháng' }]} />
+      {tab === 'dinh-ky' ? <RecurringPanel /> : <>
       <div className="exp-groups">
         <button className={`exp-card${!grp ? ' on' : ''}`} onClick={() => setGrp('')}><span>Tất cả</span><b>{short(all)}</b><i style={{ width: '100%' }} /></button>
         {order.map((g, idx) => (
@@ -332,15 +339,18 @@ export function ExpensesPage() {
             <i style={{ width: `${all ? Math.max(2, ((byGrp[g] || 0) / all) * 100) : 0}%`, background: GROUP_COLORS[idx % GROUP_COLORS.length] }} />
           </button>))}
       </div>
-      <div className="muted small">Số trên thẻ là tiền các khoản ghi trong kỳ (theo ngày phát sinh). Số tính vào lãi lỗ từng tháng (đã chia phân bổ) xem ở Báo cáo → Chi phí.</div>
+      <div className="muted small">Số trên thẻ là tiền các khoản ghi trong kỳ (theo ngày phát sinh); khoản chia cho nhiều thương hiệu chỉ tính phần của sổ này. Số tính vào lãi lỗ từng tháng (đã chia phân bổ) xem ở Báo cáo → Chi phí.</div>
       <ErrorBox error={q.error} />
       <Table rows={q.data ? rows : null} rowClass={(e) => (e.voided ? 'row-void' : '')} foot={{ a: money(total) }} empty="Chưa có chi phí trong kỳ" columns={[
         { key: 'c', label: 'Mã', render: (e) => <><div className="cell-main">{e.code}</div><div className="cell-sub">{dmy(e.exp_date)}</div></> },
         { key: 'g', label: 'Nhóm · khoản mục', render: (e) => <><div className="cell-main">{e.category}</div><div className="cell-sub">{e.expense_group}</div></> },
         { key: 'd', label: 'Diễn giải', render: (e) => <>{e.description}{e.alloc_months > 1 && <div><Pill tone="info">Phân bổ {e.alloc_months} tháng · đến {e.alloc_end ? `${e.alloc_end.slice(5, 7)}/${e.alloc_end.slice(0, 4)}` : ''}</Pill></div>}
+          {(e.split?.length > 0 || e.recur_id) && <div className="row gap-s">{e.recur_id && <Pill tone="info">Định kỳ</Pill>}
+            {e.split?.length > 0 && <><Pill tone="info">Chia {e.split.length} thương hiệu</Pill><SplitMini split={e.split} /></>}</div>}
+          {e.split_of && <div className="cell-sub">Phần chia từ {e.split_of_book_name || e.split_of_book} · {e.split_of_code}</div>}
           {e.settled_payment_code && <div className="cell-sub">trừ vào phiếu thu {e.settled_payment_code}</div>}{e.supplier_name && <div className="cell-sub">nợ {e.supplier_name}</div>}</> },
-        { key: 's', label: 'Trạng thái', render: (e) => (e.voided ? <Pill tone="mute">Đã hủy</Pill> : e.unpaid > 0 ? <Pill tone="warn">Chưa trả {money(e.unpaid)}</Pill> : <Pill tone="good">Đã trả</Pill>) },
-        { key: 'a', label: 'Số tiền', align: 'right', render: (e) => <>{money(e.amount)}{e.alloc_months > 1 && <div className="cell-sub">≈ {money(Math.round(e.amount / e.alloc_months))}/tháng</div>}</> },
+        { key: 's', label: 'Trạng thái', render: (e) => (e.voided ? <Pill tone="mute">Đã hủy</Pill> : e.split_of ? <Pill tone="info">{e.split_of_book} trả tiền</Pill> : e.unpaid > 0 ? <Pill tone="warn">Chưa trả {money(e.unpaid)}</Pill> : <Pill tone="good">Đã trả</Pill>) },
+        { key: 'a', label: 'Số tiền', align: 'right', render: (e) => <>{money(e.amount)}{e.pl_amount !== e.amount && <div className="cell-sub">sổ này chịu {money(e.pl_amount)}</div>}{e.alloc_months > 1 && <div className="cell-sub">≈ {money(Math.round(e.amount / e.alloc_months))}/tháng</div>}</> },
         { key: 'x', label: '', render: (e) => !e.voided && <div className="row gap-s" onClick={(ev) => ev.stopPropagation()}>
           {e.unpaid > 0 && can('thu_chi') && <Btn small onClick={() => open('payment', { kind: e.supplier_id ? 'tra_ncc' : 'chi_phi', party_id: e.supplier_id, alloc: { doc_type: 'chi_phi', doc_id: e.id, code: e.code, amount: e.unpaid } })}>Trả</Btn>}
           {e.paid === 0 && !e.settled_payment_id && can('chi_phi') && <Btn small onClick={() => open('expense', { id: e.id })}>Sửa</Btn>}
@@ -349,6 +359,7 @@ export function ExpensesPage() {
             : <Btn small onClick={() => { setVoidId(e.id); setReason(''); }}>Hủy</Btn>)}
         </div> },
       ]} />
+      </>}
     </ListPage>
   );
 }

@@ -27,6 +27,7 @@ drop view if exists v_fund_moves;
 drop view if exists v_suppliers;
 drop view if exists v_expense_alloc;
 drop view if exists v_expenses;
+drop view if exists v_expense_recurring;
 drop view if exists v_customers;
 drop view if exists v_opening_debts;
 drop view if exists v_paysheet_lines;
@@ -493,12 +494,31 @@ from t;
 create view v_expenses as
 select e.id, e.book_id, e.code, e.exp_date, e.category, e.description, e.amount, e.supplier_id, s.name as supplier_name,
   e.settled_payment_id, sp.code as settled_payment_code, e.voided, e.void_reason, e.note, e.created_at, e.invoice_no,
-  case when e.settled_payment_id is not null then e.amount else coalesce(pd.paid_net, 0) end as paid,
-  case when e.voided then 0 when e.settled_payment_id is not null then 0 else e.amount - coalesce(pd.paid_net, 0) end as unpaid,
+  case when e.settled_payment_id is not null or e.split_of is not null then e.amount else coalesce(pd.paid_net, 0) end as paid,
+  case when e.voided then 0 when e.settled_payment_id is not null or e.split_of is not null then 0 else e.amount - coalesce(pd.paid_net, 0) end as unpaid,
   e.expense_group, e.alloc_months,
-  case when e.alloc_months > 1 then date(e.exp_date, 'start of month', '+' || (e.alloc_months - 1) || ' months') end as alloc_end
+  case when e.alloc_months > 1 then date(e.exp_date, 'start of month', '+' || (e.alloc_months - 1) || ' months') end as alloc_end,
+  coalesce(e.pl_amount, e.amount) as pl_amount, e.split, e.split_of, po.code as split_of_code, pb.short_name as split_of_book, pb.name as split_of_book_name,
+  e.recur_id, e.recur_month
 from expenses e left join suppliers s on s.id = e.supplier_id left join payments sp on sp.id = e.settled_payment_id
-left join v_doc_paid pd on pd.doc_id = e.id;
+left join v_doc_paid pd on pd.doc_id = e.id
+left join expenses po on po.id = e.split_of left join books pb on pb.id = po.book_id;
+
+-- Chi phí định kỳ: lần ghi gần nhất và ngày ghi kế tiếp (ngày hẹn quá số ngày của tháng → ngày cuối tháng)
+create view v_expense_recurring as
+with t as (
+  select r.*, f.name as fund_name,
+    (select max(e.recur_month) from expenses e where e.recur_id = r.id) as last_month,
+    (select count(*) from expenses e where e.recur_id = r.id and e.voided = 0) as runs,
+    (select coalesce(sum(e.amount), 0) from expenses e where e.recur_id = r.id and e.voided = 0) as total
+  from expense_recurring r left join funds f on f.id = r.fund_id
+), n as (
+  select t.*, case when last_month is null or last_month < start_month then start_month
+    else strftime('%Y-%m', date(last_month || '-01', '+1 month')) end as next_month from t
+)
+select n.*, case when n.end_month is not null and n.next_month > n.end_month then null
+  else min(date(n.next_month || '-01', '+' || (n.day - 1) || ' days'), date(n.next_month || '-01', '+1 month', '-1 day')) end as next_date
+from n;
 
 -- Chi phí chia theo tháng: phần 1 tính vào ngày phát sinh, các phần sau vào ngày 1 của tháng kế tiếp; phần cuối nhận số lẻ
 create view v_expense_alloc as
@@ -506,12 +526,12 @@ with recursive g(i) as (select 0 union all select i + 1 from g where i < 59)
 select e.book_id, e.id as expense_id, e.code, e.category, coalesce(e.expense_group, 'Quản lý & khác') as expense_group, e.description,
   s.name as supplier_name, e.alloc_months, g.i + 1 as part_no,
   case when g.i = 0 then e.exp_date else date(e.exp_date, 'start of month', '+' || g.i || ' months') end as alloc_date,
-  case when g.i < e.alloc_months - 1 then round(e.amount / e.alloc_months)
-       else e.amount - round(e.amount / e.alloc_months) * (e.alloc_months - 1) end as amount
+  case when g.i < e.alloc_months - 1 then round(coalesce(e.pl_amount, e.amount) / e.alloc_months)
+       else coalesce(e.pl_amount, e.amount) - round(coalesce(e.pl_amount, e.amount) / e.alloc_months) * (e.alloc_months - 1) end as amount
 from expenses e
 join g on g.i < e.alloc_months
 left join suppliers s on s.id = e.supplier_id
-where e.voided = 0;
+where e.voided = 0 and coalesce(e.pl_amount, e.amount) > 0;
 
 create view v_suppliers as
 with od as (
@@ -601,7 +621,7 @@ from v_opening_debts
 union all
 select book_id, 'chi_phi', id, code, exp_date, supplier_id, case when supplier_id is null then null else 'ncc' end,
   amount, amount, paid, unpaid, unpaid, null, case when voided then 'huy' else 'xac_nhan' end, exp_date
-from v_expenses where settled_payment_id is null;
+from v_expenses where settled_payment_id is null and split_of is null;
 
 create view v_members as
 select m.book_id, m.user_id, u.email, m.role, m.perms, m.display_name, m.created_at

@@ -1,4 +1,4 @@
-// Lịch tự động (giờ Việt Nam): báo cáo cuối ngày 21:00, nhắc công nợ 08:00, sao lưu CSDL 03:00, gửi thông báo đẩy và email còn chờ mỗi phút.
+// Lịch tự động (giờ Việt Nam): chi phí định kỳ đầu mỗi ngày, báo cáo cuối ngày 21:00, nhắc công nợ 08:00, sao lưu CSDL 03:00, gửi thông báo đẩy và email còn chờ mỗi phút.
 // Thông báo có khóa chống trùng theo ngày nên khởi động lại máy chủ không gửi lặp.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -7,6 +7,7 @@ import { ctx, today } from '../lib/context.js';
 import { callService } from '../domain/rpc.js';
 import { runScheduled } from '../domain/notify.js';
 import { runDuePurges } from '../domain/purge.js';
+import { runAllRecurring } from '../domain/expense-recurring.js';
 import { flushPush } from './push.js';
 import { flushMail } from '../lib/mail.js';
 
@@ -25,6 +26,8 @@ export async function backupNow(label = '') {
 }
 
 const JOBS = [
+  // Chi phí định kỳ: chạy lần đầu mỗi ngày (cả khi vừa khởi động máy chủ), ghi bù kỳ đã đến hạn
+  { name: 'recurring_expenses', hour: null, run: () => console.log('chi phí định kỳ', callService(runAllRecurring)) },
   { name: 'daily_report', hour: 21, run: () => console.log('báo cáo ngày', callService(runScheduled, { kind: 'daily_report' })) },
   { name: 'debt_reminder', hour: 8, run: () => console.log('nhắc công nợ', callService(runScheduled, { kind: 'debt_reminder' })) },
   { name: 'backup', hour: 3, run: () => backupNow().then((f) => console.log('đã sao lưu', f)) },
@@ -35,7 +38,7 @@ const JOBS = [
 async function tick() {
   const d = today(); const h = vnHour();
   for (const j of JOBS) {
-    if (h !== j.hour || done.get(j.name) === d) continue;
+    if ((j.hour != null && h !== j.hour) || done.get(j.name) === d) continue;
     done.set(j.name, d);
     try { await j.run(); } catch (e) { console.error(`lịch ${j.name} lỗi`, e); }
   }

@@ -18,11 +18,11 @@ const AUDIT_TABLES = {
   books: '', book_members: '', products: 'on_hand,stock_value,last_cost', customers: '', suppliers: '', funds: '', opening_debts: '',
   sales_orders: '', sales_order_lines: 'delivered_qty,returned_qty', deliveries: '', sales_returns: '', purchase_orders: '',
   purchase_order_lines: 'received_qty,returned_qty', goods_receipts: '', supplier_returns: '', stock_adjustments: '', productions: '', payments: '',
-  payment_allocations: '', expenses: '', drivers: '', driver_trips: '', quotes: '', contracts: '', tax_invoices: '', employees: '', paysheets: '', commission_tables: '',
+  payment_allocations: '', expenses: '', expense_recurring: '', drivers: '', driver_trips: '', quotes: '', contracts: '', tax_invoices: '', employees: '', paysheets: '', commission_tables: '',
   shipments: 'status,status_at,status_detail,last_sync_at,tracking_registered_at,cod_status,cod_settled_at,cod_payment_ids',
   bank_txns: '', product_units: '', price_books: '', warranty_claims: '', promotions: '', vouchers: '', coupons: '', cash_shifts: '',
 };
-const JSON_TEXT_COLS = new Set(['owner_ids', 'extra_costs', 'pay', 'rules', 'settings', 'perms', 'notify', 'cod_payment_ids', 'candidate_books', 'payment_ids', 'raw', 'data', 'payload', 'extra', 'body', 'images', 'prices', 'formula', 'cust_groups', 'user_ids']);
+const JSON_TEXT_COLS = new Set(['owner_ids', 'extra_costs', 'pay', 'rules', 'settings', 'perms', 'notify', 'cod_payment_ids', 'candidate_books', 'payment_ids', 'raw', 'data', 'payload', 'extra', 'body', 'images', 'prices', 'formula', 'cust_groups', 'user_ids', 'split']);
 
 function registerFunctions(db) {
   db.function('today', () => today());
@@ -95,6 +95,11 @@ const ADDED_COLUMNS = [
   ['deliveries', 'deposit_used', 'real not null default 0 check (deposit_used >= 0)'],
   ['stock_adjustments', 'purpose', 'text'],
   ['expenses', 'invoice_no', 'text'],
+  ['expenses', 'pl_amount', 'real'],
+  ['expenses', 'split', 'text'],
+  ['expenses', 'split_of', 'text'],
+  ['expenses', 'recur_id', 'text'],
+  ['expenses', 'recur_month', 'text'],
   ['products', 'product_type', "text not null default 'hang'"],
   ['products', 'description', 'text'],
   ['products', 'order_note', 'text'],
@@ -260,6 +265,8 @@ function migrate(db, from) {
   if (from < 8) seedRoles(db);
   if (from > 0 && from < 11) keepSourceValues(db);
   db.exec(`create unique index if not exists products_barcode_uq on products (book_id, barcode) where barcode is not null and barcode <> ''`);
+  db.exec(`create unique index if not exists expenses_recur_uq on expenses (recur_id, recur_month) where recur_id is not null;
+    create index if not exists expenses_split_of_idx on expenses (split_of) where split_of is not null;`);
 }
 
 // Giữ giá trị gốc của các dòng nhập có giá trước khi có phương pháp giá vốn cố định (sổ cũ luôn tính bình quân)

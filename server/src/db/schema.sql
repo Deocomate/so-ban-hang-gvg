@@ -565,7 +565,30 @@ create table if not exists expenses (
   voided integer not null default 0,
   void_reason text,
   note text,
-  created_by text, created_at text not null
+  created_by text, created_at text not null,
+  pl_amount real,                         -- phần tính vào lãi lỗ sổ này khi chia cho nhiều thương hiệu (null = cả số tiền)
+  split text,                             -- khoản gốc: [{book_id, pct, amount, expense_id}] các thương hiệu cùng chịu
+  split_of text,                          -- phần chia: id khoản gốc ở sổ trả tiền (khác sổ nên không ràng buộc khóa ngoại)
+  recur_id text,                          -- sinh tự động từ chi phí định kỳ
+  recur_month text                        -- tháng (YYYY-MM) của lần sinh định kỳ
+);
+
+-- Chi phí định kỳ (thuê nhà, phần mềm, internet…): mỗi tháng tự ghi 1 khoản chi phí vào ngày đã hẹn
+create table if not exists expense_recurring (
+  id text primary key,
+  book_id text not null references books(id) on delete cascade,
+  name text not null,
+  category text not null,
+  expense_group text,
+  amount real not null check (amount > 0),
+  day integer not null default 1 check (day between 1 and 31),   -- quá số ngày của tháng = ngày cuối tháng
+  start_month text not null,
+  end_month text,
+  fund_id text references funds(id),      -- có quỹ = tự lập phiếu chi trả luôn
+  split text not null default '[]',       -- [{book_id, pct}] chia cho các thương hiệu
+  active integer not null default 1,
+  note text,
+  created_by text, created_at text not null, updated_at text
 );
 
 -- ---------- VẬN ĐƠN ----------

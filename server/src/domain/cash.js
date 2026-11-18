@@ -155,11 +155,57 @@ export function void_payment(p) {
   return { ok: true };
 }
 
+// ---------- CHIA CHI PHÍ CHO CÁC THƯƠNG HIỆU ----------
+// split = [{book_id, pct}] (tổng 100%). Sổ trả tiền giữ khoản gốc đủ số tiền (quỹ, công nợ) nhưng lãi lỗ chỉ tính phần của mình;
+// mỗi thương hiệu khác nhận 1 khoản "phần chia" đã trả (không động tới quỹ của sổ đó) để lãi lỗ từng thương hiệu đúng.
+// Trả null khi không chia (rỗng hoặc 100% cho chính sổ trả tiền).
+export function normSplit(b, split, amt) {
+  const list = (Array.isArray(split) ? split : []).map((x) => ({ book_id: nz(x?.book_id), pct: Math.round((num(x?.pct) ?? 0) * 100) / 100 }))
+    .filter((x) => x.book_id && x.pct > 0);
+  if (!list.length || (list.length === 1 && list[0].book_id === b)) return null;
+  if (new Set(list.map((x) => x.book_id)).size !== list.length) fail('Mỗi thương hiệu chỉ chọn 1 lần khi phân bổ chi phí');
+  const sum = list.reduce((s, x) => s + x.pct, 0);
+  if (Math.abs(sum - 100) > 0.01) fail(`Tỷ lệ phân bổ cho các thương hiệu phải cộng đủ 100% (đang ${Math.round(sum * 100) / 100}%)`);
+  const demo = one(`select is_demo from books where id = ?`, b)?.is_demo;
+  for (const x of list) {
+    const bk = one(`select is_demo from books where id = ?`, x.book_id);
+    if (!bk || bk.is_demo !== demo) fail('Thương hiệu phân bổ không hợp lệ');
+    if (ctx.uid && x.book_id !== b) requirePerm(x.book_id, 'chi_phi');
+  }
+  // Làm tròn từng phần tới đồng; phần cuối nhận số lẻ để cộng lại đúng tổng
+  let left = amt;
+  return list.map((x, i) => {
+    const a = i === list.length - 1 ? left : Math.round((amt * x.pct) / 100);
+    left -= a;
+    return { ...x, amount: a };
+  });
+}
+
+// Ghi lại các phần chia của khoản gốc e (xóa phần chia cũ rồi tạo lại theo tỷ lệ mới)
+function writeSplit(b, e, parts) {
+  run(`delete from expenses where split_of = ?`, e.id);
+  if (!parts) { run(`update expenses set pl_amount = null, split = null where id = ?`, e.id); return; }
+  const src = one(`select short_name from books where id = ?`, b)?.short_name;
+  const saved = parts.map((x) => {
+    if (x.book_id === b || !(x.amount > 0)) return { ...x, expense_id: x.book_id === b ? e.id : null };
+    checkDate(x.book_id, e.exp_date);
+    const s = insertExpense(x.book_id, { exp_date: e.exp_date, category: e.category, expense_group: e.expense_group, alloc_months: e.alloc_months,
+      description: `${e.description ? e.description + ' · ' : ''}${x.pct}% phân bổ từ ${src} ${e.code}`, amount: x.amount, split_of: e.id, note: e.note });
+    return { ...x, expense_id: s.id };
+  });
+  run(`update expenses set pl_amount = ?, split = ? where id = ?`, parts.find((x) => x.book_id === b)?.amount ?? 0, JSON.stringify(saved), e.id);
+}
+
 // ---------- CHI PHÍ ----------
 export function save_expense(p) {
   const b = p.book_id;
   requirePerm(b, 'chi_phi');
-  return once(p, b, 'save_expense', () => {
+  return once(p, b, 'save_expense', () => writeExpense(b, p));
+}
+
+// Ghi / sửa 1 khoản chi phí (dùng chung cho form và chi phí định kỳ). Chi phí định kỳ chạy theo lịch không có người dùng → bỏ qua kiểm tra quyền.
+export function writeExpense(b, p) {
+  {
     const amt = rnd(num(p.amount));
     if (amt == null || amt <= 0) fail('Số tiền chi phí phải lớn hơn 0');
     if (!trimNz(p.category)) fail('Chọn khoản mục chi phí');
@@ -171,13 +217,15 @@ export function save_expense(p) {
     // Mua dịch vụ: khoản chi phí mua của nhà cung cấp, ghi vào công nợ phải trả nhà cung cấp đó
     if (p.service && !sid) fail('Chọn nhà cung cấp dịch vụ');
     if (sid && !one(`select 1 from suppliers where id = ? and book_id = ?`, sid, b)) fail('Không tìm thấy nhà cung cấp');
+    const parts = normSplit(b, p.split, amt);
     let e;
     if (!eid) {
       e = insertExpense(b, { exp_date: d, category: trimNz(p.category), expense_group: grp, alloc_months: am, description: p.description ?? null,
-        amount: amt, supplier_id: sid, invoice_no: inv, note: p.note ?? null }, p.service ? 'DV' : 'CP');
+        amount: amt, supplier_id: sid, invoice_no: inv, note: p.note ?? null, recur_id: nz(p.recur_id), recur_month: nz(p.recur_month) }, p.service ? 'DV' : 'CP');
     } else {
       e = one(`select * from expenses where id = ? and book_id = ?`, eid, b);
       if (!e) fail('Không tìm thấy khoản chi phí');
+      if (e.split_of) fail('Khoản này là phần chia từ thương hiệu khác — hãy sửa ở khoản gốc');
       if (e.voided || e.settled_payment_id) fail('Không thể sửa khoản chi phí này');
       if (one(`select 1 from v_alloc_signed where doc_id = ?`, e.id)) fail('Chi phí đã thanh toán — hãy hủy phiếu chi trước khi sửa');
       checkDate(b, e.exp_date);
@@ -185,9 +233,10 @@ export function save_expense(p) {
         d, trimNz(p.category), grp || expenseGroupOf(b, p.category), am, p.description ?? null, amt, sid, inv, p.note ?? null, e.id);
       e = one(`select * from expenses where id = ?`, e.id);
     }
+    writeSplit(b, e, parts);
     let pay = null;
     if (nz(p.pay_now?.fund_id)) {
-      requirePerm(b, 'thu_chi');
+      if (ctx.uid) requirePerm(b, 'thu_chi');
       // Trả ngay một phần (chỉ khi có nhà cung cấp để ghi phần còn nợ) hoặc toàn bộ
       const pa = sid && p.pay_now.amount != null ? rnd(num(p.pay_now.amount)) : amt;
       if (!(pa > 0) || pa > amt) fail('Số tiền trả ngay phải lớn hơn 0 và không quá số cần thanh toán');
@@ -195,18 +244,19 @@ export function save_expense(p) {
         note: 'Trả chi phí ' + e.code + (e.description != null ? ' – ' + e.description : ''),
         allocations: [{ doc_type: 'chi_phi', doc_id: e.id, amount: pa }] });
     }
-    return { id: e.id, code: e.code, payment_code: pay?.code ?? null, expense_group: e.expense_group };
-  });
+    return { id: e.id, code: e.code, payment_code: pay?.code ?? null, expense_group: e.expense_group, split: parts?.length ?? 0 };
+  }
 }
 
 export function void_expense(p) {
   const e = one(`select * from expenses where id = ?`, p.id);
   if (!e) fail('Không tìm thấy chi phí');
   requirePerm(e.book_id, 'owner');
+  if (e.split_of) fail('Khoản này là phần chia từ thương hiệu khác — hãy hủy ở khoản gốc');
   if (e.settled_payment_id) fail('Phí sàn này gắn với phiếu thu — hãy hủy phiếu thu');
   if (one(`select 1 from v_alloc_signed where doc_id = ?`, e.id)) fail('Chi phí đã thanh toán — hãy hủy phiếu chi trước');
   if (!trimNz(p.reason)) fail('Hãy ghi lý do hủy');
   checkDate(e.book_id, e.exp_date);
-  run(`update expenses set voided = 1, void_reason = ? where id = ?`, p.reason, e.id);
+  run(`update expenses set voided = 1, void_reason = ? where id = ? or split_of = ?`, p.reason, e.id, e.id);
   return { ok: true };
 }
