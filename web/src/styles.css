@@ -1273,3 +1273,22 @@ body {
   .rec-cal { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 @media (max-width: 520px) { .rec-cal { grid-template-columns: repeat(3, minmax(0, 1fr)); } .bs-row { grid-template-columns: 12px 1fr 64px 14px; } .bs-amt { grid-column: 2 / -1; text-align: left; } }
+
+/* Đơn nhập của nhà cung cấp: theo dõi giao hàng, tích chọn nhiều đơn để xuất PDF */
+.po-track-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.po-track-head .seg button { display: inline-flex; align-items: center; gap: 6px; }
+.po-count { font-size: 11px; min-width: 18px; padding: 0 5px; border-radius: 99px; background: var(--surface-2); color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
+.po-count.bad { background: var(--bad-bg); color: var(--bad); font-weight: 600; } .po-count.warn { background: var(--warn-bg); color: var(--warn); font-weight: 600; }
+.po-selbar { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 46px; padding: 6px 12px; border-radius: 10px; background: var(--surface); color: var(--muted); border: 1px dashed var(--line); font-size: 13px; }
+.po-selbar.on { background: var(--accent-2); color: var(--accent); border: 1px solid var(--accent); font-size: 14px; }
+.po-tbl .po-ck { width: 36px; text-align: center; cursor: pointer; }
+.po-tbl .po-ck input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
+.po-tbl .po-ck input:disabled { cursor: not-allowed; opacity: .4; }
+.po-tbl tr.po-on td { background: var(--accent-2); }
+.po-prog { min-width: 120px; }
+.po-prog-bar { position: relative; height: 8px; border-radius: 99px; background: var(--line); overflow: visible; margin: 3px 0 2px; }
+.po-prog-bar span { display: block; height: 100%; border-radius: 99px; background: var(--info); }
+.po-prog-bar i { position: absolute; top: -3px; width: 2px; height: 14px; margin-left: -1px; background: var(--ink, currentColor); opacity: .45; border-radius: 1px; }
+.po-prog-bar.po-late span { background: var(--bad); } .po-prog-bar.po-soon span { background: var(--warn); } .po-prog-bar.po-done span { background: var(--good); }
+.po-due { margin-top: 3px; flex-wrap: wrap; }
+@media (max-width: 640px) { .po-track-head .btn-primary { width: 100%; justify-content: center; } }

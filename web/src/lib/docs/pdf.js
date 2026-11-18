@@ -220,13 +220,18 @@ export function toPdfDef(doc) {
 // Một hoặc nhiều chứng từ → một tệp PDF; mỗi chứng từ bắt đầu ở trang mới (khổ giấy theo chứng từ đầu)
 export async function pdfBlob(docOrList) {
   const docs = Array.isArray(docOrList) ? docOrList : [docOrList];
-  if (!pdfMakeP) pdfMakeP = import('pdfmake/build/pdfmake').then((m) => m.default || m);
-  const [pdfMake, a, t] = await Promise.all([pdfMakeP, fontVfs('Arimo'), fontVfs('Tinos')]);
   const def = toPdfDef(docs[0]);
   for (const d of docs.slice(1)) def.content.push({ text: '', pageBreak: 'after' }, ...toPdfDef(d).content);
   if (docs.length > 1) def.info.title = docs.map((d) => d.title).join(', ') + ' ' + (docs[0].code || '');
+  return pdfFromDef(def);
+}
+
+// Định nghĩa pdfmake dựng sẵn (báo cáo tự vẽ) → tệp PDF, dùng chung phông Arimo / Tinos đã nhúng
+export async function pdfFromDef(def, layouts = {}) {
+  if (!pdfMakeP) pdfMakeP = import('pdfmake/build/pdfmake').then((m) => m.default || m);
+  const [pdfMake, a, t] = await Promise.all([pdfMakeP, fontVfs('Arimo'), fontVfs('Tinos')]);
   return new Promise((resolve, reject) => {
-    try { pdfMake.createPdf(def, LAYOUTS, { Arimo: a.def, Tinos: t.def }, { ...a.vfs, ...t.vfs }).getBlob((b) => resolve(b)); } catch (e) { reject(e); }
+    try { pdfMake.createPdf(def, { ...LAYOUTS, ...layouts }, { Arimo: a.def, Tinos: t.def }, { ...a.vfs, ...t.vfs }).getBlob((b) => resolve(b)); } catch (e) { reject(e); }
   });
 }
 

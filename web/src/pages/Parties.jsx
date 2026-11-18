@@ -3,6 +3,7 @@ import { useApp, useQ, useAction } from '../lib/store.jsx';
 import { money, dmy, todayVN, addDays, match, short } from '../lib/format.js';
 import { TimeFilter, useTimeFilter } from '../components/DocFilters.jsx';
 import { CustomerDetail } from './CustomerLedger.jsx';
+import { SupplierOrdersTab } from './SupplierOrders.jsx';
 import { exportXlsx } from '../lib/excel.js';
 import { CustomerFields } from './CustomerFields.jsx';
 import { Btn, Icon, Pill, StatusPill, DELIVERY, PAYMENT, RECEIVE, Field, Input, TextArea, Select, DateInput, NumInput, Check, Search, Tabs, Loading, ErrorBox, Note, Table, Modal, KV, Section, ListPage, FilterBox, RadioList } from '../components/ui.jsx';
@@ -195,7 +196,8 @@ function SupplierDetail({ type, id, onClose }) {
       <KV items={[['Số dư công nợ', `${money(c.opening)} (đầu kỳ) + ${money(c.delivered ?? c.received)} (${isKh ? 'đã giao' : 'đã nhận'}) − ${money(c.paid)} (đã trả) = ${money(c.balance)}`],
         c.credit_limit > 0 && ['Hạn mức nợ', money(c.credit_limit) + (c.receivable > c.credit_limit ? ' — ĐÃ VƯỢT' : '')], c.note && ['Ghi chú', c.note]]} />
       <Tabs value={tab} onChange={setTab} tabs={[{ value: 'orders', label: isKh ? 'Đơn hàng' : 'Đơn nhập' }, ...(can('thu_chi') ? [{ value: 'pays', label: 'Thu / chi' }] : []), { value: 'debts', label: 'Nợ đầu kỳ' }]} />
-      {tab === 'orders' && <Table dense rows={orders.data} onRow={(o) => open(isKh ? 'order' : 'po', { id: o.id })} rowClass={(o) => (o.overdue_days > 0 ? 'row-late' : '')} columns={[
+      {tab === 'orders' && !isKh && <SupplierOrdersTab supplier={c} orders={orders} />}
+      {tab === 'orders' && isKh && <Table dense rows={orders.data} onRow={(o) => open(isKh ? 'order' : 'po', { id: o.id })} rowClass={(o) => (o.overdue_days > 0 ? 'row-late' : '')} columns={[
         { key: 'c', label: 'Đơn', render: (o) => <><b>{o.code}</b><div className="cell-sub">{dmy(o.order_date)}</div></> },
         { key: 't', label: 'Tổng', align: 'right', render: (o) => money(o.order_total) },
         { key: 'p', label: 'Đã trả', align: 'right', render: (o) => money(o.paid_net) },
