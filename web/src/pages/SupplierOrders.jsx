@@ -59,9 +59,13 @@ export function SupplierOrdersTab({ supplier, orders }) {
     if (!list.length) return;
     setBusy(which);
     try {
-      const lines = await q('purchase_order_lines', [['po_id', 'in', list.map((o) => o.id)]], 'line_no', 10000);
+      const ids = list.map((o) => o.id);
+      const [lines, receipts] = await Promise.all([
+        q('purchase_order_lines', [['po_id', 'in', ids]], 'line_no', 10000),
+        q('receipts', [['po_id', 'in', ids], ['cancelled_at', 'is_null']], 'receipt_date', 10000), // số đã giao theo từng ngày
+      ]);
       const { poTrackingPdf } = await import('../lib/docs/po-tracking-pdf.js');
-      const blob = await poTrackingPdf({ supplier, orders: list, lines, today });
+      const blob = await poTrackingPdf({ supplier, orders: list, lines, receipts, today });
       const name = `theo-doi-don-dat_${supplier.code || 'ncc'}_${today}.pdf`;
       if (await saveFile(name, blob)) toast(`Đã tạo ${name} (${list.length} đơn)`);
     } catch (e) { toast('Không tạo được PDF: ' + e.message, 'err'); } finally { setBusy(null); }
