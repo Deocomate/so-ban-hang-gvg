@@ -10,12 +10,8 @@ import TextAlign from '@tiptap/extension-text-align';
 import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
 import Image from '@tiptap/extension-image';
-import {
-  Bold, Italic, Underline, Strikethrough, Subscript as SubIcon, Superscript as SupIcon, AlignLeft, AlignCenter, AlignRight, AlignJustify, List, ListOrdered,
-  Undo2, Redo2, ImagePlus, Table as TableIcon, Minus, Code, Baseline, Highlighter, Copy, Scissors, ClipboardPaste, Grid3x3, RemoveFormatting, Printer, Save,
-  RotateCcw, X, Braces, SeparatorHorizontal, ZoomIn, ZoomOut, Search, ChevronDown, Plus, Trash2, PaintBucket, TableCellsMerge, TableCellsSplit,
-  BetweenHorizontalStart, BetweenHorizontalEnd, BetweenVerticalStart, BetweenVerticalEnd, SquareDashed, Square, Pilcrow, TriangleAlert,
-} from 'lucide-react';
+import { Code, Printer, Save, RotateCcw, X, Braces, ZoomIn, ZoomOut, Search, TriangleAlert } from 'lucide-react';
+import { RichToolbar, TB, Drop } from '../components/RichToolbar.jsx';
 import { useApp } from '../lib/store.jsx';
 import { packView } from '../lib/book-profile.js';
 import { Loading, Note } from '../components/ui.jsx';
@@ -24,13 +20,11 @@ import { groupsFor, tokenValues, sampleData } from '../lib/docs/tokens.js';
 import { PAPERS, DEFAULT_MARGIN, FONT_CSS, pageSize, marginOf, defaultTemplate, renderTemplate, unknownTokens, sanitizeHtml, fitTables, contentWidthPx, suggestedTemplates } from '../lib/docs/templates.js';
 import { editorUrl, announceTemplates } from '../lib/docs/editor-link.js';
 import { useDocFonts } from '../lib/docs/fonts.js';
-import { StyleAttr, TableX, HrX, PageBreak, TokenNode, toEditorHtml, fromEditorHtml, beautify, parseStyle } from '../lib/docs/editor-ext.js';
+import { StyleAttr, TableX, HrX, PageBreak, TokenNode, toEditorHtml, fromEditorHtml, beautify } from '../lib/docs/editor-ext.js';
 
 const SOURCE_KIND = (type) => (type === 'phieu_thu' ? 'payment' : type === 'bao_gia' ? 'quote' : ['de_nghi_tam_ung', 'doi_chieu_sl', 'doi_chieu_tt', 'de_nghi_tt'].includes(type) ? 'contract' : 'order');
 const SOURCE_VIEW = { order: 'sales_orders', payment: 'payments', contract: 'contracts', quote: 'quotes' };
 const newId = () => 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-const FONT_SIZES = [7, 8, 8.5, 9, 9.5, 10, 10.5, 11, 12, 13, 14, 16, 18, 20, 22, 24, 28, 32];
-const LINE_HEIGHTS = ['1', '1.1', '1.2', '1.35', '1.5', '1.75', '2'];
 const PX_PER_MM = 96 / 25.4;
 
 // ---------- Trang đứng riêng ----------
@@ -46,51 +40,6 @@ export function PrintEditorPage({ link }) {
       <TemplateEditor key={`${book.id}:${link.type}:${link.tpl}`} type={link.type} tplId={link.tpl} />
       <div className="toasts" aria-live="polite">{toasts.map((t) => <div key={t.id} className={`toast${t.kind === 'err' ? ' err' : ''}`}><span>{t.text}</span></div>)}</div>
     </>
-  );
-}
-
-// ---------- Nút thanh công cụ ----------
-function TB({ icon: I, title, on, disabled, onClick, children, className = '' }) {
-  return (
-    <button type="button" className={`te-btn${on ? ' on' : ''} ${className}`} title={title} aria-label={title} aria-pressed={on ? 'true' : undefined} disabled={disabled}
-      onMouseDown={(e) => e.preventDefault()} onClick={onClick}>
-      {I && <I size={16} strokeWidth={1.9} />}{children}
-    </button>
-  );
-}
-// Menu thả xuống nhỏ (bảng, đoạn văn…)
-function Drop({ icon, title, label, children, wide }) {
-  const [open, setOpen] = useState(false); const ref = useRef(null);
-  useEffect(() => {
-    if (!open) return undefined;
-    const h = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
-    const k = (e) => { if (e.key === 'Escape') setOpen(false); };
-    document.addEventListener('mousedown', h); document.addEventListener('keydown', k);
-    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', k); };
-  }, [open]);
-  return (
-    <span className="te-drop" ref={ref}>
-      <TB icon={icon} title={title} on={open} onClick={() => setOpen((x) => !x)}>{label}<ChevronDown size={12} /></TB>
-      {open && <div className={`te-menu${wide ? ' wide' : ''}`} onMouseDown={(e) => { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') e.preventDefault(); }} onClick={(e) => { if (e.target.closest('[data-close]')) setOpen(false); }}>{children}</div>}
-    </span>
-  );
-}
-const MI = ({ icon: I, children, onClick, disabled, danger }) => (
-  <button type="button" className={`te-mi${danger ? ' danger' : ''}`} data-close disabled={disabled} onClick={onClick}>{I ? <I size={15} /> : <span style={{ width: 15 }} />}<span>{children}</span></button>
-);
-
-// Chọn số dòng × cột khi chèn bảng
-function GridPicker({ onPick }) {
-  const [hv, setHv] = useState([0, 0]);
-  return (
-    <div className="te-grid">
-      <div className="te-grid-cells" onMouseLeave={() => setHv([0, 0])}>
-        {Array.from({ length: 8 }, (_, r) => Array.from({ length: 8 }, (_, c) => (
-          <button type="button" key={`${r}-${c}`} data-close className={r < hv[0] && c < hv[1] ? 'on' : ''} onMouseEnter={() => setHv([r + 1, c + 1])} onClick={() => onPick(r + 1, c + 1)} aria-label={`${r + 1} dòng × ${c + 1} cột`} />
-        )))}
-      </div>
-      <div className="small muted">{hv[0] ? `${hv[0]} dòng × ${hv[1]} cột` : 'Chọn kích thước bảng'}</div>
-    </div>
   );
 }
 
@@ -135,23 +84,6 @@ function TokenPanel({ type, onInsert, onClose }) {
   );
 }
 
-// Ảnh chèn vào mẫu: thu nhỏ tối đa 900px, lưu PNG (ảnh trong suốt) hoặc JPEG (ảnh chụp) để PDF đọc được
-async function loadImage(file) {
-  if (!/^image\//.test(file.type)) throw new Error('Chọn tệp ảnh (PNG, JPG)');
-  const url = URL.createObjectURL(file);
-  try {
-    const img = await new Promise((res, rej) => { const i = new window.Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('Không đọc được ảnh')); i.src = url; });
-    const k = Math.min(1, 900 / Math.max(img.width, img.height));
-    const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
-    const g = c.getContext('2d'); g.drawImage(img, 0, 0, c.width, c.height);
-    const png = /png|gif|webp|svg/.test(file.type);
-    if (!png) { g.globalCompositeOperation = 'destination-over'; g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); }
-    const data = c.toDataURL(png ? 'image/png' : 'image/jpeg', 0.86);
-    if (data.length > 450000) throw new Error('Ảnh quá lớn sau khi thu nhỏ — chọn ảnh khác nhỏ hơn');
-    return { src: data, width: Math.min(c.width, 240) };
-  } finally { URL.revokeObjectURL(url); }
-}
-
 // ---------- Trình sửa ----------
 function TemplateEditor({ type, tplId }) {
   useDocFonts();
@@ -176,7 +108,6 @@ function TemplateEditor({ type, tplId }) {
   const [busy, setBusy] = useState(false);
   const [slash, setSlash] = useState(null); // { from, query, x, y, i }
   const slashRef = useRef(null); slashRef.current = slash;
-  const fileRef = useRef(null);
 
   const insertToken = useCallback((ed, k, range) => {
     const c = ed.chain().focus(); if (range) c.deleteRange(range);
@@ -313,20 +244,6 @@ function TemplateEditor({ type, tplId }) {
   const close = () => { if (dirty && !window.confirm('Mẫu chưa lưu. Đóng tab và bỏ thay đổi?')) return; window.close(); setTimeout(() => { location.href = location.pathname + '#cai-dat/mau-in'; }, 200); };
 
   if (!editor || editor.isDestroyed) return <div className="center-screen"><Loading /></div>;
-  const inTable = editor.isActive('table');
-  const imgSel = editor.isActive('image');
-  const ts = editor.getAttributes('textStyle');
-  // Cỡ chữ hiện tại: lấy theo định dạng chữ, không có thì đo chữ trên trang
-  let curSize = ts.fontSize ? parseFloat(ts.fontSize) * (/px$/.test(ts.fontSize) ? 0.75 : 1) : null;
-  if (!curSize) { try { const dom = editor.view.domAtPos(editor.state.selection.from).node; const el = dom.nodeType === 3 ? dom.parentElement : dom; curSize = Math.round(parseFloat(getComputedStyle(el).fontSize) * 0.75 * 2) / 2; } catch (e) { curSize = 10; } }
-  if (!Number.isFinite(curSize) || curSize <= 0) curSize = 10;
-  const curFont = /tinos|times/i.test(ts.fontFamily || '') ? 'Tinos' : /arimo|arial/i.test(ts.fontFamily || '') ? 'Arimo' : '';
-  const setSize = (pt) => { const v = Math.max(5, Math.min(72, Math.round(pt * 2) / 2)); editor.chain().focus().setFontSize(`${v}pt`).run(); };
-  const pStyle = parseStyle(editor.getAttributes('paragraph').style);
-  const tblBorder = editor.getAttributes('table').border !== '0';
-  const imgW = imgSel ? parseFloat(parseStyle(editor.getAttributes('image').style).width) || null : null;
-  const setImgW = (w) => editor.chain().focus().updateAttributes('image', { style: w ? `width: ${w}px` : null }).run();
-  const ch = () => editor.chain().focus();
   const items = slash ? slashItems(type, slash.query) : [];
 
   return (
@@ -352,94 +269,10 @@ function TemplateEditor({ type, tplId }) {
 
       <div className="te-main">
         <section className="te-left">
-          <div className="te-bar">
-            <div className="te-row">
-              <TB icon={Code} title={source === null ? 'Xem mã nguồn HTML' : 'Quay lại chế độ trực quan'} on={source !== null} onClick={toggleSource}>Source</TB>
-              <span className="te-sep" />
-              <select className="te-sel" disabled={source !== null} value={curFont} onChange={(e) => { const v = e.target.value; if (v) ch().setFontFamily(FONT_CSS[v]).run(); else ch().unsetFontFamily().run(); }} aria-label="Phông chữ">
-                <option value="">Phông mặc định</option><option value="Arimo">Arial</option><option value="Tinos">Times New Roman</option>
-              </select>
-              <TB icon={Minus} title="Giảm cỡ chữ" disabled={source !== null} onClick={() => setSize(curSize - (curSize > 12 ? 1 : 0.5))} />
-              <select className="te-sel te-size" disabled={source !== null} value={FONT_SIZES.includes(curSize) ? curSize : ''} onChange={(e) => setSize(Number(e.target.value))} aria-label="Cỡ chữ (pt)">
-                {!FONT_SIZES.includes(curSize) && <option value="">{curSize}</option>}
-                {FONT_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <TB icon={Plus} title="Tăng cỡ chữ" disabled={source !== null} onClick={() => setSize(curSize + (curSize >= 12 ? 1 : 0.5))} />
-              <span className="te-sep" />
-              <TB icon={ImagePlus} title="Chèn ảnh" disabled={source !== null} onClick={() => fileRef.current?.click()} />
-              <input ref={fileRef} type="file" accept="image/*" hidden onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (!f) return;
-                try { const im = await loadImage(f); ch().setImage({ src: im.src }).updateAttributes('image', { style: `width: ${im.width}px` }).run(); } catch (x) { toast(x.message, 'err'); } }} />
-              <Drop icon={TableIcon} title="Bảng" wide>
-                {!inTable ? <GridPicker onPick={(r, c) => ch().insertTable({ rows: r, cols: c, withHeaderRow: false }).run()} /> : <>
-                  <MI icon={BetweenHorizontalStart} onClick={() => ch().addRowBefore().run()}>Thêm dòng phía trên</MI>
-                  <MI icon={BetweenHorizontalEnd} onClick={() => ch().addRowAfter().run()}>Thêm dòng phía dưới</MI>
-                  <MI icon={BetweenVerticalStart} onClick={() => ch().addColumnBefore().run()}>Thêm cột bên trái</MI>
-                  <MI icon={BetweenVerticalEnd} onClick={() => ch().addColumnAfter().run()}>Thêm cột bên phải</MI>
-                  <MI icon={TableCellsMerge} disabled={!editor.can().mergeCells()} onClick={() => ch().mergeCells().run()}>Gộp ô</MI>
-                  <MI icon={TableCellsSplit} disabled={!editor.can().splitCell()} onClick={() => ch().splitCell().run()}>Tách ô</MI>
-                  <MI icon={tblBorder ? SquareDashed : Square} onClick={() => ch().updateAttributes('table', { border: tblBorder ? '0' : '1' }).run()}>{tblBorder ? 'Bỏ viền bảng' : 'Kẻ viền bảng'}</MI>
-                  <div className="te-mi-row"><PaintBucket size={15} /> Nền ô
-                    {['', '#f2f2f2', '#fff2cc', '#deebf7', '#e2f0d9', '#fbe5d6'].map((c) => <button type="button" key={c || 'none'} data-close className="te-swatch" style={{ background: c || '#fff' }} title={c || 'Không màu'} onClick={() => ch().setCellStyle('background-color', c || null).run()}>{c ? '' : '×'}</button>)}
-                  </div>
-                  <div className="te-mi-row">Căn dọc ô
-                    {[['top', 'Trên'], ['middle', 'Giữa'], ['bottom', 'Dưới']].map(([v, l]) => <button type="button" key={v} data-close className="te-chip" onClick={() => ch().setCellStyle('vertical-align', v).run()}>{l}</button>)}
-                  </div>
-                  <MI icon={Trash2} danger onClick={() => ch().deleteRow().run()}>Xóa dòng</MI>
-                  <MI icon={Trash2} danger onClick={() => ch().deleteColumn().run()}>Xóa cột</MI>
-                  <MI icon={Trash2} danger onClick={() => ch().deleteTable().run()}>Xóa bảng</MI>
-                </>}
-              </Drop>
-              <Drop icon={SeparatorHorizontal} title="Kẻ ngang, ngắt trang">
-                <MI icon={Minus} onClick={() => ch().setHorizontalRule().run()}>Đường kẻ ngang</MI>
-                <MI icon={Minus} onClick={() => ch().insertContent({ type: 'horizontalRule', attrs: { kind: 'rule' } }).run()}>Dải màu đầu trang</MI>
-                <MI icon={SeparatorHorizontal} onClick={() => ch().insertPageBreak().run()}>Ngắt trang</MI>
-              </Drop>
-              <span className="grow" />
-              <span className="small muted te-slash-hint">Gõ <kbd>/</kbd> để <button type="button" className="link-btn small" onClick={() => setPanel(true)}>chèn thông tin</button></span>
-            </div>
-            <div className="te-row">
-              <TB icon={Undo2} title="Hoàn tác (Ctrl+Z)" disabled={!editor.can().undo()} onClick={() => ch().undo().run()} />
-              <TB icon={Redo2} title="Làm lại (Ctrl+Y)" disabled={!editor.can().redo()} onClick={() => ch().redo().run()} />
-              <span className="te-sep" />
-              <TB icon={Copy} title="Sao chép (Ctrl+C)" onClick={() => { editor.view.focus(); document.execCommand('copy'); }} />
-              <TB icon={Scissors} title="Cắt (Ctrl+X)" onClick={() => { editor.view.focus(); document.execCommand('cut'); }} />
-              <TB icon={ClipboardPaste} title="Dán chữ (Ctrl+V)" onClick={async () => { try { const t = await navigator.clipboard.readText(); if (t) ch().insertContent(t).run(); } catch (e) { toast('Trình duyệt chặn đọc bộ nhớ tạm — hãy bấm Ctrl+V', 'err'); } }} />
-              <span className="te-sep" />
-              <TB icon={Bold} title="Đậm (Ctrl+B)" on={editor.isActive('bold')} onClick={() => ch().toggleBold().run()} />
-              <TB icon={Italic} title="Nghiêng (Ctrl+I)" on={editor.isActive('italic')} onClick={() => ch().toggleItalic().run()} />
-              <TB icon={Underline} title="Gạch dưới (Ctrl+U)" on={editor.isActive('underline')} onClick={() => ch().toggleUnderline().run()} />
-              <TB icon={Strikethrough} title="Gạch ngang" on={editor.isActive('strike')} onClick={() => ch().toggleStrike().run()} />
-              <TB icon={SubIcon} title="Chỉ số dưới" on={editor.isActive('subscript')} onClick={() => ch().toggleSubscript().run()} />
-              <TB icon={SupIcon} title="Chỉ số trên" on={editor.isActive('superscript')} onClick={() => ch().toggleSuperscript().run()} />
-              <span className="te-sep" />
-              <label className="te-btn te-color" title="Màu chữ"><Baseline size={16} /><i style={{ background: ts.color || '#000' }} />
-                <input type="color" value={/^#[0-9a-f]{6}$/i.test(ts.color || '') ? ts.color : '#000000'} onChange={(e) => ch().setColor(e.target.value).run()} /></label>
-              <label className="te-btn te-color" title="Màu nền chữ"><Highlighter size={16} /><i style={{ background: ts.backgroundColor || 'transparent' }} />
-                <input type="color" value={/^#[0-9a-f]{6}$/i.test(ts.backgroundColor || '') ? ts.backgroundColor : '#ffff00'} onChange={(e) => ch().setBackgroundColor(e.target.value).run()} /></label>
-              <TB icon={RemoveFormatting} title="Xóa định dạng chữ" onClick={() => ch().unsetAllMarks().run()} />
-              <span className="te-sep" />
-              <TB icon={AlignLeft} title="Căn trái" on={editor.isActive({ textAlign: 'left' })} onClick={() => ch().setTextAlign('left').run()} />
-              <TB icon={AlignCenter} title="Căn giữa" on={editor.isActive({ textAlign: 'center' })} onClick={() => ch().setTextAlign('center').run()} />
-              <TB icon={AlignRight} title="Căn phải" on={editor.isActive({ textAlign: 'right' })} onClick={() => ch().setTextAlign('right').run()} />
-              <TB icon={AlignJustify} title="Căn đều hai bên" on={editor.isActive({ textAlign: 'justify' })} onClick={() => ch().setTextAlign('justify').run()} />
-              <TB icon={List} title="Danh sách dấu chấm" on={editor.isActive('bulletList')} onClick={() => ch().toggleBulletList().run()} />
-              <TB icon={ListOrdered} title="Danh sách đánh số" on={editor.isActive('orderedList')} onClick={() => ch().toggleOrderedList().run()} />
-              <Drop icon={Pilcrow} title="Đoạn văn: giãn dòng, khoảng cách, thụt lề" wide>
-                <div className="te-form">
-                  <label>Giãn dòng<select value={pStyle['line-height'] || ''} onChange={(e) => ch().setBlockStyle('line-height', e.target.value || null).run()}>
-                    <option value="">Mặc định</option>{LINE_HEIGHTS.map((v) => <option key={v} value={v}>{v}</option>)}</select></label>
-                  <label>Cách trên (pt)<input type="number" min="0" max="72" step="1" value={parseFloat(pStyle['margin-top']) || ''} onChange={(e) => ch().setBlockStyle('margin-top', e.target.value ? `${e.target.value}pt` : null).run()} /></label>
-                  <label>Cách dưới (pt)<input type="number" min="0" max="72" step="1" value={parseFloat(pStyle['margin-bottom']) || ''} onChange={(e) => ch().setBlockStyle('margin-bottom', e.target.value ? `${e.target.value}pt` : null).run()} /></label>
-                  <label>Thụt lề trái (pt)<input type="number" min="0" max="200" step="2" value={parseFloat(pStyle['margin-left']) || ''} onChange={(e) => ch().setBlockStyle('margin-left', e.target.value ? `${e.target.value}pt` : null).run()} /></label>
-                  <label>Thụt dòng đầu (pt)<input type="number" min="0" max="100" step="2" value={parseFloat(pStyle['text-indent']) || ''} onChange={(e) => ch().setBlockStyle('text-indent', e.target.value ? `${e.target.value}pt` : null).run()} /></label>
-                </div>
-              </Drop>
-              <span className="te-sep" />
-              <TB icon={Grid3x3} title="Hiện đường lưới của bảng không viền" on={grid} onClick={() => setGrid((x) => !x)} />
-              <TB icon={Braces} title="Chèn thông tin" onClick={() => setPanel(true)} />
-              {imgSel && <span className="te-imgw">Rộng ảnh <input type="number" min="16" max="800" value={imgW || ''} onChange={(e) => setImgW(Number(e.target.value) || null)} /> px</span>}
-            </div>
-          </div>
+          <RichToolbar editor={editor} off={source !== null} toast={toast} grid={grid} onGrid={setGrid}
+            lead={<><TB icon={Code} title={source === null ? 'Xem mã nguồn HTML' : 'Quay lại chế độ trực quan'} on={source !== null} onClick={toggleSource}>Source</TB><span className="te-sep" /></>}
+            tail1={<><span className="grow" /><span className="small muted te-slash-hint">Gõ <kbd>/</kbd> để <button type="button" className="link-btn small" onClick={() => setPanel(true)}>chèn thông tin</button></span></>}
+            tail2={<TB icon={Braces} title="Chèn thông tin" onClick={() => setPanel(true)} />} />
           <div className={`te-canvas${grid ? ' grid' : ''}`}>
             {source !== null ? (
               <div className="te-source">

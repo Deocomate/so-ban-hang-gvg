@@ -26,6 +26,9 @@ export function CustomerFields({ f, set, id }) {
         <Field label="Mã số thuế" required={req('tax_code')}><Input value={x.tax_code} onChange={(v) => setX('tax_code', v)} /></Field>
         <Field label="Email nhận hóa đơn"><Input value={x.tax_email} onChange={(v) => setX('tax_email', v)} /></Field>
         <Field label="Địa chỉ xuất hóa đơn" wide required={req('tax_address')}><Input value={x.tax_address} onChange={(v) => setX('tax_address', v)} /></Field>
+        <Field label="Theo dõi giấy tờ đơn hàng" wide hint="Hợp đồng, biên bản giao hàng, chứng nhận xuất xưởng, hóa đơn VAT của từng đơn">
+          <Select value={x.docs_track || ''} onChange={(v) => setX('docs_track', v || undefined)} options={[{ value: '', label: 'Theo nhóm khách / tự động (theo dõi khi khách cần xuất VAT)' },
+            { value: 'on', label: 'Luôn theo dõi' }, { value: 'off', label: 'Không theo dõi' }]} /></Field>
       </div>}
       {tab === 'chung' && <>
         <div className="cust-tabs-grid">

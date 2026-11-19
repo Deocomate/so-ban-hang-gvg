@@ -18,6 +18,7 @@ import {
   ErrorBox, Note, Table, Modal, ConfirmBtn, Picker, KV, Section, Empty, ListPage, FilterBox, RadioList,
 } from '../components/ui.jsx';
 import { VatReminder } from '../components/VatReminder.jsx';
+import { OrderDocsPanel } from './OrderDocs.jsx';
 
 // ===================== DANH SÁCH ĐƠN BÁN =====================
 // Như KiotViet: hóa đơn gồm đơn bán ngay và đơn đặt hàng đã giao ít nhất một đợt (phiếu đặt chưa giao nằm ở trang Đặt hàng).
@@ -397,7 +398,7 @@ export function OrderDetail({ id, onClose }) {
       footer={<>
         <Btn icon="dl" onClick={() => open('doc', { kind: 'order', id })}>Xuất PDF</Btn>
         {contract.data?.[0] ? <Btn icon="receipt" onClick={() => open('contract', { id: contract.data[0].id })}>Hợp đồng {contract.data[0].code}</Btn>
-          : canSell && d.status !== 'huy' && d.kind === 'dat_hang' && <Btn icon="receipt" onClick={() => open('contract-form', { order_id: id })}>Lập hợp đồng</Btn>}
+          : canSell && d.status !== 'huy' && d.status !== 'nhap' && <Btn icon="receipt" onClick={() => open('contract-writer', { order_id: id })}>Soạn hợp đồng</Btn>}
         <span className="grow" />
         {canSell && d.status !== 'huy' && <Btn onClick={() => { onClose(); open('order-form', { id }); }} icon="edit">Sửa</Btn>}
         {canSell && d.status === 'nhap' && <Btn kind="soft" busy={busy} onClick={() => run('confirm_sales_order', { id }, (r) => (r.warnings?.length ? 'Đã xác nhận. Lưu ý: ' + r.warnings.join('; ') : 'Đã xác nhận đơn – hàng đã được giữ'))}>Xác nhận đơn</Btn>}
@@ -432,6 +433,7 @@ export function OrderDetail({ id, onClose }) {
       </div>
       <VatReminder orderId={d.delivery_count > 0 ? id : null} onShowRequest={() => open('doc', { kind: 'order', id, type: 'yeu_cau_vat' })} />
       {d.status === 'xac_nhan' && d.eff_qty > 0 && <div className="deliv-bar"><span>Đã giao <b>{fq(d.delivered_qty)}</b> / {fq(d.eff_qty)}</span><div className="prog grow"><i style={{ width: `${Math.min(100, (d.delivered_qty / d.eff_qty) * 100)}%` }} /></div><b>{fq((d.delivered_qty / d.eff_qty) * 100)}%</b><span>Còn phải giao <b className="warn">{fq(d.remaining_qty)}</b></span></div>}
+      {d.status !== 'huy' && d.status !== 'nhap' && <Section title="Giấy tờ đơn hàng"><OrderDocsPanel orderId={id} order={d} /></Section>}
       <Section title="Hàng trong đơn">
         <Table dense rows={lines.data} columns={[
           { key: 'p', label: 'Sản phẩm', render: (l) => <div><div className="cell-main">{l.sku} · {l.product_name}{l.is_kit ? ' (bộ)' : ''}</div>{l.note && <div className="cell-sub"><i>{l.note}</i></div>}{l.po_code && <div className="cell-sub"><Icon name="kiln" size={12} /> {l.po_code}: {l.po_step || 'đã đặt'} · đã về {fq(l.po_received)}</div>}</div> },

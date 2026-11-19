@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { useApp } from '../lib/store.jsx';
 import { money, qty as fq, dmy, dmyhm } from '../lib/format.js';
 import { exportXlsx } from '../lib/excel.js';
@@ -25,6 +25,10 @@ import { DriverForm, TripForm, PayDriverDialog, PriceBookForm, PriceBookImport }
 import { QuoteForm, QuoteDetail } from './Quotes.jsx';
 import { ContractForm, ContractDetail } from './Contracts.jsx';
 import { TaxInvoiceForm } from './Tax.jsx';
+import { OrderDocsDialog, DocFilePreview } from './OrderDocs.jsx';
+const ContractWriterLazy = React.lazy(() => import('./ContractWriter.jsx'));
+// Trình soạn hợp đồng nạp riêng (kèm trình soạn văn bản) khi mở lần đầu
+const ContractWriter = (p) => <Suspense fallback={<Modal title="Soạn hợp đồng" onClose={p.onClose}><Loading /></Modal>}><ContractWriterLazy {...p} /></Suspense>;
 import { orderTransferContent } from '../lib/vietqr.js';
 
 const MAP = {
@@ -39,6 +43,7 @@ const MAP = {
   'bank-txn': BankTxnDialog, 'bank-sim': BankSimDialog,
   driver: DriverForm, trip: TripForm, 'pay-driver': PayDriverDialog, 'quote-form': QuoteForm, quote: QuoteDetail,
   'contract-form': ContractForm, contract: ContractDetail, 'tax-invoice': TaxInvoiceForm,
+  'order-docs': OrderDocsDialog, 'doc-file': DocFilePreview, 'contract-writer': ContractWriter,
 };
 
 export function ModalHost() {

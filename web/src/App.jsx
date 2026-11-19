@@ -32,6 +32,7 @@ import { DocStandalone, readDocPage } from './pages/Documents.jsx';
 import { readEditorLink } from './lib/docs/editor-link.js';
 const PrintEditorPage = React.lazy(() => import('./pages/PrintEditor.jsx').then((m) => ({ default: m.PrintEditorPage })));
 import { WarrantyPage } from './pages/Warranty.jsx';
+import { OrderDocsPage } from './pages/OrderDocs.jsx';
 import { LoyaltyPage } from './pages/Loyalty.jsx';
 import { ShiftsPage } from './pages/Shifts.jsx';
 
@@ -45,6 +46,7 @@ const PAGES = [
   { id: 'xuat-noi-bo', label: 'Xuất dùng nội bộ', icon: 'gift', comp: InternalUsePage },
   { id: 'bao-gia', label: 'Báo giá', icon: 'quote', perm: 'xem_ban_hang', comp: QuotesPage },
   { id: 'hop-dong', label: 'Hợp đồng', icon: 'contract', perm: 'xem_ban_hang', comp: ContractsPage },
+  { id: 'giay-to', label: 'Giấy tờ đơn hàng', icon: 'file', perm: 'xem_ban_hang', comp: OrderDocsPage },
   { id: 'dat-rieng', label: 'Đặt hàng', icon: 'order', perm: 'xem_ban_hang', comp: SpecialPage },
   { id: 'ban-hang', label: 'Hóa đơn', icon: 'invoice', perm: 'xem_ban_hang', comp: SalesPage },
   { id: 'tra-hang', label: 'Trả hàng', icon: 'return', perm: 'xem_ban_hang', comp: SalesReturnsPage },
@@ -87,7 +89,7 @@ const MENU = [
   { label: 'Đơn hàng', icon: 'order', groups: [
     { title: 'Đơn hàng', items: ['dat-rieng', 'ban-hang', 'tra-hang'] },
     { title: 'Giao hàng', items: ['van-chuyen', 'lai-xe'] },
-    { title: 'Báo giá & hợp đồng', items: ['bao-gia', 'hop-dong'] },
+    { title: 'Báo giá & hợp đồng', items: ['bao-gia', 'hop-dong', 'giay-to'] },
     { title: 'Sau bán hàng', items: ['bao-hanh'] },
   ] },
   { label: 'Khách hàng', icon: 'users', groups: [{ title: 'Khách hàng', items: ['khach-hang', 'nhom-khach', 'khuyen-mai'] }] },

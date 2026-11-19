@@ -12,7 +12,7 @@ import { sampleData } from '../lib/docs/tokens.js';
 
 import { useDocFonts } from '../lib/docs/fonts.js';
 
-const TYPES_FOR = { quote: ['bao_gia'], contract: ['de_nghi_tam_ung', 'doi_chieu_sl', 'doi_chieu_tt', 'de_nghi_tt'], order: ['hoa_don', 'don_dat_hang', 'bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen', 'yeu_cau_vat', 'doi_chieu_tt', 'doi_chieu_sl'], delivery: ['bien_ban', 'hoa_don', 'hd_van_chuyen', 'phieu_xuat_kho', 'don_dat_hang', 'yeu_cau_vat'], payment: ['phieu_thu'] };
+const TYPES_FOR = { quote: ['bao_gia'], contract: ['de_nghi_tam_ung', 'doi_chieu_sl', 'doi_chieu_tt', 'de_nghi_tt'], order: ['hoa_don', 'don_dat_hang', 'bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen', 'yeu_cau_vat', 'cn_xuat_xuong', 'doi_chieu_tt', 'doi_chieu_sl'], delivery: ['bien_ban', 'hoa_don', 'hd_van_chuyen', 'phieu_xuat_kho', 'don_dat_hang', 'yeu_cau_vat', 'cn_xuat_xuong'], payment: ['phieu_thu'] };
 
 // ---------- Bản xem trước: chứng từ dựng từ mẫu in (HTML), đúng khổ giấy và lề ----------
 export function DocPreview({ doc }) {
@@ -361,7 +361,7 @@ const PROFILE_FIELDS = [
 // Nhóm loại chứng từ ở cột trái (giống "Quản lý mẫu in" của KiotViet)
 const TYPE_GROUPS = [
   ['Bán hàng', ['hoa_don', 'don_dat_hang', 'bao_gia', 'yeu_cau_vat']],
-  ['Giao hàng', ['bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen']],
+  ['Giao hàng', ['bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen', 'cn_xuat_xuong']],
   ['Đối chiếu sau giao hàng', ['doi_chieu_tt', 'doi_chieu_sl']],
   ['Hợp đồng', ['de_nghi_tam_ung', 'de_nghi_tt']],
   ['Sổ quỹ', ['phieu_thu']],

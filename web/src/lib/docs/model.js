@@ -17,6 +17,7 @@ export const DOC_TYPES = {
   de_nghi_tt: { label: 'Đề nghị thanh toán', from: ['contract'], font: 'Tinos', sep: '.' },
   bao_gia: { label: 'Báo giá', from: ['quote'], font: 'Arimo', sep: '.' },
   yeu_cau_vat: { label: 'Yêu cầu xuất hóa đơn VAT', from: ['order', 'delivery'], font: 'Tinos', sep: '.' },
+  cn_xuat_xuong: { label: 'Giấy chứng nhận xuất xưởng', from: ['order', 'delivery'], font: 'Tinos', sep: '.' },
 };
 
 export const DEFAULT_TEXTS = {
@@ -216,7 +217,7 @@ export function currentInfo(type, data) {
 const pick = (o, ks) => Object.fromEntries(ks.filter((k) => o && o[k]).map((k) => [k, o[k]]));
 
 // Chứng từ lập được theo từng đợt giao
-export const PER_DELIVERY = ['hoa_don', 'bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen', 'yeu_cau_vat'];
+export const PER_DELIVERY = ['hoa_don', 'bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen', 'yeu_cau_vat', 'cn_xuat_xuong'];
 // Bảng đối chiếu: lập sau khi giao một hoặc nhiều đợt, theo hợp đồng hoặc theo đơn
 export const RECONCILE = ['doi_chieu_sl', 'doi_chieu_tt'];
 
@@ -245,6 +246,8 @@ export function editableFields(type, data) {
     { key: 'vat_buyer', label: 'Họ tên người mua hàng' }, { key: 'vat_address', label: 'Địa chỉ xuất hóa đơn', wide: true }, { key: 'vat_email', label: 'Email nhận hóa đơn' },
     { key: 'vat_pay_method', label: 'Hình thức thanh toán' }, { key: 'vat_bank', label: 'Số tài khoản bên mua' }, { key: 'vat_rate', label: 'Thuế suất GTGT (%)', kind: 'num' },
     { key: 'vat_note', label: 'Ghi chú cho kế toán', wide: true }];
+  if (type === 'cn_xuat_xuong') return [D, { key: 'cert_buyer', label: 'Đơn vị mua hàng', wide: true }, { key: 'cert_address', label: 'Địa chỉ đơn vị mua', wide: true },
+    { key: 'cert_project', label: 'Dự án', wide: true }, { key: 'cert_site', label: 'Địa điểm', wide: true }, { key: 'cert_result', label: 'Kết luận', wide: true }];
   if (type === 'phieu_xuat_kho') return [D, { key: 'recv_name', label: 'Người nhận hàng' }, { key: 'recv_address', label: 'Địa chỉ (bộ phận)', wide: true },
     { key: 'place', label: 'Xuất tại kho (ngăn lô)' }, { key: 'attach', label: 'Số chứng từ gốc kèm theo' }];
   return [D, { key: 'payer_name', label: data.p?.direction === 'chi' ? 'Người nhận tiền' : 'Người nộp tiền' }, { key: 'payer_address', label: 'Địa chỉ', wide: true },
@@ -272,7 +275,10 @@ export function defaults(type, data, ds) {
   const vat = type === 'yeu_cau_vat' ? { vat_unit: x.tax_name || o.customer_name || '', vat_tax_code: x.tax_code || '', vat_buyer: x.tax_buyer || '',
     vat_address: x.tax_address || c.address || o.customer_address || '', vat_email: x.tax_email || '', vat_pay_method: 'TM/CK', vat_bank: '',
     vat_rate: String(Number(o.vat_rate) > 0 ? Number(o.vat_rate) : 8), vat_note: '' } : {};
-  return { ...vat,
+  // Giấy chứng nhận xuất xưởng: đơn vị mua theo thông tin xuất hóa đơn của khách, địa điểm là nơi giao hàng
+  const cert = type === 'cn_xuat_xuong' ? { cert_buyer: String(x.tax_name || o.customer_name || '').toUpperCase(), cert_address: x.tax_address || c.address || o.customer_address || '',
+    cert_project: '', cert_site: data.orderInfo?.recv_address || o.customer_address || '', cert_result: 'Sản phẩm đủ tiêu chuẩn xuất xưởng.' } : {};
+  return { ...vat, ...cert,
     [`date_${type}`]: docDate, recv_phone: o.customer_phone || '', recv_address: o.customer_address || '', recv_name: o.customer_name || '', recv_party: o.customer_name || '',
     box_total: String(g.reduce((s, l) => s + l.boxes, 0) || ''), old_debt: String(Math.round(oldDebt)), note: o.note || '',
     place: type === 'phieu_xuat_kho' ? 'Kho hàng' : `kho hàng thuộc ${prof.legal_name || prof.name}`, handover_rep: prof.representative || '',

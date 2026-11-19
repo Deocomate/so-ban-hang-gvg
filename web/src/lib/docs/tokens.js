@@ -80,6 +80,10 @@ export const TOKEN_GROUPS = [
     T('Cong_Tien_Hang', 'Cộng tiền hàng (trước thuế)'), T('Thue_Suat_GTGT', 'Thuế suất GTGT', '"8"'), T('Tien_Thue_GTGT', 'Tiền thuế GTGT'),
     T('Tong_Tien_Thanh_Toan_VAT', 'Tổng tiền thanh toán (gồm thuế)'), T('Tong_Tien_VAT_Bang_Chu', 'Tổng tiền thanh toán bằng chữ'), T('Ghi_Chu_Xuat_HD', 'Ghi chú cho kế toán'),
   ] },
+  { id: 'xuat_xuong', label: 'Chứng nhận xuất xưởng', icon: 'kiln', tokens: [
+    T('Don_Vi_Mua_Hang', 'Đơn vị mua hàng'), T('Dia_Chi_Don_Vi_Mua', 'Địa chỉ đơn vị mua'), T('Du_An', 'Dự án'), T('Dia_Diem_Du_An', 'Địa điểm dự án'),
+    T('Ket_Luan_Xuat_Xuong', 'Kết luận', '"Sản phẩm đủ tiêu chuẩn xuất xưởng."'),
+  ] },
   { id: 'bao_gia', label: 'Báo giá', icon: 'quote', tokens: [
     T('Ma_Bao_Gia', 'Mã báo giá'), T('Kinh_Gui', 'Kính gửi (khách)'), T('Dia_Chi_Bao_Gia', 'Địa chỉ khách'), T('Dia_Diem_Cong_Trinh', 'Địa điểm công trình'),
     T('Bang_Bao_Gia', 'Bảng báo giá', 'Bảng dựng sẵn: nhóm hàng, hình ảnh, định mức, tổng tiền'), T('Luu_Y_Bao_Gia', 'Lưu ý báo giá', 'Mục "LƯU Ý" của báo giá'),
@@ -96,6 +100,7 @@ export const GROUPS_FOR = {
   doi_chieu_sl: ['don_vi', 'chung_tu', 'khach_hang', 'hop_dong'], doi_chieu_tt: ['don_vi', 'chung_tu', 'khach_hang', 'hop_dong', 'tong'],
   bao_gia: ['don_vi', 'chung_tu', 'bao_gia'],
   yeu_cau_vat: ['don_vi', 'chung_tu', 'khach_hang', 'hoa_don_vat', 'hang_hoa'],
+  cn_xuat_xuong: ['don_vi', 'chung_tu', 'khach_hang', 'hang_hoa', 'xuat_xuong'],
 };
 
 export const ALL_TOKENS = Object.fromEntries(TOKEN_GROUPS.flatMap((g) => g.tokens.map((t) => [t.k, { ...t, group: g.id, item: !!g.item }])));
@@ -214,6 +219,7 @@ export function tokenValues(type, data, ds, info, sep = ',') {
     CCCD_Lai_Xe: info.id_no || '', Bien_So_Xe: info.vehicle || '', Ben_B_Van_Chuyen: upper(info.carrier_party || info.driver_name), Dia_Chi_Ben_B: info.carrier_address || '',
     Tinh_Trang_Hang: info.goods_condition || '', So_Ngay_Van_Chuyen: info.transit_days || '04', Can_Nang_Gia_Cuoc: info.freight_note || 'tính theo từng khách hàng',
     Thanh_Toan_Cuoc_Tai: info.pay_at || 'khách nhận hàng', Chung_Tu_Kem_Theo: info.attach || '',
+    Don_Vi_Mua_Hang: info.cert_buyer || '', Dia_Chi_Don_Vi_Mua: info.cert_address || '', Du_An: info.cert_project || '', Dia_Diem_Du_An: info.cert_site || '', Ket_Luan_Xuat_Xuong: info.cert_result || '',
     Ly_Do_Xuat: `Xuất bán theo đơn hàng ${o.code}${data.d ? `, phiếu giao ${data.d.code}` : ''}`,
     Tong_So_Luong: N(g.reduce((s, l) => s + l.qty, 0)), Tong_So_Hop: info.box_total || '0',
     Don_Vi_Dong_Goi: type === 'hd_van_chuyen' ? (g.find((l) => l.packUnit)?.packUnit || 'hộp') : packLabel(g),

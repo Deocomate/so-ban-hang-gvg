@@ -136,7 +136,9 @@ export function ContractDetail({ id, onClose }) {
       footer={<>
         <Btn onClick={() => open('order', { id: k.order_id })} icon="order">Mở đơn {k.order_code}</Btn>
         <span className="grow" />
-        {can('ban_hang') && <Btn icon="edit" onClick={() => open('contract-form', { id })}>Sửa</Btn>}
+        <Btn icon="contract" onClick={() => open('contract-writer', { id })}>Văn bản hợp đồng</Btn>
+        <Btn icon="file" onClick={() => open('order-docs', { order_id: k.order_id })}>Giấy tờ đơn</Btn>
+        {can('ban_hang') && <Btn icon="edit" onClick={() => open('contract-form', { id })}>Sửa tạm ứng, vận chuyển</Btn>}
         {can('ban_hang') && k.delivery_count > 0 && <Btn kind={ready ? 'ghost' : 'soft'} busy={busy} onClick={() => run('set_contract_reconciled', { id, done: !ready }, ready ? 'Đã mở lại đối chiếu' : 'Đã hoàn tất đối chiếu')}>{ready ? 'Mở lại đối chiếu' : 'Hoàn tất đối chiếu'}</Btn>}
         {can('ban_hang') && k.remaining_qty > 0 && k.order_status === 'xac_nhan' && <OrderDeliverBtn orderId={k.order_id} />}
       </>}>

@@ -76,6 +76,25 @@ const lines = (txt, st) => String(txt || '').split('\n').map((t) => P(esc(t) || 
 function textOf(ds, type, k) { const t = ds?.types?.[type]?.text; return t && t[k] !== undefined && t[k] !== null ? t[k] : DEFAULT_TEXTS[k]; }
 
 const BUILDERS = {
+  // Giấy chứng nhận xuất xưởng (theo mẫu Excel của xưởng): đầu trang căn giữa, danh mục sản phẩm, kết luận, ký QC và giám đốc
+  cn_xuat_xuong() {
+    const s = 'font-size:12pt'; const c = `${center}; font-size:11pt`;
+    const ln = (label, tok) => P(`${B(label)} ${tok}`, `${s}; margin-bottom:3pt`);
+    return P(B('{Ten_Phap_Ly_In_Hoa}'), `${center}; font-size:13pt`) + P('Địa chỉ: {Dia_Chi_Don_Vi}', c) + P('Điện thoại: {Dien_Thoai_Don_Vi}', c)
+      + P('Website: {Website_Don_Vi} - Email: {Email_Don_Vi}', c) + '<hr>'
+      + P(I('Hà Nội, {Ngay_Thang_Nam_Thuong}'), `text-align:right; ${s}; margin-top:6pt`)
+      + P(`<span style="font-size:18pt">${B('GIẤY CHỨNG NHẬN XUẤT XƯỞNG')}</span>`, `${center}; margin-top:10pt; margin-bottom:12pt`)
+      + ln('Đơn vị sản xuất:', B('{Ten_Phap_Ly_In_Hoa}')) + ln('Địa chỉ:', '{Dia_Chi_Don_Vi}')
+      + ln('Đơn vị mua hàng:', B('{Don_Vi_Mua_Hang}')) + ln('Địa chỉ:', '{Dia_Chi_Don_Vi_Mua}')
+      + ln('DỰ ÁN:', '{Du_An}') + ln('ĐỊA ĐIỂM:', '{Dia_Diem_Du_An}')
+      + P(B('I. Danh mục sản phẩm xuất xưởng:'), `${s}; margin-top:8pt; margin-bottom:4pt`)
+      + table([36, '*', 56, 80, 110], [
+        head(['STT', 'TÊN SẢN PHẨM', 'ĐVT', 'SỐ LƯỢNG', 'GHI CHÚ']),
+        [C('{STT}'), L('{Ten_Hang}'), C('{Don_Vi_Tinh}'), C('{So_Luong}'), L('{Ghi_Chu_Hang}')],
+      ], { size: 11.5 })
+      + P(B('II. Kết luận:'), `${s}; margin-top:10pt`) + P('{Ket_Luan_Xuat_Xuong}', `${s}; margin-left:14pt`)
+      + sign([{ title: 'Bộ phận quản lý chất lượng' }, { title: 'Giám đốc', name: '{Nguoi_Dai_Dien}' }], { size: 12, space: 4, mt: 14 });
+  },
   hoa_don(ds) {
     const s = 'font-size:9.5pt';
     const sumRow = (label, tok, bold) => ['', { h: bold ? B(label) : label, span: 4, pst: right }, { h: bold ? B(tok) : tok, pst: right }];
@@ -445,7 +464,7 @@ export function unknownTokens(html) {
 // ---------- Chứng từ in hoàn chỉnh ----------
 const FILE_PREFIX = { hoa_don: 'hoa-don', don_dat_hang: 'don-dat-hang', bien_ban: 'bien-ban-ban-giao', phieu_xuat_kho: 'phieu-xuat-kho', hd_van_chuyen: 'hop-dong-van-chuyen',
   de_nghi_tam_ung: 'de-nghi-tam-ung', de_nghi_tt: 'de-nghi-thanh-toan', doi_chieu_sl: 'doi-chieu-so-luong', doi_chieu_tt: 'doi-chieu-cong-no', bao_gia: 'bao-gia',
-  yeu_cau_vat: 'yeu-cau-xuat-hoa-don' };
+  yeu_cau_vat: 'yeu-cau-xuat-hoa-don', cn_xuat_xuong: 'chung-nhan-xuat-xuong' };
 // Dựng chứng từ theo mẫu: { html, font, paper, orient, margin, filename, title, code, tplId }
 export function buildPrintDoc(type, data, ds, info, tplId) {
   const tpl = pickTemplate(ds, type, tplId);

@@ -5,6 +5,7 @@ import { money, dmy, todayVN } from '../lib/format.js';
 import { useFunds } from '../lib/lookups.js';
 import { TIME_PRESETS, presetRange } from '../components/DocFilters.jsx';
 import { CustomerFiles } from './CustomerFiles.jsx';
+import { DocsBoardMini } from './OrderDocs.jsx';
 import { Btn, Pill, StatusPill, DELIVERY, Field, Input, Select, DateInput, NumInput, Tabs, Loading, ErrorBox, Note, Table, Modal } from '../components/ui.jsx';
 
 const METHODS = ['Chuyển khoản', 'Tiền mặt', 'Quẹt thẻ', 'Bù trừ'];
@@ -53,9 +54,10 @@ export function CustomerDetail({ id, onClose }) {
         {c.supplier_id && <span><span className="muted">Đồng thời là nhà cung cấp — </span><DualDebt c={c} /></span>}
       </div>}
       <ErrorBox error={led.error} />
-      <Tabs value={tab} onChange={setTab} tabs={[...(seeLedger ? [{ value: 'ledger', label: 'Sổ công nợ' }] : []), { value: 'orders', label: 'Chi tiết đơn' }, { value: 'files', label: 'Tài liệu' }]} />
+      <Tabs value={tab} onChange={setTab} tabs={[...(seeLedger ? [{ value: 'ledger', label: 'Sổ công nợ' }] : []), { value: 'orders', label: 'Chi tiết đơn' }, { value: 'docs', label: 'Giấy tờ đơn hàng' }, { value: 'files', label: 'Tài liệu' }]} />
       {tab === 'ledger' && <LedgerTab id={id} />}
       {tab === 'orders' && <OrdersTab id={id} usablePrepaid={L?.usable_prepaid || 0} />}
+      {tab === 'docs' && <DocsBoardMini params={{ customer_id: id }} showCustomer={false} />}
       {tab === 'files' && <CustomerFiles customerId={id} customerName={c.name} />}
     </Modal>
   );
