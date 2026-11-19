@@ -93,10 +93,11 @@ const useLinkToken = (t) => run(`update auth_tokens set used_at = ? where id = ?
 
 // ---------- Thư ----------
 const hello = (u) => `Chào ${u.name || u.email},`;
-function mailInvite(u) {
+// extra: đoạn giới thiệu thêm (vd. lời mời chấm công kèm link trang chấm công)
+function mailInvite(u, extra = '') {
   requireMail();
   const link = appLink('nhan-loi-moi', newLinkToken(u.id, 'invite'));
-  queueMail(u.email, 'Lời mời dùng Sổ bán hàng gốm', `${hello(u)}\n\nBạn được mời dùng Sổ bán hàng gốm với email ${u.email}.\nBấm link dưới đây để đặt mật khẩu và kích hoạt tài khoản (hạn 7 ngày, dùng 1 lần):\n\n${link}\n\nNếu bạn không biết lời mời này, hãy bỏ qua thư.`);
+  queueMail(u.email, extra ? 'Lời mời chấm công trên Sổ bán hàng gốm' : 'Lời mời dùng Sổ bán hàng gốm', `${hello(u)}\n\nBạn được mời dùng Sổ bán hàng gốm với email ${u.email}.\nBấm link dưới đây để đặt mật khẩu và kích hoạt tài khoản (hạn 7 ngày, dùng 1 lần):\n\n${link}\n\n${extra ? `${extra}\n\n` : ''}Nếu bạn không biết lời mời này, hãy bỏ qua thư.`);
 }
 function mailReset(u) {
   requireMail();
@@ -129,19 +130,19 @@ export function createUser({ email, password, name, isAdmin = false, verified = 
 }
 
 // Tổng quản trị mời người mới: tài khoản chờ kích hoạt + thư mời
-export function inviteUser({ email, name, phone }) {
+export function inviteUser({ email, name, phone, extra }) {
   const e = normEmail(email);
   if (userByEmail(e)) fail(`Email ${e} đã có tài khoản`);
   const u = { id: uuid(), email: e, name: cleanName(name), phone: cleanPhone(phone), password_hash: NO_PASSWORD, token_version: 0, status: 'invited', created_at: nowIso() };
   insert('users', u);
-  mailInvite(u);
+  mailInvite(u, extra);
   secLog('invite_sent', u.id, { email: e });
   return u;
 }
-export function resendInvite(userId) {
+export function resendInvite(userId, extra) {
   const u = userById(userId);
   if (!u || u.status !== 'invited') fail('Tài khoản này đã kích hoạt — không cần mời lại');
-  mailInvite(u);
+  mailInvite(u, extra);
   secLog('invite_sent', u.id, { email: u.email, resend: true });
 }
 

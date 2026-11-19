@@ -78,13 +78,13 @@ export function EmployeeForm({ id, onClose }) {
   const members = useQ('members', [], 'display_name', 200);
   const tables = useQ('commission_tables', [['active', 'eq', 'true']], 'name', 200);
   const [tab, setTab] = useState('info');
-  const [f, setF] = useState({ code: '', name: '', phone: '', id_no: '', title: '', dept: '', address: '', start_date: todayVN(), user_id: '', note: '', active: true,
+  const [f, setF] = useState({ code: '', name: '', phone: '', id_no: '', title: '', dept: '', address: '', start_date: todayVN(), user_id: '', email: '', note: '', active: true,
     pay: { type: 'ngay_cong', rate: null, std_days: null, ot: true, ot_rate: null, allowances: [], deductions: [], bonus: [], commission_id: '' } });
   const [loaded, setLoaded] = useState(!id);
   React.useEffect(() => {
     if (id) rpc('q', { view: 'employees', filters: [['id', 'eq', id]] }).then(([e]) => {
       setF((s) => ({ ...s, ...e, phone: e.phone || '', id_no: e.id_no || '', title: e.title || '', dept: e.dept || '', address: e.address || '', note: e.note || '',
-        user_id: e.user_id || '', active: !!e.active, pay: { ...s.pay, ...(e.pay || {}), commission_id: e.pay?.commission_id || '' } }));
+        user_id: e.user_id || '', loaded_user: e.user_id || '', active: !!e.active, pay: { ...s.pay, ...(e.pay || {}), commission_id: e.pay?.commission_id || '' } }));
       setLoaded(true);
     });
   }, [id]);
@@ -95,7 +95,8 @@ export function EmployeeForm({ id, onClose }) {
   return (
     <Modal title={id ? `Nhân viên ${f.code}` : 'Thêm nhân viên'} onClose={onClose} size="lg"
       footer={<><Btn onClick={onClose}>Thôi</Btn><Btn kind="primary" busy={busy} disabled={!loaded} onClick={async () => {
-        if (await run('save_employee', { id: id || null, ...f, user_id: f.user_id || null, pay: { ...f.pay, commission_id: f.pay.commission_id || null } }, 'Đã lưu nhân viên')) onClose();
+        if (await run('save_employee', { id: id || null, ...f, user_id: f.user_id || null, email: f.user_id ? null : f.email.trim() || null, pay: { ...f.pay, commission_id: f.pay.commission_id || null } },
+          (x) => (x.invited ? `Đã lưu và gửi link đặt mật khẩu tới ${f.email.trim()}` : 'Đã lưu nhân viên'))) onClose();
       }}>Lưu</Btn></>}>
       <Tabs value={tab} onChange={setTab} tabs={[{ value: 'info', label: 'Thông tin' }, { value: 'pay', label: 'Thiết lập lương' }]} />
       {tab === 'info' ? (
@@ -107,8 +108,19 @@ export function EmployeeForm({ id, onClose }) {
           <Field label="Chức danh"><Input value={f.title} onChange={(v) => set('title', v)} placeholder="vd. Bán hàng" /></Field>
           <Field label="Phòng ban"><Input value={f.dept} onChange={(v) => set('dept', v)} placeholder="vd. Cửa hàng" /></Field>
           <Field label="Ngày vào làm"><DateInput value={f.start_date} onChange={(v) => set('start_date', v)} /></Field>
-          <Field label="Tài khoản đăng nhập" hint="Gắn tài khoản để nhân viên tự chấm công và xem lương của mình"><Select value={f.user_id} onChange={(v) => set('user_id', v)} placeholder="(không có)"
+          <Field label="Tài khoản đăng nhập" hint="Gắn tài khoản để nhân viên tự chấm công và xem lương của mình"><Select value={f.user_id} onChange={(v) => set('user_id', v)}
+            placeholder={f.user_id ? '(không có)' : '(chưa có — nhập email bên dưới)'}
             options={(members.data || []).map((m) => ({ value: m.user_id, label: `${m.display_name || m.email}${m.email ? ` · ${m.email}` : ''}` }))} /></Field>
+          {!f.user_id ? (
+            <Field label="Email nhân viên (chưa có tài khoản)" hint="Nhập email: khi lưu, hệ thống tạo tài khoản và gửi link để nhân viên tự đặt mật khẩu rồi bắt đầu chấm công">
+              <Input type="email" value={f.email} onChange={(v) => set('email', v)} placeholder="vd. lan@gmail.com" autoComplete="off" />
+            </Field>
+          ) : f.user_status === 'invited' && f.user_id === f.loaded_user ? (
+            <div className="field"><span className="field-label">Trạng thái tài khoản</span>
+              <div className="row gap-s"><Pill tone="warn">Chờ đặt mật khẩu</Pill><span className="small muted">{f.user_email}</span>
+                <Btn small icon="refresh" busy={busy} onClick={() => run('resend_employee_invite', { id }, `Đã gửi lại thư mời tới ${f.user_email}`)}>Gửi lại thư mời</Btn></div>
+            </div>
+          ) : null}
           <Field label="Địa chỉ" wide><Input value={f.address} onChange={(v) => set('address', v)} /></Field>
           <Field label="Ghi chú" wide><TextArea value={f.note} onChange={(v) => set('note', v)} /></Field>
           {id && <Check checked={f.active} onChange={(v) => set('active', v)}>Đang làm việc</Check>}

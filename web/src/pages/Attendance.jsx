@@ -221,6 +221,28 @@ function PayCard({ emp, title = 'Lương tạm tính tháng này' }) {
   );
 }
 
+// Link trang chấm công để nhân viên lưu lại / chủ gửi cho nhân viên (đăng nhập xong mở thẳng trang này)
+export const attLink = () => `${location.origin}${location.pathname}#cham-cong-cua-toi`;
+export function CopyAttLink({ label = 'Link chấm công' }) {
+  const { toast } = useApp();
+  const link = attLink();
+  const box = React.useRef(null);
+  // Cách cũ (chọn chữ trong ô + lệnh copy) khi trình duyệt chặn API bộ nhớ tạm (trang http, khung nhúng, chưa cấp quyền)
+  const legacyCopy = () => { const el = box.current; if (!el) return false; el.focus(); el.select(); try { return document.execCommand('copy'); } catch (e) { return false; } };
+  const copy = async () => {
+    let ok = false;
+    try { await navigator.clipboard.writeText(link); ok = true; } catch (e) { ok = legacyCopy(); }
+    toast(ok ? 'Đã chép link chấm công' : 'Trình duyệt chặn chép tự động — bấm vào ô link rồi Ctrl+C', ok ? undefined : 'err');
+  };
+  return (
+    <div className="att-link">
+      <span className="small muted">{label}</span>
+      <input ref={box} readOnly value={link} aria-label={label} onFocus={(e) => e.target.select()} />
+      <Btn small icon="copy" onClick={copy}>Sao chép</Btn>
+    </div>
+  );
+}
+
 // ---------- TRANG CỦA NHÂN VIÊN ----------
 function ClockCard({ data, emp }) {
   const { run, busy } = useAction();
@@ -257,6 +279,7 @@ export function MyAttendancePage() {
   return (
     <div className="stack">
       <div className="page-head"><div className="grow"><h1 className="page-title">Chấm công của tôi</h1></div><MonthNav month={month} setMonth={setMonth} /></div>
+      <CopyAttLink label="Link chấm công của bạn (lưu lại để mở nhanh)" />
       <ErrorBox error={q.error} />
       {!data ? <Loading /> : !data.linked ? (
         <Note tone="warn">Tài khoản của bạn chưa gắn với hồ sơ nhân viên nào nên chưa chấm công được. Nhờ chủ cửa hàng mở Nhân viên › Danh sách nhân viên, chọn tên bạn và gắn ô “Tài khoản đăng nhập”.</Note>
@@ -329,6 +352,7 @@ export function AttendanceBoardPage(props) {
             <section className="card stack-s">
               <div className="row gap"><Search value={search} onChange={setSearch} placeholder="Tìm nhân viên" /><span className="grow" />
                 {pay && <span className="small muted">Tổng lương tạm tính: <b>{money(emps.reduce((s, e) => s + (e.pay?.total || 0), 0))} đ</b></span>}</div>
+              <CopyAttLink label="Link chấm công gửi cho nhân viên" />
               <Table rows={rows} empty="Chưa có nhân viên — thêm ở Nhân viên › Danh sách nhân viên" onRow={(e) => setTab(e.id)} columns={[
                 { key: 'n', label: 'Nhân viên', render: (e) => <><div className="cell-main">{e.name}{!e.active && <> <Pill tone="mute">đã nghỉ</Pill></>}</div>
                   <div className="cell-sub">{e.code}{e.title ? ` · ${e.title}` : ''}{!e.linked ? ' · chưa gắn tài khoản' : ''}</div></> },

@@ -66,7 +66,11 @@ Không còn tự đăng ký tài khoản: mọi người dùng đều do Tổng 
 6. Trong hộp thoại của từng người: gửi lại lời mời, gửi email đặt lại mật khẩu, đăng xuất người đó khỏi mọi thiết bị, **khóa tài khoản** (người nghỉ việc: khóa là mất quyền ngay, lịch sử chứng từ vẫn giữ tên họ).
 
 ### Chấm công: nhân viên tự chấm, chủ xem công và lương
-1. Muốn nhân viên tự chấm công: mở **Nhân viên → Danh sách nhân viên**, chọn người đó, gắn ô **Tài khoản đăng nhập** với tài khoản của họ trong sổ. Không cần cấp thêm quyền nào.
+1. Muốn nhân viên tự chấm công: mở **Nhân viên → Danh sách nhân viên**, thêm mới hoặc chọn người đó:
+   - Đã có tài khoản trong sổ: chọn ở ô **Tài khoản đăng nhập**.
+   - Chưa có tài khoản: nhập **Email nhân viên** rồi bấm Lưu. Hệ thống tạo tài khoản (chỉ chấm công, không có quyền nghiệp vụ nào) và gửi thư có link để nhân viên tự đặt mật khẩu, kèm link trang chấm công. Link đặt mật khẩu có hạn 7 ngày. Nếu nhân viên chưa đặt mật khẩu, hồ sơ hiện **Chờ đặt mật khẩu** và có nút **Gửi lại thư mời**. Email đã có tài khoản thì được gắn luôn, không gửi thư.
+   - Mỗi tài khoản chỉ gắn được với một nhân viên trong sổ. Muốn cấp thêm quyền (bán hàng, kho…) thì Tổng quản trị chỉnh ở **Người dùng & quyền**.
+   - Nhân viên quên link: trang **Chấm công của tôi** và trang **Bảng chấm công** đều có ô **Link chấm công** kèm nút **Sao chép**. Mở link này, đăng nhập xong là vào thẳng trang chấm công.
 2. Nhân viên đăng nhập là vào ngay trang **Chấm công của tôi** (trên điện thoại là nút **Chấm công** ở thanh dưới):
    - Bấm **Vào ca** khi đến, **Ra ca** khi về. Giờ lấy theo đồng hồ máy chủ (giờ Việt Nam), ca lấy theo Lịch làm việc hôm nay. Đi muộn hay về sớm được tính so với giờ của ca.
    - Lưới cả tháng (T2–CN): bấm một ngày để chấm **Đủ công / Nửa ngày / Nghỉ có phép / Nghỉ không phép / Chưa chấm** (bấm là lưu, có **Hoàn tác**) hoặc sửa giờ vào, giờ ra, ghi chú. Ngày chưa tới không chấm được. Nhân viên không tự ghi giờ làm thêm, phần này do quản lý ghi.

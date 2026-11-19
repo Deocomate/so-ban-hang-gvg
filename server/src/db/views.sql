@@ -716,7 +716,7 @@ from tax_invoices t left join sales_orders o on o.id = t.order_id;
 -- ---------- NHÂN VIÊN ----------
 -- Cách tính lương chỉ chủ cửa hàng xem được
 create view v_employees as
-select e.id, e.book_id, e.code, e.name, e.phone, e.id_no, e.title, e.dept, e.address, e.start_date, e.user_id, u.email as user_email,
+select e.id, e.book_id, e.code, e.name, e.phone, e.id_no, e.title, e.dept, e.address, e.start_date, e.user_id, u.email as user_email, u.status as user_status,
   e.active, e.note, e.created_at, case when is_owner(e.book_id) then e.pay end as pay
 from employees e left join users u on u.id = e.user_id;
 

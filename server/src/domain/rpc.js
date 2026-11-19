@@ -65,7 +65,7 @@ export const RPC = {
   ...pick(customerFiles, ['customer_files', 'create_customer_folder', 'upload_customer_file', 'add_customer_link', 'update_customer_item', 'move_customer_items',
     'delete_customer_items', 'get_customer_file', 'set_customer_drive']),
   ...pick(reminders, ['vat_invoice_todo']),
-  ...pick(staff, ['save_employee', 'save_shift', 'save_schedule', 'save_timesheet', 'delete_timesheet', 'fill_timesheets', 'save_commission_table',
+  ...pick(staff, ['resend_employee_invite', 'save_employee', 'save_shift', 'save_schedule', 'save_timesheet', 'delete_timesheet', 'fill_timesheets', 'save_commission_table',
     'create_paysheet', 'recalc_paysheet', 'adjust_paysheet_line', 'close_paysheet', 'cancel_paysheet', 'rpt_staff']),
   ...pick(attendance, ['att_month', 'att_save_day', 'att_delete', 'att_clock']),
   ...pick(groups, ['save_customer_group', 'delete_customer_group', 'set_customer_group', 'refresh_customer_groups']),

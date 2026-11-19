@@ -90,4 +90,25 @@ C('Lưới tháng biết kỳ đã chốt', m4.locks.length, 1);
 C('Nhân viên thấy phiếu lương của mình', [m4.payslips.length, m4.payslips[0].code], [1, ps.code || m4.payslips[0].code]);
 await E('Kỳ đã chốt không tự chấm lại được', () => api.call('att_save_day', { book_id: TH, employee_id: L.id, work_date: today, shift_id: ca, status: 'nghi_phep' }), 'đã chốt');
 
+G('Thêm nhân viên kèm email: mời đặt mật khẩu để chấm công');
+api.as(owner);
+const N = await api.call('save_employee', { book_id: TH, name: 'Ngọc Mới', email: 'Ngoc.Moi@gomsu.vn', pay: { type: 'ngay_cong', rate: 5200000 } });
+const nu = (await api.sql(`select id, status from users where email = 'ngoc.moi@gomsu.vn'`))[0];
+C('Tạo tài khoản chờ kích hoạt và gắn vào hồ sơ', [N.invited, N.user_id, nu.status], [true, nu.id, 'invited']);
+const mem = (await api.sql(`select role, perms from book_members where book_id = ? and user_id = ?`, [TH, nu.id]))[0];
+C('Vào sổ là nhân viên, không có quyền nghiệp vụ', [mem.role, mem.perms], ['staff', '{}']);
+const mail = (await api.sql(`select subject, body from mail_outbox where to_email = 'ngoc.moi@gomsu.vn' order by id desc limit 1`))[0];
+C('Thư mời có link đặt mật khẩu và link chấm công', [mail.subject, /#tai-khoan\/nhan-loi-moi\//.test(mail.body), /#cham-cong-cua-toi/.test(mail.body)], ['Lời mời chấm công trên Sổ bán hàng gốm', true, true]);
+C('Danh sách nhân viên biết tài khoản đang chờ kích hoạt', (await api.one('employees', TH, [['id', 'eq', N.id]])).user_status, 'invited');
+await api.call('resend_employee_invite', { book_id: TH, id: N.id });
+C('Gửi lại thư mời', (await api.sql(`select count(*) n from mail_outbox where to_email = 'ngoc.moi@gomsu.vn'`))[0].n, 2);
+await E('Một tài khoản không gắn cho 2 nhân viên', () => api.call('save_employee', { book_id: TH, name: 'Ngọc trùng', email: 'ngoc.moi@gomsu.vn' }), 'đã gắn với nhân viên');
+await E('Email sai bị chặn', () => api.call('save_employee', { book_id: TH, name: 'X', email: 'khong-phai-email' }), 'Email không hợp lệ');
+const outsider = await api.user('ngoai@gomsu.vn');
+const O = await api.call('save_employee', { book_id: TH, name: 'Người có sẵn', email: 'ngoai@gomsu.vn' });
+C('Email đã có tài khoản: gắn luôn, không gửi thư mời', [O.user_id, O.invited], [outsider, false]);
+await E('Nhân viên đã kích hoạt thì không gửi lại thư mời', () => api.call('resend_employee_invite', { book_id: TH, id: O.id }), 'đã kích hoạt');
+api.as(hr);
+await E('Chỉ chủ cửa hàng thêm nhân viên kèm email', () => api.call('save_employee', { book_id: TH, name: 'Y', email: 'y@gomsu.vn' }), 'chủ cửa hàng');
+
 finish('Chấm công tự phục vụ · quyền xem công/lương');

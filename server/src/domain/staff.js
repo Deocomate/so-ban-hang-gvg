@@ -5,6 +5,9 @@
 import { ctx, fail, one, all, run, insert, uuid, nowIso, num, int, nz, trimNz, rnd, asDate, today, addDays, json } from '../lib/context.js';
 import { requirePerm, can, newMasterCode, nextCode, bookSettings, checkDate } from './access.js';
 import { insertExpense } from './cash.js';
+import { setMembership } from './books.js';
+import { inviteUser, resendInvite } from '../lib/auth.js';
+import { config } from '../config.js';
 
 export const PAY_TYPES = { ca: 'Theo ca', gio: 'Theo giờ', ngay_cong: 'Theo ngày công chuẩn', co_dinh: 'Cố định' };
 const STAFF_DEFAULTS = { std_days: 26, std_hours: 8, ot_rate: 1.5, late_grace: 5, paid_leave: true };
@@ -46,10 +49,14 @@ export function save_employee(p) {
   let id = nz(p.id); let code = trimNz(p.code);
   if (!code && !id) code = newMasterCode(b, 'NV', 'employees');
   if (code && one(`select 1 from employees where book_id = ? and lower(code) = lower(?) and id is not ?`, b, code, id)) fail(`Mã "${code}" đã tồn tại`);
-  const uid = nz(p.user_id);
-  if (uid && !one(`select 1 from book_members where book_id = ? and user_id = ?`, b, uid)) fail('Tài khoản không thuộc sổ này');
   const pay = cleanPay(p.pay);
   if (pay.commission_id && !one(`select 1 from commission_tables where id = ? and book_id = ?`, pay.commission_id, b)) fail('Không tìm thấy bảng hoa hồng');
+  let uid = nz(p.user_id); let invited = false;
+  // Chưa có tài khoản: nhập email → dùng tài khoản có sẵn (thêm vào sổ, không quyền nghiệp vụ) hoặc tạo mới và gửi thư mời đặt mật khẩu
+  if (!uid && trimNz(p.email)) ({ uid, invited } = accountForEmployee(b, trimNz(p.email), name, nz(p.phone)));
+  if (uid && !one(`select 1 from book_members where book_id = ? and user_id = ?`, b, uid)) fail('Tài khoản không thuộc sổ này');
+  const other = uid && one(`select name from employees where book_id = ? and user_id = ? and id is not ?`, b, uid, id);
+  if (other) fail(`Tài khoản này đã gắn với nhân viên "${other.name}"`);
   const f = { name, phone: nz(p.phone), id_no: nz(p.id_no), title: nz(p.title), dept: nz(p.dept), address: nz(p.address), start_date: asDate(p.start_date),
     user_id: uid, pay, note: p.note ?? null };
   if (!id) {
@@ -60,7 +67,34 @@ export function save_employee(p) {
     if (!run(`update employees set code = coalesce(?, code), active = ?, ${keys.map((k) => `${k} = ?`).join(', ')} where id = ? and book_id = ?`,
       code, p.active === false ? 0 : 1, ...keys.map((k) => f[k]), id, b).changes) fail('Không tìm thấy nhân viên');
   }
-  return { id, code };
+  return { id, code, user_id: uid, invited };
+}
+
+// Link trang chấm công (đăng nhập xong mở thẳng trang "Chấm công của tôi")
+export const attendanceLink = () => `${config.appUrl}/#cham-cong-cua-toi`;
+const attNote = () => `Sau khi đặt mật khẩu, bạn vào thẳng trang "Chấm công của tôi" để bấm Vào ca / Ra ca. Lưu lại link chấm công: ${attendanceLink()}`;
+
+function accountForEmployee(b, email, name, phone) {
+  const e = email.toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) fail('Email không hợp lệ');
+  const u = one(`select id, status from users where lower(email) = ?`, e);
+  if (u) {
+    if (u.status === 'disabled') fail('Tài khoản dùng email này đang bị khóa — nhờ Tổng quản trị mở khóa');
+    if (!one(`select 1 from book_members where book_id = ? and user_id = ?`, b, u.id)) setMembership(b, u.id, { role: 'staff', perms: {}, display_name: name });
+    return { uid: u.id, invited: false };
+  }
+  const nu = inviteUser({ email: e, name, phone, extra: attNote() });
+  setMembership(b, nu.id, { role: 'staff', perms: {}, display_name: name });
+  return { uid: nu.id, invited: true };
+}
+
+// Gửi lại thư mời cho nhân viên chưa kích hoạt tài khoản
+export function resend_employee_invite(p) {
+  requirePerm(p.book_id, 'owner');
+  const e = one(`select user_id from employees where id = ? and book_id = ?`, p.id, p.book_id);
+  if (!e?.user_id) fail('Nhân viên này chưa có tài khoản');
+  resendInvite(e.user_id, attNote());
+  return { ok: true };
 }
 
 // ---------- CA LÀM VIỆC & LỊCH ----------
