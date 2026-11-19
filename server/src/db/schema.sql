@@ -778,6 +778,10 @@ create table if not exists contracts (
   advance_amount real not null default 0 check (advance_amount >= 0),
   advance_note text,
   advance_date text,
+  kind text not null default 'kinh_te' check (kind in ('kinh_te','ca_nhan','nguyen_tac')),
+  fields text not null default '{}',   -- các trường đã điền khi soạn hợp đồng theo mẫu
+  body_html text,                       -- nội dung đã sửa trực tiếp (null = dựng từ mẫu)
+  gdoc_url text,                        -- hợp đồng soạn trên Google Docs
   reconciled_at text,
   terms text, note text,
   created_by text, created_at text not null, updated_at text
@@ -811,6 +815,23 @@ create table if not exists customer_files (
   created_by text, created_at text not null, updated_at text
 );
 create index if not exists customer_files_idx on customer_files (customer_id, parent_id);
+
+-- ---------- GIẤY TỜ THEO ĐƠN HÀNG (hợp đồng, biên bản giao hàng, CN xuất xưởng, hóa đơn VAT) ----------
+-- Mỗi dòng là một tệp tải lên, một link hoặc một dấu "đã có bản giấy" cho một giấy tờ của đơn, theo bên mình hoặc bản đối tác ký gửi lại
+create table if not exists order_doc_files (
+  id text primary key,
+  book_id text not null references books(id) on delete cascade,
+  order_id text not null references sales_orders(id) on delete cascade,
+  doc_key text not null check (doc_key in ('hop_dong','bien_ban','cn_xuat_xuong','hoa_don_vat')),
+  side text not null check (side in ('minh','doi_tac')),
+  kind text not null check (kind in ('file','link','paper')),
+  name text not null,
+  url text,
+  mime text, size integer, data blob,
+  note text,
+  created_by text, created_at text not null
+);
+create index if not exists order_doc_files_idx on order_doc_files (order_id, doc_key, side);
 
 -- ---------- HÓA ĐƠN ĐẦU VÀO / ĐẦU RA (kho chứng từ dùng chung Mua hàng và Thuế) ----------
 create table if not exists tax_invoices (

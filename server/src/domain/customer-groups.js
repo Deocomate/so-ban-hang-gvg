@@ -54,7 +54,9 @@ function cleanInfo(p) {
   if (conds.length > 5) fail('Tối đa 5 điều kiện');
   const days = int(p.days) ?? 0;
   if (days < 0 || days > 3650) fail('Khoảng thời gian không hợp lệ');
-  return { discount, discount_type: type, note: trimNz(p.note), conds, days, auto_add: !!p.auto_add, auto_remove: !!p.auto_remove };
+  // Theo dõi giấy tờ đơn hàng của khách trong nhóm: 'on' | 'off' | '' (tự động theo nhu cầu xuất VAT)
+  const docs_track = ['on', 'off'].includes(p.docs_track) ? p.docs_track : '';
+  return { discount, discount_type: type, note: trimNz(p.note), conds, days, auto_add: !!p.auto_add, auto_remove: !!p.auto_remove, docs_track };
 }
 
 const saveSettings = (b, s) => run(`update books set settings = ? where id = ?`, s, b);

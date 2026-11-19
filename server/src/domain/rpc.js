@@ -37,6 +37,7 @@ import * as detach from './detach.js';
 import * as recurring from './expense-recurring.js';
 import * as customerFiles from './customer-files.js';
 import * as reminders from './reminders.js';
+import * as orderDocs from './order-docs.js';
 
 const pick = (mod, names) => Object.fromEntries(names.map((n) => {
   if (typeof mod[n] !== 'function') throw new Error(`Thiếu hàm ${n}`);
@@ -65,6 +66,8 @@ export const RPC = {
   ...pick(customerFiles, ['customer_files', 'create_customer_folder', 'upload_customer_file', 'add_customer_link', 'update_customer_item', 'move_customer_items',
     'delete_customer_items', 'get_customer_file', 'set_customer_drive']),
   ...pick(reminders, ['vat_invoice_todo']),
+  ...pick(orderDocs, ['order_docs_board', 'order_docs', 'set_order_docs_track', 'set_order_doc_skip', 'upload_order_doc', 'add_order_doc_link', 'mark_order_doc_paper',
+    'delete_order_doc', 'get_order_doc', 'save_contract_doc', 'get_contract_doc']),
   ...pick(staff, ['resend_employee_invite', 'save_employee', 'save_shift', 'save_schedule', 'save_timesheet', 'delete_timesheet', 'fill_timesheets', 'save_commission_table',
     'create_paysheet', 'recalc_paysheet', 'adjust_paysheet_line', 'close_paysheet', 'cancel_paysheet', 'rpt_staff']),
   ...pick(attendance, ['att_month', 'att_save_day', 'att_delete', 'att_clock']),

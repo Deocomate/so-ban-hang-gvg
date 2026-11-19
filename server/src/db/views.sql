@@ -694,6 +694,7 @@ from quotes q left join sales_orders o on o.id = q.order_id;
 create view v_contracts as
 select k.id, k.book_id, k.code, k.order_id, k.sign_date, k.profile_id, k.rep_name, k.rep_title, k.tax_code, k.transport_included,
   k.ship_unit, k.ship_fee_note, k.ship_payer, k.ship_plan, k.advance_amount, k.advance_note, k.advance_date, k.reconciled_at, k.terms, k.note, k.created_at,
+  k.kind, k.fields, k.body_html is not null as has_body, k.gdoc_url,
   o.code as order_code, o.status as order_status, o.customer_id, o.customer_name, o.customer_phone, o.customer_address, o.order_total, o.net_total, o.vat_rate, o.vat_total,
   o.goods_total, o.delivered_value, o.paid_net, o.remaining_to_pay, o.eff_qty, o.delivered_qty, o.remaining_qty, o.delivery_count, o.progress, o.delivery_status, o.payment_status,
   case when o.status = 'huy' then 'huy'

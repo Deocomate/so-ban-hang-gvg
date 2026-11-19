@@ -20,7 +20,7 @@ function itemOf(id) {
   return it;
 }
 const cleanName = (v) => { const n = trimNz(v); if (!n) fail('Thiếu tên'); return n.replace(/[\\/]+/g, '-').slice(0, MAX_NAME); };
-function cleanUrl(v) {
+export function cleanUrl(v) {
   const u = trimNz(v);
   if (!u) fail('Thiếu đường link');
   let x;
