@@ -2,7 +2,7 @@
 // Biến nhóm "Hàng hóa" là biến theo dòng: dòng bảng nào chứa biến này sẽ được lặp lại cho từng mặt hàng.
 // Giá trị là chuỗi (in nguyên văn) hoặc { h: '<html>' } (đoạn HTML dựng sẵn: logo, bảng đối chiếu…);
 // { h, block: true } là khối lớn (bảng) — đặt riêng một dòng trong mẫu thì thay luôn cả dòng đó.
-import { fmtNum, phoneFmt, dateLine, moneyWords, profileFor, goodsLines, packLabel, totalKg, fmtKg, weightPerUnit, DEFAULT_TEXTS, runsOf, PER_DELIVERY } from './model.js';
+import { fmtNum, phoneFmt, dateLine, moneyWords, profileFor, goodsLines, packLabel, totalKg, fmtKg, weightPerUnit, DEFAULT_TEXTS, runsOf, PER_DELIVERY, RECONCILE } from './model.js';
 
 const T = (k, label, desc) => ({ k, label, desc: desc || label });
 
@@ -16,6 +16,7 @@ export const TOKEN_GROUPS = [
     T('Ma_So_Thue_Don_Vi', 'Mã số thuế đơn vị'), T('So_Tai_Khoan_Don_Vi', 'Số tài khoản', 'Dòng số tài khoản ngân hàng của đơn vị'),
     T('Nguoi_Dai_Dien', 'Người đại diện'), T('Chuc_Danh_Dai_Dien', 'Chức danh người đại diện'), T('Chuc_Danh_Dai_Dien_In_Hoa', 'Chức danh đại diện in hoa'),
     T('Ma_Don_Vi_Ngan', 'Ký hiệu đơn vị', 'TH hoặc HKD — dùng trong số đối chiếu'),
+    T('Ten_Viet_Tat', 'Tên viết tắt', 'Tên viết tắt của đơn vị, vd. "CÔNG TY TNHH SX&TM THANH HẢI" (trống thì dùng tên pháp lý in hoa)'),
   ] },
   { id: 'chung_tu', label: 'Chứng từ', icon: 'quote', tokens: [
     T('Ngay_Thang_Nam', 'Ngày tháng năm', '"Ngày 25 tháng 12 năm 2026"'), T('Ngay_Thang_Nam_Thuong', 'ngày tháng năm (chữ thường)', '"ngày 25 tháng 12 năm 2026"'),
@@ -64,12 +65,12 @@ export const TOKEN_GROUPS = [
     T('Ly_Do', 'Lý do'), T('So_Tien', 'Số tiền'), T('So_Tien_Bang_Chu', 'Số tiền bằng chữ'), T('Kem_Theo', 'Kèm theo'), T('Trang_Thai_Phieu', 'Dấu "PHIẾU ĐÃ HỦY"', 'Chỉ hiện khi phiếu đã hủy'),
   ] },
   { id: 'hop_dong', label: 'Hợp đồng', icon: 'contract', tokens: [
-    T('So_Hop_Dong', 'Số hợp đồng'), T('Ngay_Ky_Hop_Dong', 'Ngày ký hợp đồng'), T('Tong_Gia_Tri_Hop_Dong', 'Tổng giá trị hợp đồng'),
+    T('So_Hop_Dong', 'Số hợp đồng'), T('Can_Cu_Doi_Chieu', 'Căn cứ đối chiếu', '"THEO HỢP ĐỒNG SỐ: …" hoặc "THEO ĐƠN HÀNG SỐ: …" khi đơn chưa có hợp đồng'), T('Ngay_Ky_Hop_Dong', 'Ngày ký hợp đồng'), T('Tong_Gia_Tri_Hop_Dong', 'Tổng giá trị hợp đồng'),
     T('So_Tien_Tam_Ung', 'Số tiền đề nghị tạm ứng'), T('Noi_Dung_Tam_Ung', 'Nội dung tạm ứng', '" (30% giá trị hợp đồng)" nếu có ghi chú'),
     T('Gia_Tri_Da_Giao', 'Tổng giá trị hàng đã giao'), T('Da_Tam_Ung', 'Đã tạm ứng / thanh toán'), T('Con_Lai_Can_TT', 'Còn lại cần thanh toán'),
     T('So_Tien_De_Nghi_Bang_Chu', 'Số tiền đề nghị bằng chữ'),
     T('Bang_Doi_Chieu_So_Luong', 'Bảng đối chiếu số lượng', 'Bảng dựng sẵn: mỗi ngày giao một hàng, mỗi mặt hàng một cột'),
-    T('Bang_Doi_Chieu_Cong_No', 'Bảng đối chiếu công nợ', 'Bảng dựng sẵn: từng đợt giao, VAT, đã thanh toán, còn phải thanh toán'),
+    T('Bang_Doi_Chieu_Cong_No', 'Bảng đối chiếu công nợ', 'Bảng dựng sẵn: từng đợt giao, VAT, các lần thanh toán, còn phải thanh toán và dòng bằng chữ'),
     T('Con_No_Doi_Chieu_Bang_Chu', 'Còn nợ đối chiếu bằng chữ'),
   ] },
   { id: 'hoa_don_vat', label: 'Yêu cầu xuất hóa đơn VAT', icon: 'invoice', tokens: [
@@ -109,17 +110,21 @@ const nowText = () => { const d = new Date(); const p = (n) => String(n).padStar
 // Văn bản nhiều dòng có **đậm** → HTML
 export const richText = (txt) => String(txt || '').split('\n').map((ln) => runsOf(ln).map((r) => (r.b ? `<strong>${esc(r.text)}</strong>` : esc(r.text))).join('')).join('<br>');
 // Bảng dựng sẵn (cùng kiểu bảng có viền của mẫu)
-function htmlTable(head, rows, widthsPt, size) {
+// Ô: { text | h, b, i, align, sub, colSpan, rowSpan, mid (canh giữa theo chiều dọc), bg }; opt.headBg: nền dòng tiêu đề
+function htmlTable(head, rows, widthsPt, size, opt = {}) {
   const col = widthsPt.map((w) => (w === '*' ? '<col>' : `<col style="width:${Math.round(w * 4 / 3)}px">`)).join('');
   const cell = (c) => {
     if (!c) return '';
-    const st = [c.align && `text-align:${c.align}`].filter(Boolean).join(';');
-    const inner = c.h ?? (c.b ? `<strong>${esc(c.text)}</strong>` : esc(c.text));
+    const tdSt = [c.mid && 'vertical-align:middle', c.bg && `background-color:${c.bg}`].filter(Boolean).join(';');
+    let inner = c.h ?? esc(c.text);
+    if (c.h === undefined && c.i) inner = `<em>${inner}</em>`;
+    if (c.h === undefined && c.b) inner = `<strong>${inner}</strong>`;
     const sub = c.sub ? `<br><em>${esc(c.sub).replace(/\n/g, '<br>')}</em>` : '';
-    return `<td${c.colSpan ? ` colspan="${c.colSpan}"` : ''}${st ? ` style="${st}"` : ''}><p>${inner}${sub}</p></td>`;
+    return `<td${c.colSpan ? ` colspan="${c.colSpan}"` : ''}${c.rowSpan > 1 ? ` rowspan="${c.rowSpan}"` : ''}${tdSt ? ` style="${tdSt}"` : ''}><p${c.align ? ` style="text-align:${c.align}"` : ''}>${inner}${sub}</p></td>`;
   };
   const tr = (r) => `<tr>${r.filter((c) => c !== null).map(cell).join('')}</tr>`;
-  return `<table data-border="1" style="font-size:${size}pt"><colgroup>${col}</colgroup><tbody>${tr(head.map((h) => ({ text: h, b: true, align: 'center' })))}${rows.map(tr).join('')}</tbody></table>`;
+  const hd = head.map((h) => ({ ...(typeof h === 'string' ? { text: h } : h), b: true, align: 'center', mid: true, bg: opt.headBg }));
+  return `<table data-border="1" style="font-size:${size}pt"><colgroup>${col}</colgroup><tbody>${tr(hd)}${rows.map(tr).join('')}</tbody></table>`;
 }
 
 function docDate(type, data, info) {
@@ -141,6 +146,7 @@ export function tokenValues(type, data, ds, info, sep = ',') {
     Lien_He_Don_Vi: [prof.phone && `ĐT: ${prof.phone}`, prof.email && `Email: ${prof.email}`].filter(Boolean).join(' - '),
     Nguoi_Dai_Dien: prof.representative || '', Chuc_Danh_Dai_Dien: prof.rep_title || 'Người đại diện', Chuc_Danh_Dai_Dien_In_Hoa: upper(prof.rep_title || 'Người đại diện'),
     Ma_Don_Vi_Ngan: String(legal.split(/\s+/).pop()).slice(0, 2).toUpperCase() === 'HẢ' ? 'TH' : 'HKD',
+    Ten_Viet_Tat: String(prof.short_name || '').trim() || upper(legal),
   });
   const dt = docDate(type, data, info); const [y, m, d] = String(dt || '').slice(0, 10).split('-');
   Object.assign(v, { Ngay_Thang_Nam: dateLine(dt), Ngay_Thang_Nam_Thuong: dateLine(dt, false), Ngay: d || '.....', Thang: m || '.....', Nam: y || '.........', Ngay_Chung_Tu: dmy(dt), Thoi_Gian_In: nowText() });
@@ -174,14 +180,17 @@ export function tokenValues(type, data, ds, info, sep = ',') {
     Cong_No_Hien_Tai: c.balance !== undefined && c.balance !== null ? N(c.balance) : '',
   });
 
-  if (data.kind === 'contract') {
+  if (data.kind === 'contract' || RECONCILE.includes(type)) {
     const k = data.k; const remain = Math.max(Number(o.delivered_value) - Number(o.paid_net), 0); const isAdv = type === 'de_nghi_tam_ung';
-    Object.assign(v, {
-      So_Hop_Dong: k.code, So_Chung_Tu: k.code, Ngay_Ky_Hop_Dong: dmy(k.sign_date), Tong_Gia_Tri_Hop_Dong: N(o.order_total), So_Tien_Tam_Ung: N(k.advance_amount),
-      Noi_Dung_Tam_Ung: k.advance_note ? ` (${k.advance_note})` : '', Gia_Tri_Da_Giao: N(o.delivered_value), Da_Tam_Ung: N(o.paid_net), Con_Lai_Can_TT: N(remain),
-      So_Tien_De_Nghi_Bang_Chu: moneyWords(isAdv ? k.advance_amount : remain),
-    });
-    if (type === 'doi_chieu_sl') v.Bang_Doi_Chieu_So_Luong = { h: qtyTable(data.allDl || [], N), block: true };
+    if (k) {
+      Object.assign(v, {
+        So_Hop_Dong: k.code, So_Chung_Tu: k.code, Ngay_Ky_Hop_Dong: dmy(k.sign_date), Tong_Gia_Tri_Hop_Dong: N(o.order_total), So_Tien_Tam_Ung: N(k.advance_amount),
+        Noi_Dung_Tam_Ung: k.advance_note ? ` (${k.advance_note})` : '', Gia_Tri_Da_Giao: N(o.delivered_value), Da_Tam_Ung: N(o.paid_net), Con_Lai_Can_TT: N(remain),
+        So_Tien_De_Nghi_Bang_Chu: moneyWords(isAdv ? k.advance_amount : remain),
+      });
+    }
+    v.Can_Cu_Doi_Chieu = k ? `THEO HỢP ĐỒNG SỐ: ${k.code}` : `THEO ĐƠN HÀNG SỐ: ${o.code}`;
+    if (type === 'doi_chieu_sl') v.Bang_Doi_Chieu_So_Luong = { h: qtyTable(data, N), block: true };
     if (type === 'doi_chieu_tt') { const t = payTable(data, N); v.Bang_Doi_Chieu_Cong_No = { h: t.html, block: true }; v.Con_No_Doi_Chieu_Bang_Chu = moneyWords(t.due); }
     return { v, items };
   }
@@ -254,34 +263,50 @@ function vatRequest(v, items, data, info, N, goods) {
 }
 
 // ---------- Bảng dựng sẵn ----------
-function qtyTable(rows, N) {
-  const prods = [...new Map(rows.map((r) => [r.product_id, r.product_name])).entries()];
+// Mỗi ngày giao một hàng, mỗi mặt hàng một cột (theo thứ tự dòng trong đơn), dòng cuối là tổng đã giao
+function qtyTable(data, N) {
+  const rows = data.allDl || [];
+  const names = new Map(rows.map((r) => [r.product_id, r.product_name]));
+  const order = [...new Set([...(data.lines || []).map((l) => l.product_id).filter((id) => names.has(id)), ...names.keys()])];
   const days = [...new Set(rows.map((r) => r.delivery_date))].sort();
-  const qty = (day, pid) => rows.filter((r) => r.delivery_date === day && r.product_id === pid).reduce((s, r) => s + Number(r.qty), 0);
-  const body = days.map((day) => [{ text: dmy(day), align: 'center' }, ...prods.map(([pid]) => ({ text: qty(day, pid) ? N(qty(day, pid)) : '', align: 'center' }))]);
-  body.push([{ text: 'Tổng giao hàng', b: true }, ...prods.map(([pid]) => ({ text: N(rows.filter((r) => r.product_id === pid).reduce((s, r) => s + Number(r.qty), 0)), align: 'center', b: true }))]);
-  return htmlTable(['Ngày', ...prods.map(([, n]) => n)], body, [80, ...prods.map(() => '*')], 10);
+  const sum = (ls) => ls.reduce((s, r) => s + Number(r.qty), 0);
+  const body = days.map((day) => [{ text: dmy(day), align: 'center' }, ...order.map((pid) => { const q = sum(rows.filter((r) => r.delivery_date === day && r.product_id === pid)); return { text: q ? N(q) : '', align: 'center' }; })]);
+  body.push([{ text: 'Tổng giao hàng', b: true, align: 'center' }, ...order.map((pid) => ({ text: N(sum(rows.filter((r) => r.product_id === pid))), align: 'center', b: true }))]);
+  return htmlTable(['Ngày', ...order.map((pid) => names.get(pid))], body, [90, ...order.map(() => '*')], 11);
 }
+// Từng đợt giao (gộp ô STT, ngày giao, tổng theo đơn), VAT, các lần thanh toán, còn phải thanh toán và dòng bằng chữ
 function payTable(data, N) {
   const o = data.o; const rows = data.allDl || [];
   const codes = [...new Set(rows.map((r) => r.delivery_code))];
   const body = []; let goods = 0;
   codes.forEach((dc, i) => {
-    const ls = rows.filter((r) => r.delivery_code === dc); const sum = ls.reduce((s, r) => s + Number(r.revenue), 0); goods += sum;
-    ls.forEach((l, j) => body.push([{ text: j ? '' : String(i + 1), align: 'center' }, { text: j ? '' : dmy(l.delivery_date), align: 'center' }, { text: l.product_name }, { text: N(l.qty), align: 'right' },
-      { text: l.unit, align: 'center' }, { text: N(l.unit_price_net), align: 'right' }, { text: N(l.revenue), align: 'right' }, { text: j ? '' : N(sum), align: 'right', b: true }]));
+    const ls = rows.filter((r) => r.delivery_code === dc); const sum = ls.reduce((s, r) => s + Number(r.revenue), 0); goods += sum; const n = ls.length;
+    ls.forEach((l, j) => body.push([
+      ...(j ? [] : [{ text: String(i + 1), align: 'center', rowSpan: n, mid: true }, { text: dmy(l.delivery_date), align: 'center', rowSpan: n, mid: true }]),
+      { text: l.product_name }, { text: N(l.qty), align: 'center' }, { text: l.unit, align: 'center' }, { text: N(l.unit_price_net), align: 'right' }, { text: N(l.revenue), align: 'right' },
+      ...(j ? [] : [{ text: N(sum), align: 'right', b: true, rowSpan: n, mid: true }]),
+    ]));
   });
-  const row = (label, val, b) => [{ text: label, colSpan: 7, align: 'right', b }, null, null, null, null, null, null, { text: N(val), align: 'right', b }];
-  const vat = Number(o.vat_net) || 0; const ship = Number(o.ship_billed) || 0; const paid = Number(o.paid_net) || 0;
-  const total = goods + vat + ship - (Number(o.returned_value) || 0);
-  body.push(row('TỔNG TIỀN', goods, true));
-  if (Number(o.vat_rate)) body.push(row(`VAT ${fmtNum(o.vat_rate)}%`, vat));
-  if (ship) body.push(row('TIỀN VẬN CHUYỂN', ship));
-  if (Number(o.returned_value)) body.push(row('HÀNG TRẢ LẠI', -o.returned_value));
-  body.push(row('TỔNG THANH TOÁN (1)', total, true));
-  body.push(row('ĐÃ THANH TOÁN (2)', paid));
-  body.push(row('CÒN THANH TOÁN (3) = (1) - (2)', total - paid, true));
-  return { html: htmlTable(['STT', 'Ngày giao', 'Tên hàng', 'Số lượng', 'ĐVT', 'Đơn giá', 'Số tiền', 'Tổng'], body, [24, 56, '*', 44, 30, 50, 66, 66], 9), due: total - paid };
+  const sumRow = (label, val) => [{ text: '', colSpan: 3 }, null, null, { text: label, colSpan: 4, b: true }, null, null, null, { text: N(val), align: 'right', b: true }];
+  const payRow = (left, label, val, b) => [{ text: '', colSpan: 2 }, null, { text: left, align: 'center' }, { text: label, colSpan: 4, b }, null, null, null, { text: N(val), align: 'right', b }];
+  const vat = Number(o.vat_net) || 0; const ship = Number(o.ship_billed) || 0; const ret = Number(o.returned_value) || 0;
+  const total = goods + vat + ship - ret;
+  body.push(sumRow('TỔNG TIỀN', goods));
+  if (Number(o.vat_rate)) body.push(sumRow(`VAT ${fmtNum(o.vat_rate)}%`, vat));
+  if (ship) body.push(sumRow('TIỀN VẬN CHUYỂN', ship));
+  if (ret) body.push(sumRow('HÀNG TRẢ LẠI', -ret));
+  body.push(sumRow('TỔNG THANH TOÁN (1)', total));
+  // Từng lần thu / hoàn tiền của đơn; thu trước đợt giao đầu tiên là tiền đặt cọc
+  const first = rows.length ? rows[0].delivery_date : null;
+  const pays = (data.pays || []).filter((p) => Number(p.signed_amount));
+  const paid = pays.reduce((s, p) => s + Number(p.signed_amount), 0);
+  body.push(payRow('', 'ĐÃ THANH TOÁN (2)', paid, true));
+  for (const p of pays) body.push(payRow(dmy(p.pay_date), Number(p.signed_amount) < 0 ? 'Hoàn tiền' : !first || p.pay_date < first ? 'Đặt cọc' : 'Thanh toán', Number(p.signed_amount), false));
+  const due = total - paid;
+  body.push(payRow('', 'CÒN THANH TOÁN (3) = (1) - (2)', due, true));
+  body.push([{ text: `Bằng chữ: ${moneyWords(due, false)}.`, colSpan: 8, align: 'center', b: true, i: true }, null, null, null, null, null, null, null]);
+  const head = ['STT', 'NGÀY GIAO', 'TÊN HÀNG', 'SỐ LƯỢNG', 'ĐVT', 'ĐƠN GIÁ', 'SỐ TIỀN', 'TỔNG THEO ĐƠN'];
+  return { html: htmlTable(head, body, [30, 68, '*', 54, 30, 54, 56, 64], 10, { headBg: '#d9d9d9' }), due };
 }
 function quoteTable(q, N) {
   const b = q.body || { groups: [] }; const mosaic = q.template === 'mosaic'; const showNorm = !mosaic && b.show_norm;
@@ -335,7 +360,8 @@ export function sampleData(type) {
   if (['de_nghi_tam_ung', 'doi_chieu_sl', 'doi_chieu_tt', 'de_nghi_tt'].includes(type)) {
     const dl = (code, date, pid, name, qty, price) => ({ delivery_code: code, delivery_date: date, product_id: pid, product_name: name, qty, unit: 'Viên', unit_price_net: price, revenue: qty * price });
     return { ...base, kind: 'contract', k: { id: 's', code: 'HĐ-045/2026', sign_date: today, advance_amount: 4752000, advance_note: '30% giá trị hợp đồng', reconciled_at: today, profile_id: null },
-      allDl: [dl('GH0001', '2026-11-02', 'p1', 'Ngói âm 80 men lam', 300, 12000), dl('GH0001', '2026-11-02', 'p2', 'Ngói dương 80 men lam', 280, 14000), dl('GH0002', '2026-11-09', 'p1', 'Ngói âm 80 men lam', 300, 12000), dl('GH0002', '2026-11-09', 'p2', 'Ngói dương 80 men lam', 280, 14000)] };
+      allDl: [dl('GH0001', '2026-11-02', 'p1', 'Ngói âm 80 men lam', 300, 12000), dl('GH0001', '2026-11-02', 'p2', 'Ngói dương 80 men lam', 280, 14000), dl('GH0002', '2026-11-09', 'p1', 'Ngói âm 80 men lam', 300, 12000), dl('GH0002', '2026-11-09', 'p2', 'Ngói dương 80 men lam', 280, 14000)],
+      pays: [{ pay_date: '2026-10-28', signed_amount: 2000000 }] };
   }
   return base;
 }

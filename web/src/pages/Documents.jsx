@@ -4,7 +4,7 @@ import { packView } from '../lib/book-profile.js';
 import { dmy } from '../lib/format.js';
 import { saveFile } from '../lib/excel.js';
 import { Btn, Loading, ErrorBox, Note, Modal, Field, Input, TextArea, Select, DateInput, NumInput, Check, Section, Tabs, ConfirmBtn } from '../components/ui.jsx';
-import { DOC_TYPES, DEFAULT_TEXTS, docSettings, loadDocData, defaults, currentInfo, editableFields, infoRef, profileFor, profileFromBook, PER_DELIVERY, isCompany } from '../lib/docs/model.js';
+import { DOC_TYPES, DEFAULT_TEXTS, docSettings, loadDocData, defaults, currentInfo, editableFields, infoRef, profileFor, profileFromBook, PER_DELIVERY, RECONCILE, isCompany } from '../lib/docs/model.js';
 import { VatReminder, VatReminderPopup } from '../components/VatReminder.jsx';
 import { buildPrintDoc, templatesFor, pageSize, PAPERS, FONT_CSS } from '../lib/docs/templates.js';
 import { openTemplateEditor } from '../lib/docs/editor-link.js';
@@ -12,7 +12,7 @@ import { sampleData } from '../lib/docs/tokens.js';
 
 import { useDocFonts } from '../lib/docs/fonts.js';
 
-const TYPES_FOR = { quote: ['bao_gia'], contract: ['de_nghi_tam_ung', 'doi_chieu_sl', 'doi_chieu_tt', 'de_nghi_tt'], order: ['hoa_don', 'don_dat_hang', 'bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen', 'yeu_cau_vat'], delivery: ['bien_ban', 'hoa_don', 'hd_van_chuyen', 'phieu_xuat_kho', 'don_dat_hang', 'yeu_cau_vat'], payment: ['phieu_thu'] };
+const TYPES_FOR = { quote: ['bao_gia'], contract: ['de_nghi_tam_ung', 'doi_chieu_sl', 'doi_chieu_tt', 'de_nghi_tt'], order: ['hoa_don', 'don_dat_hang', 'bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen', 'yeu_cau_vat', 'doi_chieu_tt', 'doi_chieu_sl'], delivery: ['bien_ban', 'hoa_don', 'hd_van_chuyen', 'phieu_xuat_kho', 'don_dat_hang', 'yeu_cau_vat'], payment: ['phieu_thu'] };
 
 // ---------- Bản xem trước: chứng từ dựng từ mẫu in (HTML), đúng khổ giấy và lề ----------
 export function DocPreview({ doc }) {
@@ -132,6 +132,58 @@ function BatchExport({ deliveryId, pay, ds, beforeExport, company, onDone }) {
   );
 }
 
+// ---------- Bộ hồ sơ đối chiếu sau nhiều đợt giao ----------
+// Giống tệp gửi khách: bảng đối chiếu công nợ, bảng đối chiếu số lượng, rồi biên bản bàn giao của từng đợt (theo ngày giao).
+// Chọn phần cần in, gộp một tệp PDF hoặc tải từng tệp. Dùng thông tin đã lưu của từng chứng từ.
+const PACK_KEY = 'gomsu.reconcile_pack';
+function ReconcilePack({ src, dels, ds, beforeExport }) {
+  const { q, rpc, settings, toast } = useApp();
+  const list = [...dels].sort((a, b) => String(a.delivery_date).localeCompare(String(b.delivery_date)) || String(a.code).localeCompare(String(b.code)));
+  const saved = (() => { try { return JSON.parse(localStorage.getItem(PACK_KEY) || 'null') || {}; } catch (e) { return {}; } })();
+  const [pick, setPick] = useState({ doi_chieu_tt: saved.doi_chieu_tt ?? true, doi_chieu_sl: saved.doi_chieu_sl ?? true, bien_ban: saved.bien_ban ?? true });
+  const [merge, setMerge] = useState(saved.merge ?? true);
+  const [busy, setBusy] = useState(false);
+  const opts = [['doi_chieu_tt', 'Bảng đối chiếu công nợ'], ['doi_chieu_sl', 'Bảng đối chiếu số lượng giao hàng'], ['bien_ban', `Biên bản bàn giao (${list.length} đợt)`]];
+  const count = (pick.doi_chieu_tt ? 1 : 0) + (pick.doi_chieu_sl ? 1 : 0) + (pick.bien_ban ? list.length : 0);
+  const load = async (s) => { const d = await loadDocData(q, rpc, s); return { ...d, prods: Object.fromEntries(Object.entries(d.prods || {}).map(([k, p]) => [k, packView(p, settings)])) }; };
+  const build = (t, d) => buildPrintDoc(t, d, ds, { ...defaults(t, d, ds), ...(currentInfo(t, d) || {}) });
+  const run = async (print) => {
+    if (!count) return;
+    try { localStorage.setItem(PACK_KEY, JSON.stringify({ ...pick, merge })); } catch (e) { /* bỏ qua */ }
+    setBusy(true);
+    try {
+      if (beforeExport && !(await beforeExport())) return;
+      const main = await load(src);
+      const docs = RECONCILE.slice().reverse().filter((t) => pick[t]).map((t) => build(t, main));
+      if (pick.bien_ban) for (const d of await Promise.all(list.map((x) => load({ kind: 'delivery', id: x.id })))) docs.push(build('bien_ban', d));
+      const { pdfBlob, printDocs } = await import('../lib/docs/pdf.js');
+      if (print) { await printDocs(docs); return; }
+      const code = String(main.k?.code || main.o.code).replace(/[\/:*?"<>|]+/g, '-');
+      if (merge && docs.length > 1) {
+        const name = `ho-so-doi-chieu-giao-hang_${code}.pdf`;
+        if (await saveFile(name, await pdfBlob(docs))) toast(`Đã tạo ${name} (${docs.length} trang chứng từ)`);
+      } else {
+        for (const doc of docs) await saveFile(doc.filename, await pdfBlob(doc));
+        toast(`Đã tạo ${docs.length} tệp PDF`);
+      }
+    } catch (e) { toast(`Không ${print ? 'in được' : 'tạo được PDF'}: ` + e.message, 'err'); } finally { setBusy(false); }
+  };
+  return (
+    <div className="card doc-batch">
+      <b>Bộ hồ sơ đối chiếu & giao hàng</b>
+      <div className="small muted">Gửi khách sau khi giao xong: đối chiếu công nợ, đối chiếu số lượng và biên bản từng đợt giao.</div>
+      <div className="doc-batch-list">
+        {opts.map(([t, label]) => <Check key={t} checked={!!pick[t]} onChange={(v) => setPick((s) => ({ ...s, [t]: v }))}>{label}</Check>)}
+      </div>
+      {count > 1 && <Check checked={merge} onChange={setMerge}>Gộp vào một tệp PDF</Check>}
+      <div className="row">
+        <Btn kind="primary" icon="dl" busy={busy} disabled={!count} onClick={() => run(false)}>{count ? `Tải bộ hồ sơ (${count})` : 'Chọn chứng từ'}</Btn>
+        <Btn icon="print" disabled={!count || busy} onClick={() => run(true)}>In</Btn>
+      </div>
+    </div>
+  );
+}
+
 // ---------- Hộp thoại xuất chứng từ ----------
 // pay: phiếu thu lập cùng lúc với đợt giao (giao + thu) → thêm thẻ "Phiếu thu" vào cùng hộp thoại.
 // page: hiện toàn trang (tab mới) thay cho hộp thoại.
@@ -168,7 +220,9 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
 
   // Đề nghị thanh toán chỉ lập sau khi đã hoàn tất đối chiếu
   const company = !!data?.o && isCompany(data.cust);
-  const tabTypes = types.filter((t) => (t !== 'de_nghi_tt' || data?.k?.reconciled_at) && (t !== 'yeu_cau_vat' || company));
+  // Bảng đối chiếu chỉ lập khi đơn đã có ít nhất một đợt giao
+  const delivered = (data?.dels || []).length > 0;
+  const tabTypes = types.filter((t) => (t !== 'de_nghi_tt' || data?.k?.reconciled_at) && (t !== 'yeu_cau_vat' || company) && (!RECONCILE.includes(t) || data?.kind === 'contract' || delivered));
   // In / tải xong biên bản giao hàng của khách công ty → nhắc bước xuất hóa đơn VAT
   const afterExport = (done) => { if (company && done.includes('bien_ban')) setRemindVat(true); };
   // Chỉ dựng khi dữ liệu đã nạp khớp với thẻ đang chọn (đổi thẻ Phiếu thu ↔ Biên bản phải chờ nạp lại)
@@ -242,6 +296,8 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
         <div className="doc-wrap">
           <div className="doc-side">
             {kind === 'delivery' && <BatchExport deliveryId={id} pay={withPay ? pay : null} ds={ds} beforeExport={save} company={company} onDone={afterExport} />}
+            {RECONCILE.includes(type) && delivered && (kind === 'order' || kind === 'contract') && <ReconcilePack src={{ kind, id }} dels={data.dels} ds={ds} beforeExport={save} />}
+            {RECONCILE.includes(type) && kind === 'order' && !data?.k && <div className="muted small">Đơn chưa có hợp đồng: bảng ghi "Theo đơn hàng số {data?.o?.code}".</div>}
             {perDelivery && !['payment', 'contract', 'quote'].includes(data.kind) && (
               <Field label="Lập theo">
                 <Select value={src.kind === 'delivery' ? src.id : ''} onChange={(v) => setSrc(v ? { kind: 'delivery', id: v } : { kind: 'order', id: data.o.id })}
@@ -300,13 +356,14 @@ function FontLoader() { useDocFonts(); return null; }
 // ---------- Cài đặt → Mẫu in ----------
 const PROFILE_FIELDS = [
   ['name', 'Tên in đầu trang (IN HOA)', true], ['legal_name', 'Tên dùng trong nội dung', true], ['address', 'Địa chỉ', true], ['phone', 'Điện thoại'], ['email', 'Email'],
-  ['website', 'Website'], ['tax_code', 'Mã số thuế'], ['bank_line', 'Dòng số tài khoản (sau chữ “STK:”)', true], ['representative', 'Người đại diện'], ['rep_title', 'Chức danh người đại diện'],
+  ['website', 'Website'], ['short_name', 'Tên viết tắt (đầu bảng đối chiếu, vd. CÔNG TY TNHH SX&TM THANH HẢI)', true], ['tax_code', 'Mã số thuế'], ['bank_line', 'Dòng số tài khoản (sau chữ “STK:”)', true], ['representative', 'Người đại diện'], ['rep_title', 'Chức danh người đại diện'],
 ];
 // Nhóm loại chứng từ ở cột trái (giống "Quản lý mẫu in" của KiotViet)
 const TYPE_GROUPS = [
   ['Bán hàng', ['hoa_don', 'don_dat_hang', 'bao_gia', 'yeu_cau_vat']],
   ['Giao hàng', ['bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen']],
-  ['Hợp đồng', ['de_nghi_tam_ung', 'doi_chieu_sl', 'doi_chieu_tt', 'de_nghi_tt']],
+  ['Đối chiếu sau giao hàng', ['doi_chieu_tt', 'doi_chieu_sl']],
+  ['Hợp đồng', ['de_nghi_tam_ung', 'de_nghi_tt']],
   ['Sổ quỹ', ['phieu_thu']],
 ];
 const QUOTE_TEXTS = [['quote_ngoi', 'Lưu ý mặc định - báo giá mẫu ngói', 8], ['quote_mosaic', 'Lưu ý mặc định - báo giá tranh mosaic', 8]];

@@ -131,7 +131,7 @@ const BUILDERS = {
       + table([30, '*', 58, 50, 150], [
         head(['STT', 'Tên hàng hoá', 'Số lượng', 'ĐVT', 'Quy cách đóng gói']),
         [C('{STT}'), L(`{Ten_Hang}<br>${I('{Ghi_Chu_Hang}')}`), C('{So_Luong}'), C('{Don_Vi_Tinh_Thuong}'), C('{Quy_Cach}')],
-        [{ h: B('Tổng cộng: {Tong_So_Hop} {Don_Vi_Dong_Goi}{Tong_Trong_Luong_Kem}'), span: 5, pst: right }],
+        ['', { h: '', span: 3 }, C(B('Tổng cộng: {Tong_So_Hop} {Don_Vi_Dong_Goi}'))],
       ], { size: 10.5 })
       + P(B('Địa chỉ giao hàng: {Dia_Chi_Nhan_Hang}'), 'font-size:11pt; margin-top:6pt')
       + P(B('SĐT nhận hàng: {SDT_Kem_Nguoi_Nhan}'), 'font-size:11pt; margin-top:4pt')
@@ -228,8 +228,8 @@ const BUILDERS = {
   },
   de_nghi_tam_ung() { return requestTpl(true); },
   de_nghi_tt() { return requestTpl(false); },
-  doi_chieu_sl() { return reconcileTpl('BẢNG ĐỐI CHIẾU SỐ LƯỢNG GIAO HÀNG', '{Bang_Doi_Chieu_So_Luong}', ''); },
-  doi_chieu_tt() { return reconcileTpl('BẢNG ĐỐI CHIẾU CÔNG NỢ', '{Bang_Doi_Chieu_Cong_No}', P(B(I('Bằng chữ: {Con_No_Doi_Chieu_Bang_Chu}.')), 'font-size:10.5pt; margin-top:6pt')); },
+  doi_chieu_sl() { return reconcileTpl('BẢNG ĐỐI CHIẾU SỐ LƯỢNG GIAO HÀNG', '{Bang_Doi_Chieu_So_Luong}', '', { titleSize: 17, underline: true }); },
+  doi_chieu_tt() { return reconcileTpl('BẢNG ĐỐI CHIẾU CÔNG NỢ', '{Bang_Doi_Chieu_Cong_No}', P(B(I('Tôi xin chân thành cảm ơn!')), `${center}; font-size:11pt; margin-top:8pt`), { titleSize: 15 }); },
   bao_gia() {
     const s = 'font-size:10.5pt';
     return letterhead({ size: 9.5, bank: false, gap: 2 }).replace(P('Website: {Website_Don_Vi}', 'margin-bottom:2pt'), '')
@@ -258,14 +258,18 @@ function requestTpl(isAdv) {
     + P(B(I('Hà Nội, {Ngay_Thang_Nam_Thuong}')), `${right}; font-size:12pt; margin-top:4pt`)
     + P(B(isAdv ? 'Người đề nghị tạm ứng' : 'Người đề nghị thanh toán'), `${right}; font-size:12pt; margin-top:2pt`);
 }
-function reconcileTpl(title, tableTok, after) {
-  return table(['*', '*'], [[{ h: P(B('{Ten_Phap_Ly_In_Hoa}')) + P('Số:......./ĐCCN/{Ma_Don_Vi_Ngan}') }, { h: P(B(NATION), center) + P(B(MOTTO), center) }]], { border: false, size: 10 })
-    + P(`<span style="font-size:14pt">${B(title)}</span>`, `${center}; margin-top:12pt; margin-bottom:4pt`)
-    + P('THEO HỢP ĐỒNG SỐ: {So_Hop_Dong}', `${center}; font-size:11pt`) + P(B('KHÁCH HÀNG: {Khach_Hang_In_Hoa}'), `${center}; font-size:11pt`)
-    + P('Địa chỉ: {Dia_Chi_Khach_Hang}', `${center}; font-size:10pt`) + P('Số điện thoại: {So_Dien_Thoai}', `${center}; font-size:10pt; margin-bottom:8pt`)
+// Bảng đối chiếu: tên viết tắt + số bên trái, quốc hiệu bên phải; khách hàng canh trái; ngày và chữ ký canh giữa
+function reconcileTpl(title, tableTok, after, { titleSize = 15, underline = false } = {}) {
+  const motto = underline ? `<u>${MOTTO}</u>` : MOTTO;
+  const s = 'font-size:11pt; margin-top:5pt';
+  return table(['*', '*'], [[{ h: P('{Ten_Viet_Tat}', 'font-size:8pt; margin-top:3pt') + P('Số:......./ĐCCN/{Ma_Don_Vi_Ngan}', 'font-size:8pt; margin-top:6pt') },
+    { h: P(B(NATION), `${center}; font-size:12pt`) + P(motto, `${center}; font-size:11.5pt; margin-top:4pt`) }]], { border: false })
+    + P(`<span style="font-size:${titleSize}pt">${B(title)}</span>`, `${center}; margin-top:16pt`)
+    + P(B('{Can_Cu_Doi_Chieu}'), `${center}; font-size:11pt; margin-top:2pt; margin-bottom:10pt`)
+    + P(B('KHÁCH HÀNG: {Khach_Hang_In_Hoa}'), s) + P('Địa chỉ: {Dia_Chi_Khach_Hang}', s) + P('Số điện thoại: {So_Dien_Thoai}', `${s}; margin-bottom:10pt`)
     + P(tableTok) + after
-    + P('Hà Nội, {Ngay_Thang_Nam_Thuong}', `${right}; font-size:11pt; margin-top:10pt`)
-    + sign([{ title: 'Đại diện bên mua' }, { title: 'Đại diện bên bán' }], { size: 11, space: 5, mt: 6 });
+    + P(B('Hà Nội, {Ngay_Thang_Nam_Thuong}'), `${center}; font-size:11pt; margin-top:8pt`)
+    + sign([{ title: 'Đại diện bên mua' }, { title: 'Đại diện bên bán' }], { size: 11, space: 5, mt: 4 });
 }
 
 // Mẫu gợi ý thêm (chọn ở "Chọn mẫu gợi ý" trong trình sửa): hóa đơn / phiếu thu khổ giấy cuộn K80

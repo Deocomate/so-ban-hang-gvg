@@ -155,6 +155,8 @@ function tableOf(el, ctx, maxW) {
       const stack = blocksOf(td, tc, innerW(ci, cs));
       const cell = { stack: stack.length ? stack : [{ text: '' }] };
       if (cs > 1) cell.colSpan = cs; if (rs > 1) cell.rowSpan = rs;
+      // pdfmake không canh giữa theo chiều dọc: ô gộp nhiều dòng canh giữa thì đẩy xuống nửa chiều cao các dòng một hàng chữ
+      if (rs > 1 && /middle/.test(tst['vertical-align'] || '')) cell.margin = [0, ((Math.min(rs, rows.length - ri) - 1) * ((tc.fontSize || 10) * 1.2 + 2 * padY)) / 2, 0, 0];
       const bg = colorOf(tst['background-color'] || tst.background); if (bg) cell.fillColor = bg;
       for (let r = ri; r < Math.min(ri + rs, rows.length); r++) for (let k = ci; k < ci + cs; k++) grid[r][k] = (r === ri && k === ci) ? cell : {};
       ci += cs;

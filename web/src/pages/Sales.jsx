@@ -465,7 +465,9 @@ export function OrderDetail({ id, onClose }) {
         </Section>
       )}
       <div className="grid-2">
-        <Section title="Các đợt giao hàng" actions={canSell && d.status === 'xac_nhan' && d.remaining_qty > 0 && <Btn small icon="plus" onClick={() => open('deliver', { order: d })}>Tạo đợt giao tiếp theo</Btn>}>
+        <Section title="Các đợt giao hàng" actions={<div className="row gap-s">
+          {(dels.data || []).length > 0 && <Btn small icon="dl" onClick={() => open('doc', contract.data?.[0] ? { kind: 'contract', id: contract.data[0].id, type: 'doi_chieu_tt' } : { kind: 'order', id, type: 'doi_chieu_tt' })}>Hồ sơ đối chiếu</Btn>}
+          {canSell && d.status === 'xac_nhan' && d.remaining_qty > 0 && <Btn small icon="plus" onClick={() => open('deliver', { order: d })}>Tạo đợt giao tiếp theo</Btn>}</div>}>
           <Table dense rows={dels.data} empty="Chưa giao" columns={[
             { key: 'c', label: 'Đợt', render: (r) => <><b>Đợt {dels.data.indexOf(r) + 1}</b><div className="cell-sub">{r.code} · {dmy(r.delivery_date)}</div></> },
             { key: 'v', label: 'Tiền đợt này', align: 'right', render: (r) => money(r.total) },

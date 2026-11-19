@@ -12,8 +12,8 @@ export const DOC_TYPES = {
   phieu_thu: { label: 'Phiếu thu / chi', from: ['payment'], font: 'Tinos', sep: '.' },
   hd_van_chuyen: { label: 'Hợp đồng vận chuyển', from: ['order', 'delivery'], font: 'Tinos', sep: '.' },
   de_nghi_tam_ung: { label: 'Đề nghị tạm ứng', from: ['contract'], font: 'Tinos', sep: '.' },
-  doi_chieu_sl: { label: 'Đối chiếu số lượng', from: ['contract'], font: 'Tinos', sep: '.' },
-  doi_chieu_tt: { label: 'Đối chiếu kèm thanh toán', from: ['contract'], font: 'Tinos', sep: '.' },
+  doi_chieu_sl: { label: 'Đối chiếu số lượng', from: ['contract', 'order'], font: 'Tinos', sep: '.' },
+  doi_chieu_tt: { label: 'Đối chiếu công nợ', from: ['contract', 'order'], font: 'Tinos', sep: '.' },
   de_nghi_tt: { label: 'Đề nghị thanh toán', from: ['contract'], font: 'Tinos', sep: '.' },
   bao_gia: { label: 'Báo giá', from: ['quote'], font: 'Arimo', sep: '.' },
   yeu_cau_vat: { label: 'Yêu cầu xuất hóa đơn VAT', from: ['order', 'delivery'], font: 'Tinos', sep: '.' },
@@ -161,12 +161,19 @@ export async function loadDocData(q, rpc, src) {
     if (!qu) throw new Error('Không tìm thấy báo giá');
     return { kind: 'quote', q: qu, info: (await rpc('get_doc_info', { ref_type: 'quote', ref_id: src.id })) || {} };
   }
-  let d = null; let dlines = null; let orderId = src.id; let k = null; let allDl = null; let kInfo = null;
+  let d = null; let dlines = null; let orderId = src.id; let k = null; let allDl = null; let kInfo = null; let pays = null;
   if (src.kind === 'contract') {
     [k] = await q('contracts', [['id', 'eq', src.id]]);
     if (!k) throw new Error('Không tìm thấy hợp đồng');
     orderId = k.order_id;
-    [allDl, kInfo] = await Promise.all([q('delivery_lines', [['order_id', 'eq', orderId]], 'delivery_date'), rpc('get_doc_info', { ref_type: 'contract', ref_id: src.id })]);
+    kInfo = await rpc('get_doc_info', { ref_type: 'contract', ref_id: src.id });
+  }
+  // Bảng đối chiếu (theo hợp đồng hoặc theo đơn): mọi dòng đã giao, các khoản đã thu và số hợp đồng của đơn nếu có
+  if (src.kind === 'contract' || src.kind === 'order') {
+    const [dl, ps, ks] = await Promise.all([q('delivery_lines', [['order_id', 'eq', orderId]], 'delivery_date', 5000), q('doc_payments', [['doc_id', 'eq', orderId]], 'pay_date'),
+      k ? Promise.resolve([k]) : q('contracts', [['order_id', 'eq', orderId]])]);
+    allDl = [...dl].sort((a, b) => String(a.delivery_date).localeCompare(String(b.delivery_date)) || String(a.delivery_code).localeCompare(String(b.delivery_code)));
+    pays = ps; k = ks[0] || null;
   }
   if (src.kind === 'delivery') {
     [d] = await q('deliveries', [['id', 'eq', src.id]]);
@@ -189,7 +196,7 @@ export async function loadDocData(q, rpc, src) {
   const prods = ids.length ? await q('products', [['id', 'in', ids]]) : [];
   const orderInfo = (await rpc('get_doc_info', { ref_type: 'order', ref_id: orderId })) || {};
   const delInfo = d ? (await rpc('get_doc_info', { ref_type: 'delivery', ref_id: d.id })) || {} : null;
-  return { kind: src.kind, o, lines, dels, d, dlines, cust: custs[0] || null, prods: Object.fromEntries(prods.map((p) => [p.id, p])), orderInfo, delInfo, k, allDl, kInfo: kInfo || {}, driver: driver || null };
+  return { kind: src.kind, o, lines, dels, d, dlines, cust: custs[0] || null, prods: Object.fromEntries(prods.map((p) => [p.id, p])), orderInfo, delInfo, k, allDl, pays: pays || [], kInfo: kInfo || {}, driver: driver || null };
 }
 
 // Thông tin sửa được của chứng từ được lưu ở đâu (đơn / phiếu giao / phiếu thu)
@@ -210,6 +217,8 @@ const pick = (o, ks) => Object.fromEntries(ks.filter((k) => o && o[k]).map((k) =
 
 // Chứng từ lập được theo từng đợt giao
 export const PER_DELIVERY = ['hoa_don', 'bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen', 'yeu_cau_vat'];
+// Bảng đối chiếu: lập sau khi giao một hoặc nhiều đợt, theo hợp đồng hoặc theo đơn
+export const RECONCILE = ['doi_chieu_sl', 'doi_chieu_tt'];
 
 // Thông tin xuất hóa đơn khai ở hồ sơ khách (thẻ "Thông tin xuất hóa đơn")
 export const custExtra = (c) => { const x = c?.extra; if (!x) return {}; if (typeof x === 'string') { try { return JSON.parse(x) || {}; } catch (e) { return {}; } } return x; };
@@ -226,7 +235,7 @@ export function editableFields(type, data) {
     { key: 'driver_name', label: 'Lái xe' }, { key: 'driver_phone', label: 'SĐT lái xe' }, { key: 'id_no', label: 'CCCD lái xe' }, { key: 'vehicle', label: 'Biển số xe' }, { key: 'recv_address', label: 'Địa chỉ giao hàng', wide: true },
     { key: 'recv_name', label: 'Người nhận' }, { key: 'recv_phone', label: 'SĐT nhận hàng' }, { key: 'box_total', label: 'Tổng số hộp', kind: 'num' }, { key: 'transit_days', label: 'Số ngày vận chuyển tối đa' },
     { key: 'freight_note', label: 'Cân nặng và giá cước', wide: true }, { key: 'pay_at', label: 'Thanh toán cước phí tại' }];
-  if (data.kind === 'contract' || type === 'bao_gia') return type === 'bao_gia' ? [] : [D];
+  if (data.kind === 'contract' || type === 'bao_gia' || RECONCILE.includes(type)) return type === 'bao_gia' ? [] : [D];
   if (type === 'don_dat_hang') return [D, { key: 'recv_phone', label: 'SĐT nhận hàng' }, { key: 'recv_address', label: 'Địa chỉ nhận hàng', wide: true }, { key: 'note', label: 'Ghi chú', wide: true }];
   if (type === 'bien_ban') return [D, { key: 'place', label: 'Nơi lập biên bản', wide: true }, { key: 'handover_rep', label: 'Đại diện bên giao' },
     { key: 'driver_name', label: 'Bên vận chuyển / lái xe' }, { key: 'driver_phone', label: 'SĐT lái xe' }, { key: 'recv_party', label: 'Bên nhận hàng', wide: true },
@@ -246,7 +255,7 @@ export function editableFields(type, data) {
 export function defaults(type, data, ds) {
   const prof = profileFor(ds, type);
   if (data.kind === 'quote') return { profile_bao_gia: data.q.profile_id || undefined };
-  if (data.kind === 'contract') return { [`date_${type}`]: new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10), [`profile_${type}`]: data.k.profile_id || undefined };
+  if (data.kind === 'contract' || RECONCILE.includes(type)) return { [`date_${type}`]: new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10), [`profile_${type}`]: data.k?.profile_id || undefined };
   if (data.kind === 'payment') {
     const p = data.p; const pa = data.party || {};
     const allocs = (p.allocations || []).map((a) => a.doc_code).filter(Boolean);

@@ -127,7 +127,7 @@ export function ContractDetail({ id, onClose }) {
   const steps = [
     ['Đề nghị tạm ứng', 'de_nghi_tam_ung', k.advance_amount > 0, k.advance_amount > 0 ? `${money(k.advance_amount)} đ` : 'Chưa nhập số tiền tạm ứng'],
     ['Đối chiếu số lượng', 'doi_chieu_sl', k.delivery_count > 0, k.delivery_count > 0 ? `${k.delivery_count} đợt giao` : 'Chưa có đợt giao'],
-    ['Đối chiếu kèm thanh toán', 'doi_chieu_tt', k.delivery_count > 0, ready ? `Hoàn tất ${dmy(k.reconciled_at.slice(0, 10))}` : 'Chưa hoàn tất'],
+    ['Đối chiếu công nợ', 'doi_chieu_tt', k.delivery_count > 0, ready ? `Hoàn tất ${dmy(k.reconciled_at.slice(0, 10))}` : 'Chưa hoàn tất'],
     ['Đề nghị thanh toán', 'de_nghi_tt', ready, ready ? 'Sẵn sàng lập' : 'Lập sau khi hoàn tất đối chiếu'],
   ];
   const pct = k.eff_qty ? (k.delivered_qty / k.eff_qty) * 100 : 0;
@@ -157,7 +157,7 @@ export function ContractDetail({ id, onClose }) {
           <button key={type} className="step" disabled={!ok} onClick={() => doc(type)}><b>{label}</b><span className="small muted">{sub}</span></button>
         ))}</div>
       </Section>
-      <Section title="Các đợt giao hàng">
+      <Section title="Các đợt giao hàng" actions={k.delivery_count > 0 && <Btn small icon="dl" onClick={() => doc('doi_chieu_tt')}>Bộ hồ sơ đối chiếu & giao hàng</Btn>}>
         <Table dense rows={dels.data} empty="Chưa có đợt giao" columns={[
           { key: 'n', label: 'Đợt', render: (r) => <b>Đợt {dels.data.indexOf(r) + 1}</b> },
           { key: 'd', label: 'Ngày giao', render: (r) => dmy(r.delivery_date) }, { key: 'c', label: 'Phiếu', render: (r) => r.code },
