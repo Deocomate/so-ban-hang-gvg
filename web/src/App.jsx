@@ -11,7 +11,8 @@ import { PartiesPage } from './pages/Parties.jsx';
 import { CashPage, ExpensesPage, ServicePurchasesPage } from './pages/Cash.jsx';
 import { DamagePage, InternalUsePage, ProductionPage } from './pages/StockDocs.jsx';
 import { CustomerGroupsPage } from './pages/CustomerGroups.jsx';
-import { EmployeesPage, SchedulePage, TimesheetPage, PaysheetsPage, CommissionPage, StaffSettingsPage } from './pages/Staff.jsx';
+import { EmployeesPage, SchedulePage, PaysheetsPage, CommissionPage, StaffSettingsPage } from './pages/Staff.jsx';
+import { MyAttendancePage, AttendanceBoardPage } from './pages/Attendance.jsx';
 import { ReportsPage } from './pages/Reports.jsx';
 import { SettingsPage } from './pages/Settings.jsx';
 import { GEAR_MENU, ALL_SECTIONS, canSee } from './lib/settings-nav.js';
@@ -62,7 +63,8 @@ const PAGES = [
   { id: 'chi-phi', label: 'Chi phí vận hành', icon: 'receipt', perm: 'xem_chi_phi', comp: ExpensesPage },
   { id: 'nhan-vien', label: 'Danh sách nhân viên', icon: 'users', perm: 'owner', comp: EmployeesPage },
   { id: 'lich-lam-viec', label: 'Lịch làm việc', icon: 'calendar', perm: 'cham_cong', comp: SchedulePage },
-  { id: 'cham-cong', label: 'Bảng chấm công', icon: 'check', perm: 'cham_cong', comp: TimesheetPage },
+  { id: 'cham-cong', label: 'Bảng chấm công', icon: 'check', perm: 'cham_cong', comp: AttendanceBoardPage },
+  { id: 'cham-cong-cua-toi', label: 'Chấm công của tôi', icon: 'clock', self: true, comp: MyAttendancePage },
   { id: 'bang-luong', label: 'Bảng lương', icon: 'cash', perm: 'owner', comp: PaysheetsPage },
   { id: 'hoa-hong', label: 'Bảng hoa hồng', icon: 'tag', perm: 'owner', comp: CommissionPage },
   { id: 'thiet-lap-nv', label: 'Thiết lập nhân viên', icon: 'gear', perm: 'owner', comp: StaffSettingsPage },
@@ -95,7 +97,7 @@ const MENU = [
     { title: 'Mua dịch vụ', items: ['mua-dich-vu'] },
   ] },
   { label: 'Sổ quỹ', icon: 'wallet', items: ['thu-chi', 'tien-ve', 'chi-phi', 'ket-ca'] },
-  { label: 'Nhân viên', icon: 'users', items: ['nhan-vien', 'lich-lam-viec', 'cham-cong', 'bang-luong', 'hoa-hong', 'thiet-lap-nv'] },
+  { label: 'Nhân viên', icon: 'users', items: ['cham-cong-cua-toi', 'cham-cong', 'nhan-vien', 'lich-lam-viec', 'bang-luong', 'hoa-hong', 'thiet-lap-nv'] },
   { label: 'Báo cáo', icon: 'chart', groups: [
     { title: 'Lãi lỗ & tài chính', items: [{ id: 'bao-cao', sub: 'pl', label: 'Lãi lỗ (P&L)' }, { id: 'bao-cao', sub: 'exp', label: 'Chi phí', perm: 'xem_gia_von' },
       { id: 'bao-cao', sub: 'debt', label: 'Công nợ' }, { id: 'bao-cao', sub: 'be', label: 'Hòa vốn & kịch bản giá', perm: 'xem_gia_von' },
@@ -291,9 +293,9 @@ function Shell() {
     setTimeout(() => openLink(l, { open, go }), 50);
   }, [pendingOpen, books, book?.id]);
   useEffect(() => { const h = () => { const r = readHash(); if (r) setRoute(r); }; window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h); }, []);
-  const visible = PAGES.filter((p) => (!p.perm || can(p.perm)) && (!p.on || p.on.some((k) => settings?.[k])));
+  const visible = PAGES.filter((p) => (!p.perm || can(p.perm)) && (!p.on || p.on.some((k) => settings?.[k])) && (!p.self || book?.employee_id));
   const byId = Object.fromEntries(visible.map((p) => [p.id, p]));
-  const cur = byId[page] || byId['ban-hang'] || visible[0];
+  const cur = byId[page] || (!byId['tong-quan'] && byId['cham-cong-cua-toi']) || byId['ban-hang'] || visible[0];
   const go = (id, s = '') => { setRoute({ id, sub: s }); setMoreOpen(false); window.scrollTo(0, 0); };
   // Trang báo tab đang mở để địa chỉ và mục menu đang chọn khớp theo
   const onSub = useCallback((v) => setRoute((r) => (r.sub === v ? r : { ...r, sub: v })), []);
@@ -326,7 +328,7 @@ function Shell() {
     if (!m.groups && !m.items) return link(m);
     const groups = (m.groups || [{ items: m.items }]).map((g) => ({ ...g, items: g.items.map(link).filter(Boolean) })).filter((g) => g.items.length);
     const all = groups.flatMap((g) => g.items);
-    if (all.length === 1) return { ...all[0], label: m.label, icon: m.icon || all[0].icon, key: m.label }; // chỉ còn một mục: liên kết thẳng
+    if (all.length === 1) return { ...all[0], label: all[0].self ? all[0].label : m.label, icon: all[0].self ? all[0].icon : m.icon || all[0].icon, key: m.label }; // chỉ còn một mục: liên kết thẳng
     return all.length > 0 && { ...m, key: m.label, groups };
   }).filter(Boolean);
   const isOn = (x) => x.id === cur.id && (!x.sub || x.sub === sub);
@@ -368,8 +370,8 @@ function Shell() {
       </nav>
       <main className="page" key={book.id + cur.id}><Page go={go} sub={cur.id === page ? sub : ''} onSub={onSub} /></main>
       <nav className="bottom-nav" aria-label="Điều hướng">
-        {[byId['tong-quan'] || byId['kho'], byId['ban-hang']].filter(Boolean).map((p) => (
-          <button key={p.id} className={cur.id === p.id ? 'on' : ''} onClick={() => go(p.id)}><Icon name={p.icon} />{p.id === 'ban-hang' ? 'Đơn hàng' : p.id === 'kho' ? 'Kho' : p.label}</button>
+        {[byId['tong-quan'] || byId['cham-cong-cua-toi'] || byId['kho'], byId['ban-hang']].filter(Boolean).map((p) => (
+          <button key={p.id} className={cur.id === p.id ? 'on' : ''} onClick={() => go(p.id)}><Icon name={p.icon} />{p.id === 'ban-hang' ? 'Đơn hàng' : p.id === 'kho' ? 'Kho' : p.id === 'cham-cong-cua-toi' ? 'Chấm công' : p.label}</button>
         ))}
         <button className="fab" onClick={() => setQuickOpen(true)} aria-label="Tạo nhanh"><Icon name="plus" size={22} />Tạo</button>
         {byId['thu-chi'] ? <button className={cur.id === 'thu-chi' ? 'on' : ''} onClick={() => go('thu-chi')}><Icon name="cash" />Thu chi</button> : <button className={cur.id === 'kho' ? 'on' : ''} onClick={() => go('kho')}><Icon name="box" />Kho</button>}

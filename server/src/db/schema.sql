@@ -874,13 +874,14 @@ create table if not exists timesheets (
   employee_id text not null references employees(id) on delete cascade,
   work_date text not null,
   shift_id text references shifts(id),
-  status text not null check (status in ('di_lam','nghi_phep','nghi_khong_phep')),
+  status text not null check (status in ('di_lam','nua_ngay','nghi_phep','nghi_khong_phep')),
   check_in text, check_out text,             -- 'HH:MM'
   hours real not null default 0,
   late_minutes integer not null default 0,
   early_minutes integer not null default 0,
   ot_hours real not null default 0,
   note text,
+  self_marked integer not null default 0,   -- 1 = nhân viên tự chấm (lần ghi gần nhất do chính người đó)
   created_by text, created_at text not null
 );
 create unique index if not exists timesheets_uq on timesheets (employee_id, work_date, coalesce(shift_id, ''));

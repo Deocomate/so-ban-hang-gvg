@@ -99,7 +99,8 @@ export function addAnamtileBook() {
 
 // Sổ của người đang đăng nhập; perms là quyền hiệu lực (đã gộp vai trò mẫu và phần chỉnh riêng)
 export function my_books() {
-  return outRows(all(`select b.id, b.name, b.short_name, b.is_demo, b.settings, m.role, m.role_id, r.name as role_name, m.perms, m.display_name
+  return outRows(all(`select b.id, b.name, b.short_name, b.is_demo, b.settings, m.role, m.role_id, r.name as role_name, m.perms, m.display_name,
+    (select e.id from employees e where e.book_id = b.id and e.user_id = m.user_id and e.active = 1 order by e.created_at limit 1) as employee_id
     from books b join book_members m on m.book_id = b.id and m.user_id = ? left join roles r on r.id = m.role_id order by b.created_at, b.rowid`, ctx.uid))
     .map((b) => ({ ...b, perms: effectivePerms(b.role, b.role_id, b.perms) }));
 }

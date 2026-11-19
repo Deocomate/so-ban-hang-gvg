@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { money, parseNum, qty as fq, match } from '../lib/format.js';
 import {
   Amphora, ArrowDownToLine, Store, ShieldCheck, Lock, Database, Scale, Gift, Hammer, Trash2, UsersRound, Wrench, ArrowUpFromLine, Banknote, Bell, BookOpen, Calculator, Calendar, ChartColumn, Check as CheckIcon, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Copy, Download, Ellipsis, Factory, FilePenLine, FileText, History, House, Info, Landmark, Link, LogOut, Package, PackagePlus, Pencil, Plus, Printer, QrCode, Receipt, ReceiptText, RefreshCw, Route, Search as SearchIcon, Settings, ShoppingCart, Smartphone, Tag, TriangleAlert, Truck, Undo2, Upload, Users, Wallet, X,
-  Folder, FolderInput, FolderPlus, File as FileIcon, Image as ImageIcon, HardDrive, ExternalLink,
+  Folder, FolderInput, FolderPlus, File as FileIcon, Image as ImageIcon, HardDrive, ExternalLink, Clock,
 } from 'lucide-react';
 
 // ---------- Biểu tượng ----------
@@ -49,6 +49,7 @@ const ICONS = {
   link: Link,
   phone: Smartphone,
   calendar: Calendar,
+  clock: Clock,
   quote: FileText,
   contract: FilePenLine,
   tag: Tag,

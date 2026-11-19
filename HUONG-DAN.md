@@ -65,6 +65,19 @@ Không còn tự đăng ký tài khoản: mọi người dùng đều do Tổng 
 5. **Cài đặt → Vai trò**: sửa quyền của một vai trò thì mọi người đang dùng vai trò đó đổi theo ngay; thêm vai trò mới khi có khâu mới.
 6. Trong hộp thoại của từng người: gửi lại lời mời, gửi email đặt lại mật khẩu, đăng xuất người đó khỏi mọi thiết bị, **khóa tài khoản** (người nghỉ việc: khóa là mất quyền ngay, lịch sử chứng từ vẫn giữ tên họ).
 
+### Chấm công: nhân viên tự chấm, chủ xem công và lương
+1. Muốn nhân viên tự chấm công: mở **Nhân viên → Danh sách nhân viên**, chọn người đó, gắn ô **Tài khoản đăng nhập** với tài khoản của họ trong sổ. Không cần cấp thêm quyền nào.
+2. Nhân viên đăng nhập là vào ngay trang **Chấm công của tôi** (trên điện thoại là nút **Chấm công** ở thanh dưới):
+   - Bấm **Vào ca** khi đến, **Ra ca** khi về. Giờ lấy theo đồng hồ máy chủ (giờ Việt Nam), ca lấy theo Lịch làm việc hôm nay. Đi muộn hay về sớm được tính so với giờ của ca.
+   - Lưới cả tháng (T2–CN): bấm một ngày để chấm **Đủ công / Nửa ngày / Nghỉ có phép / Nghỉ không phép / Chưa chấm** (bấm là lưu, có **Hoàn tác**) hoặc sửa giờ vào, giờ ra, ghi chú. Ngày chưa tới không chấm được. Nhân viên không tự ghi giờ làm thêm, phần này do quản lý ghi.
+   - Xem số công, giờ làm, lương tạm tính tháng này và các phiếu lương đã lập (đã trả hay chưa). Nhân viên chỉ xem được của chính mình.
+3. Chủ cửa hàng hoặc người có quyền **Chấm công** mở **Nhân viên → Bảng chấm công**:
+   - Tab **Tổng hợp** liệt kê từng người với số ngày công, giờ làm, làm thêm, ngày nghỉ, số lần muộn/sớm, **số ngày còn chưa chấm** và **số lần tự chấm**. Chủ cửa hàng thấy thêm **lương tạm tính** của từng người và tổng quỹ lương.
+   - Bấm tên một người (hoặc tab của họ) để xem lưới tháng và sửa. Ô có chữ **T** là do nhân viên tự chấm, chữ **M** là đi muộn hoặc về sớm.
+   - **Chấm theo lịch** điền nhanh "đi làm" cho các ca theo lịch chưa chấm. **Xuất Excel** để lưu bảng công. **Lập bảng lương** tạo bảng lương kỳ đó.
+4. Khi **chốt bảng lương**, mọi ngày trong kỳ bị khóa (biểu tượng ổ khóa), kể cả với chủ cửa hàng. Muốn sửa thì phải hủy bảng lương.
+5. Nửa ngày được tính 0,5 công (lương theo ngày công và theo ca), số giờ bằng nửa ca nếu không nhập giờ vào/ra.
+
 ### Tài khoản của mỗi người (bấm tên ở góc phải trên → Tài khoản của tôi)
 - Sửa tên, số điện thoại; đổi mật khẩu; đổi email đăng nhập (link xác nhận gửi tới email mới, email cũ nhận thư báo).
 - **Đăng xuất mọi thiết bị khác** khi quên đăng xuất ở máy khác hoặc nghi lộ mật khẩu.
@@ -300,6 +313,12 @@ Có 5 loại chứng từ, xuất ra PDF khổ A4, dựng theo đúng mẫu cử
 | Phiếu thu / phiếu chi | Thu chi → mở phiếu → **Xuất phiếu PDF**; tự mở khi giao hàng có tick "Thu luôn" hoặc thu tiền nhanh trên danh sách | Hộ kinh doanh |
 
 - **Sau khi giao hàng:** khung **Xuất chứng từ giao hàng** bên trái cho chọn Hợp đồng vận chuyển, Hóa đơn bán hàng, Biên bản giao hàng (và Phiếu thu nếu vừa thu tiền). Chọn 1 hoặc nhiều rồi bấm **Tải … chứng từ**: mặc định gộp vào một tệp PDF, mỗi chứng từ một trang mới; bỏ tick "Gộp vào một tệp PDF" để tải từng tệp. Lựa chọn được nhớ cho lần sau.
+- **Sau khi giao nhiều đợt:** ở chi tiết đơn, mục "Các đợt giao hàng", bấm **Hồ sơ đối chiếu** (trong hợp đồng: **Bộ hồ sơ đối chiếu & giao hàng**). Có hai thẻ:
+  - **Đối chiếu công nợ:** từng đợt giao (gộp ô STT, ngày giao, tổng theo đợt), tổng tiền, VAT, tổng thanh toán (1), đã thanh toán (2) kèm từng lần thu (thu trước đợt giao đầu tiên ghi "Đặt cọc"), còn thanh toán (3) và số tiền bằng chữ.
+  - **Đối chiếu số lượng:** mỗi ngày giao một hàng, mỗi mặt hàng một cột theo thứ tự trong đơn, dòng cuối là tổng đã giao.
+  - Đơn có hợp đồng thì ghi "THEO HỢP ĐỒNG SỐ …", chưa có hợp đồng thì ghi "THEO ĐƠN HÀNG SỐ …".
+  - Khung **Bộ hồ sơ đối chiếu & giao hàng** bên trái tải một tệp PDF gồm đối chiếu công nợ, đối chiếu số lượng và biên bản bàn giao của từng đợt (theo ngày giao). Bỏ tick phần không cần, hoặc bỏ "Gộp vào một tệp PDF" để tải từng tệp.
+  - Đầu bảng đối chiếu in **Tên viết tắt** của đơn vị (vd. CÔNG TY TNHH SX&TM THANH HẢI): khai ở Cài đặt → Mẫu in → Đơn vị phát hành; để trống thì in tên pháp lý.
 - **Giao nhanh / thu nhanh trên danh sách** mở chứng từ ở tab mới của trình duyệt. Trình duyệt chặn cửa sổ bật lên thì chứng từ mở ngay trong trang đang xem.
 
 ### Sửa đơn đã giao, đã thu và lịch sử đơn
@@ -382,7 +401,7 @@ Ba phân hệ hoạt động độc lập; chứng từ con chỉ sinh trong t�
 
 **Báo giá.** Chọn mẫu ngói / gốm xây dựng hoặc mẫu tranh mosaic. Mẫu ngói có nhóm hàng I, II, III; số lượng tự tính bằng khối lượng × định mức − số viên diềm (định mức khai ở từng hàng hóa); cột định mức có thể ẩn khi xuất. Lưu ý cuối báo giá sửa được từng lần; nội dung mặc định sửa ở **Cài đặt → Mẫu in → Đơn vị phát hành & phông chữ**. Báo giá không giữ hàng, không ghi công nợ. Dòng tự nhập không gắn hàng hóa sẽ bị bỏ qua khi chuyển sang đơn.
 
-**Hợp đồng.** Mỗi hợp đồng gắn với một đơn đặt hàng và dùng chung đợt giao, tiền cọc, tồn kho của đơn. Tạo ở mục **Hợp đồng** hoặc nút **Lập hợp đồng** trong đơn đặt hàng. Thứ tự giấy tờ: đề nghị tạm ứng → các đợt giao (mỗi đợt có hóa đơn, biên bản giao hàng, hợp đồng vận chuyển) → đối chiếu số lượng → đối chiếu kèm thanh toán → bấm **Hoàn tất đối chiếu** → đề nghị thanh toán. Số thanh toán tính theo số lượng thực giao. Bản scan hợp đồng tải lên trong trang hợp đồng, tối đa 15 MB mỗi tệp, được lưu cùng cơ sở dữ liệu nên có trong bản sao lưu hằng đêm. Riêng tệp đính kèm không nằm trong tệp sao lưu JSON tải về.
+**Hợp đồng.** Mỗi hợp đồng gắn với một đơn đặt hàng và dùng chung đợt giao, tiền cọc, tồn kho của đơn. Tạo ở mục **Hợp đồng** hoặc nút **Lập hợp đồng** trong đơn đặt hàng. Thứ tự giấy tờ: đề nghị tạm ứng → các đợt giao (mỗi đợt có hóa đơn, biên bản giao hàng, hợp đồng vận chuyển) → đối chiếu số lượng → đối chiếu công nợ → bấm **Hoàn tất đối chiếu** → đề nghị thanh toán. Số thanh toán tính theo số lượng thực giao. Bản scan hợp đồng tải lên trong trang hợp đồng, tối đa 15 MB mỗi tệp, được lưu cùng cơ sở dữ liệu nên có trong bản sao lưu hằng đêm. Riêng tệp đính kèm không nằm trong tệp sao lưu JSON tải về.
 
 **Hóa đơn.** Nút **Thu khác** trên màn bán hàng thêm VAT và tiền vận chuyển. Thuế suất VAT đặt theo từng đơn, mặc định ở **Cài đặt**. Doanh thu báo cáo không gồm VAT của đơn; công nợ khách có gồm VAT. Khi tạo đợt giao có thể nhập số **cọc khấu trừ** cho hóa đơn đợt đó.
 

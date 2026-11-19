@@ -34,7 +34,9 @@ const oldSchema = fs.readFileSync(path.join(here, '../src/db/schema.sql'), 'utf8
   .replace(/\r?\n\s*mode text not null default 'dat'[^\n]*/, '')
   .replace(/\r?\n\s*discount real not null default 0 check \(discount >= 0\),\r?\n\s*invoice_no text,/, '')
   .replace(/,\r?\n\s*unit_price real,\r?\n\s*discount real not null default 0\r?\n\);/, '\n);')
-  .replace(/,\r?\n\s*cancelled_at text, cancel_reason text\r?\n\);/, '\n);');
+  .replace(/,\r?\n\s*cancelled_at text, cancel_reason text\r?\n\);/, '\n);')
+  // Chấm công trước khi có nửa ngày và cờ nhân viên tự chấm
+  .replace("'di_lam','nua_ngay','nghi_phep'", "'di_lam','nghi_phep'").replace(/\r?\n\s*self_marked integer[^\n]*/, '');
 const old = new Database(file);
 old.exec(oldSchema);
 const now = new Date().toISOString();
@@ -59,6 +61,8 @@ old.prepare(`insert into goods_receipts (id, book_id, code, po_id, receipt_date,
 old.prepare(`insert into goods_receipt_lines (id, receipt_id, book_id, po_line_id, product_id, qty, unit_cost, value, returned_qty) values ('gl1', 'g1', 'th', 'pl1', 'p1', 10, 100, 1000, 2)`).run();
 old.prepare(`insert into supplier_returns (id, book_id, code, po_id, return_date, reason, created_at) values ('r1', 'th', 'TN00001', 'po1', '2026-10-02', 'Men lỗi', ?)`).run(now);
 old.prepare(`insert into supplier_return_lines (id, return_id, book_id, receipt_line_id, product_id, qty, unit_cost, value) values ('rl1', 'r1', 'th', 'gl1', 'p1', 2, 100, 200)`).run();
+old.prepare(`insert into employees (id, book_id, code, name, created_at) values ('e1', 'th', 'NV1', 'Nhân viên cũ', ?)`).run(now);
+old.prepare(`insert into timesheets (id, book_id, employee_id, work_date, status, hours, created_at) values ('t1', 'th', 'e1', '2026-10-01', 'di_lam', 8, ?)`).run(now);
 old.pragma('user_version = 1');
 old.close();
 
@@ -68,7 +72,7 @@ C('Đã sao lưu trước khi nâng cấp', fs.existsSync(`${file}.truoc-nang-ca
 const bak = new Database(`${file}.truoc-nang-cap-v1.bak`, { readonly: true });
 C('Bản sao lưu còn cấu trúc cũ', bak.prepare(`select 1 from pragma_table_info('products') where name = 'price4'`).get(), undefined);
 bak.close();
-C('Lên phiên bản mới', db.pragma('user_version', { simple: true }), 11);
+C('Lên phiên bản mới', db.pragma('user_version', { simple: true }), 12);
 C('Đơn nhập kho ngay lúc lập thành phiếu nhập, đơn đặt giữ nguyên', db.prepare(`select id, mode from purchase_orders order by id`).all(), [{ id: 'po1', mode: 'nhap' }, { id: 'po2', mode: 'dat' }]);
 C('Giá trước giảm giá của dòng cũ bằng giá nhập', db.prepare(`select unit_price, discount from purchase_order_lines where id = 'pl2'`).get(), { unit_price: 120, discount: 0 });
 C('Phiếu trả cũ nhận nhà cung cấp của đơn, giá trả lại = giá nhập', db.prepare(`select r.supplier_id, l.unit_price, l.cost_value, l.value from supplier_returns r join supplier_return_lines l on l.return_id = r.id`).get(),
@@ -84,6 +88,9 @@ C('Có sẵn 5 vai trò mẫu', db.prepare(`select count(*) n from roles`).get()
 C('Phiếu kho cũ và dòng phiếu giữ nguyên', db.prepare(`select a.code, l.qty_delta from stock_adjustments a join stock_adjustment_lines l on l.adjustment_id = a.id`).get(), { code: 'DC00001', qty_delta: -1 });
 db.prepare(`insert into stock_adjustments (id, book_id, code, adj_date, reason, purpose, created_at) values ('a2', 'th', 'XNB00001', '2026-10-02', 'noi_bo', 'Khác', ?)`).run(now);
 C('Phiếu kho nhận lý do xuất dùng nội bộ', db.prepare(`select reason_label from v_adjustments where id = 'a2'`).get().reason_label, 'Xuất dùng nội bộ');
+C('Chấm công cũ giữ nguyên, chưa đánh dấu tự chấm', db.prepare(`select work_date, status, hours, self_marked from timesheets`).get(), { work_date: '2026-10-01', status: 'di_lam', hours: 8, self_marked: 0 });
+db.prepare(`insert into timesheets (id, book_id, employee_id, work_date, status, hours, created_at) values ('t2', 'th', 'e1', '2026-10-02', 'nua_ngay', 4, ?)`).run(now);
+C('Chấm công nhận trạng thái nửa ngày', db.prepare(`select status_label from v_timesheets where id = 't2'`).get().status_label, 'Nửa ngày');
 C('Khách hàng giữ nguyên', db.prepare(`select code, name, price_tier, credit_days from customers`).get(), { code: 'KH1', name: 'Khách cũ', price_tier: 3, credit_days: 30 });
 C('Đơn cũ vẫn trỏ đúng khách', db.prepare(`select c.code from sales_orders o join customers c on c.id = o.customer_id`).get().code, 'KH1');
 C('Hàng hóa giữ nguyên, cột mới để trống', db.prepare(`select sku, price1, price3, price4, price5, brand from products`).get(), { sku: 'SP1', price1: 100, price3: 300, price4: 0, price5: 0, brand: null });

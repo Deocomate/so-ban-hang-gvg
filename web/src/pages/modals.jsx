@@ -10,7 +10,7 @@ import { PaymentForm, PaymentDetail, ExpenseForm } from './Cash.jsx';
 import { RecurringForm } from './RecurringExpenses.jsx';
 import { ProductionForm } from './StockDocs.jsx';
 import { CustomerGroupForm } from './CustomerGroups.jsx';
-import { EmployeeForm, ScheduleForm, TimesheetForm, PaysheetNewForm, PaysheetDetail, CommissionForm, ShiftForm } from './Staff.jsx';
+import { EmployeeForm, ScheduleForm, PaysheetNewForm, PaysheetDetail, CommissionForm, ShiftForm } from './Staff.jsx';
 import { ProductForm, ProductDetail } from './Products.jsx';
 import { StockCard, AdjustForm } from './Inventory.jsx';
 import { PartyForm, PartyDetail } from './Parties.jsx';
@@ -32,7 +32,7 @@ const MAP = {
   'po-form': PurchasePos, po: PoDetail, receive: ReceiveDialog, 'po-return': ReturnPos, sret: SupplierReturnDetail, 'po-print': PurchaseSlip,
   payment: PaymentForm, 'pay-detail': PaymentDetail, expense: ExpenseForm, recurring: RecurringForm, receipt: ReceiptForm,
   product: ProductForm, 'product-detail': ProductDetail, 'price-book': PriceBookForm, 'price-book-import': PriceBookImport, stockcard: StockCard, adjust: AdjustForm, production: ProductionForm, 'customer-group': CustomerGroupForm,
-  employee: EmployeeForm, schedule: ScheduleForm, timesheet: TimesheetForm, 'paysheet-new': PaysheetNewForm, paysheet: PaysheetDetail, commission: CommissionForm, shift: ShiftForm,
+  employee: EmployeeForm, schedule: ScheduleForm, 'paysheet-new': PaysheetNewForm, paysheet: PaysheetDetail, commission: CommissionForm, shift: ShiftForm,
   party: PartyForm, 'party-detail': PartyDetail, import: ImportDialog,
   drill: DrillDialog, print: PrintSlip, doc: DocDialog,
   ship: ShipmentDetail, 'ship-form': ShipmentForm, 'cod-settle': CodSettleDialog, 'ship-import': ShipImportDialog,

@@ -99,26 +99,39 @@ export function save_schedule(p) {
 
 // ---------- CHẤM CÔNG ----------
 // Giờ làm: theo giờ vào/ra nếu có, không thì theo số giờ của ca. Đi muộn/về sớm so với giờ ca, trừ số phút cho phép.
+// Nửa ngày: không có giờ vào/ra thì tính nửa số giờ của ca (hoặc nửa ngày công).
+export const WORK_STATUSES = ['di_lam', 'nua_ngay'];
+export const TS_STATUSES = ['di_lam', 'nua_ngay', 'nghi_phep', 'nghi_khong_phep'];
 function timeFacts(b, sh, status, cin, cout) {
-  if (status !== 'di_lam') return { hours: 0, late_minutes: 0, early_minutes: 0 };
+  if (!WORK_STATUSES.includes(status)) return { hours: 0, late_minutes: 0, early_minutes: 0 };
   const grace = staffSettings(b).late_grace;
-  const hours = cin && cout ? rnd(span(cin, cout) / 60, 2) : sh ? sh.hours : staffSettings(b).std_hours;
+  const full = sh ? sh.hours : staffSettings(b).std_hours;
+  const hours = cin && cout ? rnd(span(cin, cout) / 60, 2) : status === 'nua_ngay' ? rnd(full / 2, 2) : full;
   let late = 0; let early = 0;
   if (sh && cin) { const d = mins(cin) - mins(sh.start_time); if (d > grace) late = d; }
   if (sh && cout && sh.end_time > sh.start_time) { const d = mins(sh.end_time) - mins(cout); if (d > grace) early = d; }
   return { hours, late_minutes: late, early_minutes: early };
 }
 
+// Ngày đã nằm trong bảng lương đã chốt thì khóa chấm công
+export const lockedDay = (employeeId, d) => !!one(`select 1 from paysheet_lines l join paysheets s on s.id = l.paysheet_id
+  where l.employee_id = ? and s.status = 'chot' and ? between s.period_from and s.period_to`, employeeId, d);
+
 export function save_timesheet(p) {
   const b = p.book_id;
   requirePerm(b, 'cham_cong');
-  const e = one(`select id from employees where id = ? and book_id = ?`, p.employee_id, b);
+  return writeTimesheet(b, p);
+}
+
+// Ghi một dòng chấm công (người gọi đã kiểm tra quyền). self_marked = 1 khi chính nhân viên đó ghi.
+export function writeTimesheet(b, p) {
+  const e = one(`select id, user_id from employees where id = ? and book_id = ?`, p.employee_id, b);
   if (!e) fail('Không tìm thấy nhân viên');
   const d = asDate(p.work_date);
   if (!d) fail('Chọn ngày chấm công');
   if (d > today()) fail('Không chấm công cho ngày chưa tới');
   const status = p.status || 'di_lam';
-  if (!['di_lam', 'nghi_phep', 'nghi_khong_phep'].includes(status)) fail('Trạng thái chấm công không hợp lệ');
+  if (!TS_STATUSES.includes(status)) fail('Trạng thái chấm công không hợp lệ');
   const sid = nz(p.shift_id);
   const sh = sid ? one(`select * from shifts where id = ? and book_id = ?`, sid, b) : null;
   if (sid && !sh) fail('Không tìm thấy ca');
@@ -126,14 +139,14 @@ export function save_timesheet(p) {
   if ((cin && !TIME.test(cin)) || (cout && !TIME.test(cout))) fail('Giờ vào / ra theo dạng HH:MM');
   const ot = num(p.ot_hours) ?? 0;
   if (ot < 0 || ot > 24) fail('Giờ làm thêm không hợp lệ');
-  if (one(`select 1 from paysheet_lines l join paysheets s on s.id = l.paysheet_id
-    where l.employee_id = ? and s.status = 'chot' and ? between s.period_from and s.period_to`, e.id, d)) fail('Ngày này đã nằm trong bảng lương đã chốt');
-  const f = { status, check_in: status === 'di_lam' ? cin : null, check_out: status === 'di_lam' ? cout : null, ot_hours: status === 'di_lam' ? ot : 0, note: p.note ?? null,
-    ...timeFacts(b, sh, status, cin, cout) };
+  if (lockedDay(e.id, d)) fail('Ngày này đã nằm trong bảng lương đã chốt');
+  const working = WORK_STATUSES.includes(status);
+  const f = { status, check_in: working ? cin : null, check_out: working ? cout : null, ot_hours: working ? ot : 0, note: p.note ?? null,
+    self_marked: e.user_id && e.user_id === ctx.uid ? 1 : 0, ...timeFacts(b, sh, status, cin, cout) };
   const ex = one(`select id from timesheets where employee_id = ? and work_date = ? and coalesce(shift_id, '') = ?`, e.id, d, sid || '');
   if (ex) {
-    run(`update timesheets set status = ?, check_in = ?, check_out = ?, ot_hours = ?, note = ?, hours = ?, late_minutes = ?, early_minutes = ? where id = ?`,
-      f.status, f.check_in, f.check_out, f.ot_hours, f.note, f.hours, f.late_minutes, f.early_minutes, ex.id);
+    run(`update timesheets set status = ?, check_in = ?, check_out = ?, ot_hours = ?, note = ?, hours = ?, late_minutes = ?, early_minutes = ?, self_marked = ? where id = ?`,
+      f.status, f.check_in, f.check_out, f.ot_hours, f.note, f.hours, f.late_minutes, f.early_minutes, f.self_marked, ex.id);
     return { id: ex.id };
   }
   const id = uuid();
@@ -145,8 +158,11 @@ export function delete_timesheet(p) {
   const t = one(`select * from timesheets where id = ?`, p.id);
   if (!t) fail('Không tìm thấy dòng chấm công');
   requirePerm(t.book_id, 'cham_cong');
-  if (one(`select 1 from paysheet_lines l join paysheets s on s.id = l.paysheet_id
-    where l.employee_id = ? and s.status = 'chot' and ? between s.period_from and s.period_to`, t.employee_id, t.work_date)) fail('Ngày này đã nằm trong bảng lương đã chốt');
+  return removeTimesheet(t);
+}
+
+export function removeTimesheet(t) {
+  if (lockedDay(t.employee_id, t.work_date)) fail('Ngày này đã nằm trong bảng lương đã chốt');
   run(`delete from timesheets where id = ?`, t.id);
   return { ok: true };
 }
@@ -224,15 +240,20 @@ export function calcPay(b, emp, from, to) {
   const st = staffSettings(b); const pay = cleanPay(json(emp.pay));
   const ts = all(`select t.*, s.hours as shift_hours from timesheets t left join shifts s on s.id = t.shift_id
     where t.employee_id = ? and t.work_date between ? and ?`, emp.id, from, to);
-  const work = ts.filter((t) => t.status === 'di_lam');
-  const days = new Set(work.map((t) => t.work_date)).size;
+  // Đi làm = 1 công, nửa ngày = 0,5 công; một ngày có nhiều ca vẫn tính tối đa 1 công
+  const work = ts.filter((t) => WORK_STATUSES.includes(t.status));
+  const weight = (t) => (t.status === 'nua_ngay' ? 0.5 : 1);
+  const dayW = new Map();
+  for (const t of work) dayW.set(t.work_date, Math.max(dayW.get(t.work_date) || 0, weight(t)));
+  const days = [...dayW.values()].reduce((s, w) => s + w, 0);
+  const halfDays = [...dayW.values()].filter((w) => w === 0.5).length;
   const leaveDays = new Set(ts.filter((t) => t.status === 'nghi_phep').map((t) => t.work_date)).size;
   const absentDays = new Set(ts.filter((t) => t.status === 'nghi_khong_phep').map((t) => t.work_date)).size;
-  const shifts = work.length; const hours = work.reduce((s, t) => s + t.hours, 0);
+  const shifts = work.reduce((s, t) => s + weight(t), 0); const hours = work.reduce((s, t) => s + t.hours, 0);
   const otHours = work.reduce((s, t) => s + t.ot_hours, 0); const lates = work.filter((t) => t.late_minutes > 0 || t.early_minutes > 0).length;
   const stdDays = pay.std_days || st.std_days;
   const paidDays = days + (st.paid_leave ? leaveDays : 0);
-  const avgShift = shifts ? work.reduce((s, t) => s + (t.shift_hours || t.hours), 0) / shifts : st.std_hours;
+  const avgShift = work.length ? work.reduce((s, t) => s + (t.shift_hours || t.hours / weight(t)), 0) / work.length : st.std_hours;
   let base; let hourly;
   if (pay.type === 'ca') { base = pay.rate * shifts; hourly = pay.rate / (avgShift || st.std_hours); }
   else if (pay.type === 'gio') { base = pay.rate * hours; hourly = pay.rate; }
@@ -249,7 +270,7 @@ export function calcPay(b, emp, from, to) {
   const commission = ct ? commissionOf(lines, json(ct.rules, [])) : 0;
   const r = { base: rnd(base), ot: rnd(ot), bonus: rnd(bonus), commission, allowance: rnd(allowance), deduction: rnd(deduction) };
   return { ...r, total: r.base + r.ot + r.bonus + r.commission + r.allowance - r.deduction,
-    detail: { type: pay.type, rate: pay.rate, std_days: stdDays, days, leave_days: leaveDays, absent_days: absentDays, shifts, hours: rnd(hours, 2),
+    detail: { type: pay.type, rate: pay.rate, std_days: stdDays, days, half_days: halfDays, leave_days: leaveDays, absent_days: absentDays, shifts, hours: rnd(hours, 2),
       ot_hours: rnd(otHours, 2), lates, revenue, bonus_tier: tier || null } };
 }
 

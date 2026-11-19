@@ -728,7 +728,7 @@ from work_schedules w join shifts s on s.id = w.shift_id;
 
 create view v_timesheets as
 select t.*, e.code as employee_code, e.name as employee_name, s.name as shift_name, s.start_time, s.end_time,
-  case t.status when 'di_lam' then 'Đi làm' when 'nghi_phep' then 'Nghỉ có phép' else 'Nghỉ không phép' end as status_label
+  case t.status when 'di_lam' then 'Đi làm' when 'nua_ngay' then 'Nửa ngày' when 'nghi_phep' then 'Nghỉ có phép' else 'Nghỉ không phép' end as status_label
 from timesheets t join employees e on e.id = t.employee_id left join shifts s on s.id = t.shift_id;
 
 create view v_commission_tables as

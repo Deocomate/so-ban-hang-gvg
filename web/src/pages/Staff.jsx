@@ -1,7 +1,7 @@
 // Nhân viên theo kiểu KiotViet: danh sách nhân viên, lịch làm việc, bảng chấm công, bảng lương, bảng hoa hồng, thiết lập.
 import React, { useMemo, useState } from 'react';
 import { useApp, useQ, useAction, useRpcData } from '../lib/store.jsx';
-import { money, qty as fq, dmy, todayVN, addDays, monthStart, monthEnd, match } from '../lib/format.js';
+import { money, qty as fq, dmy, todayVN, monthStart, monthEnd, match } from '../lib/format.js';
 import { useProducts, productLabel } from '../lib/lookups.js';
 import { exportXlsx } from '../lib/excel.js';
 import { PeriodPicker, usePeriod } from '../components/Period.jsx';
@@ -17,12 +17,8 @@ export const PAY_TYPES = [
 ];
 const ALLOW_PER = [{ value: 'thang', label: 'Mỗi kỳ lương' }, { value: 'ngay', label: 'Mỗi ngày đi làm' }];
 const DEDUCT_PER = [{ value: 'thang', label: 'Mỗi kỳ lương' }, { value: 'lan_muon', label: 'Mỗi lần đi muộn / về sớm' }, { value: 'nghi_khong_phep', label: 'Mỗi ngày nghỉ không phép' }];
-const STATUS = [{ value: 'di_lam', label: 'Đi làm' }, { value: 'nghi_phep', label: 'Nghỉ có phép' }, { value: 'nghi_khong_phep', label: 'Nghỉ không phép' }];
-const STATUS_TONE = { di_lam: 'good', nghi_phep: 'info', nghi_khong_phep: 'bad' };
 const WEEKDAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 const ORDER = [1, 2, 3, 4, 5, 6, 0];   // tuần bắt đầu từ thứ Hai
-const weekday = (iso) => new Date(iso + 'T00:00:00Z').getUTCDay();
-const mondayOf = (iso) => addDays(iso, -((weekday(iso) + 6) % 7));
 const payText = (p) => (p?.type ? `${PAY_TYPES.find((t) => t.value === p.type)?.label}: ${money(p.rate)} đ` : '—');
 const useEmployees = (all) => useQ('employees', all ? [] : [['active', 'eq', 'true']], 'code', 2000);
 const useShifts = () => useQ('shifts', [['active', 'eq', 'true']], 'start_time', 200);
@@ -111,7 +107,7 @@ export function EmployeeForm({ id, onClose }) {
           <Field label="Chức danh"><Input value={f.title} onChange={(v) => set('title', v)} placeholder="vd. Bán hàng" /></Field>
           <Field label="Phòng ban"><Input value={f.dept} onChange={(v) => set('dept', v)} placeholder="vd. Cửa hàng" /></Field>
           <Field label="Ngày vào làm"><DateInput value={f.start_date} onChange={(v) => set('start_date', v)} /></Field>
-          <Field label="Tài khoản đăng nhập"><Select value={f.user_id} onChange={(v) => set('user_id', v)} placeholder="(không có)"
+          <Field label="Tài khoản đăng nhập" hint="Gắn tài khoản để nhân viên tự chấm công và xem lương của mình"><Select value={f.user_id} onChange={(v) => set('user_id', v)} placeholder="(không có)"
             options={(members.data || []).map((m) => ({ value: m.user_id, label: `${m.display_name || m.email}${m.email ? ` · ${m.email}` : ''}` }))} /></Field>
           <Field label="Địa chỉ" wide><Input value={f.address} onChange={(v) => set('address', v)} /></Field>
           <Field label="Ghi chú" wide><TextArea value={f.note} onChange={(v) => set('note', v)} /></Field>
@@ -192,68 +188,6 @@ export function ScheduleForm({ employee, onClose }) {
   );
 }
 
-// ---------- BẢNG CHẤM CÔNG ----------
-export function TimesheetPage() {
-  const { open, can } = useApp();
-  const [mon, setMon] = useState(mondayOf(todayVN()));
-  const days = ORDER.map((_, i) => addDays(mon, i));
-  const emps = useEmployees();
-  const ts = useQ('timesheets', [['work_date', 'gte', days[0]], ['work_date', 'lte', days[6]]], 'work_date', 10000);
-  const { run, busy } = useAction();
-  const [search, setSearch] = useState('');
-  const rows = (emps.data || []).filter((e) => match(`${e.code} ${e.name}`, search));
-  const cell = (eid, d) => (ts.data || []).filter((t) => t.employee_id === eid && t.work_date === d);
-  const today = todayVN();
-  const sum = (eid) => { const x = (ts.data || []).filter((t) => t.employee_id === eid && t.status === 'di_lam'); return { n: x.length, h: x.reduce((s, t) => s + t.hours + t.ot_hours, 0) }; };
-  return (
-    <ListPage title="Bảng chấm công"
-      filters={<FilterBox title="Tuần"><div className="small"><b>{dmy(days[0])}</b> – <b>{dmy(days[6])}</b></div>
-        <div className="row gap-s" style={{ marginTop: 8 }}><Btn small icon="back" aria-label="Tuần trước" onClick={() => setMon(addDays(mon, -7))} />
-          <Btn small onClick={() => setMon(mondayOf(today))}>Tuần này</Btn><Btn small icon="chev" aria-label="Tuần sau" onClick={() => setMon(addDays(mon, 7))} /></div></FilterBox>}
-      search={<Search value={search} onChange={setSearch} placeholder="Tìm nhân viên" />}
-      actions={can('cham_cong') && <Btn kind="primary" icon="check" busy={busy} disabled={days[0] > today}
-        onClick={() => run('fill_timesheets', { from: days[0], to: days[6] }, (x) => `Đã chấm ${x.created} ca theo lịch`)}>Chấm theo lịch</Btn>}>
-      <ErrorBox error={emps.error || ts.error} />
-      <Table rows={emps.data && ts.data ? rows : null} empty="Chưa có nhân viên" columns={[
-        { key: 'n', label: 'Nhân viên', render: (e) => <><div className="cell-main">{e.name}</div><div className="cell-sub">{sum(e.id).n} ca · {fq(sum(e.id).h)} giờ</div></> },
-        ...days.map((d) => ({ key: d, label: <>{WEEKDAYS[weekday(d)]}<div className="cell-sub">{d.slice(8)}/{d.slice(5, 7)}</div></>, render: (e) => (
-          <div className="stack" style={{ gap: 2, minWidth: 64 }}>
-            {cell(e.id, d).map((t) => <button key={t.id} type="button" className="link-btn" onClick={() => open('timesheet', { employee: e, date: d, entry: t })}>
-              <Pill tone={STATUS_TONE[t.status]}>{t.status === 'di_lam' ? (t.shift_name || `${fq(t.hours)}h`) : t.status === 'nghi_phep' ? 'Phép' : 'Nghỉ'}{t.late_minutes > 0 ? ' · muộn' : ''}{t.ot_hours > 0 ? ` +${fq(t.ot_hours)}h` : ''}</Pill></button>)}
-            {can('cham_cong') && d <= today && <button type="button" className="link-btn small muted" onClick={() => open('timesheet', { employee: e, date: d })}>+ chấm</button>}
-          </div>) })),
-      ]} />
-    </ListPage>
-  );
-}
-
-export function TimesheetForm({ employee, date, entry, onClose }) {
-  const shifts = useShifts();
-  const { run, busy } = useAction();
-  const [f, setF] = useState({ shift_id: entry?.shift_id || '', status: entry?.status || 'di_lam', check_in: entry?.check_in || '', check_out: entry?.check_out || '',
-    ot_hours: entry?.ot_hours || null, note: entry?.note || '' });
-  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
-  return (
-    <Modal title={`Chấm công · ${employee.name}`} subtitle={`${WEEKDAYS[weekday(date)]}, ${dmy(date)}`} onClose={onClose}
-      footer={<>{entry && <ConfirmBtn kind="danger" icon="x" busy={busy} onConfirm={async () => { if (await run('delete_timesheet', { id: entry.id }, 'Đã xóa chấm công')) onClose(); }}>Xóa</ConfirmBtn>}
-        <span className="grow" /><Btn onClick={onClose}>Thôi</Btn><Btn kind="primary" busy={busy} onClick={async () => {
-          if (await run('save_timesheet', { employee_id: employee.id, work_date: date, ...f, shift_id: f.shift_id || null }, 'Đã chấm công')) onClose();
-        }}>Lưu</Btn></>}>
-      <div className="grid">
-        <Field label="Ca"><Select value={f.shift_id} onChange={(v) => set('shift_id', v)} placeholder="(không theo ca)" disabled={!!entry}
-          options={(shifts.data || []).map((s) => ({ value: s.id, label: `${s.name} (${s.start_time} – ${s.end_time})` }))} /></Field>
-        <Field label="Trạng thái"><Select value={f.status} onChange={(v) => set('status', v)} options={STATUS} /></Field>
-        {f.status === 'di_lam' && <>
-          <Field label="Giờ vào" hint="HH:MM, để trống: theo giờ ca"><Input value={f.check_in} onChange={(v) => set('check_in', v)} placeholder="08:00" /></Field>
-          <Field label="Giờ ra"><Input value={f.check_out} onChange={(v) => set('check_out', v)} placeholder="17:00" /></Field>
-          <Field label="Làm thêm (giờ)"><NumInput money={false} min={0} value={f.ot_hours} onChange={(v) => set('ot_hours', v)} /></Field>
-        </>}
-        <Field label="Ghi chú" wide><Input value={f.note} onChange={(v) => set('note', v)} /></Field>
-      </div>
-    </Modal>
-  );
-}
-
 // ---------- BẢNG LƯƠNG ----------
 export function PaysheetsPage() {
   const { open } = useApp();
@@ -305,7 +239,7 @@ export function PaysheetNewForm({ onClose }) {
 }
 
 const breakdownText = (b) => [
-  b.type === 'ca' ? `${b.shifts} ca` : b.type === 'gio' ? `${fq(b.hours)} giờ` : b.type === 'ngay_cong' ? `${b.days} ngày công${b.leave_days ? ` + ${b.leave_days} phép` : ''} / ${b.std_days}` : 'Cố định',
+  b.type === 'ca' ? `${b.shifts} ca` : b.type === 'gio' ? `${fq(b.hours)} giờ` : b.type === 'ngay_cong' ? `${fq(b.days)} ngày công${b.half_days ? ` (${b.half_days} nửa ngày)` : ''}${b.leave_days ? ` + ${b.leave_days} phép` : ''} / ${b.std_days}` : 'Cố định',
   b.ot_hours ? `làm thêm ${fq(b.ot_hours)}h` : '', b.lates ? `${b.lates} lần muộn/sớm` : '', b.absent_days ? `${b.absent_days} ngày nghỉ không phép` : '',
   b.revenue ? `doanh số ${money(b.revenue)}` : '', b.adjust_note ? `ghi chú: ${b.adjust_note}` : '',
 ].filter(Boolean).join(' · ');

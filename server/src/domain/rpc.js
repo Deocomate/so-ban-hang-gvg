@@ -23,6 +23,7 @@ import * as contracts from './contracts.js';
 import * as tax from './tax.js';
 import * as groups from './customer-groups.js';
 import * as staff from './staff.js';
+import * as attendance from './attendance.js';
 import * as priceBooks from './price-books.js';
 import * as users from './users.js';
 import * as receivables from './receivables.js';
@@ -66,6 +67,7 @@ export const RPC = {
   ...pick(reminders, ['vat_invoice_todo']),
   ...pick(staff, ['save_employee', 'save_shift', 'save_schedule', 'save_timesheet', 'delete_timesheet', 'fill_timesheets', 'save_commission_table',
     'create_paysheet', 'recalc_paysheet', 'adjust_paysheet_line', 'close_paysheet', 'cancel_paysheet', 'rpt_staff']),
+  ...pick(attendance, ['att_month', 'att_save_day', 'att_delete', 'att_clock']),
   ...pick(groups, ['save_customer_group', 'delete_customer_group', 'set_customer_group', 'refresh_customer_groups']),
   ...pick(priceBooks, ['save_price_book', 'delete_price_book', 'save_price_book_items', 'import_price_book_items', 'apply_price_formula']),
   ...pick(users, ['admin_reset_2fa', 'admin_overview', 'admin_save_user', 'admin_resend_invite', 'admin_send_reset', 'admin_set_status', 'admin_logout_user',

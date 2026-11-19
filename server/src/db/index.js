@@ -11,7 +11,7 @@ import { addAnamtileBook, defaultDocs, VARIANTS } from '../domain/books.js';
 import { DEFAULT_ROLES } from '../lib/labels.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const SCHEMA_VERSION = 11;
+const SCHEMA_VERSION = 12;
 
 // Bảng ghi nhật ký chỉnh sửa; cột bỏ qua khi so sánh UPDATE (do hệ thống tự cập nhật)
 const AUDIT_TABLES = {
@@ -130,6 +130,7 @@ const ADDED_COLUMNS = [
   ['users', 'last_login_at', 'text'],
   ['users', 'updated_at', 'text'],
   ['book_members', 'role_id', 'text references roles(id) on delete set null'],
+  ['timesheets', 'self_marked', 'integer not null default 0'],
 ];
 
 // SQLite không sửa được CHECK của bảng đã có nên phải dựng lại bảng khách hàng để nhận đủ 5 mức giá
@@ -181,6 +182,20 @@ function widenDocInfo(db) {
     db.exec(t.sql.replace('doc_info', 'doc_info_new').replace("('order','delivery','payment')", "('order','delivery','payment','contract','quote')"));
     db.exec(`insert into doc_info_new select * from doc_info; drop table doc_info; alter table doc_info_new rename to doc_info;`);
   })();
+}
+
+// Chấm công cũ chưa nhận trạng thái "nửa ngày"; dựng lại bảng (không bảng nào trỏ tới chấm công)
+function widenTimesheetStatus(db) {
+  const t = db.prepare(`select sql from sqlite_master where type = 'table' and name = 'timesheets'`).get();
+  if (t.sql.includes("'nua_ngay'")) return;
+  const indexes = db.prepare(`select sql from sqlite_master where type = 'index' and tbl_name = 'timesheets' and sql is not null`).all();
+  db.pragma('legacy_alter_table = ON');
+  db.transaction(() => {
+    db.exec(t.sql.replace('timesheets', 'timesheets_new').replace("('di_lam','nghi_phep','nghi_khong_phep')", "('di_lam','nua_ngay','nghi_phep','nghi_khong_phep')"));
+    db.exec(`insert into timesheets_new select * from timesheets; drop table timesheets; alter table timesheets_new rename to timesheets;`);
+    for (const i of indexes) db.exec(i.sql);
+  })();
+  db.pragma('legacy_alter_table = OFF');
 }
 
 // Phiếu kho cũ chưa nhận lý do "xuất dùng nội bộ"; dựng lại bảng (dòng phiếu trỏ tới bảng này nên tắt kiểm tra khóa ngoại khi đổi tên)
@@ -255,6 +270,7 @@ function migrate(db, from) {
   widenPriceTier(db);
   widenDocInfo(db);
   widenAdjReason(db);
+  widenTimesheetStatus(db);
   relaxSupplierReturns(db);
   if (from > 0 && from < 9) splitPurchaseModes(db);
   if (from === 1) addFourthPriceName(db);
