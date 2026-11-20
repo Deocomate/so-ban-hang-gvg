@@ -26,6 +26,7 @@ import { QuoteForm, QuoteDetail } from './Quotes.jsx';
 import { ContractForm, ContractDetail } from './Contracts.jsx';
 import { TaxInvoiceForm } from './Tax.jsx';
 import { OrderDocsDialog, DocFilePreview } from './OrderDocs.jsx';
+import { PickOrderDialog, EodDialog, KeysDialog } from '../components/PosMenu.jsx';
 const ContractWriterLazy = React.lazy(() => import('./ContractWriter.jsx'));
 // Trình soạn hợp đồng nạp riêng (kèm trình soạn văn bản) khi mở lần đầu
 const ContractWriter = (p) => <Suspense fallback={<Modal title="Soạn hợp đồng" onClose={p.onClose}><Loading /></Modal>}><ContractWriterLazy {...p} /></Suspense>;
@@ -44,6 +45,7 @@ const MAP = {
   driver: DriverForm, trip: TripForm, 'pay-driver': PayDriverDialog, 'quote-form': QuoteForm, quote: QuoteDetail,
   'contract-form': ContractForm, contract: ContractDetail, 'tax-invoice': TaxInvoiceForm,
   'order-docs': OrderDocsDialog, 'doc-file': DocFilePreview, 'contract-writer': ContractWriter,
+  'pos-pick-order': PickOrderDialog, 'pos-eod': EodDialog, 'pos-keys': KeysDialog,
 };
 
 export function ModalHost() {

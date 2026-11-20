@@ -9,6 +9,7 @@ import { packView } from '../lib/book-profile.js';
 import { loadSheets, readLineFile, exportXlsx, LINE_FILE_COLUMNS } from '../lib/excel.js';
 import { Icon, Select, DateInput, NumInput, Loading, Picker } from '../components/ui.jsx';
 import { ExtraCosts } from '../components/ExtraCosts.jsx';
+import { PosMenu } from '../components/PosMenu.jsx';
 
 let seq = 0;
 const METHODS = ['Tiền mặt', 'Chuyển khoản'];
@@ -69,7 +70,7 @@ function ItemSearch({ products, onPick, inputRef }) {
 }
 
 // Khung chung: thanh trên (ô tìm hàng, tên màn, nút đóng hỏi lại khi đang có dòng), danh sách dòng, cột phải
-function PosShell({ title, icon, search, top, empty, lines, note, right, rootRef, dirty, onClose, label }) {
+function PosShell({ title, icon, search, top, empty, lines, note, right, rootRef, dirty, onClose, label, onImport }) {
   const [armClose, setArmClose] = useState(false);
   useEffect(() => { if (!armClose) return undefined; const t = setTimeout(() => setArmClose(false), 4000); return () => clearTimeout(t); }, [armClose]);
   const tryClose = () => { if (dirty && !armClose) { setArmClose(true); return; } onClose(); };
@@ -80,6 +81,7 @@ function PosShell({ title, icon, search, top, empty, lines, note, right, rootRef
         <div className="pos-tab"><Icon name={icon} size={17} /><b>{title}</b></div>
         <span className="grow" />
         {top}
+        <PosMenu screen="purchase" dirty={dirty} onClose={onClose} onImport={onImport} keys={[['F3', 'Tìm hàng hóa'], ['F4', 'Tìm nhà cung cấp']]} />
         <button className={`pos-close${armClose ? ' armed' : ''}`} onClick={tryClose} title="Đóng">{armClose ? <span className="small">Bỏ phiếu đang làm? Bấm lần nữa</span> : <Icon name="x" />}</button>
       </div>
       <div className="pos-body">
@@ -106,7 +108,7 @@ function useHotkeys(rootRef, searchRef) {
 }
 
 // Thêm dòng từ file Excel (Mã hàng, Số lượng, Đơn giá, Giảm giá); mã không có trong danh mục được báo lại
-function useLineFile(products, toast, makeLine, addLines) {
+export function useLineFile(products, toast, makeLine, addLines, priceOfRow = costOf) {
   const pick = async (file) => {
     try {
       const r = readLineFile(await loadSheets(file));
@@ -124,7 +126,7 @@ function useLineFile(products, toast, makeLine, addLines) {
     } catch (e) { toast('Không đọc được file: ' + e.message, 'err'); }
   };
   const template = (name) => exportXlsx(`mau-${name}.xlsx`, [{ name: 'Dòng hàng', columns: LINE_FILE_COLUMNS,
-    rows: products.slice(0, 2).map((p) => ({ sku: p.sku, name: p.name, qty: 1, price: costOf(p), discount: 0 })) }]);
+    rows: products.slice(0, 2).map((p) => ({ sku: p.sku, name: p.name, qty: 1, price: priceOfRow(p), discount: 0 })) }]);
   return { pick, template };
 }
 
@@ -262,7 +264,7 @@ export function PurchasePos({ id, copy_id, mode: mode0, kind: kind0, sales_order
     if (r) { onClose(); if (!editing) open('po', { id: r.id }); }
   };
 
-  const shellProps = { rootRef, onClose, dirty: f.lines.length > 0, label: isNhap ? 'Nhập hàng' : 'Đặt hàng nhập' };
+  const shellProps = { rootRef, onClose, dirty: f.lines.length > 0, label: isNhap ? 'Nhập hàng' : 'Đặt hàng nhập', onImport: file.pick };
   if (!ready) return <div className="pos-overlay" ref={rootRef}><div className="pos-top"><span className="grow" /><button className="pos-close" onClick={onClose}><Icon name="x" /></button></div><Loading /></div>;
   const steps = settings.prod_steps || [];
   const lines = f.lines.map((l, i) => {
@@ -440,7 +442,7 @@ export function ReturnPos({ po_id, supplier_id: sup0, onClose }) {
     <div className="pos-actions one"><button className="pos-btn pos-btn-main" disabled={busy} onClick={submit}>{busy ? <span className="spin" /> : 'Hoàn thành'}</button></div>
   </>;
   return (
-    <PosShell rootRef={rootRef} onClose={onClose} dirty={f.lines.some((l) => num(l.qty) > 0)} label="Trả hàng nhập" title="Trả hàng nhập" icon="return"
+    <PosShell rootRef={rootRef} onClose={onClose} dirty={f.lines.some((l) => num(l.qty) > 0)} onImport={po_id ? null : file.pick} label="Trả hàng nhập" title="Trả hàng nhập" icon="return"
       search={po_id ? <div className="pos-search muted small" style={{ alignItems: 'center' }}>Nhập số lượng trả cho từng dòng đã nhận của {po?.code}</div> : <ItemSearch products={buyable} onPick={addProduct} inputRef={searchRef} />}
       top={!po_id && <FileBtn onPick={file.pick} />}
       empty={po_id ? <div className="pos-empty"><b>Phiếu này không còn hàng nào trả được</b></div>

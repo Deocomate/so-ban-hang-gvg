@@ -9,6 +9,7 @@ import { docSettings, DEFAULT_TEXTS, weightOf } from '../lib/docs/model.js';
 import { exportXlsx } from '../lib/excel.js';
 import { Btn, Icon, Pill, Input, TextArea, Select, DateInput, NumInput, Check, Search, ErrorBox, Loading, Note, Table, Modal, Picker, KV, ListPage, FilterBox, RadioList } from '../components/ui.jsx';
 import { useTimeFilter, TimeFilter } from '../components/DocFilters.jsx';
+import { PosMenu } from '../components/PosMenu.jsx';
 
 const STATUS = { nhap: ['Nháp', 'neutral'], da_gui: ['Đã gửi khách', 'info'], chot: ['Đã chốt', 'good'], huy: ['Đã hủy', 'mute'] };
 const QStatus = ({ v }) => <Pill tone={STATUS[v]?.[1]}>{STATUS[v]?.[0]}</Pill>;
@@ -239,6 +240,7 @@ export function QuoteForm({ id, onClose, onSaved }) {
           <button className={!mosaic ? 'on' : ''} onClick={() => switchTemplate('ngoi')}>Ngói / gốm xây dựng</button>
           <button className={mosaic ? 'on' : ''} onClick={() => switchTemplate('mosaic')}>Tranh mosaic</button>
         </div>
+        <PosMenu screen="quote" dirty={!!lineCount} onClose={onClose} keys={[['F3', 'Tìm hàng hóa']]} />
         <button className={`pos-close${armClose ? ' armed' : ''}`} onClick={tryClose} title="Đóng">{armClose ? <span className="small">Bỏ báo giá đang làm? Bấm lần nữa</span> : <Icon name="x" />}</button>
       </div>
       {showTerms && <Modal title="Lưu ý cuối báo giá" onClose={() => setShowTerms(false)} size="lg" footer={<><button className="link-btn small" onClick={() => set('terms', textOf(mosaic ? 'quote_mosaic' : 'quote_ngoi'))}>Dùng nội dung mặc định</button><span className="grow" /><Btn kind="primary" onClick={() => setShowTerms(false)}>Xong</Btn></>}>

@@ -12,6 +12,8 @@ import { ChannelSelect } from '../components/ChannelSelect.jsx';
 import { packView } from '../lib/book-profile.js';
 import { SourceFields, sourcePoPayload, sourceReady, kindLabel } from './OrderSource.jsx';
 import { PromoDialog, usePromoQuote, loyaltyOn } from './PosPromos.jsx';
+import { PosMenu } from '../components/PosMenu.jsx';
+import { useLineFile } from './PurchasePos.jsx';
 
 let seq = 0;
 const METHODS = ['Tiền mặt', 'Chuyển khoản', 'Thẻ / POS', 'TikTok Shop', 'COD'];
@@ -185,6 +187,13 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
       return { ...s, lines: [...s.lines, { ...l, unit_price: linePrice(p, l) }] };
     });
   };
+  // Import file (menu ☰): thêm nhiều dòng từ Excel có cột Mã hàng, Số lượng, Đơn giá, Giảm giá (số tiền trên mỗi đơn vị)
+  const fileLine = (p, x) => {
+    const l = { key: ++seq, product_id: p.id, qty: x.qty ?? 1, unit: p.unit, conv: 1, note: p.order_note || '', manual: x.price != null };
+    const price = x.price ?? linePrice(p, l);
+    return { ...l, unit_price: price, discount_pct: x.discount > 0 && price > 0 ? Math.min(100, Math.round((x.discount / price) * 10000) / 100) : grpPct };
+  };
+  const file = useLineFile(sellable, toast, fileLine, (add) => setF((s) => ({ ...s, lines: [...s.lines, ...add] })), (p) => linePrice(p, { unit: p.unit }));
   const setUnit = (l, name) => {
     const p = pmap[l.product_id]; const u = findUnit(p, name);
     setLine(l.key, { unit: u.name, conv: u.conv, unit_price: l.manual ? (Number(l.unit_price) || 0) / (l.conv || 1) * u.conv : linePrice(p, { unit: u.name }) });
@@ -299,6 +308,7 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
           <button className={!isDat ? 'on' : ''} onClick={() => set('kind', 'ban_san')}>Bán có sẵn</button>
           <button className={isDat ? 'on' : ''} onClick={() => set('kind', 'dat_hang')}>Đặt riêng</button>
         </div>
+        <PosMenu screen="sale" dirty={f.lines.length > 0} onClose={onClose} onImport={file.pick} keys={[['F3', 'Tìm hàng hóa'], ['F4', 'Tìm khách hàng']]} />
         <button className={`pos-close${armClose ? ' armed' : ''}`} onClick={tryClose} title="Đóng">{armClose ? <span className="small">Bỏ đơn đang làm? Bấm lần nữa</span> : <Icon name="x" />}</button>
       </div>
 

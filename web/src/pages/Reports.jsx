@@ -46,7 +46,7 @@ export function ReportsPage(nav) {
 }
 
 // Cuối ngày: tóm tắt một ngày bán hàng, hàng bán, đơn mới, thu chi theo quỹ
-function EndOfDayReport() {
+export function EndOfDayReport() {
   const { open, can } = useApp();
   const [d, setD] = useState(todayVN());
   const q = useRpcData('rpt_end_of_day', { date: d });
