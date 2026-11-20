@@ -12,6 +12,8 @@ const FIELDS = ['recv_name', 'recv_phone', 'recv_address', 'driver_name', 'drive
   // Giấy chứng nhận xuất xưởng
   'date_cn_xuat_xuong', 'profile_cn_xuat_xuong', 'cert_buyer', 'cert_address', 'cert_project', 'cert_site', 'cert_result'];
 
+const HEADER_KEY = /^hdr_[a-z_]{2,30}_(name|legal_name|address|phone|email|website|tax_code|bank_line|representative|logo)$/;
+
 function checkRef(book, type, id) {
   const t = REF_TABLES[type];
   if (!t || !one(`select 1 from ${t} where id = ? and book_id = ?`, id, book)) fail('Không tìm thấy chứng từ');
@@ -31,6 +33,8 @@ export function save_doc_info(p) {
   checkRef(b, t, p.ref_id);
   const d = {};
   for (const k of FIELDS) if (p.data && k in p.data) d[k] = p.data[k] == null ? null : String(p.data[k]).slice(0, 500);
+  // Đầu trang sửa riêng cho chứng từ: hdr_<loại chứng từ>_<trường>
+  for (const k of Object.keys(p.data || {})) if (HEADER_KEY.test(k)) d[k] = p.data[k] == null ? null : String(p.data[k]).slice(0, 500);
   const cur = json(one(`select data from doc_info where ref_type = ? and ref_id = ?`, t, p.ref_id)?.data);
   run(`insert into doc_info (book_id, ref_type, ref_id, data, updated_by, updated_at) values (?, ?, ?, ?, ?, ?)
     on conflict (ref_type, ref_id) do update set data = excluded.data, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,

@@ -71,4 +71,9 @@ export const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xx
 }));
 
 export const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
-export const match = (text, q) => !q || norm(text).includes(norm(q));
+// Tìm theo từng từ, không phân biệt dấu và thứ tự: "ngoi xanh" khớp "Ngói âm dương xanh"
+export const match = (text, q) => {
+  if (!q) return true;
+  const t = norm(text);
+  return norm(q).split(/\s+/).every((w) => !w || t.includes(w));
+};

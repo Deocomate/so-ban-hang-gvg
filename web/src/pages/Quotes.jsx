@@ -1,5 +1,5 @@
 // Báo giá: phân hệ độc lập. Chỉ khi bấm "Chuyển sang đơn" mới sao chép khách và dòng hàng sang màn tạo đơn.
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useQ, useAction } from '../lib/store.jsx';
 import { money, qty as fq, dmy, match, todayVN } from '../lib/format.js';
 import { useProducts, useCustomers, priceOf, usePriceBooks, booksFor, autoBookFor } from '../lib/lookups.js';
@@ -43,7 +43,43 @@ export function QuotesPage() {
   );
 }
 
-function LineRow({ l, mosaic, showNorm, onChange, onDel, pmap }) {
+// Ô tên sản phẩm có gợi ý: gõ một phần tên / mã (không cần dấu, không cần đúng thứ tự từ) → hiện tên đầy đủ để chọn.
+// Không chọn gợi ý thì giữ nguyên tên tự gõ (dòng tự nhập).
+function ProductNameInput({ value, onChange, onPick, products }) {
+  const [open, setOpen] = useState(false); const [hi, setHi] = useState(0);
+  const ref = useRef(null);
+  const q = String(value || '').trim();
+  const list = useMemo(() => (open && q.length >= 2 ? (products || []).filter((p) => match(`${p.sku} ${p.name} ${p.color || ''} ${p.size || ''}`, q)).slice(0, 12) : []), [open, q, products]);
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h);
+  }, []);
+  const pick = (p) => { setOpen(false); onPick(p); };
+  return (
+    <div className="picker" ref={ref}>
+      <input className="inp" value={value ?? ''} placeholder="Tên sản phẩm — gõ để tìm trong danh mục" aria-label="Tên sản phẩm" autoComplete="off"
+        onChange={(e) => { onChange(e.target.value); setOpen(true); setHi(0); }} onFocus={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (!list.length) return;
+          if (e.key === 'ArrowDown') { e.preventDefault(); setHi((h) => Math.min(h + 1, list.length - 1)); }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)); }
+          else if (e.key === 'Enter') { e.preventDefault(); pick(list[hi]); }
+          else if (e.key === 'Escape') setOpen(false);
+        }} />
+      {list.length > 0 && (
+        <div className="picker-menu">
+          {list.map((p, i) => (
+            <button type="button" key={p.id} className={`picker-item${i === hi ? ' hi' : ''}`} onMouseEnter={() => setHi(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => pick(p)}>
+              <span>{p.name}</span><span className="muted small">{[p.sku, specOf(p)].filter(Boolean).join(' · ')}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LineRow({ l, mosaic, showNorm, onChange, onDel, pmap, products, onPick }) {
   const set = (patch) => {
     const n = { ...l, ...patch };
     if ('measure_unit' in patch && pmap[l.product_id]) n.norm = patch.measure_unit === 'm' ? pmap[l.product_id].norm_m : pmap[l.product_id].norm_m2;
@@ -54,7 +90,7 @@ function LineRow({ l, mosaic, showNorm, onChange, onDel, pmap }) {
   return (
     <div className="q-line">
       <div className="q-line-main">
-        <Input value={l.name} onChange={(v) => set({ name: v })} placeholder="Tên sản phẩm" aria-label="Tên sản phẩm" />
+        <ProductNameInput value={l.name} onChange={(v) => set({ name: v })} onPick={onPick} products={products} />
         <Input value={l.spec} onChange={(v) => set({ spec: v })} placeholder="Quy cách" aria-label="Quy cách" />
         <Input value={l.note} onChange={(v) => set({ note: v })} placeholder={mosaic ? 'Ghi chú: họa tiết tranh…' : 'Ghi chú dưới tên hàng'} aria-label="Ghi chú" />
       </div>
@@ -101,11 +137,21 @@ export function QuoteForm({ id, onClose, onSaved }) {
     setF((s) => ({ ...s, price_book_id: own ? own.id : myBooks.some((b) => b.id === s.price_book_id) ? s.price_book_id : '' }));
   }, [cust?.id, cust?.kind, priceBooks.data]);
   const setGroup = (key, patch) => setF((s) => ({ ...s, groups: s.groups.map((g) => (g.key === key ? { ...g, ...patch } : g)) }));
+  // Dòng hàng lấy từ danh mục: tên đầy đủ, quy cách, ảnh, định mức, đơn vị, giá theo khách / bảng giá
+  const fromProduct = (p) => {
+    if (pbook && pbook.items[p.id] == null && !pbook.allow_others) { toast(`“${p.name}” không có trong bảng giá ${pbook.name}`, 'err'); return null; }
+    return { product_id: p.id, name: mosaic ? 'Tranh mosaic khảm trai' : p.name, spec: specOf(p), image: p.image_url || '', norm: p.norm_m2 || null, measure_unit: 'm2', unit: String(p.unit || 'viên').toLowerCase(), price: priceOf(p, { tier: cust?.price_tier || 1, book: pbook }) };
+  };
   const addProduct = (g, pid) => {
-    const p = pmap[pid]; if (!p) return;
-    const line = { ...newLine(), product_id: p.id, name: mosaic ? 'Tranh mosaic khảm trai' : p.name, spec: specOf(p), image: p.image_url || '', norm: p.norm_m2 || null, unit: String(p.unit || 'viên').toLowerCase(), price: priceOf(p, { tier: cust?.price_tier || 1, book: pbook }) };
-    if (pbook && pbook.items[p.id] == null && !pbook.allow_others) { toast(`“${p.name}” không có trong bảng giá ${pbook.name}`, 'err'); return; }
-    setGroup(g.key, { lines: [...g.lines, line] });
+    const p = pmap[pid]; const x = p && fromProduct(p); if (!x) return;
+    setGroup(g.key, { lines: [...g.lines, { ...newLine(), ...x }] });
+  };
+  // Chọn gợi ý ở ô tên của một dòng: gắn dòng với hàng hóa, giữ khối lượng / số lượng đã nhập
+  const pickInto = (g, l, p) => {
+    const x = fromProduct(p); if (!x) return;
+    const n = { ...l, ...x };
+    if (!mosaic) n.qty = autoQty(n) ?? n.qty;
+    setGroup(g.key, { lines: g.lines.map((y) => (y.key === l.key ? n : y)) });
   };
   const goods = f.groups.reduce((s, g) => s + g.lines.reduce((t, l) => t + Math.round((Number(l.qty) || 0) * (Number(l.price) || 0)), 0), 0);
   const shipAmt = Math.round((Number(f.ship.qty) || 0) * (Number(f.ship.price) || 0));
@@ -138,7 +184,7 @@ export function QuoteForm({ id, onClose, onSaved }) {
             <Field label="Tên nhóm" hint="Báo giá ít sản phẩm có thể để trống"><Input value={g.name} onChange={(v) => setGroup(g.key, { name: v })} placeholder="vd. NGÓI ÂM DƯƠNG L XANH ĐỒNG HÀNG PHẨM CẤP" /></Field>
             <Field label="Ghi chú nhóm (in nghiêng)" wide><Input value={g.note} onChange={(v) => setGroup(g.key, { note: v })} /></Field>
           </div>
-          {g.lines.map((l) => <LineRow key={l.key} l={l} mosaic={mosaic} showNorm={f.show_norm} pmap={pmap} onChange={(n) => setGroup(g.key, { lines: g.lines.map((x) => (x.key === l.key ? n : x)) })} onDel={() => setGroup(g.key, { lines: g.lines.filter((x) => x.key !== l.key) })} />)}
+          {g.lines.map((l) => <LineRow key={l.key} l={l} mosaic={mosaic} showNorm={f.show_norm} pmap={pmap} products={products.data} onPick={(p) => pickInto(g, l, p)} onChange={(n) => setGroup(g.key, { lines: g.lines.map((x) => (x.key === l.key ? n : x)) })} onDel={() => setGroup(g.key, { lines: g.lines.filter((x) => x.key !== l.key) })} />)}
           <div className="row gap">
             <div className="grow" style={{ maxWidth: 420 }}><Picker items={products.data} value="" onChange={(v) => addProduct(g, v)} getLabel={(p) => `${p.sku} · ${p.name}`} getSub={(p) => specOf(p)} placeholder="Thêm từ danh sách hàng hóa…" filterKeys={(p) => `${p.sku} ${p.name} ${p.color || ''}`} /></div>
             <Btn small icon="plus" onClick={() => setGroup(g.key, { lines: [...g.lines, newLine()] })}>Thêm dòng tự nhập</Btn>

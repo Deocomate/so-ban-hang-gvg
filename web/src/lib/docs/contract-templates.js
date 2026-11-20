@@ -254,6 +254,6 @@ export function buildContractDoc(kind, fields, data, ds, bodyHtml) {
   const f = { ...contractDefaults(kind, data, ds), ...(fields || {}) };
   const html = bodyHtml ? sanitizeHtml(bodyHtml) : contractHtml(kind, f, data);
   const code = f.so_hd || data.k?.code || '';
-  return { html, font: 'Tinos', paper: 'A4', orient: 'portrait', margin: { top: 15, right: 15, bottom: 15, left: 20 },
+  return { html, font: 'Tinos', base: ds?.base ?? 0, paper: 'A4', orient: 'portrait', margin: { top: 15, right: 15, bottom: 15, left: 20 },
     filename: `hop-dong_${String(code).replace(/[/:*?"<>|\\]+/g, '-')}.pdf`, title: CONTRACT_KINDS[kind].label, code };
 }

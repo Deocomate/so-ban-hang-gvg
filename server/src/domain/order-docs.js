@@ -41,7 +41,15 @@ function patchOrderInfo(b, id, patch) {
   run(`insert into doc_info (book_id, ref_type, ref_id, data, updated_by, updated_at) values (?, 'order', ?, ?, ?, ?)
     on conflict (ref_type, ref_id) do update set data = excluded.data, updated_by = excluded.updated_by, updated_at = excluded.updated_at`, b, id, cur, ctx.uid, nowIso());
 }
-const skipList = (info) => String(info.docs_skip || '').split(',').filter((k) => DOC_KEYS.includes(k));
+const keyList = (v) => [...new Set(String(v || '').split(',').filter((k) => DOC_KEYS.includes(k)))];
+// Giấy tờ cần có của một đơn: đơn chọn riêng (docs_need) › mặc định của khách (extra.docs_need) › đủ 4 loại.
+// docs_skip là cách lưu cũ (bỏ bớt từ danh sách mặc định) — vẫn đọc được.
+export function needOf(custNeed, info) {
+  if (info.docs_need != null) return { keys: keyList(info.docs_need), by: 'order' };
+  const base = custNeed ? keyList(custNeed) : DOC_KEYS;
+  const skip = keyList(info.docs_skip);
+  return { keys: base.filter((k) => !skip.includes(k)), by: skip.length ? 'order' : custNeed ? 'customer' : 'all' };
+}
 
 // Có theo dõi giấy tờ của đơn không, và vì sao: đơn đặt riêng > hồ sơ khách > nhóm khách > tự động (khách cần xuất VAT)
 export function trackOf(company, custTrack, groupTrack, info) {
@@ -73,10 +81,10 @@ function autoOf(key, r) {
 
 // Gộp trạng thái mọi ô của một đơn: { slots: {key: {skip, sides: {minh: {state, auto}, ...}}}, missing, total }
 function summarize(r, files, info) {
-  const skip = skipList(info);
+  const need = needOf(r.cust_need, info);
   const slots = {}; let missing = 0; let total = 0;
   for (const d of DOCS) {
-    const sk = skip.includes(d.key); const sides = {};
+    const sk = !need.keys.includes(d.key); const sides = {};
     for (const s of d.sides) {
       const fs = files.filter((f) => f.doc_key === d.key && f.side === s);
       const auto = s === 'minh' ? autoOf(d.key, r) : null;
@@ -86,7 +94,7 @@ function summarize(r, files, info) {
     }
     slots[d.key] = { skip: sk, sides };
   }
-  return { slots, missing, total };
+  return { slots, missing, total, need: need.keys, need_by: need.by };
 }
 
 // Các đơn của sổ kèm dữ liệu cần để tính trạng thái giấy tờ
@@ -94,7 +102,7 @@ function orderRows(b, where, args) {
   where.unshift(`o.book_id = ?`, `o.status not in ('huy', 'nhap')`); args.unshift(b);
   scope('customers', b, where, args);
   return all(`select o.id, o.code, o.kind, o.order_date, o.customer_id, o.customer_name, o.order_total, o.delivery_count, o.delivery_status, c.kind as cust_group,
-      ${COMPANY_SQL} as company, json_extract(c.extra, '$.docs_track') as cust_track, di.data as info,
+      ${COMPANY_SQL} as company, json_extract(c.extra, '$.docs_track') as cust_track, json_extract(c.extra, '$.docs_need') as cust_need, di.data as info,
       k.id as contract_id, k.code as contract_code, k.kind as contract_kind, k.gdoc_url, k.body_html is not null as has_body,
       (select group_concat(t.inv_no, ', ') from tax_invoices t where t.order_id = o.id and t.direction = 'ra' and t.voided = 0) as vat_nos
     from v_sales_orders o left join customers c on c.id = o.customer_id
@@ -148,7 +156,7 @@ export function order_docs(p) {
   const s = summarize(r, files, info);
   for (const d of DOCS) for (const side of d.sides) s.slots[d.key].sides[side].files = files.filter((f) => f.doc_key === d.key && f.side === side);
   const groupTrack = groupTrackOf(b)(r.cust_group);
-  return { order_id: r.id, code: r.code, company: !!r.company, cust_group: r.cust_group || '', group_track: groupTrack || 'auto', cust_track: r.cust_track || 'auto',
+  return { order_id: r.id, code: r.code, company: !!r.company, cust_group: r.cust_group || '', group_track: groupTrack || 'auto', cust_track: r.cust_track || 'auto', cust_need: r.cust_need ? keyList(r.cust_need) : null,
     track: trackOf(r.company, r.cust_track, groupTrack, info),
     contract: r.contract_id ? { id: r.contract_id, code: r.contract_code, kind: r.contract_kind, gdoc_url: r.gdoc_url, has_body: !!r.has_body } : null, ...s };
 }
@@ -163,16 +171,28 @@ export function set_order_docs_track(p) {
   return { ok: true };
 }
 
-// p = {book_id, order_id, doc_key, skip} — giấy tờ không áp dụng cho đơn này
+// p = {book_id, order_id, doc_key, skip} — bật / tắt một giấy tờ trong danh sách cần có của đơn
 export function set_order_doc_skip(p) {
   const b = p.book_id;
   requirePerm(b, EDIT);
   const o = orderOf(b, p.order_id); const k = docKey(p.doc_key);
-  const cur = new Set(skipList(orderInfo(o.id)));
-  if (p.skip) cur.add(k); else cur.delete(k);
-  patchOrderInfo(b, o.id, { docs_skip: [...cur].join(',') || null });
+  const cur = new Set(needOf(custNeedOf(o), orderInfo(o.id)).keys);
+  if (p.skip) cur.delete(k); else cur.add(k);
+  patchOrderInfo(b, o.id, { docs_need: DOC_KEYS.filter((x) => cur.has(x)).join(','), docs_skip: null });
   return { ok: true };
 }
+
+// p = {book_id, order_id, keys: [...] | null} — chọn hẳn danh sách giấy tờ cần có; null = theo mặc định của khách
+export function set_order_docs_need(p) {
+  const b = p.book_id;
+  requirePerm(b, EDIT);
+  const o = orderOf(b, p.order_id);
+  if (p.keys != null && !Array.isArray(p.keys)) fail('Danh sách giấy tờ không hợp lệ');
+  const keys = p.keys == null ? null : DOC_KEYS.filter((k) => p.keys.map(docKey).includes(k)).join(',');
+  patchOrderInfo(b, o.id, { docs_need: keys, docs_skip: null });
+  return { ok: true };
+}
+const custNeedOf = (o) => (o.customer_id ? one(`select json_extract(extra, '$.docs_need') as v from customers where id = ?`, o.customer_id)?.v : null);
 
 function slotArgs(p) {
   const b = p.book_id;

@@ -9,7 +9,7 @@ import TinosR from '../../assets/fonts/Tinos-Regular.ttf?url';
 import TinosB from '../../assets/fonts/Tinos-Bold.ttf?url';
 import TinosI from '../../assets/fonts/Tinos-Italic.ttf?url';
 import TinosBI from '../../assets/fonts/Tinos-BoldItalic.ttf?url';
-import { pageSize, TPL_CSS, FONT_CSS } from './templates.js';
+import { pageSize, TPL_CSS, FONT_CSS, withBaseSize } from './templates.js';
 
 const FONT_URLS = {
   Arimo: { normal: ArimoR, bold: ArimoB, italics: ArimoI, bolditalics: ArimoBI },
@@ -210,12 +210,13 @@ const LAYOUTS = {
 export function toPdfDef(doc) {
   const size = pageSize(doc); const m = doc.margin || {};
   const W = size.w * MM; const marg = [m.left ?? 14, m.top ?? 10, m.right ?? 14, m.bottom ?? 10].map((x) => x * MM);
-  const body = new DOMParser().parseFromString(`<body>${doc.html}</body>`, 'text/html').body;
-  const content = blocksOf(body, { fontSize: 10, font: doc.font || 'Arimo', lineHeight: 1.2 }, W - marg[0] - marg[2]);
+  const body = new DOMParser().parseFromString(`<body>${withBaseSize(doc.html, doc.base)}</body>`, 'text/html').body;
+  const fs = doc.base || 10;
+  const content = blocksOf(body, { fontSize: fs, font: doc.font || 'Tinos', lineHeight: 1.2 }, W - marg[0] - marg[2]);
   return {
     pageSize: size.h ? { width: W, height: size.h * MM } : { width: W, height: 'auto' }, pageMargins: marg, content,
     info: { title: `${doc.title} ${doc.code || ''}`.trim(), creator: 'Sổ bán hàng gốm sứ' },
-    defaultStyle: { font: doc.font || 'Arimo', fontSize: 10, lineHeight: 1.2 / NATURAL_LH },
+    defaultStyle: { font: doc.font || 'Tinos', fontSize: fs, lineHeight: 1.2 / NATURAL_LH },
   };
 }
 
@@ -248,7 +249,7 @@ export function printableHtml(docOrList) {
   const size = pageSize(d0); const m = d0.margin || {};
   // Giấy cuộn (K80/K58): không ép khổ, để máy in nhiệt tự cắt theo độ dài nội dung
   const page = `${size.h ? `size: ${size.w}mm ${size.h}mm; ` : ''}margin: ${m.top}mm ${m.right}mm ${m.bottom}mm ${m.left}mm;`;
-  const body = docs.map((d, i) => `<div class="tpl" style="font-family:${FONT_CSS[d.font] || FONT_CSS.Arimo}${i ? ';break-before:page' : ''}">${d.html}</div>`).join('');
+  const body = docs.map((d, i) => `<div class="tpl" style="font-family:${FONT_CSS[d.font] || FONT_CSS.Tinos}${d.base ? `;font-size:${d.base}pt` : ''}${i ? ';break-before:page' : ''}">${withBaseSize(d.html, d.base)}</div>`).join('');
   return `<!doctype html><html><head><meta charset="utf-8"><title>${(d0.title + ' ' + (d0.code || '')).replace(/</g, '')}</title><style>${FACES()}
 @page { ${page} } html, body { margin: 0; background: #fff; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }${size.h ? '' : ` body { width: ${size.w - (m.left || 0) - (m.right || 0)}mm; }`}
 ${TPL_CSS}</style></head><body>${body}</body></html>`;

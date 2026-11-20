@@ -17,7 +17,7 @@ import { packView } from '../lib/book-profile.js';
 import { Loading, Note } from '../components/ui.jsx';
 import { DOC_TYPES, docSettings, loadDocData, defaults, currentInfo } from '../lib/docs/model.js';
 import { groupsFor, tokenValues, sampleData } from '../lib/docs/tokens.js';
-import { PAPERS, DEFAULT_MARGIN, FONT_CSS, pageSize, marginOf, defaultTemplate, renderTemplate, unknownTokens, sanitizeHtml, fitTables, contentWidthPx, suggestedTemplates } from '../lib/docs/templates.js';
+import { PAPERS, DEFAULT_MARGIN, FONT_CSS, pageSize, marginOf, defaultTemplate, renderTemplate, unknownTokens, sanitizeHtml, fitTables, contentWidthPx, suggestedTemplates, baseFor, withBaseSize } from '../lib/docs/templates.js';
 import { editorUrl, announceTemplates } from '../lib/docs/editor-link.js';
 import { useDocFonts } from '../lib/docs/fonts.js';
 import { StyleAttr, TableX, HrX, PageBreak, TokenNode, toEditorHtml, fromEditorHtml, beautify } from '../lib/docs/editor-ext.js';
@@ -214,7 +214,7 @@ function TemplateEditor({ type, tplId }) {
     if (!t || !window.confirm(`Thay nội dung đang soạn bằng "${t.name}"? Nội dung hiện tại sẽ mất nếu chưa lưu.`)) return;
     loadContent(t.html); setMeta((m) => ({ ...m, paper: t.paper || 'A4', orient: t.orient || 'portrait', margin: marginOf(t), sep: t.sep || m.sep }));
   };
-  const currentDoc = () => ({ html: rendered.html || '', font: ds.font, paper: meta.paper, orient: meta.orient, margin: meta.margin, title: DOC_TYPES[type].label, code: 'in thử' });
+  const currentDoc = () => ({ html: rendered.html || '', font: ds.font, base: baseFor(ds, meta), paper: meta.paper, orient: meta.orient, margin: meta.margin, title: DOC_TYPES[type].label, code: 'in thử' });
   const testPrint = async () => {
     if (source !== null) applySource();
     try { const { printDocs } = await import('../lib/docs/pdf.js'); await printDocs(currentDoc()); } catch (e) { toast('Không in được: ' + e.message, 'err'); }
@@ -321,7 +321,7 @@ function TemplateEditor({ type, tplId }) {
           <div className="te-pv" ref={pvRef}>
             <div className="te-pv-zoom" style={{ zoom: z }}>
               <div className="te-paper te-shadow" style={paperStyle}>
-                {rendered.error ? <Note tone="bad">{rendered.error}</Note> : <div className="tpl" dangerouslySetInnerHTML={{ __html: rendered.html }} />}
+                {rendered.error ? <Note tone="bad">{rendered.error}</Note> : <div className="tpl" style={baseFor(ds, meta) ? { fontSize: `${baseFor(ds, meta)}pt` } : undefined} dangerouslySetInnerHTML={{ __html: withBaseSize(rendered.html, baseFor(ds, meta)) }} />}
               </div>
             </div>
           </div>

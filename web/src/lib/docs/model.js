@@ -69,13 +69,28 @@ export function docSettings(book, settings) {
     types[k] = { profile: profiles.some((p) => p.id === u.profile) ? u.profile : profiles[0].id, sep: u.sep || t.sep, show_price: u.show_price !== false,
       show_form: u.show_form !== false, text: u.text ?? null };
   }
-  // Một phông chữ cho mọi chứng từ (mặc định Arial / Arimo như mẫu hóa đơn của cửa hàng)
+  // Một phông chữ cho mọi chứng từ: mặc định Times New Roman (Tinos). Arial chỉ khi đã chọn lại ở cài đặt mới (font_set).
+  // base: cỡ chữ cơ bản (pt) — chữ nhỏ hơn trong mẫu được nâng lên bằng cỡ này; 0 = giữ đúng cỡ trong mẫu.
   // templates: mẫu in riêng theo loại chứng từ (xem templates.js)
   const templates = d.templates && typeof d.templates === 'object' ? d.templates : {};
-  return { profiles, types, font: d.font === 'Tinos' ? 'Tinos' : 'Arimo', templates };
+  const base = d.base_size === 0 || d.base_size === '0' ? 0 : BASE_SIZES.includes(Number(d.base_size)) ? Number(d.base_size) : DEFAULT_BASE;
+  return { profiles, types, font: d.font === 'Arimo' && d.font_set ? 'Arimo' : 'Tinos', base, templates };
 }
-// Đơn vị đứng tên: chọn riêng trên chứng từ (info) nếu có, không thì theo cài đặt của loại chứng từ
-export function profileFor(ds, type, info) { return ds.profiles.find((p) => p.id === (info?.[`profile_${type}`] || ds.types[type].profile)) || ds.profiles[0]; }
+export const DEFAULT_BASE = 13;
+export const BASE_SIZES = [11, 12, 13, 14];
+
+// Đầu trang (header) sửa riêng cho từng lần xuất: info[`hdr_<loại>_<trường>`] ghi đè thông tin đơn vị; "-" = bỏ dòng đó
+export const HEADER_FIELDS = [['name', 'Tên in đầu trang'], ['legal_name', 'Tên pháp lý'], ['address', 'Địa chỉ'], ['phone', 'Điện thoại'], ['email', 'Email'],
+  ['website', 'Website'], ['tax_code', 'Mã số thuế'], ['bank_line', 'Số tài khoản'], ['representative', 'Người đại diện']];
+export const headerKey = (type, k) => `hdr_${type}_${k}`;
+// Đơn vị đứng tên: chọn riêng trên chứng từ (info) nếu có, không thì theo cài đặt của loại chứng từ; kèm phần đầu trang đã sửa
+export function profileFor(ds, type, info) {
+  const p = ds.profiles.find((x) => x.id === (info?.[`profile_${type}`] || ds.types[type].profile)) || ds.profiles[0];
+  if (!info) return p;
+  const o = {};
+  for (const [k] of [...HEADER_FIELDS, ['logo']]) { const v = info[headerKey(type, k)]; if (v) o[k] = String(v).trim() === '-' ? '' : v; }
+  return Object.keys(o).length ? { ...p, ...o } : p;
+}
 
 // ---------- Định dạng ----------
 export function fmtNum(v, sep = ',') {

@@ -60,6 +60,19 @@ await api.call('set_order_doc_skip', { book_id: TH, order_id: o1, doc_key: 'hop_
 d = await api.call('order_docs', { book_id: TH, order_id: o1 });
 C('Hợp đồng "không cần" → đủ giấy tờ', [d.slots.hop_dong.sides.minh.state, d.missing, d.total], ['khong_can', 0, 4]);
 await api.call('set_order_doc_skip', { book_id: TH, order_id: o1, doc_key: 'hop_dong', skip: false });
+await api.call('set_order_docs_need', { book_id: TH, order_id: o1, keys: ['bien_ban', 'hoa_don_vat'] });
+d = await api.call('order_docs', { book_id: TH, order_id: o1 });
+C('Đơn chọn riêng giấy tờ cần có', [d.need, d.need_by, d.slots.hop_dong.skip, d.slots.cn_xuat_xuong.skip], [['bien_ban', 'hoa_don_vat'], 'order', true, true]);
+await api.call('set_order_docs_need', { book_id: TH, order_id: o1, keys: null });
+await api.call('save_party', { book_id: TH, type: 'kh', id: cty, name: 'Công ty Thăng Long', extra: { customer_type: 'Công ty', tax_code: '0500383583', docs_need: 'hop_dong,hoa_don_vat' } });
+d = await api.call('order_docs', { book_id: TH, order_id: o1 });
+C('Đơn theo mặc định giấy tờ của khách', [d.need, d.need_by, d.cust_need], [['hop_dong', 'hoa_don_vat'], 'customer', ['hop_dong', 'hoa_don_vat']]);
+await api.call('set_order_doc_skip', { book_id: TH, order_id: o1, doc_key: 'bien_ban', skip: false });
+C('Thêm một giấy tờ ngoài mặc định của khách', (await api.call('order_docs', { book_id: TH, order_id: o1 })).need, ['hop_dong', 'bien_ban', 'hoa_don_vat']);
+C('Bảng theo dõi trả về danh sách cần có', (await api.call('order_docs_board', { book_id: TH, track: 'on' })).find((r) => r.id === o1).need, ['hop_dong', 'bien_ban', 'hoa_don_vat']);
+await E('Giấy tờ lạ bị chặn', () => api.call('set_order_docs_need', { book_id: TH, order_id: o1, keys: ['x'] }), 'không hợp lệ');
+await api.call('set_order_docs_need', { book_id: TH, order_id: o1, keys: null });
+await api.call('save_party', { book_id: TH, type: 'kh', id: cty, name: 'Công ty Thăng Long', extra: { customer_type: 'Công ty', tax_code: '0500383583' } });
 await api.call('delete_order_doc', { id: f1 });
 C('Xóa tệp → ô trở lại thiếu', (await api.call('order_docs', { book_id: TH, order_id: o1 })).slots.bien_ban.sides.doi_tac.state, 'thieu');
 

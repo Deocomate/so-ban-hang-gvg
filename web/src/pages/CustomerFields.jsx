@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { useApp, useRpcData } from '../lib/store.jsx';
 import { useSuppliers } from '../lib/lookups.js';
+import { NeedChecks, DOC_LABEL } from './OrderDocs.jsx';
 import { Field, Input, TextArea, Select, DateInput, NumInput, Check, Tabs, Section, Picker } from '../components/ui.jsx';
 
 export function CustomerFields({ f, set, id }) {
@@ -29,6 +30,9 @@ export function CustomerFields({ f, set, id }) {
         <Field label="Theo dõi giấy tờ đơn hàng" wide hint="Hợp đồng, biên bản giao hàng, chứng nhận xuất xưởng, hóa đơn VAT của từng đơn">
           <Select value={x.docs_track || ''} onChange={(v) => setX('docs_track', v || undefined)} options={[{ value: '', label: 'Theo nhóm khách / tự động (theo dõi khi khách cần xuất VAT)' },
             { value: 'on', label: 'Luôn theo dõi' }, { value: 'off', label: 'Không theo dõi' }]} /></Field>
+        <Field label="Giấy tờ khách này thường cần" wide hint="Mặc định cho đơn mới của khách; từng đơn vẫn chọn lại được">
+          <NeedChecks value={x.docs_need != null ? String(x.docs_need).split(',').filter(Boolean) : Object.keys(DOC_LABEL)}
+            onChange={(v) => setX('docs_need', v.length === Object.keys(DOC_LABEL).length ? undefined : v.join(','))} /></Field>
       </div>}
       {tab === 'chung' && <>
         <div className="cust-tabs-grid">

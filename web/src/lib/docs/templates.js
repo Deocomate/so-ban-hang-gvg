@@ -38,6 +38,14 @@ export const TPL_CSS = `
 .tpl div[data-page-break] { break-after: page; page-break-after: always; height: 0; }
 `;
 
+// Cỡ chữ cơ bản: chữ trong mẫu nhỏ hơn `base` (pt) được nâng lên bằng `base`; tiêu đề lớn hơn giữ nguyên. base = 0: giữ nguyên mẫu.
+export function withBaseSize(html, base) {
+  if (!base) return String(html || '');
+  return String(html || '').replace(/font-size:\s*([\d.]+)\s*(pt|px)/gi, (m, n, u) => ((u.toLowerCase() === 'px' ? Number(n) * 0.75 : Number(n)) < base ? `font-size:${base}pt` : m));
+}
+// Cỡ chữ cơ bản của một chứng từ: giấy cuộn (K80/K58) giữ cỡ nhỏ của mẫu
+export const baseFor = (ds, tpl) => (PAPERS[tpl?.paper]?.roll ? 0 : ds?.base ?? 0);
+
 // ---------- Mẫu mặc định ----------
 const P = (inner, st = '') => `<p${st ? ` style="${st}"` : ''}>${inner}</p>`;
 const B = (s) => `<strong>${s}</strong>`;
@@ -107,7 +115,7 @@ const BUILDERS = {
       + P(`<span style="font-size:18pt">${B('HÓA ĐƠN BÁN HÀNG')}</span>`, `${center}; margin-top:8pt; margin-bottom:2pt`)
       + P('{Ngay_Thang_Nam}', `${center}; ${s}; margin-bottom:10pt`)
       + P(B('Khách hàng: {Khach_Hang_Kem_SDT}'), s) + P('Địa chỉ: {Dia_Chi_Nhan_Hang}', s) + P('SĐT: {SDT_Nhan_Hang}', `${s}; margin-bottom:10pt`)
-      + table([28, '*', 70, 52, 72, 80], [
+      + table([36, '*', 70, 52, 72, 80], [
         head(['STT', 'Tên hàng', 'Số lượng', 'ĐVT', 'Đơn giá', 'Thành tiền']),
         [C('{STT}'), L(`{Ten_Hang}<br>${I('{Quy_Cach_Ghi_Chu}')}`), C('{So_Luong}'), C('{Don_Vi_Tinh}'), R('{Don_Gia}'), R('{Thanh_Tien}')],
         [{ h: B('Tổng cộng: {Tong_So_Hop} {Don_Vi_Dong_Goi}'), span: 6 }],
@@ -128,7 +136,7 @@ const BUILDERS = {
       + P(B('Bên đặt hàng (Bên A): {Khach_Hang}'), s) + P('Địa chỉ: {Dia_Chi_Nhan_Hang}', s) + P('SĐT: {SDT_Nhan_Hang}', s)
       + P(B('Bên nhận đặt hàng (Bên B): {Ten_Phap_Ly}'), s) + P('Địa chỉ: {Dia_Chi_Don_Vi}', s) + P('Người đại diện: {Nguoi_Dai_Dien}', s) + P('SĐT: {Dien_Thoai_Don_Vi}', s)
       + P(B('I. TÊN HÀNG, SỐ LƯỢNG VÀ ĐƠN GIÁ'), `${s}; margin-top:6pt; margin-bottom:4pt`)
-      + table([28, '*', 44, 44, 72, 82], [
+      + table([36, '*', 44, 44, 72, 82], [
         head(['STT', 'Tên hàng', 'ĐVT', 'Số lượng', 'Đơn giá', 'Thành tiền']),
         [C('{STT}'), L(`{Ten_Hang}<br>${I('{Quy_Cach_Ghi_Chu}')}`), C('{Don_Vi_Tinh}'), C('{So_Luong}'), R('{Don_Gia}'), R('{Thanh_Tien}')],
         sumRow('Tổng tiền hàng:', '{Tong_Tien_Hang}'), sumRow('Chiết khấu:', '{Chiet_Khau}'), sumRow('{Ten_VAT}', '{Tien_VAT}'), sumRow('Tiền vận chuyển:', '{Phi_Van_Chuyen}'),
@@ -147,7 +155,7 @@ const BUILDERS = {
       + P(B('B. BÊN VẬN CHUYỂN: {Ben_Van_Chuyen}'), s)
       + P(B('C. BÊN NHẬN HÀNG: {Ben_Nhan_Hang_In_Hoa}'), s) + P('Địa chỉ: {Dia_Chi_Khach_Hang}', s)
       + P('Bên giao bàn giao cho bên nhận lô hàng chi tiết như sau:', `${s}; margin-bottom:6pt`)
-      + table([30, '*', 58, 50, 150], [
+      + table([36, '*', 58, 50, 150], [
         head(['STT', 'Tên hàng hoá', 'Số lượng', 'ĐVT', 'Quy cách đóng gói']),
         [C('{STT}'), L(`{Ten_Hang}<br>${I('{Ghi_Chu_Hang}')}`), C('{So_Luong}'), C('{Don_Vi_Tinh_Thuong}'), C('{Quy_Cach}')],
         ['', { h: '', span: 3 }, C(B('Tổng cộng: {Tong_So_Hop} {Don_Vi_Dong_Goi}'))],
@@ -172,7 +180,7 @@ const BUILDERS = {
       + P('Họ tên người mua hàng: {Nguoi_Mua_Hang}', s) + P(`Tên đơn vị: ${B('{Ten_Don_Vi_Mua}')}`, s) + P(`Mã số thuế: ${B('{MST_Mua}')}`, s)
       + P('Địa chỉ: {Dia_Chi_Mua}', s) + P('Email nhận hóa đơn: {Email_Nhan_HD}', s)
       + P('Hình thức thanh toán: {Hinh_Thuc_TT}', s) + P('Số tài khoản: {STK_Mua}', s) + P('Đồng tiền thanh toán: VND', `${s}; margin-bottom:6pt`)
-      + table([28, '*', 52, 62, 66, 84], [
+      + table([36, '*', 52, 62, 66, 84], [
         head(['STT', 'Tên hàng hóa, dịch vụ', 'Đơn vị tính', 'Số lượng', 'Đơn giá', 'Thành tiền']),
         [C('{STT}'), L('{Ten_Hang}'), C('{Don_Vi_Tinh_Thuong}'), R('{So_Luong}'), R('{Don_Gia}'), R('{Thanh_Tien}')],
         sumRow('Cộng tiền hàng:', '{Cong_Tien_Hang}', true),
@@ -191,7 +199,7 @@ const BUILDERS = {
     const unit = P(B('Đơn vị: {Ten_Phap_Ly}')) + P('Địa chỉ: {Dia_Chi_Don_Vi}');
     const top = showForm ? table(['*', 220], [[{ h: unit }, { h: form }]], { border: false, size: 10 }) : P(B('Đơn vị: {Ten_Phap_Ly}'), 'font-size:10pt') + P('Địa chỉ: {Dia_Chi_Don_Vi}', 'font-size:10pt');
     const headCols = ['STT', 'Tên, nhãn hiệu, quy cách hàng hóa', 'Mã số', 'ĐVT', 'Số lượng', ...(showPrice ? ['Đơn giá', 'Thành tiền'] : [])];
-    const widths = showPrice ? [26, '*', 52, 36, 56, 62, 76] : [30, '*', 70, 50, 70];
+    const widths = showPrice ? [36, '*', 52, 36, 56, 62, 76] : [36, '*', 70, 50, 70];
     return top
       + P(`<span style="font-size:16pt">${B('PHIẾU XUẤT KHO')}</span>`, `${center}; margin-top:16pt`)
       + P(I('{Ngay_Thang_Nam}'), `${center}; font-size:11pt`) + P('Số: {So_Chung_Tu}', `${center}; font-size:11pt; margin-bottom:10pt`)
@@ -236,7 +244,7 @@ const BUILDERS = {
       + P(B('LÁI XE: {Lai_Xe_In_Hoa}'), s)
       + P('CCCD số: {CCCD_Lai_Xe}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Xe BKS: {Bien_So_Xe}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Điện thoại: {SDT_Lai_Xe}', `${s}; margin-bottom:4pt`)
       + P(B('Điều I: Nhận vận chuyển số lượng hàng sau đây:'), `${s}; margin-bottom:4pt`)
-      + table([24, '*', 104, 50, 40, 52], [
+      + table([36, '*', 104, 50, 40, 52], [
         head(['STT', 'Tên hàng', 'Số hộp', 'Tổng viên', 'kg/hộp', 'Tổng kg']),
         [C('{STT}'), L('{Ten_Hang}'), C('{Quy_Cach}'), R('{So_Luong}'), R('{Kg_Moi_Hop}'), R('{Trong_Luong}')],
         [{ h: B('Tổng cộng: {Tong_So_Hop} {Don_Vi_Dong_Goi}'), span: 5, pst: right }, R(B('{Tong_Trong_Luong_So}'))],
@@ -474,6 +482,6 @@ export function buildPrintDoc(type, data, ds, info, tplId) {
   const thu = data.kind === 'payment' && data.p.direction !== 'chi';
   const title = type === 'phieu_thu' ? (thu ? 'Phiếu thu' : 'Phiếu chi') : DOC_TYPES[type].label;
   const prefix = type === 'phieu_thu' ? (thu ? 'phieu-thu' : 'phieu-chi') : FILE_PREFIX[type];
-  return { html: fitTables(renderTemplate(tpl.html, vals), contentWidthPx(tpl)), font: ds.font || 'Arimo', paper: tpl.paper || 'A4', orient: tpl.orient || 'portrait', margin: marginOf(tpl),
+  return { html: fitTables(renderTemplate(tpl.html, vals), contentWidthPx(tpl)), font: ds.font || 'Tinos', base: baseFor(ds, tpl), paper: tpl.paper || 'A4', orient: tpl.orient || 'portrait', margin: marginOf(tpl),
     filename: `${prefix}_${code.replace(/[\/:*?"<>|]+/g, '-')}.pdf`, title, code, tplId: tpl.id, due: vals.due };
 }

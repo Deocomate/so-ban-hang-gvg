@@ -5,7 +5,7 @@ import { useApp, useQ, useRpcData, useAction } from '../lib/store.jsx';
 import { dmy, match, money } from '../lib/format.js';
 import { saveFile } from '../lib/excel.js';
 import { CONTRACT_KINDS } from '../lib/docs/contract-templates.js';
-import { Btn, Icon, Pill, Field, Input, Select, Search, ErrorBox, Loading, Note, Table, Modal, ConfirmBtn, ListPage, FilterBox, RadioList } from '../components/ui.jsx';
+import { Btn, Icon, Pill, Field, Input, Select, Check, Search, ErrorBox, Loading, Note, Table, Modal, ConfirmBtn, ListPage, FilterBox, RadioList } from '../components/ui.jsx';
 
 export const DOC_LABEL = { hop_dong: 'Hợp đồng', bien_ban: 'Biên bản giao hàng', cn_xuat_xuong: 'Giấy chứng nhận xuất xưởng', hoa_don_vat: 'Hóa đơn VAT' };
 const DOC_SHORT = { hop_dong: 'Hợp đồng', bien_ban: 'Biên bản GH', cn_xuat_xuong: 'CN xuất xưởng', hoa_don_vat: 'Hóa đơn VAT' };
@@ -40,17 +40,39 @@ export const Legend = () => <div className="row gap-s small muted wrap">{Object.
 // Bảng theo dõi giấy tờ: params = {track, customer_id?, group?}
 export function DocsBoardTable({ rows, error, showCustomer = true, onTrack }) {
   const { open, can } = useApp();
+  const [needFor, setNeedFor] = useState(null);
+  const edit = can('ban_hang');
   return (
     <>
       <ErrorBox error={error} />
+      {needFor && <NeedDialog row={needFor} onClose={() => setNeedFor(null)} />}
       <Table rows={rows} empty="Không có đơn nào" onRow={(r) => open('order-docs', { order_id: r.id })} columns={[
         { key: 'o', label: 'Đơn hàng', render: (r) => <><b>{r.code}</b><div className="cell-sub">{dmy(r.order_date)} · {money(r.order_total)}</div></> },
-        ...(showCustomer ? [{ key: 'k', label: 'Khách hàng', render: (r) => <>{r.customer_name || '—'}<div className="cell-sub">{[r.cust_group, r.company ? 'cần xuất VAT' : ''].filter(Boolean).join(' · ')}</div></> }] : []),
+        ...(showCustomer ? [{ key: 'k', label: 'Khách hàng', render: (r) => <>{r.customer_name || '—'}<div className="cell-sub">{r.company ? 'Công ty' : 'Khách lẻ'}</div></> }] : []),
         ...DOC_KEYS.map((k) => ({ key: k, label: DOC_SHORT[k], render: (r) => <><DocCell slot={r.slots[k]} />{k === 'hop_dong' && r.contract_kind && <div className="cell-sub">{CONTRACT_KINDS[r.contract_kind]?.short}</div>}</> })),
         { key: 'm', label: 'Còn thiếu', align: 'right', render: (r) => (onTrack ? (can('ban_hang') && <Btn small onClick={(e) => { e.stopPropagation(); onTrack(r); }}>Bật theo dõi</Btn>)
-          : r.missing ? <Pill tone="bad">{r.missing}/{r.total}</Pill> : <Pill tone="good">Đủ</Pill>) },
+          : <span className="row gap-xs" style={{ justifyContent: 'flex-end' }}>{r.missing ? <Pill tone="bad">{r.missing}/{r.total}</Pill> : <Pill tone="good">Đủ</Pill>}
+            {edit && <Btn small kind="ghost" icon="edit" title="Chọn giấy tờ cần có cho đơn này" aria-label="Chọn giấy tờ cần có" onClick={(e) => { e.stopPropagation(); setNeedFor(r); }} />}</span>) },
       ]} />
     </>
+  );
+}
+
+// Danh sách giấy tờ cần có của một đơn (không phải đơn nào cũng cần đủ 4 loại)
+export function NeedChecks({ value, onChange, disabled }) {
+  return <div className="row gap wrap">{DOC_KEYS.map((k) => <Check key={k} disabled={disabled} checked={value.includes(k)}
+    onChange={(v) => onChange(DOC_KEYS.filter((x) => (x === k ? v : value.includes(x))))}>{DOC_LABEL[k]}</Check>)}</div>;
+}
+function NeedDialog({ row, onClose }) {
+  const { run, busy } = useAction();
+  const [keys, setKeys] = useState(row.need || DOC_KEYS);
+  const save = async (v) => { if (await run('set_order_docs_need', { order_id: row.id, keys: v }, 'Đã lưu giấy tờ cần có')) onClose(); };
+  return (
+    <Modal title={`Giấy tờ cần có · đơn ${row.code}`} subtitle={row.customer_name} onClose={onClose}
+      footer={<><Btn busy={busy} onClick={() => save(null)}>Theo mặc định của khách</Btn><span className="grow" /><Btn onClick={onClose}>Thôi</Btn><Btn kind="primary" busy={busy} onClick={() => save(keys)}>Lưu</Btn></>}>
+      <Note>Bỏ chọn giấy tờ đơn này không cần — đơn chỉ bị tính thiếu với các giấy tờ được chọn.</Note>
+      <NeedChecks value={keys} onChange={setKeys} />
+    </Modal>
   );
 }
 
@@ -68,12 +90,11 @@ export function DocsBoardMini({ params, showCustomer }) {
 }
 
 export function OrderDocsPage() {
-  const { settings, rpc, toast, refresh } = useApp();
-  const [track, setTrack] = useState('on'); const [st, setSt] = useState('thieu'); const [grp, setGrp] = useState(null); const [search, setSearch] = useState('');
+  const { rpc, toast, refresh } = useApp();
+  const [track, setTrack] = useState('on'); const [st, setSt] = useState('thieu'); const [seg, setSeg] = useState(''); const [search, setSearch] = useState('');
   const b = useRpcData('order_docs_board', { track });
   const all = b.data || [];
-  const groups = [...new Set([...(settings.customer_groups || []), ...all.map((r) => r.cust_group).filter(Boolean)])];
-  const inGroup = all.filter((r) => grp === null || r.cust_group === grp);
+  const inGroup = all.filter((r) => !seg || (seg === 'cty') === r.company);
   const rows = inGroup.filter((r) => (track === 'off' || !st || (st === 'thieu' ? r.missing > 0 : r.missing === 0)) && match(`${r.code} ${r.customer_name} ${r.contract_code || ''}`, search));
   const turnOn = async (r) => { try { await rpc('set_order_docs_track', { order_id: r.id, track: 'on' }); toast(`Đã bật theo dõi giấy tờ cho đơn ${r.code}`); refresh(); } catch (e) { toast(e.message, 'err'); } };
   return (
@@ -82,11 +103,11 @@ export function OrderDocsPage() {
         <FilterBox title="Đơn hàng"><RadioList value={track} onChange={setTrack} options={[{ value: 'on', label: 'Đang theo dõi' }, { value: 'off', label: 'Không theo dõi' }]} /></FilterBox>
         {track === 'on' && <FilterBox title="Tình trạng"><RadioList value={st} onChange={setSt} options={[{ value: 'thieu', label: 'Còn thiếu', count: inGroup.filter((r) => r.missing > 0).length },
           { value: 'du', label: 'Đủ giấy tờ', count: inGroup.filter((r) => !r.missing).length }, { value: '', label: 'Tất cả', count: inGroup.length }]} /></FilterBox>}
-        <FilterBox title="Nhóm khách hàng"><RadioList value={grp === null ? '*' : grp} onChange={(v) => setGrp(v === '*' ? null : v)} options={[{ value: '*', label: 'Tất cả nhóm', count: all.length },
-          ...groups.map((g) => ({ value: g, label: g, count: all.filter((r) => r.cust_group === g).length })), { value: '', label: 'Chưa có nhóm', count: all.filter((r) => !r.cust_group).length }]} /></FilterBox>
+        <FilterBox title="Nhóm khách hàng"><RadioList value={seg} onChange={setSeg} options={[{ value: '', label: 'Tất cả', count: all.length },
+          { value: 'cty', label: 'Công ty', count: all.filter((r) => r.company).length }, { value: 'le', label: 'Khách lẻ', count: all.filter((r) => !r.company).length }]} /></FilterBox>
       </>}
       search={<Search value={search} onChange={setSearch} placeholder="Tìm mã đơn, khách, số hợp đồng…" />}>
-      {track === 'on' ? <Note>Mặc định chỉ theo dõi đơn của khách cần xuất hóa đơn VAT (loại khách "Công ty" hoặc có mã số thuế). Bật / tắt cho cả nhóm ở Nhóm khách hàng, cho từng khách ở hồ sơ khách (thẻ Thông tin xuất hóa đơn), hoặc cho riêng một đơn.</Note>
+      {track === 'on' ? <Note>Mặc định chỉ theo dõi đơn của khách công ty (loại khách "Công ty" hoặc có mã số thuế). Không phải đơn nào cũng cần đủ 4 loại: bấm nút sửa ở cột "Còn thiếu" để chọn giấy tờ cần có cho từng đơn, hoặc đặt mặc định cho khách ở hồ sơ khách (thẻ Thông tin xuất hóa đơn).</Note>
         : <Note>Các đơn dưới đây không cần theo dõi giấy tờ. Bấm "Bật theo dõi" nếu đơn này cần đủ hồ sơ.</Note>}
       {track === 'on' && <Legend />}
       {b.loading && !b.data ? <Loading /> : <DocsBoardTable rows={rows} error={b.error} onTrack={track === 'off' ? turnOn : null} />}
@@ -125,6 +146,13 @@ export function OrderDocsPanel({ orderId, order }) {
           options={Object.entries(TRACK_OPTS).map(([value, label]) => ({ value, label: value === 'auto' ? defaultLabel : label }))} /></div>}
       </div>
       {d.track.on && <div className="row gap-s"><b>{d.missing ? `Còn thiếu ${d.missing}/${d.total} giấy tờ` : 'Đã đủ giấy tờ'}</b><span className="grow" /><Legend /></div>}
+      <div className="card stack-s">
+        <div className="row gap-s wrap"><span className="small strong">Giấy tờ cần có cho đơn này</span>
+          <span className="small muted">{d.need_by === 'order' ? '— chọn riêng cho đơn' : d.need_by === 'customer' ? '— theo mặc định của khách' : '— đủ 4 loại'}</span>
+          <span className="grow" />
+          {edit && d.need_by === 'order' && <button className="link-btn small" onClick={() => run('set_order_docs_need', { order_id: orderId, keys: null }, 'Đã đặt lại theo mặc định của khách')}>Theo mặc định của khách</button>}</div>
+        <NeedChecks value={d.need} disabled={!edit || busy} onChange={(v) => run('set_order_docs_need', { order_id: orderId, keys: v }, 'Đã lưu giấy tờ cần có')} />
+      </div>
       {!d.track.on && <Note>Đơn này không bắt buộc đủ giấy tờ. Vẫn có thể tải lên để lưu trữ; chọn "Luôn theo dõi" nếu cần kiểm tra thiếu đủ.</Note>}
       <div className="odocs">
         {DOC_KEYS.map((k) => <DocRow key={k} k={k} slot={d.slots[k]} d={d} orderId={orderId} order={order} edit={edit} busy={busy} run={run} open={open} />)}
@@ -150,7 +178,7 @@ function DocRow({ k, slot, d, orderId, order, edit, busy, run, open }) {
         {k === 'hop_dong' && k0 && <span className="small muted">{CONTRACT_KINDS[k0.kind]?.label} · số {k0.code}</span>}
         <span className="grow" />
         {!slot.skip && make}
-        {edit && <Btn small kind="ghost" busy={busy} onClick={() => run('set_order_doc_skip', { order_id: orderId, doc_key: k, skip: !slot.skip }, slot.skip ? 'Đã đưa giấy tờ vào danh sách cần có' : 'Đã đánh dấu không cần')}>{slot.skip ? 'Cần giấy tờ này' : 'Không cần'}</Btn>}
+        {slot.skip && <span className="small muted">Không cần cho đơn này</span>}
       </div>
       {!slot.skip && <div className="odoc-sides">{Object.entries(slot.sides).map(([side, s]) => <SideCell key={side} side={side} s={s} k={k} orderId={orderId} edit={edit} run={run} open={open} />)}</div>}
     </div>

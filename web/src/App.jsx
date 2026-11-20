@@ -87,9 +87,9 @@ const MENU = [
       { id: 'kho', sub: 'stock', label: 'Tồn kho' }, { id: 'kho', sub: 'nxt', label: 'Nhập – xuất – tồn' }] },
   ] },
   { label: 'Đơn hàng', icon: 'order', groups: [
+    { title: 'Báo giá & hợp đồng', items: ['bao-gia', 'hop-dong', 'giay-to'] },
     { title: 'Đơn hàng', items: ['dat-rieng', 'ban-hang', 'tra-hang'] },
     { title: 'Giao hàng', items: ['van-chuyen', 'lai-xe'] },
-    { title: 'Báo giá & hợp đồng', items: ['bao-gia', 'hop-dong', 'giay-to'] },
     { title: 'Sau bán hàng', items: ['bao-hanh'] },
   ] },
   { label: 'Khách hàng', icon: 'users', groups: [{ title: 'Khách hàng', items: ['khach-hang', 'nhom-khach', 'khuyen-mai'] }] },

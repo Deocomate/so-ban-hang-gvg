@@ -286,7 +286,11 @@ export function SpecialPage() {
   const rows = useMemo(() => inTime.filter(status.pass), [inTime, status.sel]);
   const sum = (k) => rows.reduce((t, o) => t + (o[k] || 0), 0);
   const viewSwitch = <Tabs value={view} onChange={setView} tabs={[{ value: 'list', label: 'Danh sách' }, { value: 'board', label: 'Bảng tiến độ' }]} />;
-  const createBtn = can('ban_hang') && <Btn kind="primary" icon="plus" onClick={() => open('order-form', { kind: 'dat_hang' })}>Tạo đơn đặt hàng</Btn>;
+  // Báo giá là bước đầu tiên trước khi khách chốt; khách đã chốt thì tạo đơn thẳng
+  const createBtn = can('ban_hang') && <>
+    <Btn icon="quote" onClick={() => open('quote-form', {})} title="Lập báo giá gửi khách trước, khách chốt thì bấm Chuyển sang đơn">Tạo báo giá</Btn>
+    <Btn kind="primary" icon="plus" onClick={() => open('order-form', { kind: 'dat_hang' })}>Tạo đơn đặt hàng</Btn>
+  </>;
   if (view === 'list') {
     const cols = [
       { key: 'code', label: 'Mã đặt hàng', render: (o) => <div><div className="cell-main">{o.code}</div><div className="cell-sub">{dmy(o.order_date)}</div></div> },

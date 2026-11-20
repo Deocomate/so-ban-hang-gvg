@@ -182,8 +182,8 @@ export function NumInput({ value, onChange, money: isMoney = true, placeholder, 
   );
 }
 
-export function Check({ checked, onChange, children }) {
-  return <label className="check"><input type="checkbox" checked={!!checked} onChange={(e) => onChange(e.target.checked)} /> <span>{children}</span></label>;
+export function Check({ checked, onChange, children, disabled }) {
+  return <label className="check"><input type="checkbox" checked={!!checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} /> <span>{children}</span></label>;
 }
 
 // Tab đang mở của một trang, đồng bộ với địa chỉ #trang/tab (menu chính mở thẳng một tab, đổi tab thì địa chỉ đổi theo).

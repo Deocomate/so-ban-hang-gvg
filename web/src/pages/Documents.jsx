@@ -4,9 +4,9 @@ import { packView } from '../lib/book-profile.js';
 import { dmy } from '../lib/format.js';
 import { saveFile } from '../lib/excel.js';
 import { Btn, Loading, ErrorBox, Note, Modal, Field, Input, TextArea, Select, DateInput, NumInput, Check, Section, Tabs, ConfirmBtn } from '../components/ui.jsx';
-import { DOC_TYPES, DEFAULT_TEXTS, docSettings, loadDocData, defaults, currentInfo, editableFields, infoRef, profileFor, profileFromBook, PER_DELIVERY, RECONCILE, isCompany } from '../lib/docs/model.js';
+import { DOC_TYPES, DEFAULT_TEXTS, docSettings, loadDocData, defaults, currentInfo, editableFields, infoRef, profileFor, profileFromBook, PER_DELIVERY, RECONCILE, isCompany, HEADER_FIELDS, headerKey, BASE_SIZES, DEFAULT_BASE } from '../lib/docs/model.js';
 import { VatReminder, VatReminderPopup } from '../components/VatReminder.jsx';
-import { buildPrintDoc, templatesFor, pageSize, PAPERS, FONT_CSS } from '../lib/docs/templates.js';
+import { buildPrintDoc, templatesFor, pageSize, PAPERS, FONT_CSS, withBaseSize } from '../lib/docs/templates.js';
 import { openTemplateEditor } from '../lib/docs/editor-link.js';
 import { sampleData } from '../lib/docs/tokens.js';
 
@@ -28,7 +28,7 @@ export function DocPreview({ doc }) {
   return (
     <div className="doc-scroll" ref={ref}>
       <div className="doc-page" style={{ fontFamily: FONT_CSS[doc.font], zoom, width: `${size.w}mm`, minHeight: size.h ? `${size.h}mm` : 'auto', padding: `${m.top}mm ${m.right}mm ${m.bottom}mm ${m.left}mm` }}>
-        <div className="tpl" dangerouslySetInnerHTML={{ __html: doc.html }} />
+        <div className="tpl" style={doc.base ? { fontSize: `${doc.base}pt` } : undefined} dangerouslySetInnerHTML={{ __html: withBaseSize(doc.html, doc.base) }} />
       </div>
     </div>
   );
@@ -184,6 +184,28 @@ function ReconcilePack({ src, dels, ds, beforeExport }) {
   );
 }
 
+// ---------- Đầu trang (header) sửa riêng cho chứng từ này ----------
+// Mỗi lần xuất có thể cần đầu trang khác (địa chỉ chi nhánh, SĐT người phụ trách…): sửa ở đây, lưu theo chứng từ, không đổi cài đặt đơn vị.
+function HeaderEditor({ type, prof, info, setEdit }) {
+  const [open, setOpen] = useState(false);
+  const keys = [...HEADER_FIELDS.map(([k]) => k), 'logo'];
+  const changed = keys.filter((k) => info[headerKey(type, k)]).length;
+  const set = (k, v) => setEdit((s) => ({ ...s, [headerKey(type, k)]: v }));
+  return (
+    <div className="stack-s">
+      <button className="link-btn small" onClick={() => setOpen((x) => !x)}>{open ? '▾' : '▸'} Đầu trang (header){changed ? ` · đã sửa ${changed} dòng` : ''}</button>
+      {open && <div className="stack-s">
+        <div className="muted small">Chỉ đổi đầu trang của chứng từ này. Để trống = theo đơn vị phát hành; gõ dấu "-" để bỏ dòng đó.</div>
+        {HEADER_FIELDS.map(([k, label]) => (
+          <Field key={k} label={label}><Input value={info[headerKey(type, k)] || ''} placeholder={prof[k] || '(trống)'} onChange={(v) => set(k, k === 'name' ? v.toUpperCase() : v)} maxLength={500} /></Field>
+        ))}
+        {prof.logo && <Check checked={info[headerKey(type, 'logo')] === '-'} onChange={(v) => set('logo', v ? '-' : '')}>Không in logo</Check>}
+        {changed > 0 && <button className="link-btn small" onClick={() => setEdit((s) => ({ ...s, ...Object.fromEntries(keys.map((k) => [headerKey(type, k), ''])) }))}>Dùng lại đầu trang theo đơn vị phát hành</button>}
+      </div>}
+    </div>
+  );
+}
+
 // ---------- Hộp thoại xuất chứng từ ----------
 // pay: phiếu thu lập cùng lúc với đợt giao (giao + thu) → thêm thẻ "Phiếu thu" vào cùng hộp thoại.
 // page: hiện toàn trang (tab mới) thay cho hộp thoại.
@@ -310,6 +332,7 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
                 {can('owner') && <button className="link-btn small" onClick={() => openTemplateEditor({ book: book.id, type, tpl: (ds.templates[type] || []).length ? doc?.tplId : '' })}>Sửa mẫu in này (mở tab mới)</button>}
               </Field>
             )}
+            {ready && <HeaderEditor type={type} prof={profileFor(ds, type, { ...info, ...Object.fromEntries(HEADER_FIELDS.map(([k]) => [headerKey(type, k), ''])), [headerKey(type, 'logo')]: '' })} info={info} setEdit={setEdit} />}
             <button className="link-btn small" onClick={() => setShowForm((x) => !x)}>{showForm ? '▾' : '▸'} Thông tin trên chứng từ</button>
             {showForm && ready && <div className="stack-s">
               {ds.profiles.length > 1 && (
@@ -381,7 +404,7 @@ async function resizeLogo(file) {
 }
 // Phần "docs" gửi lên máy chủ (không kèm mẫu in — mẫu lưu riêng nên không bị ghi đè)
 const docsPayload = (f) => ({
-  profiles: f.profiles, font: f.font,
+  profiles: f.profiles, font: f.font, font_set: true, base_size: f.base,
   types: Object.fromEntries(Object.entries(f.types).map(([k, t]) => [k, { profile: t.profile, sep: t.sep, show_price: t.show_price, show_form: t.show_form,
     text: Object.fromEntries(Object.entries(t.text || {}).filter(([, v]) => v !== undefined && v !== null)) }])),
 });
@@ -477,7 +500,7 @@ function IssuerSettings() {
     const ds = docSettings(book, settings);
     const types = {};
     for (const k of Object.keys(DOC_TYPES)) types[k] = { ...ds.types[k], text: { ...(ds.types[k].text || {}) } };
-    setF({ profiles: ds.profiles.map((p) => ({ ...p })), types, font: ds.font });
+    setF({ profiles: ds.profiles.map((p) => ({ ...p })), types, font: ds.font, base: ds.base });
   }, [book.id]);
   if (!f) return <Loading />;
   const setP = (i, k, v) => setF((s) => ({ ...s, profiles: s.profiles.map((p, j) => (j === i ? { ...p, [k]: v } : p)) }));
@@ -528,6 +551,10 @@ function IssuerSettings() {
         <div className="grid">
           <Field label="Phông chữ mặc định của mẫu in" hint="Dùng cho chữ chưa chọn phông riêng trong mẫu. Phông được nhúng sẵn trong PDF nên máy nào mở cũng giống nhau.">
             <Select value={f.font} onChange={(v) => setF((s) => ({ ...s, font: v }))} options={[{ value: 'Arimo', label: 'Arial (Arimo) — chữ không chân' }, { value: 'Tinos', label: 'Times New Roman (Tinos) — chữ có chân' }]} />
+          </Field>
+          <Field label="Cỡ chữ cơ bản" hint="Chữ nhỏ hơn cỡ này trong mẫu được nâng lên; tiêu đề lớn giữ nguyên. Giấy cuộn K80/K58 giữ cỡ của mẫu.">
+            <Select value={String(f.base)} onChange={(v) => setF((s) => ({ ...s, base: Number(v) }))}
+              options={[...BASE_SIZES.map((n) => ({ value: String(n), label: `${n} pt${n === DEFAULT_BASE ? ' (mặc định)' : ''}` })), { value: '0', label: 'Giữ đúng cỡ chữ trong mẫu' }]} />
           </Field>
           <div className="row gap" style={{ alignItems: 'center' }}>
             <span style={{ fontFamily: 'Arimo, Arial, sans-serif', fontSize: 16, opacity: f.font === 'Arimo' ? 1 : .45 }}>Hóa đơn bán hàng</span>

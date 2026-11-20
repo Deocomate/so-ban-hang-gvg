@@ -58,6 +58,9 @@ C('Biên bản giao hàng: lái xe, tình trạng hàng', (await api.call('get_d
 await api.call('save_doc_info', { book_id: TH, ref_type: 'order', ref_id: o.id, data: { date_hoa_don: '2026-10-25', date_don_dat_hang: '2026-10-17' } });
 const di = await api.call('get_doc_info', { book_id: TH, ref_type: 'order', ref_id: o.id });
 C('Ngày riêng cho hóa đơn và đơn đặt hàng', [di.date_hoa_don, di.date_don_dat_hang], ['2026-10-25', '2026-10-17']);
+await api.call('save_doc_info', { book_id: TH, ref_type: 'order', ref_id: o.id, data: { hdr_hoa_don_address: 'Chi nhánh Hưng Yên', hdr_hoa_don_website: '-', hdr_hoa_don_hack: 'x' } });
+const hd = await api.call('get_doc_info', { book_id: TH, ref_type: 'order', ref_id: o.id });
+C('Đầu trang sửa riêng theo chứng từ; bỏ trường lạ', [hd.hdr_hoa_don_address, hd.hdr_hoa_don_website, hd.hdr_hoa_don_hack], ['Chi nhánh Hưng Yên', '-', undefined]);
 await E('Không lưu được vào chứng từ của sổ khác', () => api.call('save_doc_info', { book_id: VG, ref_type: 'order', ref_id: o.id, data: { note: 'x' } }), 'Không tìm thấy');
 await E('Loại chứng từ lạ bị chặn', () => api.call('save_doc_info', { book_id: TH, ref_type: 'xyz', ref_id: o.id, data: {} }), 'Không tìm thấy');
 api.as(staff);
