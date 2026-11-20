@@ -2,7 +2,7 @@
 // khung chọn nổi lên trên cùng (không bị hộp thoại cắt mất). Giá trị vẫn là chuỗi như ô gốc: 'yyyy-mm-dd', 'yyyy-mm', value của option.
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { dmy, todayVN, addDays, norm } from '../lib/format.js';
+import { dmy, todayVN, addDays, norm, searchRank } from '../lib/format.js';
 import { Icon } from './ui.jsx';
 
 // Máy cảm ứng (điện thoại, máy tính bảng): dùng bàn phím/khung chọn gốc của máy cho quen tay
@@ -180,8 +180,7 @@ export function Select({ value, onChange, options, placeholder, style, className
   const searchable = opts.length > 8;
   // Tìm theo từng từ, không dấu: "tra nha" khớp "Trả tiền nhà cung cấp"
   const shown = useMemo(() => {
-    const words = norm(q).split(/\s+/).filter(Boolean);
-    return words.length ? opts.filter((o) => !o.ph && words.every((w) => norm(o.label).includes(w))) : opts;
+    return q.trim() ? searchRank(opts.filter((o) => !o.ph), q, (o) => ({ name: o.label })) : opts;
   }, [opts, q]);
   useEffect(() => {
     if (!open) return undefined;

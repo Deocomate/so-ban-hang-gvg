@@ -2,7 +2,7 @@
 // gõ tên hoặc mã vào ô tìm kiếm (F3) là có ngay một dòng; chọn nhà cung cấp (F4); thêm nhiều dòng từ file Excel.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useAction, useQ } from '../lib/store.jsx';
-import { money, qty as fq, todayVN, match } from '../lib/format.js';
+import { money, qty as fq, todayVN, match, searchRank } from '../lib/format.js';
 import { useProducts, useSuppliers, useFunds, productSub, unitsOf, findUnit } from '../lib/lookups.js';
 import { packing } from '../lib/docs/model.js';
 import { packView } from '../lib/book-profile.js';
@@ -23,7 +23,7 @@ function ItemSearch({ products, onPick, inputRef }) {
   const boxRef = useRef(null); const listRef = useRef(null);
   const list = useMemo(() => {
     if (!q.trim()) return products.slice(0, 40);
-    return products.filter((p) => match(`${p.sku} ${p.name} ${p.size || ''} ${p.color || ''} ${p.pattern || ''} ${p.category || ''}`, q)).slice(0, 60);
+    return searchRank(products, q, (p) => ({ codes: [p.sku, p.barcode], name: p.name, text: `${p.size || ''} ${p.color || ''} ${p.pattern || ''} ${p.category || ''}` }), 60);
   }, [products, q]);
   useEffect(() => {
     const h = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false); };

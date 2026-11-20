@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp, useQ, useAction } from '../lib/store.jsx';
-import { money, dmy, todayVN, addDays, match, short } from '../lib/format.js';
+import { money, dmy, todayVN, addDays, match, short, searchRank } from '../lib/format.js';
 import { TimeFilter, useTimeFilter } from '../components/DocFilters.jsx';
 import { CustomerDetail } from './CustomerLedger.jsx';
 import { SupplierOrdersTab } from './SupplierOrders.jsx';
@@ -55,11 +55,11 @@ export function PartiesPage({ type }) {
     return c.max_overdue_days >= b.min && c.max_overdue_days <= b.max;
   };
   // Mọi bộ lọc trừ "Công nợ", để số đếm cạnh từng lựa chọn công nợ khớp với danh sách đang xem
-  const base = useMemo(() => all.filter((c) => match(`${c.code} ${c.name} ${c.phone || ''} ${c.address || ''}`, search)
+  const base = useMemo(() => searchRank(all.filter((c) => match(`${c.code} ${c.name} ${c.phone || ''} ${c.address || ''}`, search)
     && (status === 'all' || (status === 'on') === isActive(c))
     && (!tier || String(c.price_tier) === tier) && (!grp || (grp === '-' ? !c.kind : c.kind === grp))
     && passOd(c) && inNum(c[debtKey] || 0, debtR) && inNum(c[soldKey] || 0, soldR)
-    && lastTx.inRange(c.last_order_date) && created.inRange(c.created_at)),
+    && lastTx.inRange(c.last_order_date) && created.inRange(c.created_at)), search, (c) => ({ codes: [c.code, c.phone], name: c.name, text: c.address || '' })),
   [all, search, status, tier, grp, od, odFrom, odTo, debtR, soldR, lastTx.from, lastTx.to, created.from, created.to]);
   const debtTest = { debt: (c) => c[debtKey] > 0, over: (c) => c.overdue > 0, pre: (c) => c.prepaid > 0 };
   const rows = useMemo(() => {

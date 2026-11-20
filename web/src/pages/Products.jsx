@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp, useQ, useAction } from '../lib/store.jsx';
-import { money, qty as fq, match, dmy, todayVN } from '../lib/format.js';
+import { money, qty as fq, match, dmy, todayVN, searchRank } from '../lib/format.js';
 import { printLabels, barcodeSvg } from '../lib/barcode.js';
 import { useProducts, productLabel, productSub, PRODUCT_TYPES, typeLabel } from '../lib/lookups.js';
 import { exportXlsx } from '../lib/excel.js';
@@ -36,12 +36,13 @@ export function ProductsPage() {
   const cost = can('xem_gia_von');
   const all = q.data || [];
   const since = created ? daysAgoIso(Number(created)) : '';
-  const rows = useMemo(() => all.filter((p) => (state === 'all' || (state === 'active' ? p.active : !p.active)) && (!cat || p.category === cat)
+  const rows = useMemo(() => searchRank(all.filter((p) => (state === 'all' || (state === 'active' ? p.active : !p.active)) && (!cat || p.category === cat)
     && (!type || p.product_type === type) && (!brand || p.brand === brand) && (!loc || p.location === loc)
     && (!direct || (direct === 'yes' ? p.sell_direct : !p.sell_direct)) && (!since || p.created_at >= since)
     && (!stock || (stock === 'low' && p.is_low) || (stock === 'in' && p.available > 0) || (stock === 'out' && p.available <= 0 && !p.is_service)
       || (stock === 'over' && p.max_stock > 0 && p.on_hand > p.max_stock))
-    && match(`${p.sku} ${p.name} ${p.size || ''} ${p.color || ''} ${p.pattern || ''} ${p.brand || ''} ${p.location || ''}`, search)), [all, search, cat, state, stock, type, brand, loc, direct, since]);
+    && match(`${p.sku} ${p.name} ${p.size || ''} ${p.color || ''} ${p.pattern || ''} ${p.brand || ''} ${p.location || ''}`, search)),
+    search, (p) => ({ codes: [p.sku, p.barcode], name: p.name, text: `${p.size || ''} ${p.color || ''} ${p.pattern || ''} ${p.brand || ''} ${p.location || ''}` })), [all, search, cat, state, stock, type, brand, loc, direct, since]);
   // Nhóm hàng, thương hiệu, vị trí: chỉ liệt kê giá trị có hàng ở trạng thái đang xem (mặc định đang kinh doanh), kèm số mã
   const inState = useMemo(() => all.filter((p) => state === 'all' || (state === 'active' ? p.active : !p.active)), [all, state]);
   const tally = (k) => { const m = new Map(); for (const p of inState) if (p[k]) m.set(p[k], (m.get(p[k]) || 0) + 1); return m; };

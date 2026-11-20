@@ -2,6 +2,7 @@
 // trái là trình soạn trực quan (hoặc mã nguồn HTML), phải là bản xem trước đúng khổ giấy với dữ liệu mẫu hoặc chứng từ thật.
 // Địa chỉ: ?mau-in=<loại>&tpl=<mã mẫu | new>&book=<sổ>
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { searchRank } from '../lib/format.js';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
@@ -48,7 +49,8 @@ function TokenPanel({ type, onInsert, onClose }) {
   const groups = groupsFor(type); const [g, setG] = useState(groups[0].id); const [qs, setQs] = useState('');
   const [copied, setCopied] = useState('');
   const norm = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').toLowerCase();
-  const list = qs.trim() ? groups.flatMap((x) => x.tokens.map((t) => ({ ...t, gl: x.label, item: x.item }))).filter((t) => norm(`${t.label} ${t.k} ${t.desc}`).includes(norm(qs.trim())))
+  const list = qs.trim() ? searchRank(groups.flatMap((x) => x.tokens.map((t) => ({ ...t, gl: x.label, item: x.item }))).filter((t) => norm(`${t.label} ${t.k} ${t.desc}`).includes(norm(qs.trim()))),
+    qs, (t) => ({ codes: [t.k], name: t.label, text: `${t.desc || ''} ${norm(`${t.label} ${t.k} ${t.desc}`)}` }))
     : groups.find((x) => x.id === g).tokens.map((t) => ({ ...t, item: groups.find((x) => x.id === g).item }));
   const copy = async (k) => { try { await navigator.clipboard.writeText(`{${k}}`); setCopied(k); setTimeout(() => setCopied(''), 1200); } catch (e) { /* bỏ qua */ } };
   useEffect(() => { const k = (e) => { if (e.key === 'Escape') onClose(); }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); }, []);
@@ -353,5 +355,6 @@ function slashItems(type, query) {
   const norm = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').toLowerCase().replace(/[_\s]+/g, '');
   const qn = norm(query || '');
   const all = groupsFor(type).flatMap((g) => g.tokens.map((t) => ({ ...t, gl: g.label, item: !!g.item })));
-  return (qn ? all.filter((t) => norm(t.label).includes(qn) || norm(t.k).includes(qn)) : all).slice(0, 12);
+  // Xếp theo độ khớp rồi mới cắt 12 dòng; text giữ cách so khớp cũ (bỏ dấu, bỏ khoảng trắng, gạch dưới)
+  return qn ? searchRank(all, query, (t) => ({ codes: [t.k], name: t.label, text: `${norm(t.label)} ${norm(t.k)}` }), 12) : all.slice(0, 12);
 }

@@ -1,6 +1,6 @@
 import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { money, parseNum, qty as fq, match } from '../lib/format.js';
+import { money, parseNum, qty as fq, match, searchRank } from '../lib/format.js';
 import {
   Amphora, ArrowDownToLine, Store, ShieldCheck, Lock, Database, Scale, Gift, Hammer, Trash2, UsersRound, Wrench, ArrowUpFromLine, Banknote, Bell, BookOpen, Calculator, Calendar, ChartColumn, Check as CheckIcon, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Copy, Download, Ellipsis, Factory, FilePenLine, FileText, History, House, Info, Landmark, Link, LogOut, Package, PackagePlus, Pencil, Plus, Printer, QrCode, Receipt, ReceiptText, RefreshCw, Route, Search as SearchIcon, Settings, ShoppingCart, Smartphone, Tag, TriangleAlert, Truck, Undo2, Upload, Users, Wallet, X,
   Folder, FolderInput, FolderPlus, File as FileIcon, Image as ImageIcon, HardDrive, ExternalLink, Clock,
@@ -345,7 +345,9 @@ export function Picker({ items, value, onChange, getLabel, getSub, placeholder =
   const [hi, setHi] = useState(0);
   const ref = useRef(null);
   const sel = items?.find((x) => x.id === value);
-  const list = useMemo(() => (items || []).filter((x) => match((filterKeys ? filterKeys(x) : getLabel(x) + ' ' + (getSub ? getSub(x) : '')), q)).slice(0, 60), [items, q, getLabel, getSub, filterKeys]);
+  // Xếp theo độ khớp rồi mới cắt 60 dòng: món khớp sát nhất (mã trùng, tên bắt đầu bằng…) luôn ở đầu
+  const list = useMemo(() => searchRank(items, q, (x) => ({ codes: [x.code, x.sku, x.barcode, x.phone], name: getLabel(x),
+    text: filterKeys ? filterKeys(x) : getSub ? getSub(x) : '' }), 60), [items, q, getLabel, getSub, filterKeys]);
   useEffect(() => {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h);

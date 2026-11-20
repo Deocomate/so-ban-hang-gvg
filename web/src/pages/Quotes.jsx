@@ -2,7 +2,7 @@
 // Màn lập báo giá toàn màn hình giống màn tạo hóa đơn: ô tìm hàng ở trên, dòng hàng theo nhóm bên trái, khách và tổng tiền bên phải.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useQ, useAction } from '../lib/store.jsx';
-import { money, qty as fq, dmy, match, norm, todayVN } from '../lib/format.js';
+import { money, qty as fq, dmy, match, norm, todayVN, searchRank } from '../lib/format.js';
 import { ProductSearch } from './OrderPos.jsx';
 import { useProducts, useCustomers, priceOf, usePriceBooks, booksFor, autoBookFor } from '../lib/lookups.js';
 import { docSettings, DEFAULT_TEXTS, weightOf } from '../lib/docs/model.js';
@@ -52,7 +52,7 @@ function ProductNameInput({ value, onChange, onPick, products }) {
   const [open, setOpen] = useState(false); const [hi, setHi] = useState(0);
   const ref = useRef(null);
   const q = String(value || '').trim();
-  const list = useMemo(() => (open && q.length >= 2 ? (products || []).filter((p) => match(`${p.sku} ${p.name} ${p.color || ''} ${p.size || ''}`, q)).slice(0, 12) : []), [open, q, products]);
+  const list = useMemo(() => (open && q.length >= 2 ? searchRank(products, q, (p) => ({ codes: [p.sku, p.barcode], name: p.name, text: `${p.size || ''} ${p.color || ''} ${p.pattern || ''} ${p.category || ''}` }), 12) : []), [open, q, products]);
   useEffect(() => {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h);

@@ -77,3 +77,34 @@ export const match = (text, q) => {
   const t = norm(text);
   return norm(q).split(/\s+/).every((w) => !w || t.includes(w));
 };
+
+// Tìm và xếp theo độ khớp (như KiotViet): lọc giống match(), rồi đưa món khớp sát nhất lên đầu TRƯỚC khi cắt bớt.
+// keys(x) = { codes: [mã, SKU, mã vạch, SĐT…], name, text: các chữ khác chỉ dùng để lọc }.
+// Thứ tự: mã trùng hẳn → mã bắt đầu bằng → tên trùng → tên bắt đầu bằng → cụm từ ở đầu một từ trong tên
+// → mọi từ là đầu một từ trong tên → cụm từ giữa tên → mã chứa → còn lại; cùng mức thì tên ngắn hơn trước.
+export function searchRank(list, q, keys, limit = Infinity) {
+  const items = list || [];
+  const qn = norm(q).trim().replace(/\s+/g, ' ');
+  if (!qn) return limit === Infinity ? items : items.slice(0, limit);
+  const words = qn.split(' ');
+  const scored = [];
+  items.forEach((x, i) => {
+    const k = keys(x);
+    const codes = (k.codes || []).filter((c) => c !== null && c !== undefined && c !== '').map((c) => norm(c).trim());
+    const name = norm(k.name).trim().replace(/\s+/g, ' ');
+    const all = `${codes.join(' ')} ${name} ${norm(k.text || '')}`;
+    if (!words.every((w) => all.includes(w))) return;
+    const nameWords = name.split(/[^a-z0-9]+/).filter(Boolean);
+    const score = codes.some((c) => c === qn) ? 0
+      : codes.some((c) => c.startsWith(qn)) ? 1
+        : name === qn ? 2
+          : name.startsWith(qn) ? 3
+            : ` ${name}`.includes(` ${qn}`) ? 4
+              : words.every((w) => nameWords.some((nw) => nw.startsWith(w))) ? 5
+                : name.includes(qn) ? 6
+                  : codes.some((c) => c.includes(qn)) ? 7 : 8;
+    scored.push([score, name.length, i, x]);
+  });
+  scored.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
+  return (limit === Infinity ? scored : scored.slice(0, limit)).map((r) => r[3]);
+}
