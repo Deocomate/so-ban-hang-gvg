@@ -903,6 +903,7 @@ create table if not exists timesheets (
   ot_hours real not null default 0,
   note text,
   self_marked integer not null default 0,   -- 1 = nhân viên tự chấm (lần ghi gần nhất do chính người đó)
+  no_lunch integer not null default 0,      -- 1 = ngày đi làm này không tính hỗ trợ ăn trưa
   created_by text, created_at text not null
 );
 create unique index if not exists timesheets_uq on timesheets (employee_id, work_date, coalesce(shift_id, ''));

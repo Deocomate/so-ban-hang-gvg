@@ -1,12 +1,12 @@
 // Đọc dữ liệu chung: p = {view, book_id, filters:[[cột, phép, giá trị]...], order:'cột desc', limit}
 import { ctx, fail, all, one, json, outRows } from '../lib/context.js';
-import { requirePerm, isOwner, bookSettings } from './access.js';
+import { requirePerm, isOwner, bookSettings, hasBusiness, can } from './access.js';
 
-// view → quyền cần có ('' = chỉ cần là thành viên sổ)
+// view → quyền cần có ('' = thành viên có quyền nghiệp vụ; 'nv' = như '' hoặc có quyền chấm công)
 const VIEWS = {
   products: '', price_books: '', price_book_items: '', customers: '', suppliers: '', sales_orders: 'xem_ban_hang', sales_order_lines: 'xem_ban_hang', deliveries: 'xem_ban_hang', delivery_lines: 'xem_ban_hang', sales_returns: 'xem_ban_hang',
-  stock_moves: '', adjustments: '', productions: '', bom_items: '', employees: '', shifts: '', work_schedules: '', timesheets: 'cham_cong', commission_tables: 'owner', paysheets: 'owner', paysheet_lines: 'owner', opening_debts: '', doc_payments: '', purchase_orders: 'xem_nhap_hang', purchase_order_lines: 'xem_nhap_hang', receipts: 'xem_nhap_hang',
-  supplier_returns: 'xem_nhap_hang', funds: '', drivers: '', driver_trips: 'xem_ban_hang', quotes: 'xem_ban_hang', contracts: 'xem_ban_hang', attachments: '', tax_invoices: 'xem_bao_cao', payments: 'xem_thu_chi', open_docs: '', expenses: 'xem_chi_phi', expense_recurring: 'xem_chi_phi', members: 'owner', audit: 'owner', order_events: 'xem_ban_hang', shipments: 'xem_ban_hang', bank_txns: 'xem_thu_chi',
+  stock_moves: '', adjustments: '', productions: '', bom_items: '', employees: 'nv', shifts: 'nv', work_schedules: 'nv', timesheets: 'cham_cong', commission_tables: 'quan_ly_luong', paysheets: 'quan_ly_luong', paysheet_lines: 'quan_ly_luong', opening_debts: '', doc_payments: '', purchase_orders: 'xem_nhap_hang', purchase_order_lines: 'xem_nhap_hang', receipts: 'xem_nhap_hang',
+  supplier_returns: 'xem_nhap_hang', funds: '', drivers: '', driver_trips: 'xem_ban_hang', quotes: 'xem_ban_hang', contracts: 'xem_ban_hang', attachments: '', tax_invoices: 'xem_bao_cao', payments: 'xem_thu_chi', open_docs: '', expenses: 'xem_chi_phi', expense_recurring: 'xem_chi_phi', members: 'nv', audit: 'owner', order_events: 'xem_ban_hang', shipments: 'xem_ban_hang', bank_txns: 'xem_thu_chi',
 };
 const BOOL_COLS = new Set(['is_kit', 'active', 'is_low', 'voided', 'restock', 'is_late', 'is_final', 'has_problem', 'assigned', 'order_cancelled', 'sell_direct', 'in_effect']);
 const IDENT = /^[a-z_][a-z0-9_]*$/;
@@ -38,7 +38,13 @@ export function scope(v, b, where, args) {
 export function q(p) {
   const v = p.view;
   if (!Object.hasOwn(VIEWS, v)) fail(`Không có bảng dữ liệu "${v ?? ''}"`);
-  requirePerm(p.book_id, VIEWS[v] || null);
+  const need = VIEWS[v];
+  if (need === '' || need === 'nv') {
+    requirePerm(p.book_id, null);
+    // Tài khoản chỉ chấm công / lương không xem hàng hóa, khách hàng, nhà cung cấp, kho…
+    if (!hasBusiness(p.book_id) && !(need === 'nv' && can(p.book_id, 'cham_cong'))) fail('Tài khoản của bạn chưa được cấp quyền xem mục này', 403);
+    if (v === 'members' && !can(p.book_id, 'quan_ly_luong')) fail('Chỉ người quản lý lương xem được danh sách tài khoản', 403);
+  } else requirePerm(p.book_id, need);
   const where = ['book_id = ?']; const args = [p.book_id];
   scope(v, p.book_id, where, args);
   for (const f of p.filters || []) {

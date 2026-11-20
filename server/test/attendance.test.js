@@ -109,6 +109,52 @@ const O = await api.call('save_employee', { book_id: TH, name: 'Người có s�
 C('Email đã có tài khoản: gắn luôn, không gửi thư mời', [O.user_id, O.invited], [outsider, false]);
 await E('Nhân viên đã kích hoạt thì không gửi lại thư mời', () => api.call('resend_employee_invite', { book_id: TH, id: O.id }), 'đã kích hoạt');
 api.as(hr);
-await E('Chỉ chủ cửa hàng thêm nhân viên kèm email', () => api.call('save_employee', { book_id: TH, name: 'Y', email: 'y@gomsu.vn' }), 'chủ cửa hàng');
+await E('Chỉ người quản lý lương thêm nhân viên kèm email', () => api.call('save_employee', { book_id: TH, name: 'Y', email: 'y@gomsu.vn' }), 'Quản lý lương');
+
+G('Tài khoản chỉ chấm công không xem module khác');
+api.as(lan);
+await E('Nhân viên chấm công không xem hàng hóa', () => api.q('products', TH), 'chưa được cấp quyền xem');
+await E('Nhân viên chấm công không xem khách hàng', () => api.q('customers', TH), 'chưa được cấp quyền xem');
+await E('Nhân viên chấm công không xem nhà cung cấp', () => api.q('suppliers', TH), 'chưa được cấp quyền xem');
+api.as(hr);
+await E('Người chỉ có quyền chấm công không xem hàng hóa', () => api.q('products', TH), 'chưa được cấp quyền xem');
+C('Người có quyền chấm công vẫn xem được danh sách nhân viên', (await api.q('employees', TH)).length > 0, true);
+await E('Người có quyền chấm công không xem lương trong hồ sơ', async () => { if ((await api.q('employees', TH)).some((e) => e.pay)) throw new Error('lộ lương'); throw new Error('ok-chặn'); }, 'ok-chặn');
+
+G('Cấp nhanh quyền quản lý lương');
+api.as(owner);
+await api.call('save_employee', { book_id: TH, id: H.id, name: 'Hoa', user_id: hoa, pay: { type: 'co_dinh', rate: 5000000 }, payroll_admin: true });
+C('Hồ sơ ghi nhận người quản lý lương', (await api.one('employees', TH, [['id', 'eq', H.id]])).payroll_admin, 1);
+api.as(hoa);
+C('Người quản lý lương xem được bảng lương', Array.isArray(await api.q('paysheets', TH)), true);
+C('Người quản lý lương thấy lương của mọi người', (await api.call('att_month', { book_id: TH, month })).employees.every((e) => e.pay), true);
+await E('Người quản lý lương vẫn không xem hàng hóa', () => api.q('products', TH), 'chưa được cấp quyền xem');
+await E('Người quản lý lương không tự cấp quyền cho người khác', () => api.call('save_employee', { book_id: TH, id: L.id, name: 'Lan', user_id: lan, pay: { type: 'ngay_cong', rate: 2600000 }, payroll_admin: true }), 'Chỉ chủ cửa hàng');
+api.as(owner);
+await api.call('save_employee', { book_id: TH, id: H.id, name: 'Hoa', user_id: hoa, pay: { type: 'co_dinh', rate: 5000000 }, payroll_admin: false });
+api.as(hoa);
+await E('Bỏ quyền thì không xem bảng lương nữa', () => api.q('paysheets', TH), 'Quản lý lương');
+
+G('Hỗ trợ ăn trưa');
+api.as(owner);
+await api.call('save_staff_settings', { book_id: TH, settings: { std_days: 26, std_hours: 8, ot_rate: 1.5, late_grace: 5, paid_leave: true, lunch_rate: 30000 } });
+const pmFrom = (() => { const d = new Date(`${month}-01T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() - 1); return d.toISOString().slice(0, 10); })();
+const pm = pmFrom.slice(0, 7);
+const K = await api.call('save_employee', { book_id: TH, name: 'Khánh', pay: { type: 'ngay_cong', rate: 2600000 } });
+const R = await api.call('save_employee', { book_id: TH, name: 'Riêng', pay: { type: 'ngay_cong', rate: 2600000, lunch_rate: 25000 } });
+const X = await api.call('save_employee', { book_id: TH, name: 'Không ăn', pay: { type: 'ngay_cong', rate: 2600000, lunch: false } });
+for (const [i, st] of [[1, 'di_lam'], [2, 'nua_ngay'], [3, 'di_lam'], [4, 'nghi_phep']]) {
+  const d = `${pm}-0${i}`;
+  for (const e of [K, R, X]) await api.call('att_save_day', { book_id: TH, employee_id: e.id, work_date: d, status: st, lunch: i !== 3 });
+}
+const lm = await api.call('att_month', { book_id: TH, month: pm });
+const lunchOf = (e) => lm.employees.find((x) => x.id === e.id);
+C('Mức chung: 2 ngày có ăn trưa × 30.000 (ngày bỏ tick và ngày phép không tính)', [lunchOf(K).summary.lunch_days, lunchOf(K).summary.lunch_amount], [2, 60000]);
+C('Mức riêng của nhân viên', lunchOf(R).summary.lunch_amount, 50000);
+C('Nhân viên không hưởng ăn trưa', lunchOf(X).summary.lunch_amount, 0);
+C('Ăn trưa cộng vào phụ cấp', lunchOf(K).pay.allowance, 60000);
+C('Bảng công trả mức ăn trưa chung', lm.settings.lunch_rate, 30000);
+api.as(lan);
+await E('Nhân viên không đổi thiết lập lương', () => api.call('save_staff_settings', { book_id: TH, settings: { std_days: 26, std_hours: 8, ot_rate: 1.5, late_grace: 5, lunch_rate: 99999 } }), 'Quản lý lương');
 
 finish('Chấm công tự phục vụ · quyền xem công/lương');

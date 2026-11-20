@@ -63,13 +63,13 @@ const PAGES = [
   { id: 'thu-chi', label: 'Sổ quỹ', icon: 'cash', perm: 'xem_thu_chi', comp: CashPage },
   { id: 'tien-ve', label: 'Tiền về tài khoản', icon: 'bank', perm: 'xem_thu_chi', comp: BankPage },
   { id: 'chi-phi', label: 'Chi phí vận hành', icon: 'receipt', perm: 'xem_chi_phi', comp: ExpensesPage },
-  { id: 'nhan-vien', label: 'Danh sách nhân viên', icon: 'users', perm: 'owner', comp: EmployeesPage },
+  { id: 'nhan-vien', label: 'Danh sách nhân viên', icon: 'users', perm: 'quan_ly_luong', comp: EmployeesPage },
   { id: 'lich-lam-viec', label: 'Lịch làm việc', icon: 'calendar', perm: 'cham_cong', comp: SchedulePage },
   { id: 'cham-cong', label: 'Bảng chấm công', icon: 'check', perm: 'cham_cong', comp: AttendanceBoardPage },
   { id: 'cham-cong-cua-toi', label: 'Chấm công của tôi', icon: 'clock', self: true, comp: MyAttendancePage },
-  { id: 'bang-luong', label: 'Bảng lương', icon: 'cash', perm: 'owner', comp: PaysheetsPage },
-  { id: 'hoa-hong', label: 'Bảng hoa hồng', icon: 'tag', perm: 'owner', comp: CommissionPage },
-  { id: 'thiet-lap-nv', label: 'Thiết lập nhân viên', icon: 'gear', perm: 'owner', comp: StaffSettingsPage },
+  { id: 'bang-luong', label: 'Bảng lương', icon: 'cash', perm: 'quan_ly_luong', comp: PaysheetsPage },
+  { id: 'hoa-hong', label: 'Bảng hoa hồng', icon: 'tag', perm: 'quan_ly_luong', comp: CommissionPage },
+  { id: 'thiet-lap-nv', label: 'Thiết lập nhân viên', icon: 'gear', perm: 'quan_ly_luong', comp: StaffSettingsPage },
   { id: 'bao-cao', label: 'Báo cáo', icon: 'chart', perm: 'xem_bao_cao', comp: ReportsPage },
   { id: 'thue', label: 'Thuế HKD', icon: 'tax', perm: 'xem_bao_cao', comp: TaxPage },
   { id: 'bao-hanh', label: 'Bảo hành, sửa chữa', icon: 'wrench', perm: 'xem_ban_hang', on: ['warranty'], comp: WarrantyPage },
@@ -295,7 +295,10 @@ function Shell() {
     setTimeout(() => openLink(l, { open, go }), 50);
   }, [pendingOpen, books, book?.id]);
   useEffect(() => { const h = () => { const r = readHash(); if (r) setRoute(r); }; window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h); }, []);
-  const visible = PAGES.filter((p) => (!p.perm || can(p.perm)) && (!p.on || p.on.some((k) => settings?.[k])) && (!p.self || book?.employee_id));
+  // Tài khoản chỉ có quyền nhân sự (chấm công / quản lý lương) hoặc không quyền nào: không thấy các mục không ghi quyền (hàng hóa, khách hàng, mua hàng…)
+  const business = book?.role === 'owner' || Object.entries(book?.perms || {}).some(([k, v]) => v && !['cham_cong', 'quan_ly_luong'].includes(k));
+  const visible = PAGES.filter((p) => (!p.perm || can(p.perm)) && (!p.on || p.on.some((k) => settings?.[k])) && (!p.self || book?.employee_id)
+    && (business || p.perm || p.self || p.id === 'cai-dat'));
   const byId = Object.fromEntries(visible.map((p) => [p.id, p]));
   const cur = byId[page] || (!byId['tong-quan'] && byId['cham-cong-cua-toi']) || byId['ban-hang'] || visible[0];
   const go = (id, s = '') => { setRoute({ id, sub: s }); setMoreOpen(false); window.scrollTo(0, 0); };

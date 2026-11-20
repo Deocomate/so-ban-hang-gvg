@@ -31,7 +31,7 @@ export function att_month(p) {
   const from = `${month}-01`;
   const to = addDays(addMonths(from, 1), -1);
   const me = myEmployee(b);
-  const manage = can(b, 'cham_cong'); const owner = can(b, 'owner');
+  const manage = can(b, 'cham_cong'); const owner = can(b, 'quan_ly_luong');
   // Người quản lý thấy nhân viên đang làm + người đã nghỉ nhưng còn chấm công trong tháng
   const emps = manage
     ? all(`select * from employees e where book_id = ? and (active = 1 or exists (select 1 from timesheets t where t.employee_id = e.id and t.work_date between ? and ?))
@@ -39,7 +39,7 @@ export function att_month(p) {
     : me ? [me] : [];
   const ids = emps.map((e) => e.id);
   const entries = ids.length ? all(`select t.id, t.employee_id, t.work_date, t.shift_id, t.status, t.check_in, t.check_out, t.hours, t.late_minutes, t.early_minutes,
-      t.ot_hours, t.note, t.self_marked, s.name as shift_name, s.start_time, s.end_time
+      t.ot_hours, t.note, t.self_marked, t.no_lunch, s.name as shift_name, s.start_time, s.end_time
     from timesheets t left join shifts s on s.id = t.shift_id where t.employee_id in ${inList(ids)} and t.work_date between ? and ?
     order by t.work_date, s.start_time`, ...ids, from, to) : [];
   const locks = ids.length ? all(`select l.employee_id, s.period_from, s.period_to, s.code from paysheet_lines l join paysheets s on s.id = l.paysheet_id
@@ -65,7 +65,7 @@ export function att_month(p) {
     month, from, to, today: today(), now: nowHM(), me_id: me?.id || null, can_manage: manage, can_pay: owner,
     linked: !!me, employees: people, entries, locks, schedules,
     shifts: all(`select id, name, start_time, end_time, hours from shifts where book_id = ? and active = 1 order by start_time`, b),
-    payslips, settings: { std_hours: st.std_hours, late_grace: st.late_grace },
+    payslips, settings: { std_hours: st.std_hours, late_grace: st.late_grace, lunch_rate: st.lunch_rate || 0, std_days: st.std_days, ot_rate: st.ot_rate, paid_leave: st.paid_leave },
   };
 }
 
@@ -80,10 +80,12 @@ export function att_save_day(p) {
     if (prev) removeTimesheet(prev);
     return { removed: !!prev };
   }
-  // Nhân viên không tự ghi giờ làm thêm (ảnh hưởng tiền lương): giữ nguyên số quản lý đã ghi
+  // Nhân viên không tự ghi giờ làm thêm và ăn trưa (ảnh hưởng tiền lương): giữ nguyên số quản lý đã ghi
   const ot = self ? prev?.ot_hours ?? 0 : p.ot_hours;
+  const keepLunch = prev ? !prev.no_lunch : true;
+  const lunch = self || typeof p.lunch !== 'boolean' ? keepLunch : p.lunch;
   return writeTimesheet(b, { employee_id: p.employee_id, work_date: d, shift_id: sid, status: p.status, check_in: nz(p.check_in), check_out: nz(p.check_out),
-    ot_hours: ot, note: p.note ?? prev?.note ?? null });
+    ot_hours: ot, note: p.note ?? prev?.note ?? null, lunch });
 }
 
 export function att_delete(p) {
@@ -106,7 +108,7 @@ export function att_clock(p) {
   if (p.action === 'out') {
     if (!open) fail('Bạn chưa bấm "Vào ca" hôm nay');
     if (t === open.check_in) fail('Vừa vào ca — đợi ít nhất 1 phút rồi bấm "Ra ca"');
-    writeTimesheet(b, { employee_id: me.id, work_date: d, shift_id: open.shift_id, status: open.status, check_in: open.check_in, check_out: t, ot_hours: open.ot_hours, note: open.note });
+    writeTimesheet(b, { employee_id: me.id, work_date: d, shift_id: open.shift_id, status: open.status, check_in: open.check_in, check_out: t, ot_hours: open.ot_hours, note: open.note, lunch: !open.no_lunch });
     return { check_out: t };
   }
   if (p.action !== 'in') fail('Thao tác không hợp lệ');
@@ -117,6 +119,6 @@ export function att_clock(p) {
   const sh = sched[0] || null;
   if (!sh && !free(null)) fail('Hôm nay bạn đã chấm vào và ra ca rồi');
   const prev = rows.find((x) => (x.shift_id || '') === (sh?.id || ''));
-  writeTimesheet(b, { employee_id: me.id, work_date: d, shift_id: sh?.id || null, status: 'di_lam', check_in: t, ot_hours: prev?.ot_hours ?? 0, note: prev?.note ?? null });
+  writeTimesheet(b, { employee_id: me.id, work_date: d, shift_id: sh?.id || null, status: 'di_lam', check_in: t, ot_hours: prev?.ot_hours ?? 0, note: prev?.note ?? null, lunch: prev ? !prev.no_lunch : true });
   return { check_in: t, shift: sh?.name || null, late: sh ? Math.max(0, mins(t) - mins(sh.start_time)) : 0 };
 }

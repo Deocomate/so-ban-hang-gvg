@@ -32,6 +32,7 @@ function registerFunctions(db) {
   db.function('days', { deterministic: true }, (a, b) => daysBetween(a, b));
   db.function('can_cost', (book) => (can(book, 'xem_gia_von') ? 1 : 0));
   db.function('is_owner', (book) => (can(book, 'owner') ? 1 : 0));
+  db.function('can_payroll', (book) => (can(book, 'quan_ly_luong') ? 1 : 0));
   db.function('ship_status_label', { deterministic: true }, (s) => shipStatusLabel(s));
   db.function('cod_status_label', { deterministic: true }, (s) => codStatusLabel(s));
   db.function('carrier_name', { deterministic: true }, (c) => carrierName(c));
@@ -135,6 +136,7 @@ const ADDED_COLUMNS = [
   ['users', 'updated_at', 'text'],
   ['book_members', 'role_id', 'text references roles(id) on delete set null'],
   ['timesheets', 'self_marked', 'integer not null default 0'],
+  ['timesheets', 'no_lunch', 'integer not null default 0'],
 ];
 
 // SQLite không sửa được CHECK của bảng đã có nên phải dựng lại bảng khách hàng để nhận đủ 5 mức giá

@@ -1,6 +1,6 @@
 // Quyền truy cập theo sổ, số chứng từ, chống ghi trùng, kiểm tra ngày chứng từ.
 import { ctx, fail, one, all, run, val, json, today, dmy, nowIso } from '../lib/context.js';
-import { permLabel, PERM_KEYS, PERM_IMPLIES } from '../lib/labels.js';
+import { permLabel, PERM_KEYS, PERM_IMPLIES, HR_PERMS } from '../lib/labels.js';
 
 const on = (v) => v === true || v === 'true' || v === 1;
 
@@ -47,6 +47,11 @@ export function requireAdmin() {
 // Có quyền không (không báo lỗi)
 export const can = (book, perm) => allowed(ctx.members.get(book), perm);
 export const isOwner = (book) => ctx.members.get(book)?.role === 'owner';
+// Có quyền nghiệp vụ (bán, mua, kho, sổ quỹ, báo cáo…) ngoài quyền nhân sự: mới được xem danh mục chung của sổ
+export const hasBusiness = (book) => {
+  const m = ctx.members.get(book);
+  return m?.role === 'owner' || Object.keys(m?.perms || {}).some((k) => !HR_PERMS.includes(k));
+};
 
 // Bắt buộc có quyền (báo lỗi tiếng Việt)
 export function requirePerm(book, perm) {

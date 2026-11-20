@@ -3,14 +3,15 @@
 // thưởng doanh thu (bậc thang), hoa hồng theo bảng, phụ cấp; trừ các khoản giảm trừ. Chốt bảng lương sinh khoản chi phí
 // "Lương" cho từng người (nhóm Nhân sự), trả lương bằng phiếu chi gắn vào khoản đó như mọi chi phí khác.
 import { ctx, fail, one, all, run, insert, uuid, nowIso, num, int, nz, trimNz, rnd, asDate, today, addDays, json } from '../lib/context.js';
-import { requirePerm, can, newMasterCode, nextCode, bookSettings, checkDate } from './access.js';
+import { requirePerm, can, isOwner, newMasterCode, nextCode, bookSettings, checkDate } from './access.js';
 import { insertExpense } from './cash.js';
 import { setMembership } from './books.js';
 import { inviteUser, resendInvite } from '../lib/auth.js';
 import { config } from '../config.js';
 
 export const PAY_TYPES = { ca: 'Theo ca', gio: 'Theo giờ', ngay_cong: 'Theo ngày công chuẩn', co_dinh: 'Cố định' };
-const STAFF_DEFAULTS = { std_days: 26, std_hours: 8, ot_rate: 1.5, late_grace: 5, paid_leave: true };
+// lunch_rate: hỗ trợ ăn trưa mỗi ngày đi làm (đủ công hoặc nửa ngày, có tick ăn trưa); 0 = không hỗ trợ
+const STAFF_DEFAULTS = { std_days: 26, std_hours: 8, ot_rate: 1.5, late_grace: 5, paid_leave: true, lunch_rate: 0 };
 export const staffSettings = (b) => ({ ...STAFF_DEFAULTS, ...(bookSettings(b).staff_settings || {}) });
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -36,6 +37,8 @@ function cleanPay(p = {}) {
     type, rate: money0(p.rate, 'Mức lương'), std_days: num(p.std_days) || null, ot_rate: num(p.ot_rate) || null, ot: p.ot !== false,
     allowances: list(p.allowances, ['thang', 'ngay'], 'Phụ cấp'), deductions: list(p.deductions, ['thang', 'lan_muon', 'nghi_khong_phep'], 'Giảm trừ'),
     bonus, commission_id: nz(p.commission_id),
+    // Ăn trưa: mặc định hưởng theo mức chung; lunch_rate riêng (để trống = theo mức chung)
+    lunch: p.lunch !== false, lunch_rate: num(p.lunch_rate) == null || p.lunch_rate === '' ? null : money0(p.lunch_rate, 'Mức ăn trưa'),
   };
   if (out.std_days != null && (out.std_days <= 0 || out.std_days > 31)) fail('Ngày công chuẩn từ 1 đến 31');
   return out;
@@ -43,7 +46,7 @@ function cleanPay(p = {}) {
 
 export function save_employee(p) {
   const b = p.book_id;
-  requirePerm(b, 'owner');
+  requirePerm(b, 'quan_ly_luong');
   const name = trimNz(p.name);
   if (!name) fail('Nhập tên nhân viên');
   let id = nz(p.id); let code = trimNz(p.code);
@@ -57,6 +60,8 @@ export function save_employee(p) {
   if (uid && !one(`select 1 from book_members where book_id = ? and user_id = ?`, b, uid)) fail('Tài khoản không thuộc sổ này');
   const other = uid && one(`select name from employees where book_id = ? and user_id = ? and id is not ?`, b, uid, id);
   if (other) fail(`Tài khoản này đã gắn với nhân viên "${other.name}"`);
+  // Cấp nhanh quyền quản lý lương cho tài khoản của nhân viên (chỉ chủ cửa hàng cấp được)
+  if (typeof p.payroll_admin === 'boolean' && uid) setPayrollAdmin(b, uid, p.payroll_admin);
   const f = { name, phone: nz(p.phone), id_no: nz(p.id_no), title: nz(p.title), dept: nz(p.dept), address: nz(p.address), start_date: asDate(p.start_date),
     user_id: uid, pay, note: p.note ?? null };
   if (!id) {
@@ -68,6 +73,31 @@ export function save_employee(p) {
       code, p.active === false ? 0 : 1, ...keys.map((k) => f[k]), id, b).changes) fail('Không tìm thấy nhân viên');
   }
   return { id, code, user_id: uid, invited };
+}
+
+function setPayrollAdmin(b, uid, on) {
+  const m = one(`select role, perms from book_members where book_id = ? and user_id = ?`, b, uid);
+  if (!m || m.role === 'owner') return;
+  const cur = json(m.perms);
+  if (!!cur.quan_ly_luong === on) return;
+  if (!isOwner(b)) fail('Chỉ chủ cửa hàng được cấp hoặc bỏ quyền quản lý lương');
+  if (uid === ctx.uid) fail('Không tự đổi quyền quản lý lương của chính mình');
+  const next = { ...cur };
+  if (on) next.quan_ly_luong = true; else delete next.quan_ly_luong;
+  run(`update book_members set perms = ? where book_id = ? and user_id = ?`, JSON.stringify(next), b, uid);
+}
+
+// Thiết lập tính công và lương (ngày công chuẩn, giờ công, làm thêm, đi muộn, nghỉ phép, ăn trưa) — người quản lý lương
+export function save_staff_settings(p) {
+  const b = p.book_id;
+  requirePerm(b, 'quan_ly_luong');
+  const s = p.settings || {};
+  const n = (k, lo, hi, label) => { const v = num(s[k]); if (v == null || v < lo || v > hi) fail(`${label} không hợp lệ`); return v; };
+  const out = { std_days: n('std_days', 1, 31, 'Ngày công chuẩn'), std_hours: n('std_hours', 1, 24, 'Số giờ mỗi ngày công'), ot_rate: n('ot_rate', 1, 10, 'Hệ số làm thêm'),
+    late_grace: n('late_grace', 0, 240, 'Số phút cho phép đi muộn'), paid_leave: s.paid_leave !== false, lunch_rate: money0(s.lunch_rate, 'Mức ăn trưa') };
+  const all0 = bookSettings(b);
+  run(`update books set settings = ? where id = ?`, JSON.stringify({ ...all0, staff_settings: out }), b);
+  return { staff_settings: out };
 }
 
 // Link trang chấm công (đăng nhập xong mở thẳng trang "Chấm công của tôi")
@@ -90,7 +120,7 @@ function accountForEmployee(b, email, name, phone) {
 
 // Gửi lại thư mời cho nhân viên chưa kích hoạt tài khoản
 export function resend_employee_invite(p) {
-  requirePerm(p.book_id, 'owner');
+  requirePerm(p.book_id, 'quan_ly_luong');
   const e = one(`select user_id from employees where id = ? and book_id = ?`, p.id, p.book_id);
   if (!e?.user_id) fail('Nhân viên này chưa có tài khoản');
   resendInvite(e.user_id, attNote());
@@ -100,7 +130,7 @@ export function resend_employee_invite(p) {
 // ---------- CA LÀM VIỆC & LỊCH ----------
 export function save_shift(p) {
   const b = p.book_id;
-  requirePerm(b, 'owner');
+  requirePerm(b, 'quan_ly_luong');
   const name = trimNz(p.name);
   if (!name) fail('Nhập tên ca');
   if (!TIME.test(p.start_time || '') || !TIME.test(p.end_time || '')) fail('Giờ ca theo dạng HH:MM');
@@ -176,11 +206,11 @@ export function writeTimesheet(b, p) {
   if (lockedDay(e.id, d)) fail('Ngày này đã nằm trong bảng lương đã chốt');
   const working = WORK_STATUSES.includes(status);
   const f = { status, check_in: working ? cin : null, check_out: working ? cout : null, ot_hours: working ? ot : 0, note: p.note ?? null,
-    self_marked: e.user_id && e.user_id === ctx.uid ? 1 : 0, ...timeFacts(b, sh, status, cin, cout) };
+    self_marked: e.user_id && e.user_id === ctx.uid ? 1 : 0, no_lunch: working && p.lunch === false ? 1 : 0, ...timeFacts(b, sh, status, cin, cout) };
   const ex = one(`select id from timesheets where employee_id = ? and work_date = ? and coalesce(shift_id, '') = ?`, e.id, d, sid || '');
   if (ex) {
-    run(`update timesheets set status = ?, check_in = ?, check_out = ?, ot_hours = ?, note = ?, hours = ?, late_minutes = ?, early_minutes = ?, self_marked = ? where id = ?`,
-      f.status, f.check_in, f.check_out, f.ot_hours, f.note, f.hours, f.late_minutes, f.early_minutes, f.self_marked, ex.id);
+    run(`update timesheets set status = ?, check_in = ?, check_out = ?, ot_hours = ?, note = ?, hours = ?, late_minutes = ?, early_minutes = ?, self_marked = ?, no_lunch = ? where id = ?`,
+      f.status, f.check_in, f.check_out, f.ot_hours, f.note, f.hours, f.late_minutes, f.early_minutes, f.self_marked, f.no_lunch, ex.id);
     return { id: ex.id };
   }
   const id = uuid();
@@ -228,7 +258,7 @@ export function fill_timesheets(p) {
 const BASES = ['doanh_thu', 'lai_gop', 'so_luong'];
 export function save_commission_table(p) {
   const b = p.book_id;
-  requirePerm(b, 'owner');
+  requirePerm(b, 'quan_ly_luong');
   const name = trimNz(p.name);
   if (!name) fail('Nhập tên bảng hoa hồng');
   const rules = (Array.isArray(p.rules) ? p.rules : []).map((r) => {
@@ -294,7 +324,11 @@ export function calcPay(b, emp, from, to) {
   else if (pay.type === 'ngay_cong') { base = pay.rate / stdDays * paidDays; hourly = pay.rate / stdDays / st.std_hours; }
   else { base = pay.rate; hourly = pay.rate / stdDays / st.std_hours; }
   const ot = pay.ot ? otHours * hourly * (pay.ot_rate || st.ot_rate) : 0;
-  const allowance = pay.allowances.reduce((s, a) => s + (a.per === 'ngay' ? a.amount * days : a.amount), 0);
+  // Ăn trưa: mỗi ngày có đi làm và có tick ăn trưa (nhiều ca trong ngày vẫn tính 1 suất)
+  const lunchRate = pay.lunch ? (pay.lunch_rate ?? st.lunch_rate ?? 0) : 0;
+  const lunchDays = new Set(work.filter((t) => !t.no_lunch).map((t) => t.work_date)).size;
+  const lunch = lunchRate * lunchDays;
+  const allowance = pay.allowances.reduce((s, a) => s + (a.per === 'ngay' ? a.amount * days : a.amount), 0) + lunch;
   const deduction = pay.deductions.reduce((s, a) => s + (a.per === 'lan_muon' ? a.amount * lates : a.per === 'nghi_khong_phep' ? a.amount * absentDays : a.amount), 0);
   const lines = salesLines(b, emp, from, to);
   const revenue = rnd(lines.reduce((s, l) => s + l.revenue, 0));
@@ -305,7 +339,7 @@ export function calcPay(b, emp, from, to) {
   const r = { base: rnd(base), ot: rnd(ot), bonus: rnd(bonus), commission, allowance: rnd(allowance), deduction: rnd(deduction) };
   return { ...r, total: r.base + r.ot + r.bonus + r.commission + r.allowance - r.deduction,
     detail: { type: pay.type, rate: pay.rate, std_days: stdDays, days, half_days: halfDays, leave_days: leaveDays, absent_days: absentDays, shifts, hours: rnd(hours, 2),
-      ot_hours: rnd(otHours, 2), lates, revenue, bonus_tier: tier || null } };
+      ot_hours: rnd(otHours, 2), lates, revenue, bonus_tier: tier || null, lunch_days: lunchDays, lunch_rate: lunchRate, lunch_amount: rnd(lunch) } };
 }
 
 // ---------- BẢNG LƯƠNG ----------
@@ -323,7 +357,7 @@ function fillLines(b, ps, ids) {
 
 export function create_paysheet(p) {
   const b = p.book_id;
-  requirePerm(b, 'owner');
+  requirePerm(b, 'quan_ly_luong');
   const from = asDate(p.from); const to = asDate(p.to);
   if (!from || !to || from > to) fail('Kỳ lương không hợp lệ');
   const id = uuid(); const code = nextCode(b, 'BL');
@@ -337,7 +371,7 @@ export function create_paysheet(p) {
 const openSheet = (id) => {
   const ps = one(`select * from paysheets where id = ?`, id);
   if (!ps) fail('Không tìm thấy bảng lương');
-  requirePerm(ps.book_id, 'owner');
+  requirePerm(ps.book_id, 'quan_ly_luong');
   return ps;
 };
 
@@ -358,7 +392,7 @@ export function recalc_paysheet(p) {
 export function adjust_paysheet_line(p) {
   const l = one(`select l.*, s.status, s.book_id as b from paysheet_lines l join paysheets s on s.id = l.paysheet_id where l.id = ?`, p.id);
   if (!l) fail('Không tìm thấy dòng bảng lương');
-  requirePerm(l.b, 'owner');
+  requirePerm(l.b, 'quan_ly_luong');
   if (l.status !== 'tam') fail('Bảng lương đã chốt hoặc đã hủy');
   const a = rnd(num(p.adjust) ?? 0);
   const total = l.total - l.adjust + a;

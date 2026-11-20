@@ -5,7 +5,7 @@ import React, { useEffect, useState } from 'react';
 import { useApp, useAction, useRpcData } from '../lib/store.jsx';
 import { money, qty as fq, dmy, todayVN, addDays, addMonths, match } from '../lib/format.js';
 import { exportXlsx } from '../lib/excel.js';
-import { Btn, Icon, Pill, Field, Input, NumInput, Tabs, Search, ErrorBox, Note, Table, Modal, Loading, MonthInput, usePageTab } from '../components/ui.jsx';
+import { Btn, Icon, Pill, Field, Input, NumInput, Check, Tabs, Search, ErrorBox, Note, Table, Modal, Loading, MonthInput, usePageTab } from '../components/ui.jsx';
 
 const ST = {
   di_lam: { label: 'Đủ công', cell: 'Đủ công', cls: 'work' },
@@ -119,7 +119,8 @@ function DayEditor({ data, emp, date, onClose }) {
   const [shiftId, setShiftId] = useState(rows[0]?.shift_id || sched[0]?.shift_id || '');
   const cur = rows.find((r) => (r.shift_id || '') === shiftId) || null;
   const [f, setF] = useState({});
-  useEffect(() => setF({ check_in: cur?.check_in || '', check_out: cur?.check_out || '', ot_hours: cur?.ot_hours || null, note: cur?.note || '' }), [cur?.id, shiftId]);
+  useEffect(() => setF({ check_in: cur?.check_in || '', check_out: cur?.check_out || '', ot_hours: cur?.ot_hours || null, note: cur?.note || '', lunch: cur ? !cur.no_lunch : true }), [cur?.id, shiftId]);
+  const lunchOn = data.settings.lunch_rate > 0 || emp.pay?.lunch_rate > 0;
   const [busy, setBusy] = useState(false); const [err, setErr] = useState(''); const [undo, setUndo] = useState(null);
   const working = cur && WORKING.includes(cur.status);
   const save = async (patch, msg) => {
@@ -127,13 +128,13 @@ function DayEditor({ data, emp, date, onClose }) {
     const before = cur;
     try {
       await rpc('att_save_day', { employee_id: emp.id, work_date: date, shift_id: shiftId || null, status: cur?.status || 'di_lam', check_in: f.check_in, check_out: f.check_out,
-        ot_hours: f.ot_hours || 0, note: f.note || null, ...patch });
+        ot_hours: f.ot_hours || 0, note: f.note || null, ...(self ? {} : { lunch: f.lunch !== false }), ...patch });
       refresh(); setUndo({ before, msg });
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
   const doUndo = async () => {
     const b = undo.before; setUndo(null);
-    await save(b ? { status: b.status, check_in: b.check_in, check_out: b.check_out, ot_hours: b.ot_hours, note: b.note } : { status: 'xoa' });
+    await save(b ? { status: b.status, check_in: b.check_in, check_out: b.check_out, ot_hours: b.ot_hours, note: b.note, lunch: !b.no_lunch } : { status: 'xoa' });
     setUndo(null); toast('Đã hoàn tác');
   };
   const canTime = !lk && (!cur || working);
@@ -173,6 +174,8 @@ function DayEditor({ data, emp, date, onClose }) {
                 {date === data.today && <Btn small onClick={() => setF((s) => ({ ...s, check_out: nowHM() }))}>Bây giờ</Btn>}</div>
             </Field>
             {!self && <Field label="Làm thêm (giờ)"><NumInput money={false} min={0} value={f.ot_hours} onChange={(v) => setF((s) => ({ ...s, ot_hours: v }))} /></Field>}
+            {!self && lunchOn && <div className="field" style={{ alignSelf: 'end' }}><Check checked={f.lunch !== false} onChange={(v) => setF((s) => ({ ...s, lunch: v }))}>Có ăn trưa (hỗ trợ)</Check></div>}
+            {self && lunchOn && cur && <div className="small muted" style={{ gridColumn: '1 / -1' }}>{cur.no_lunch ? 'Ngày này không tính ăn trưa' : 'Ngày này có tính hỗ trợ ăn trưa'}</div>}
             <Field label="Ghi chú" wide><Input value={f.note} onChange={(v) => setF((s) => ({ ...s, note: v }))} placeholder="vd. đi khám, đổi ca…" /></Field>
             <div className="row gap-s" style={{ gridColumn: '1 / -1' }}>
               {cur && working && <span className="small muted">{fmtH(cur.hours, true)}{cur.late_minutes ? ` · muộn ${cur.late_minutes} phút` : ''}{cur.early_minutes ? ` · về sớm ${cur.early_minutes} phút` : ''}{cur.ot_hours ? ` · làm thêm ${fq(cur.ot_hours)}g` : ''}</span>}
@@ -208,7 +211,8 @@ function PayCard({ emp, title = 'Lương tạm tính tháng này' }) {
   const paid = p.rate ? Math.round((p.base * s.std_days) / p.rate * 100) / 100 : 0; // số công được trả (gồm ngày phép nếu thiết lập tính công)
   const base = p.type === 'ngay_cong' ? `${money(p.rate)} ÷ ${s.std_days} × ${fq(paid)} công${paid > s.days ? ` (gồm ${fq(paid - s.days)} ngày phép)` : ''}` : p.type === 'ca' ? `${money(p.rate)} × ${fq(s.shifts)} ca`
     : p.type === 'gio' ? `${money(p.rate)} × ${fq(s.hours)} giờ` : 'Cố định mỗi kỳ';
-  const lines = [['Lương chính', p.base, `${PAY_TYPE[p.type] || ''} · ${base}`], ['Làm thêm', p.ot], ['Thưởng doanh thu', p.bonus], ['Hoa hồng', p.commission], ['Phụ cấp', p.allowance], ['Giảm trừ', -p.deduction]]
+  const lines = [['Lương chính', p.base, `${PAY_TYPE[p.type] || ''} · ${base}`], ['Làm thêm', p.ot], ['Thưởng doanh thu', p.bonus], ['Hoa hồng', p.commission],
+    ['Ăn trưa', s.lunch_amount || 0, s.lunch_amount ? `${s.lunch_days} ngày × ${money(s.lunch_rate)}` : ''], ['Phụ cấp', p.allowance - (s.lunch_amount || 0)], ['Giảm trừ', -p.deduction]]
     .filter(([, v], i) => i === 0 || v);
   return (
     <section className="card stack-s">
@@ -323,6 +327,7 @@ export function AttendanceBoardPage(props) {
   const [tab, setTab] = usePageTab(props, 'tong-hop');
   const [search, setSearch] = useState('');
   const [pick, setPick] = useState(null);
+  const [setup, setSetup] = useState(false);
   const emps = data?.employees || [];
   const emp = emps.find((e) => e.id === tab);
   const rows = emps.filter((e) => match(`${e.code} ${e.name} ${e.title || ''}`, search));
@@ -342,6 +347,7 @@ export function AttendanceBoardPage(props) {
         <MonthNav month={month} setMonth={setMonth} />
         <Btn icon="check" busy={busy} disabled={!data || data.from > data.today} onClick={() => run('fill_timesheets', { from: data.from, to: data.to }, (x) => `Đã chấm ${x.created} ca theo lịch`)}>Chấm theo lịch</Btn>
         <Btn icon="dl" disabled={!data} onClick={xlsx}>Xuất Excel</Btn>
+        {pay && <Btn icon="gear" onClick={() => setSetup(true)}>Thiết lập</Btn>}
         {pay && <Btn kind="primary" icon="cash" onClick={() => open('paysheet-new', {})}>Lập bảng lương</Btn>}
       </div>
       <ErrorBox error={q.error} />
@@ -381,6 +387,34 @@ export function AttendanceBoardPage(props) {
         </>
       )}
       {pick && emp && <DayEditor data={data} emp={emp} date={pick} onClose={() => setPick(null)} />}
+      {setup && data && <SetupForm data={data} onClose={() => setSetup(false)} />}
     </div>
+  );
+}
+
+// Thiết lập nhanh ngay trên Bảng chấm công: mức hỗ trợ ăn trưa và cách tính công (cùng dữ liệu với Nhân viên › Thiết lập nhân viên)
+function SetupForm({ data, onClose }) {
+  const { loadBooks } = useApp();
+  const { run, busy } = useAction();
+  const [f, setF] = useState({ ...data.settings });
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  return (
+    <Modal title="Thiết lập chấm công & lương" onClose={onClose} size="sm"
+      footer={<><Btn onClick={onClose}>Thôi</Btn><Btn kind="primary" busy={busy} onClick={async () => {
+        if (await run('save_staff_settings', { settings: { std_days: Number(f.std_days) || 26, std_hours: Number(f.std_hours) || 8, ot_rate: Number(f.ot_rate) || 1,
+          late_grace: Number(f.late_grace) || 0, paid_leave: f.paid_leave !== false, lunch_rate: Number(f.lunch_rate) || 0 } }, 'Đã lưu thiết lập')) { loadBooks(); onClose(); }
+      }}>Lưu</Btn></>}>
+      <div className="stack">
+        <Field label="Hỗ trợ ăn trưa (đ / ngày đi làm)" hint="Tính cho mỗi ngày đủ công hoặc nửa ngày có tick ăn trưa. 0 = không hỗ trợ. Mức riêng từng người đặt ở hồ sơ nhân viên › Thiết lập lương">
+          <NumInput min={0} value={f.lunch_rate} onChange={(v) => set('lunch_rate', v)} /></Field>
+        <div className="grid">
+          <Field label="Ngày công chuẩn / tháng"><NumInput money={false} min={1} max={31} value={f.std_days} onChange={(v) => set('std_days', v)} /></Field>
+          <Field label="Giờ mỗi ngày công"><NumInput money={false} min={1} max={24} value={f.std_hours} onChange={(v) => set('std_hours', v)} /></Field>
+          <Field label="Hệ số làm thêm"><NumInput money={false} min={1} value={f.ot_rate} onChange={(v) => set('ot_rate', v)} /></Field>
+          <Field label="Cho phép đi muộn (phút)"><NumInput money={false} min={0} value={f.late_grace} onChange={(v) => set('late_grace', v)} /></Field>
+        </div>
+        <Check checked={f.paid_leave !== false} onChange={(v) => set('paid_leave', v)}>Ngày nghỉ có phép vẫn tính công</Check>
+      </div>
+    </Modal>
   );
 }

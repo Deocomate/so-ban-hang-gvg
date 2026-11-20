@@ -7,11 +7,14 @@ export const PERM_GROUPS = [
   { group: 'Sổ quỹ', perms: [['xem_thu_chi', 'Xem phiếu thu chi, tiền về tài khoản'], ['thu_chi', 'Lập / hủy phiếu thu chi'],
     ['xem_chi_phi', 'Xem chi phí vận hành'], ['chi_phi', 'Ghi chi phí']] },
   { group: 'Hàng hóa & kho', perms: [['danh_muc', 'Sửa hàng hóa, khách hàng, nhà cung cấp'], ['kho', 'Điều chỉnh kho (vỡ, kiểm kê, xuất hủy)']] },
-  { group: 'Nhân sự', perms: [['cham_cong', 'Chấm công và lịch làm việc']] },
+  { group: 'Nhân sự', perms: [['cham_cong', 'Chấm công và lịch làm việc của mọi người'],
+    ['quan_ly_luong', 'Quản lý lương: hồ sơ & thiết lập lương, ca làm, bảng lương, hoa hồng; xem lương mọi người']] },
   { group: 'Báo cáo', perms: [['xem_bao_cao', 'Xem tổng quan, báo cáo, thuế'], ['xem_gia_von', 'Xem giá vốn, lợi nhuận, giá trị tồn kho']] },
 ];
 export const PERM_KEYS = PERM_GROUPS.flatMap((g) => g.perms.map(([k]) => k));
-export const PERM_IMPLIES = { ban_hang: ['xem_ban_hang'], nhap_hang: ['xem_nhap_hang'], thu_chi: ['xem_thu_chi'], chi_phi: ['xem_chi_phi'] };
+export const PERM_IMPLIES = { ban_hang: ['xem_ban_hang'], nhap_hang: ['xem_nhap_hang'], thu_chi: ['xem_thu_chi'], chi_phi: ['xem_chi_phi'], quan_ly_luong: ['cham_cong'] };
+// Quyền nhân sự: chỉ có các quyền này (hoặc không quyền nào) = tài khoản chấm công / lương, không thấy hàng hóa, khách hàng, mua hàng…
+export const HR_PERMS = ['cham_cong', 'quan_ly_luong'];
 
 export const PERM_LABELS = {
   ...Object.fromEntries(PERM_GROUPS.flatMap((g) => g.perms)),

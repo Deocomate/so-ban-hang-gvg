@@ -39,16 +39,16 @@ export function EmployeesPage() {
         <Btn icon="dl" onClick={() => exportXlsx('nhan-vien.xlsx', [{ name: 'Nhân viên', rows: rows.map((e) => ({ ...e, pay_text: payText(e.pay) })), columns: [{ key: 'code', label: 'Mã' },
           { key: 'name', label: 'Tên' }, { key: 'phone', label: 'Điện thoại' }, { key: 'id_no', label: 'CMND/CCCD' }, { key: 'title', label: 'Chức danh' }, { key: 'dept', label: 'Phòng ban' },
           { key: 'start_date', label: 'Ngày vào làm', type: 'date' }, { key: 'pay_text', label: 'Lương' }] }])}>Xuất Excel</Btn>
-        {can('owner') && <Btn kind="primary" icon="plus" onClick={() => open('employee', {})}>Nhân viên</Btn>}
+        {can('quan_ly_luong') && <Btn kind="primary" icon="plus" onClick={() => open('employee', {})}>Nhân viên</Btn>}
       </>}>
       <ErrorBox error={q.error} />
-      <Table rows={q.data ? rows : null} empty="Chưa có nhân viên" onRow={can('owner') ? (e) => open('employee', { id: e.id }) : undefined} columns={[
+      <Table rows={q.data ? rows : null} empty="Chưa có nhân viên" onRow={can('quan_ly_luong') ? (e) => open('employee', { id: e.id }) : undefined} columns={[
         { key: 'c', label: 'Mã nhân viên', render: (e) => <b>{e.code}</b> },
         { key: 'n', label: 'Tên nhân viên', render: (e) => <><div className="cell-main">{e.name}</div><div className="cell-sub">{[e.title, e.dept].filter(Boolean).join(' · ')}</div></> },
         { key: 'p', label: 'Số điện thoại', render: (e) => e.phone || '—' },
         { key: 'i', label: 'Số CMND/CCCD', render: (e) => e.id_no || '—' },
         { key: 'u', label: 'Tài khoản', render: (e) => (e.user_email ? <span className="small">{e.user_email}</span> : <span className="muted small">—</span>) },
-        ...(can('owner') ? [{ key: 'l', label: 'Lương', render: (e) => <span className="small">{payText(e.pay)}</span> }] : []),
+        ...(can('quan_ly_luong') ? [{ key: 'l', label: 'Lương', render: (e) => <span className="small">{payText(e.pay)}</span> }] : []),
       ]} />
     </ListPage>
   );
@@ -73,7 +73,7 @@ function ListEditor({ rows, onChange, pers, label, addLabel }) {
 }
 
 export function EmployeeForm({ id, onClose }) {
-  const { rpc } = useApp();
+  const { rpc, can, settings } = useApp();
   const { run, busy } = useAction();
   const members = useQ('members', [], 'display_name', 200);
   const tables = useQ('commission_tables', [['active', 'eq', 'true']], 'name', 200);
@@ -84,7 +84,7 @@ export function EmployeeForm({ id, onClose }) {
   React.useEffect(() => {
     if (id) rpc('q', { view: 'employees', filters: [['id', 'eq', id]] }).then(([e]) => {
       setF((s) => ({ ...s, ...e, phone: e.phone || '', id_no: e.id_no || '', title: e.title || '', dept: e.dept || '', address: e.address || '', note: e.note || '',
-        user_id: e.user_id || '', loaded_user: e.user_id || '', active: !!e.active, pay: { ...s.pay, ...(e.pay || {}), commission_id: e.pay?.commission_id || '' } }));
+        user_id: e.user_id || '', loaded_user: e.user_id || '', payroll_admin: !!e.payroll_admin, active: !!e.active, pay: { ...s.pay, ...(e.pay || {}), commission_id: e.pay?.commission_id || '' } }));
       setLoaded(true);
     });
   }, [id]);
@@ -95,7 +95,8 @@ export function EmployeeForm({ id, onClose }) {
   return (
     <Modal title={id ? `Nhân viên ${f.code}` : 'Thêm nhân viên'} onClose={onClose} size="lg"
       footer={<><Btn onClick={onClose}>Thôi</Btn><Btn kind="primary" busy={busy} disabled={!loaded} onClick={async () => {
-        if (await run('save_employee', { id: id || null, ...f, user_id: f.user_id || null, email: f.user_id ? null : f.email.trim() || null, pay: { ...f.pay, commission_id: f.pay.commission_id || null } },
+        if (await run('save_employee', { id: id || null, ...f, user_id: f.user_id || null, email: f.user_id ? null : f.email.trim() || null,
+          payroll_admin: can('owner') && (f.user_id || f.email.trim()) ? !!f.payroll_admin : undefined, pay: { ...f.pay, commission_id: f.pay.commission_id || null } },
           (x) => (x.invited ? `Đã lưu và gửi link đặt mật khẩu tới ${f.email.trim()}` : 'Đã lưu nhân viên'))) onClose();
       }}>Lưu</Btn></>}>
       <Tabs value={tab} onChange={setTab} tabs={[{ value: 'info', label: 'Thông tin' }, { value: 'pay', label: 'Thiết lập lương' }]} />
@@ -121,6 +122,11 @@ export function EmployeeForm({ id, onClose }) {
                 <Btn small icon="refresh" busy={busy} onClick={() => run('resend_employee_invite', { id }, `Đã gửi lại thư mời tới ${f.user_email}`)}>Gửi lại thư mời</Btn></div>
             </div>
           ) : null}
+          {can('owner') && (f.user_id || f.email.trim()) && (
+            <div className="field field-wide"><Check checked={!!f.payroll_admin} onChange={(v) => set('payroll_admin', v)}>
+              <b>Cho quản lý module lương</b> <span className="muted small">— thiết lập lương, ca làm, chấm công, bảng lương, hoa hồng và xem lương của mọi người (không thấy hàng hóa, đơn hàng, sổ quỹ nếu không có quyền khác)</span>
+            </Check></div>
+          )}
           <Field label="Địa chỉ" wide><Input value={f.address} onChange={(v) => set('address', v)} /></Field>
           <Field label="Ghi chú" wide><TextArea value={f.note} onChange={(v) => set('note', v)} /></Field>
           {id && <Check checked={f.active} onChange={(v) => set('active', v)}>Đang làm việc</Check>}
@@ -149,6 +155,9 @@ export function EmployeeForm({ id, onClose }) {
             ))}
             <div><Btn small icon="plus" onClick={() => setPay('bonus', [...f.pay.bonus, { from: null, type: 'pct', value: null }])}>Thêm mốc thưởng</Btn></div>
           </div>
+          <div className="row gap"><Check checked={f.pay.lunch !== false} onChange={(v) => setPay('lunch', v)}>Hưởng hỗ trợ ăn trưa</Check>
+            {f.pay.lunch !== false && <Field label="Mức ăn trưa mỗi ngày" hint={`Để trống: theo mức chung ${money(settings?.staff_settings?.lunch_rate || 0)} đ`}>
+              <NumInput value={f.pay.lunch_rate} onChange={(v) => setPay('lunch_rate', v)} style={{ maxWidth: 160 }} /></Field>}</div>
           <Field label="Bảng hoa hồng"><Select value={f.pay.commission_id} onChange={(v) => setPay('commission_id', v)} placeholder="(không tính hoa hồng)"
             options={(tables.data || []).map((t) => ({ value: t.id, label: t.name }))} /></Field>
         </div>
@@ -168,7 +177,7 @@ export function SchedulePage() {
   return (
     <ListPage title="Lịch làm việc"
       search={<Search value={search} onChange={setSearch} placeholder="Tìm nhân viên" />}
-      actions={!(shifts.data || []).length && can('owner') && <Btn kind="primary" icon="plus" onClick={() => open('shift', {})}>Tạo ca làm việc</Btn>}>
+      actions={!(shifts.data || []).length && can('quan_ly_luong') && <Btn kind="primary" icon="plus" onClick={() => open('shift', {})}>Tạo ca làm việc</Btn>}>
       <ErrorBox error={emps.error || sch.error} />
       {shifts.data && !shifts.data.length && <Note tone="warn">Chưa có ca làm việc. Tạo ca ở Nhân viên → Thiết lập nhân viên.</Note>}
       <Table rows={emps.data && sch.data ? rows : null} empty="Chưa có nhân viên" onRow={can('cham_cong') ? (e) => open('schedule', { employee: e }) : undefined} columns={[
@@ -356,9 +365,9 @@ export function CommissionForm({ table, onClose }) {
 }
 
 // ---------- THIẾT LẬP NHÂN VIÊN ----------
-const DEF = { std_days: 26, std_hours: 8, ot_rate: 1.5, late_grace: 5, paid_leave: true };
+const DEF = { std_days: 26, std_hours: 8, ot_rate: 1.5, late_grace: 5, paid_leave: true, lunch_rate: 0 };
 export function StaffSettingsPage({ go }) {
-  const { settings, open, loadBooks } = useApp();
+  const { settings, open, loadBooks, can } = useApp();
   const shifts = useQ('shifts', [], 'start_time', 200);
   const { run, busy } = useAction();
   const [f, setF] = useState({ ...DEF, ...(settings.staff_settings || {}) });
@@ -366,7 +375,7 @@ export function StaffSettingsPage({ go }) {
   return (
     <>
       <div className="page-head"><div className="grow"><h1 className="page-title">Thiết lập nhân viên</h1></div>
-        <Btn icon="users" onClick={() => go('cai-dat', 'users')}>Tài khoản đăng nhập & quyền</Btn></div>
+        {can('owner') && <Btn icon="users" onClick={() => go('cai-dat', 'users')}>Tài khoản đăng nhập & quyền</Btn>}</div>
       <Section title="Ca làm việc">
         <Table dense rows={shifts.data} empty="Chưa có ca làm việc" onRow={(s) => open('shift', { shift: s })} columns={[
           { key: 'n', label: 'Tên ca', render: (s) => <><b>{s.name}</b>{!s.active && <> <Pill tone="mute">ngừng</Pill></>}</> },
@@ -381,11 +390,12 @@ export function StaffSettingsPage({ go }) {
           <Field label="Số giờ mỗi ngày công"><NumInput money={false} min={1} max={24} value={f.std_hours} onChange={(v) => set('std_hours', v)} /></Field>
           <Field label="Hệ số lương làm thêm giờ"><NumInput money={false} min={1} value={f.ot_rate} onChange={(v) => set('ot_rate', v)} /></Field>
           <Field label="Cho phép đi muộn / về sớm (phút)"><NumInput money={false} min={0} value={f.late_grace} onChange={(v) => set('late_grace', v)} /></Field>
+          <Field label="Hỗ trợ ăn trưa (đ / ngày đi làm)" hint="0 = không hỗ trợ. Từng nhân viên đặt mức riêng hoặc tắt ở Thiết lập lương"><NumInput min={0} value={f.lunch_rate} onChange={(v) => set('lunch_rate', v)} /></Field>
         </div>
         <Check checked={f.paid_leave} onChange={(v) => set('paid_leave', v)}>Ngày nghỉ có phép vẫn tính công (lương theo ngày công chuẩn)</Check>
         <div><Btn kind="primary" busy={busy} onClick={async () => {
-          if (await run('update_book_settings', { settings: { staff_settings: { std_days: Number(f.std_days) || 26, std_hours: Number(f.std_hours) || 8, ot_rate: Number(f.ot_rate) || 1,
-            late_grace: Number(f.late_grace) || 0, paid_leave: !!f.paid_leave } } }, 'Đã lưu thiết lập')) loadBooks();
+          if (await run('save_staff_settings', { settings: { std_days: Number(f.std_days) || 26, std_hours: Number(f.std_hours) || 8, ot_rate: Number(f.ot_rate) || 1,
+            late_grace: Number(f.late_grace) || 0, paid_leave: !!f.paid_leave, lunch_rate: Number(f.lunch_rate) || 0 } }, 'Đã lưu thiết lập')) loadBooks();
         }}>Lưu thiết lập</Btn></div>
       </Section>
     </>

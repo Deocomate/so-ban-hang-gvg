@@ -105,7 +105,7 @@ api.as(nv);
 await api.call('save_timesheet', { book_id: TH, employee_id: F.id, work_date: today, status: 'di_lam' });
 C('Nhân viên có quyền chấm công chấm được', (await api.q('timesheets', TH, [['employee_id', 'eq', F.id]])).length, 1);
 C('Nhân viên không xem được cách tính lương', (await api.one('employees', TH, [['id', 'eq', A.id]])).pay ?? null, null);
-await E('Nhân viên không lập bảng lương', () => api.call('create_paysheet', { book_id: TH, from: d0, to: today }), 'chủ cửa hàng');
-await E('Nhân viên không xem bảng lương', () => api.q('paysheets', TH), 'chủ cửa hàng');
+await E('Nhân viên không lập bảng lương', () => api.call('create_paysheet', { book_id: TH, from: d0, to: today }), 'Quản lý lương');
+await E('Nhân viên không xem bảng lương', () => api.q('paysheets', TH), 'Quản lý lương');
 
 finish('Nhân viên · chấm công · bảng lương');
