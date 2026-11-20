@@ -18,7 +18,7 @@ const lsGet = (k) => { try { return localStorage.getItem(k) || ''; } catch (e) {
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* bỏ qua */ } };
 
 // Ô tìm hàng hóa: chọn là thêm dòng; máy quét mã vạch (gõ mã + Enter) thêm ngay nếu trùng SKU
-function ProductSearch({ products, tier, book, onPick, inputRef }) {
+export function ProductSearch({ products, tier, book, onPick, inputRef }) {
   const [q, setQ] = useState(''); const [open, setOpen] = useState(false); const [hi, setHi] = useState(0);
   const boxRef = useRef(null); const listRef = useRef(null);
   const list = useMemo(() => {

@@ -1439,3 +1439,28 @@ i.f-self { background: var(--accent-2); color: var(--accent); }
 .dq-hist-row .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dq-hist-row b { font-variant-numeric: tabular-nums; }
 @media (max-width: 420px) { .dq-grid { grid-template-columns: 1fr; } }
+
+/* Báo giá dạng màn tạo hóa đơn: nhóm hàng I, II, III; dòng hàng có khối lượng, định mức, trừ diềm */
+.qgroup { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px dashed var(--line); border-radius: 14px; }
+.qgroup.on { border-color: var(--accent); border-style: solid; }
+.qgroup-head { display: flex; align-items: flex-start; gap: 10px; }
+.qgroup-no { font-weight: 700; color: var(--accent); min-width: 28px; padding-top: 6px; }
+.qgroup-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.qgroup-name { border: 0; border-bottom: 1px solid var(--line); background: none; font: inherit; font-weight: 600; font-size: 15px; color: var(--ink); padding: 6px 0; outline: 0; width: 100%; text-transform: uppercase; }
+.qgroup-name::placeholder { text-transform: none; font-weight: 400; color: var(--muted); }
+.qgroup-name:focus { border-bottom-color: var(--accent); }
+.qgroup-hint { padding-top: 8px; white-space: nowrap; }
+.qgroup-empty { padding: 4px 38px; }
+.pos-line.qline { grid-template-columns: 22px 26px minmax(0, 1fr) 130px; grid-template-areas: "no del info total" ". . calc calc"; row-gap: 8px; }
+.qline .pos-line-no { grid-area: no; } .qline .pos-line-del { grid-area: del; } .qline .pos-line-info { grid-area: info; } .qline .pos-line-total { grid-area: total; }
+.qline-calc { grid-area: calc; display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.qline-calc .q-mini { width: 96px; } .qline-calc .q-unit { width: 76px; } .qline-calc .qline-price { width: 120px; }
+.qline-spec { font-style: normal; }
+.qship { display: flex; flex-direction: column; gap: 6px; }
+.qship-row { display: grid; grid-template-columns: minmax(0, 1fr) 70px minmax(0, 1.2fr); gap: 6px; }
+.qterms { margin-top: -6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 860px) {
+  .pos-line.qline { grid-template-columns: 22px minmax(0, 1fr) 32px; grid-template-areas: "no info del" "calc calc calc" "total total total"; }
+  .qline-calc .q-mini { width: calc(50% - 4px); }
+  .qgroup-hint { display: none; }
+}
