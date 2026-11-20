@@ -1578,3 +1578,9 @@ body { font-size: 13px; line-height: 1.45; }
 .kpis { gap: 8px; }
 .kpi { padding: 10px 14px; gap: 2px; }
 .kpi-value { font-size: 19px; }
+/* Chi tiết khách hàng kiểu KiotViet: lưới thông tin, ghi chú, dải số công nợ gọn */
+.cust-info { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.kv-detail .cust-info label { grid-template-columns: 104px minmax(0, 1fr); min-height: 22px; border-bottom: 1px dashed var(--line); padding-bottom: 4px; }
+.cust-note { border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; white-space: pre-wrap; }
+.cust-sum { display: flex; flex-wrap: wrap; gap: 6px 22px; padding: 8px 12px; background: var(--surface-2); border-radius: 4px; font-size: 13px; color: var(--muted); }
+.cust-sum b { color: var(--ink); font-weight: 600; margin-left: 4px; }

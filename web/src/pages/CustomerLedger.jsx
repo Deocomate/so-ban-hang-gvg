@@ -6,6 +6,7 @@ import { useFunds } from '../lib/lookups.js';
 import { TIME_PRESETS, presetRange } from '../components/DocFilters.jsx';
 import { CustomerFiles } from './CustomerFiles.jsx';
 import { DocsBoardMini } from './OrderDocs.jsx';
+import { PaymentDetail } from './Cash.jsx';
 import { OrderDetail } from './Sales.jsx';
 import { Btn, Pill, StatusPill, DELIVERY, Field, Input, Select, DateInput, NumInput, Tabs, Loading, ErrorBox, Note, Table, Modal } from '../components/ui.jsx';
 
@@ -22,79 +23,82 @@ export function orderPayState(o) {
 
 // Dư nợ âm = khách đang trả trước
 const Balance = ({ v }) => (v < 0 ? <span className="good">{money(-v)}<div className="cell-sub">khách trả trước</div></span> : <span className={v > 0 ? 'bad' : ''}>{money(v)}</span>);
-const stop = (fn) => (e) => { e.stopPropagation(); fn(); };
 
-// Hộp chi tiết khách hàng mở đè lên danh sách: số liệu công nợ, tab Sổ công nợ / Chi tiết đơn, nút Ghi phiếu thu luôn ở chân hộp
+// Chi tiết khách hàng như KiotViet: thẻ Thông tin (các trường của khách + vài số công nợ gọn), Lịch sử bán / trả hàng,
+// Nợ cần thu từ khách, Giấy tờ, Tài liệu. Nút ở chân đổi theo thẻ đang xem.
 export function CustomerDetail({ id, onClose }) {
   const { open, can, settings } = useApp();
   const seeLedger = can('xem_thu_chi');
   const cq = useQ('customers', [['id', 'eq', id]]);
   const led = useRpcData('customer_ledger', { customer_id: id }, seeLedger);
-  const [tab, setTab] = useState('orders');
+  const [tab, setTab] = useState('info');
   const c = cq.data?.[0];
   if (!c) return <Modal title="Khách hàng" onClose={onClose} size="xl">{cq.error ? <ErrorBox error={cq.error} /> : cq.data ? <Note tone="warn">Không tìm thấy khách hàng này</Note> : <Loading />}</Modal>;
   const L = led.data;
   const nPay = L ? L.rows.filter((r) => r.type === 'thu').length : 0;
+  const x = c.extra || {};
+  const priceName = (settings.price_names || [])[c.price_tier - 1];
+  const payBtn = can('thu_chi') && <Btn kind="primary" icon="in" onClick={() => open('receipt', { customer_id: id, round: nPay + 1 })}>Thanh toán</Btn>;
+  const orderBtn = can('ban_hang') && <Btn icon="cart" onClick={() => open('order-form', { customer_id: id })}>Tạo đơn</Btn>;
+  const footer = tab === 'info' ? <>{orderBtn}<span className="grow" />{can('danh_muc') && <Btn kind="primary" icon="edit" onClick={() => open('party', { type: 'kh', id })}>Cập nhật</Btn>}</>
+    : tab === 'orders' ? <>{orderBtn}<span className="grow" />{payBtn}</>
+      : tab === 'ledger' ? <><span className="grow" />{payBtn}</> : null;
+  const field = (label, value) => <label key={label}><span>{label}</span><b>{value || ''}</b></label>;
   return (
-    <Modal title={c.name} subtitle={[c.code, c.phone, c.address].filter(Boolean).join(' · ') + (c.credit_days ? ` · cho nợ ${c.credit_days} ngày` : '')} onClose={onClose} size="xl"
-      footer={<>
-        {can('danh_muc') && <Btn icon="edit" onClick={() => open('party', { type: 'kh', id })}>Sửa thông tin</Btn>}
-        {can('ban_hang') && <Btn icon="cart" onClick={() => open('order-form', { customer_id: id })}>Tạo đơn</Btn>}
-        <span className="grow" />
-        {can('thu_chi') && <Btn kind="primary" icon="plus" onClick={() => open('receipt', { customer_id: id, round: nPay + 1 })}>Ghi phiếu thu</Btn>}
-      </>}>
-      <div className={`kpis ${c.prepaid > 0 ? 'kpis-4' : 'kpis-3'}`}>
-        {L && <div className="kpi"><span className="kpi-label">Tiền hàng</span><span className="kpi-value">{money(L.total_billed)}</span></div>}
-        {L && <div className="kpi"><span className="kpi-label">Tổng đã thu</span><span className="kpi-value">{money(L.total_paid)}</span></div>}
-        <div className={`kpi ${c.overdue > 0 ? 'alertk' : c.receivable > 0 ? 'key' : ''}`}><span className="kpi-label">Khách còn nợ</span><span className="kpi-value">{money(c.receivable)}</span>
-          {c.overdue > 0 && <span className="kpi-sub bad">Quá hạn {money(c.overdue)}, lâu nhất {c.max_overdue_days} ngày</span>}</div>
-        {c.prepaid > 0 && <div className="kpi"><span className="kpi-label">Khách trả trước</span><span className="kpi-value good">{money(c.prepaid)}</span></div>}
-      </div>
-      {(settings.points_on || c.supplier_id) && <div className="row gap-l small">
-        {settings.points_on && <span><span className="muted">Điểm tích lũy: </span><PointsCell c={c} /></span>}
-        {c.supplier_id && <span><span className="muted">Đồng thời là nhà cung cấp — </span><DualDebt c={c} /></span>}
-      </div>}
-      <ErrorBox error={led.error} />
-      <Tabs value={tab} onChange={setTab} tabs={[{ value: 'orders', label: 'Lịch sử bán / trả hàng' }, ...(seeLedger ? [{ value: 'ledger', label: 'Nợ cần thu từ khách' }] : []), { value: 'docs', label: 'Giấy tờ đơn hàng' }, { value: 'files', label: 'Tài liệu' }]} />
-      {tab === 'ledger' && <LedgerTab id={id} />}
+    <Modal title={c.name} subtitle={<span className="row gap-s">{c.code}{c.active === false && <Pill tone="mute">Ngừng giao dịch</Pill>}{c.overdue > 0 && <Pill tone="bad">Quá hạn {money(c.overdue)}</Pill>}</span>}
+      onClose={onClose} size="xl" footer={footer}>
+      <Tabs value={tab} onChange={setTab} tabs={[
+        { value: 'info', label: 'Thông tin' },
+        { value: 'orders', label: 'Lịch sử bán / trả hàng' },
+        ...(seeLedger ? [{ value: 'ledger', label: 'Nợ cần thu từ khách' }] : []),
+        { value: 'docs', label: 'Giấy tờ đơn hàng' },
+        { value: 'files', label: 'Tài liệu' },
+      ]} />
+      {tab === 'info' && <>
+        <div className="od-info cust-info">
+          {field('Mã khách hàng', c.code)}
+          {field('Tên khách', c.name)}
+          {field('Điện thoại', c.phone)}
+          {field('Nhóm khách', c.kind)}
+          {field('Ngày sinh', x.birthday ? dmy(x.birthday) : '')}
+          {field('Giới tính', x.gender)}
+          {field('Email', x.email)}
+          {field('Facebook', x.facebook)}
+          {field('Địa chỉ', c.address)}
+          {field('Khu vực', x.province)}
+          {field('Phường/Xã', x.ward)}
+          {field('Người liên hệ', c.contact)}
+          {field('Mức giá', priceName)}
+          {field('Được nợ', c.credit_days ? `${c.credit_days} ngày` : '')}
+          {field('Hạn mức nợ', c.credit_limit > 0 ? money(c.credit_limit) : '')}
+          {field('Ngày tạo', c.created_at ? dmy(String(c.created_at).slice(0, 10)) : '')}
+          {(x.tax_code || x.tax_name) && field('Mã số thuế', x.tax_code)}
+          {(x.tax_code || x.tax_name) && field('Tên đơn vị', x.tax_name)}
+          {x.ship_address && field('Giao hàng đến', [x.ship_name, x.ship_phone, x.ship_address].filter(Boolean).join(' · '))}
+        </div>
+        {c.note && <div className="cust-note"><span className="muted small">Ghi chú</span><div>{c.note}</div></div>}
+        <div className="cust-sum">
+          <span>Nợ hiện tại <b className={c.receivable > 0 ? 'bad' : ''}>{money(c.receivable)}</b></span>
+          {c.overdue > 0 && <span>Quá hạn <b className="bad">{money(c.overdue)}</b> · lâu nhất {c.max_overdue_days} ngày</span>}
+          {c.prepaid > 0 && <span>Trả trước <b className="good">{money(c.prepaid)}</b></span>}
+          <span>Tổng bán <b>{money(c.total_bought || 0)}</b></span>
+          {L && <span>Tổng đã thu <b>{money(L.total_paid)}</b></span>}
+          {settings.points_on && <span>Điểm <PointsCell c={c} /></span>}
+          {c.supplier_id && <span>Đồng thời là nhà cung cấp · <DualDebt c={c} /></span>}
+        </div>
+        <ErrorBox error={led.error} />
+      </>}
       {tab === 'orders' && <OrdersTab id={id} usablePrepaid={L?.usable_prepaid || 0} />}
+      {tab === 'ledger' && <LedgerTab id={id} />}
       {tab === 'docs' && <DocsBoardMini params={{ customer_id: id }} showCustomer={false} />}
       {tab === 'files' && <CustomerFiles customerId={id} customerName={c.name} />}
     </Modal>
   );
 }
 
-// Một dòng sổ: mã chứng từ, ngày; phiếu thu bấm để mở rộng xem trừ vào những đơn nào
-function LedgerCell({ r, open: isOpen, onOrder, onPay }) {
-  if (r.mark) return <b>{r.mark}{r.date ? ` (${dmy(r.date)})` : ''}</b>;
-  const pay = r.type === 'thu' || r.type === 'hoan';
-  return (
-    <div>
-      <div className="cell-main">
-        {pay && <span className="muted" aria-hidden>{isOpen ? '▾ ' : '▸ '}</span>}
-        <b className={pay ? 'accent' : ''}>{r.code}</b>{r.title && <span>{' · ' + r.title}</span>}
-      </div>
-      <div className="cell-sub">{dmy(r.date)}{pay && r.method ? ' · ' + r.method : ''}{!pay && r.note ? ' · ' + r.note : ''}</div>
-      {pay && isOpen && (
-        <div className="ledger-more small">
-          {r.note && <div>{r.note}</div>}
-          {r.ref_no && <div className="muted">Mã giao dịch: {r.ref_no}</div>}
-          {r.allocs.map((a) => (
-            <div key={a.doc_id}>{a.doc_type === 'don_ban' ? <a href="#" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onOrder(a.doc_id); }}>{a.code}</a> : a.code} · {money(a.amount)} đ</div>
-          ))}
-          {r.prepaid > 0 && <div className="good">Khách trả trước · {money(r.prepaid)} đ</div>}
-          <button type="button" className="link-btn small" onClick={stop(onPay)}>Xem phiếu {r.code}</button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function LedgerTab({ id }) {
-  const { open } = useApp();
   const [preset, setPreset] = useState('all'); const [from, setFrom] = useState(''); const [to, setTo] = useState('');
   const [newest, setNewest] = useState(true);
-  const [openKeys, setOpenKeys] = useState(() => new Set());
   const [f, t] = preset === 'custom' ? [from || null, to || null] : presetRange(preset);
   const led = useRpcData('customer_ledger', { customer_id: id, from: f, to: t });
   const L = led.data;
@@ -106,8 +110,6 @@ function LedgerTab({ id }) {
     return newest ? list.reverse() : list;
   }, [L, newest, filtered]);
   const sum = (k) => (L ? L.rows.reduce((s, r) => s + r[k], 0) : 0);
-  const toggle = (k) => setOpenKeys((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
-  const onRow = (r) => (r.payment_id ? toggle(r.key) : r.order_id ? open('order', { id: r.order_id }) : null);
   return (
     <div className="stack">
       <div className="row gap">
@@ -123,13 +125,15 @@ function LedgerTab({ id }) {
       {filtered && L && <div className="small muted">Dư nợ đầu kỳ <b>{money(L.opening)}</b> · phát sinh {money(sum('debt'))} · đã thu {money(sum('paid'))} · dư nợ cuối kỳ <b>{money(L.closing)}</b></div>}
       <ErrorBox error={led.error} />
       <Table rows={rows} rowKey="key" empty={filtered ? 'Không có giao dịch nào trong thời gian này' : 'Khách chưa có giao dịch nào'}
-        rowClass={(r) => (r.mark ? 'row-strong' : openKeys.has(r.key) ? 'row-top' : '')} onRow={onRow}
-        foot={L && L.rows.length ? { d: `${L.rows.length} giao dịch`, n: money(sum('debt')), p: money(sum('paid')), b: <Balance v={L.closing} /> } : null}
+        rowClass={(r) => (r.mark ? 'row-strong' : '')}
+        expand={(r, close) => (r.payment_id ? <PaymentDetail id={r.payment_id} onClose={close} /> : r.order_id ? <OrderDetail id={r.order_id} onClose={close} /> : null)}
+        foot={L && L.rows.length ? { c: `${L.rows.length} giao dịch`, v: money(sum('debt') - sum('paid')), b: <Balance v={L.closing} /> } : null}
         columns={[
-          { key: 'd', label: 'Giao dịch', className: 'col-fill', render: (r) => <LedgerCell r={r} open={openKeys.has(r.key)} onOrder={(oid) => open('order', { id: oid })} onPay={() => open('pay-detail', { id: r.payment_id })} /> },
-          { key: 'n', label: 'Phát sinh nợ', align: 'right', width: 140, render: (r) => (r.mark ? '' : r.debt ? <span className={r.debt < 0 ? 'good' : ''}>{money(r.debt)}</span> : '—') },
-          { key: 'p', label: 'Đã thu', align: 'right', width: 140, render: (r) => (r.mark ? '' : r.paid ? <span className={r.paid < 0 ? 'bad' : ''}>{money(r.paid)}</span> : '—') },
-          { key: 'b', label: 'Dư nợ', align: 'right', width: 140, render: (r) => <Balance v={r.balance} /> },
+          { key: 'c', label: 'Mã phiếu', render: (r) => (r.mark ? <b>{r.mark}</b> : <b className={r.payment_id ? 'accent' : ''}>{r.code}</b>) },
+          { key: 'd', label: 'Thời gian', className: 'nowrap', render: (r) => (r.date ? dmy(r.date) : '') },
+          { key: 'k', label: 'Loại', className: 'col-clip', render: (r) => (r.mark ? '' : <span title={[r.title, r.note].filter(Boolean).join(' · ')}>{r.title || (r.payment_id ? 'Thanh toán' : 'Bán hàng')}{r.method ? ` · ${r.method}` : ''}</span>) },
+          { key: 'v', label: 'Giá trị', align: 'right', render: (r) => { if (r.mark) return ''; const v = (r.debt || 0) - (r.paid || 0); return <span className={v < 0 ? 'good' : ''}>{money(v)}</span>; } },
+          { key: 'b', label: 'Dư nợ khách hàng', align: 'right', render: (r) => <Balance v={r.balance} /> },
         ]} />
     </div>
   );
