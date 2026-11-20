@@ -9,11 +9,11 @@ import { hushHoverCards } from '../components/HoverCard.jsx';
 import { reserveTab } from './Documents.jsx';
 import { QUICK_FUND_KEY, readFund } from './Sales.jsx';
 
-const METHODS = ['Tiền mặt', 'Chuyển khoản', 'Thẻ / POS', 'COD', 'Bù trừ'];
-const ENTER_SUBMITS = new Set(['Số tiền', 'Mã giao dịch', 'Ghi chú']); // Enter ở ô ngày/chọn để dành cho chính ô đó
+const ENTER_SUBMITS = new Set(['Số tiền', 'Ghi chú']); // Enter ở ô ngày/chọn để dành cho chính ô đó
 const PRINT_KEY ='gomsu.debt_quick_print';
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* bỏ qua */ } } };
-const methodOf = (fund) => (/mặt|két/i.test(fund?.name || '') ? 'Tiền mặt' : 'Chuyển khoản');
+// Hình thức gắn liền với quỹ: quỹ tiền mặt (tên có "mặt"/"két") ↔ Tiền mặt, các quỹ còn lại là tài khoản ngân hàng ↔ Chuyển khoản
+const isCash = (f) => /mặt|két/i.test(f?.name || '');
 
 // Số ngày quá hạn (âm = còn bao nhiêu ngày nữa mới đến hạn); null khi chứng từ chưa có hạn trả
 export const overdueDays = (d, today = todayVN()) => (d.due_date ? Math.round((new Date(today) - new Date(d.due_date)) / 864e5) : null);
@@ -42,15 +42,16 @@ export function DebtQuickPay({ doc: d, isKh, close }) {
   const [amount, setAmount] = useState(null);
   const [date, setDate] = useState(todayVN());
   const [fund, setFund] = useState(readFund);
-  const [method, setMethod] = useState(null);
-  const [refNo, setRefNo] = useState('');
   const [note, setNote] = useState('');
   const [print, setPrint] = useState(() => store.get(PRINT_KEY) === '1');
   useEffect(() => {
     if (funds.data?.length && !funds.data.some((f) => f.id === fund)) setFund(funds.data[0].id);
   }, [funds.data]);
-  const fundRow = (funds.data || []).find((f) => f.id === fund);
-  const meth = method || methodOf(fundRow);
+  const all = funds.data || [];
+  const cash = all.filter(isCash); const banks = all.filter((f) => !isCash(f));
+  const meth = isCash(all.find((f) => f.id === fund)) ? 'Tiền mặt' : 'Chuyển khoản';
+  const pickBank = meth === 'Chuyển khoản' && banks.length > 1;
+  const pickMethod = (m) => { const list = m === 'Tiền mặt' ? cash : banks; if (!list.some((f) => f.id === fund)) setFund(list[0]?.id || ''); };
 
   const amt = mode === 'full' ? due : Number(amount) || 0;
   const tooMuch = amt > max;
@@ -63,7 +64,7 @@ export function DebtQuickPay({ doc: d, isKh, close }) {
     const tab = print ? reserveTab() : null;
     const r = await run('create_payment', {
       kind: isKh ? 'thu_khach' : 'tra_ncc', date, fund_id: fund, party_id: d.party_id, amount: amt, method: meth,
-      ref_no: refNo.trim() || null, note: note.trim() || null, allocations: [{ doc_type: d.doc_type, doc_id: d.doc_id, amount: amt }],
+      note: note.trim() || null, allocations: [{ doc_type: d.doc_type, doc_id: d.doc_id, amount: amt }],
     }, (x) => `${isKh ? 'Đã thu' : 'Đã trả'} ${money(amt)} đ cho ${d.code} – phiếu ${x.code}. ${left > 0 ? `Còn nợ ${money(left)} đ` : 'Đã hết nợ'}`);
     if (!r) { tab?.cancel(); return; }
     hushHoverCards(2000);
@@ -105,10 +106,12 @@ export function DebtQuickPay({ doc: d, isKh, close }) {
       )}
 
       <div className="dq-grid">
-        <label className="dq-f"><span>Ngày {isKh ? 'thu' : 'trả'}</span><DateInput value={date} onChange={(v) => v && setDate(v)} max={todayVN()} aria-label="Ngày" /></label>
-        <label className="dq-f"><span>{isKh ? 'Thu vào quỹ' : 'Chi từ quỹ'}</span><Select value={fund} onChange={setFund} options={(funds.data || []).map((f) => ({ value: f.id, label: f.name }))} aria-label="Quỹ" /></label>
-        <label className="dq-f"><span>Hình thức</span><Select value={meth} onChange={setMethod} options={METHODS} aria-label="Hình thức" /></label>
-        <label className="dq-f"><span>Mã giao dịch</span><Input value={refNo} onChange={setRefNo} placeholder="Không bắt buộc" aria-label="Mã giao dịch" /></label>
+        <div className="dq-f dq-wide"><span>Hình thức</span>
+          <div className="seg" role="radiogroup" aria-label="Hình thức">{['Tiền mặt', 'Chuyển khoản'].map((m) => (
+            <button type="button" key={m} role="radio" aria-checked={meth === m} className={meth === m ? 'on' : ''}
+              disabled={!(m === 'Tiền mặt' ? cash : banks).length} onClick={() => pickMethod(m)}>{m}</button>))}</div></div>
+        <label className={`dq-f${pickBank ? '' : ' dq-wide'}`}><span>Ngày {isKh ? 'thu' : 'trả'}</span><DateInput value={date} onChange={(v) => v && setDate(v)} max={todayVN()} aria-label="Ngày" /></label>
+        {pickBank && <label className="dq-f"><span>{isKh ? 'Vào tài khoản' : 'Từ tài khoản'}</span><Select value={fund} onChange={setFund} options={banks.map((f) => ({ value: f.id, label: f.name }))} aria-label="Tài khoản" /></label>}
         <label className="dq-f dq-wide"><span>Ghi chú</span><Input value={note} onChange={setNote} placeholder={isKh ? 'VD: khách hẹn trả nốt cuối tháng' : 'VD: trả đợt 2'} aria-label="Ghi chú" /></label>
       </div>
 
