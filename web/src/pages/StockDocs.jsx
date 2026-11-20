@@ -6,7 +6,7 @@ import { useProducts, productLabel, productSub } from '../lib/lookups.js';
 import { exportXlsx } from '../lib/excel.js';
 import { useTimeFilter, TimeFilter, dateFilters } from '../components/DocFilters.jsx';
 import { Btn, Pill, Field, Input, DateInput, NumInput, Check, Search, ErrorBox, Note, Table, Modal, Picker, ListPage, FilterBox, RadioList } from '../components/ui.jsx';
-import { DAMAGE_REASONS, INTERNAL_PURPOSES } from './Inventory.jsx';
+import { DAMAGE_REASONS, INTERNAL_PURPOSES, StockCard } from './Inventory.jsx';
 
 const linesText = (ls) => (ls || []).slice(0, 4).map((x) => `${x.sku} ${fq(Math.abs(x.qty))}`).join('; ') + ((ls || []).length > 4 ? ` … (+${ls.length - 4})` : '');
 
@@ -76,7 +76,7 @@ export function ProductionPage() {
         {can('kho') && <Btn kind="primary" icon="plus" onClick={() => open('production', {})}>Tạo phiếu sản xuất</Btn>}
       </>}>
       <ErrorBox error={q.error} />
-      <Table rows={q.data ? rows : null} empty="Chưa có phiếu sản xuất trong kỳ" onRow={(x) => open('stockcard', { product_id: x.product_id })} columns={[
+      <Table rows={q.data ? rows : null} empty="Chưa có phiếu sản xuất trong kỳ" expand={(x, close) => <StockCard product_id={x.product_id} onClose={close} />} columns={[
         { key: 'c', label: 'Mã sản xuất', render: (x) => <><div className="cell-main">{x.code}</div><div className="cell-sub">{dmy(x.prod_date)}</div></> },
         { key: 'p', label: 'Mặt hàng', render: (x) => <><div className="cell-main">{x.sku} · {x.name}</div><div className="cell-sub">{x.note}</div></> },
         { key: 'q', label: 'Số lượng', align: 'right', render: (x) => <b>{fq(x.qty)} {x.unit}</b> },

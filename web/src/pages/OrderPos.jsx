@@ -319,7 +319,7 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
         footer={<><Btn onClick={() => setUpd(null)}>Bỏ qua</Btn><Btn kind="primary" busy={busy} onClick={() => { const u = upd; setUpd(null); submit(u.mode, u.print, u.confirmed, true); }}>Đồng ý</Btn></>}>
         <div className="stack-s">
           <div>Khi lưu thay đổi trên hóa đơn <b>{f.code}</b>, phần mềm sẽ tự động:</div>
-          <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>{upd.items.map((x) => <li key={x}>{x}</li>)}<li>Ghi toàn bộ vào Lịch sử đơn</li></ul>
+          <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>{upd.items.map((x) => <li key={x}>{x}</li>)}</ul>
           <div>Bạn có muốn tiếp tục?</div>
         </div>
       </Modal>}
@@ -340,7 +340,7 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
                 <Icon name="alert" size={16} />
                 <span>{f.delivery_count > 0 ? `Đơn đã giao ${f.delivery_count} đợt. ` : ''}{f.paid_net > 0 ? `Đã thu ${money(f.paid_net)} đ. ` : ''}
                   Sửa thoải mái như đơn mới: đổi khách, sửa giá, thêm / bỏ hàng, giảm số lượng. Phần mềm tự chuyển phiếu thu sang khách mới,
-                  tự hủy phiếu giao cũ và giao lại khi cần, rồi báo lại cho bạn. Mọi thay đổi được ghi vào Lịch sử đơn.</span>
+                  tự hủy phiếu giao cũ và giao lại khi cần, rồi báo lại cho bạn.</span>
               </div>
             )}
             {f.lines.length === 0 && (

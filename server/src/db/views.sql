@@ -292,7 +292,7 @@ select x.id, x.book_id, x.delivery_id, d.code as delivery_code, d.delivery_date,
 from delivery_lines x join deliveries d on d.id = x.delivery_id join products p on p.id = x.product_id;
 
 create view v_sales_returns as
-select r.id, r.book_id, r.code, r.order_id, o.code as order_code, c.name as customer_name, r.return_date, r.reason, r.note,
+select r.id, r.book_id, r.code, r.order_id, o.code as order_code, o.customer_id, c.name as customer_name, r.return_date, r.reason, r.note,
   r.created_at, coalesce(x.revenue, 0) as revenue,
   case when can_cost(r.book_id) then x.cogs end as cogs, x.lines
 from sales_returns r join sales_orders o on o.id = r.order_id left join customers c on c.id = o.customer_id

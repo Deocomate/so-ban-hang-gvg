@@ -82,7 +82,7 @@ export function ProductsPage() {
         {can('danh_muc') && <Btn kind="primary" icon="plus" onClick={() => open('product', {})}>Thêm hàng hóa</Btn>}
       </>}>
       <ErrorBox error={q.error} />
-      <Table rows={q.data ? rows : null} onRow={(p) => open('product-detail', { id: p.id })} empty={<span>Chưa có sản phẩm. {can('owner') && 'Bấm “Nhập từ Excel” để đưa toàn bộ hàng hóa vào một lần.'}</span>}
+      <Table rows={q.data ? rows : null} expand={(p, close) => <ProductDetail id={p.id} onClose={close} />} empty={<span>Chưa có sản phẩm. {can('owner') && 'Bấm “Nhập từ Excel” để đưa toàn bộ hàng hóa vào một lần.'}</span>}
         foot={rows.length ? { p: `${rows.length} mã hàng` } : null} columns={[
         { key: 'img', label: '', width: 48, render: (p) => (p.image_url ? <img className="thumb" src={p.image_url} alt="" loading="lazy" decoding="async" /> : <span className="thumb"><Icon name="vase" size={18} /></span>) },
         { key: 'p', label: 'Hàng hóa', className: 'col-product', render: (p) => <><div className="cell-main">{p.sku} · {p.name} {p.product_type !== 'hang' && <Pill tone="accent">{typeLabel(p.product_type)}</Pill>} {!p.active && <Pill tone="mute">ngừng bán</Pill>} {!p.sell_direct && <Pill tone="mute">không bán trực tiếp</Pill>}</div><div className="cell-sub">{[productSub(p), p.unit, pack(p)].filter(Boolean).join(' · ')}</div></> },

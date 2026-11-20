@@ -4,6 +4,7 @@ import { money, dmy, todayVN, addDays, match, short } from '../lib/format.js';
 import { TimeFilter, useTimeFilter } from '../components/DocFilters.jsx';
 import { CustomerDetail } from './CustomerLedger.jsx';
 import { SupplierOrdersTab } from './SupplierOrders.jsx';
+import { PaymentDetail } from './Cash.jsx';
 import { exportXlsx } from '../lib/excel.js';
 import { CustomerFields } from './CustomerFields.jsx';
 import { groupNames } from '../lib/lookups.js';
@@ -117,7 +118,7 @@ export function PartiesPage({ type }) {
         <div className="kpi"><span className="kpi-label">{isKh ? 'Khách đã trả trước / cọc' : 'Mình đã trả trước'}</span><span className="kpi-value">{short(tot('prepaid'))}</span></div>
       </div>
       <ErrorBox error={q.error} />
-      <Table rows={q.data ? rows : null} onRow={(c) => open('party-detail', { type, id: c.id })} rowClass={(c) => (c.overdue > 0 ? 'row-late' : '')}
+      <Table rows={q.data ? rows : null} expand={(c, close) => <PartyDetail type={type} id={c.id} onClose={close} />} rowClass={(c) => (c.overdue > 0 ? 'row-late' : '')}
         empty={all.length ? `Không có ${who} nào khớp bộ lọc` : `Chưa có ${who} nào`}
         foot={rows.length ? { n: `${money(rows.length)} ${who}`, d: money(tot(debtKey)), o: money(tot('overdue')), p: money(tot('prepaid')), s: money(tot(soldKey)) } : null} columns={[
         { key: 'c', label: isKh ? 'Mã KH' : 'Mã NCC', width: 100, render: (c) => c.code },
@@ -200,7 +201,7 @@ function SupplierDetail({ type, id, onClose }) {
       </div>
       <KV items={[['Số dư công nợ', `${money(c.opening)} (đầu kỳ) + ${money(c.delivered ?? c.received)} (${isKh ? 'đã giao' : 'đã nhận'}) − ${money(c.paid)} (đã trả) = ${money(c.balance)}`],
         c.credit_limit > 0 && ['Hạn mức nợ', money(c.credit_limit) + (c.receivable > c.credit_limit ? ' — ĐÃ VƯỢT' : '')], c.note && ['Ghi chú', c.note]]} />
-      <Tabs value={tab} onChange={setTab} tabs={[{ value: 'orders', label: isKh ? 'Đơn hàng' : 'Đơn nhập' }, ...(can('thu_chi') ? [{ value: 'pays', label: 'Thu / chi' }] : []), { value: 'debts', label: 'Nợ đầu kỳ' }]} />
+      <Tabs value={tab} onChange={setTab} tabs={[{ value: 'orders', label: isKh ? 'Lịch sử bán / trả hàng' : 'Lịch sử nhập hàng' }, ...(can('thu_chi') ? [{ value: 'pays', label: 'Lịch sử thanh toán' }] : []), { value: 'debts', label: 'Nợ đầu kỳ' }]} />
       {tab === 'orders' && !isKh && <SupplierOrdersTab supplier={c} orders={orders} />}
       {tab === 'orders' && isKh && <Table dense rows={orders.data} onRow={(o) => open(isKh ? 'order' : 'po', { id: o.id })} rowClass={(o) => (o.overdue_days > 0 ? 'row-late' : '')} columns={[
         { key: 'c', label: 'Đơn', render: (o) => <><b>{o.code}</b><div className="cell-sub">{dmy(o.order_date)}</div></> },
@@ -210,7 +211,7 @@ function SupplierDetail({ type, id, onClose }) {
         { key: 'h', label: 'Hạn thanh toán', render: (o) => (o.pay_due_date ? dmy(o.pay_due_date) + (o.overdue_days > 0 ? ` (quá hạn ${o.overdue_days} ngày)` : '') : '—') },
         { key: 's', label: 'Trạng thái', render: (o) => (isKh ? <div className="row gap-s"><StatusPill map={DELIVERY} value={o.delivery_status} /><StatusPill map={PAYMENT} value={o.payment_status} /></div> : <StatusPill map={RECEIVE} value={o.receive_status} />) },
       ]} />}
-      {tab === 'pays' && <Table dense rows={pays.data} onRow={(p) => open('pay-detail', { id: p.id })} rowClass={(p) => (p.voided ? 'row-void' : '')} columns={[
+      {tab === 'pays' && <Table dense rows={pays.data} expand={(p, close) => <PaymentDetail id={p.id} onClose={close} />} rowClass={(p) => (p.voided ? 'row-void' : '')} columns={[
         { key: 'c', label: 'Phiếu', render: (p) => <><b>{p.code}</b><div className="cell-sub">{dmy(p.pay_date)} · {p.fund_name}</div></> },
         { key: 'k', label: 'Loại', render: (p) => p.kind_label },
         { key: 'al', label: 'Trả cho', render: (p) => (p.allocations || []).map((a) => a.doc_code).join(', ') || <span className="muted">trả trước</span> },

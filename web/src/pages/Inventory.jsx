@@ -55,7 +55,7 @@ export function InventoryPage(nav) {
       </>}>
       {tab === 'stock' && <>
         <ErrorBox error={prods.error} />
-        <Table rows={prods.data ? rows : null} onRow={(p) => open('stockcard', { product_id: p.id })} rowClass={(p) => (p.on_hand < 0 ? 'row-late' : p.is_low ? 'row-warn' : '')}
+        <Table rows={prods.data ? rows : null} expand={(p, close) => <StockCard product_id={p.id} onClose={close} />} rowClass={(p) => (p.on_hand < 0 ? 'row-late' : p.is_low ? 'row-warn' : '')}
           foot={rows.length ? { p: `${rows.length} mã`, ...(cost ? { v: money(tot) } : {}) } : null} columns={[
             { key: 'p', label: 'Sản phẩm', render: (p) => <><div className="cell-main">{p.sku} · {p.name}</div><div className="cell-sub">{productSub(p)}</div></> },
             { key: 'oh', label: 'Tồn thực tế', align: 'right', render: (p) => <b>{fq(p.on_hand)}</b> },

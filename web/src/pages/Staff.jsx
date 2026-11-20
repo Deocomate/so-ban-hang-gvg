@@ -42,7 +42,7 @@ export function EmployeesPage() {
         {can('quan_ly_luong') && <Btn kind="primary" icon="plus" onClick={() => open('employee', {})}>Nhân viên</Btn>}
       </>}>
       <ErrorBox error={q.error} />
-      <Table rows={q.data ? rows : null} empty="Chưa có nhân viên" onRow={can('quan_ly_luong') ? (e) => open('employee', { id: e.id }) : undefined} columns={[
+      <Table rows={q.data ? rows : null} empty="Chưa có nhân viên" expand={can('quan_ly_luong') ? (e, close) => <EmployeeForm id={e.id} onClose={close} /> : undefined} columns={[
         { key: 'c', label: 'Mã nhân viên', render: (e) => <b>{e.code}</b> },
         { key: 'n', label: 'Tên nhân viên', render: (e) => <><div className="cell-main">{e.name}</div><div className="cell-sub">{[e.title, e.dept].filter(Boolean).join(' · ')}</div></> },
         { key: 'p', label: 'Số điện thoại', render: (e) => e.phone || '—' },
@@ -180,7 +180,7 @@ export function SchedulePage() {
       actions={!(shifts.data || []).length && can('quan_ly_luong') && <Btn kind="primary" icon="plus" onClick={() => open('shift', {})}>Tạo ca làm việc</Btn>}>
       <ErrorBox error={emps.error || sch.error} />
       {shifts.data && !shifts.data.length && <Note tone="warn">Chưa có ca làm việc. Tạo ca ở Nhân viên → Thiết lập nhân viên.</Note>}
-      <Table rows={emps.data && sch.data ? rows : null} empty="Chưa có nhân viên" onRow={can('cham_cong') ? (e) => open('schedule', { employee: e }) : undefined} columns={[
+      <Table rows={emps.data && sch.data ? rows : null} empty="Chưa có nhân viên" expand={can('cham_cong') ? (e, close) => <ScheduleForm employee={e} onClose={close} /> : undefined} columns={[
         { key: 'n', label: 'Nhân viên', render: (e) => <><div className="cell-main">{e.name}</div><div className="cell-sub">{e.code}</div></> },
         ...ORDER.map((wd) => ({ key: 'd' + wd, label: WEEKDAYS[wd], render: (e) => <div className="stack" style={{ gap: 2 }}>{cell(e.id, wd).map((w) => <Pill key={w.shift_id} tone="accent">{w.shift_name}</Pill>)}</div> })),
       ]} />
@@ -222,7 +222,7 @@ export function PaysheetsPage() {
         ...[['tam', 'Tạm tính'], ['chot', 'Đã chốt'], ['huy', 'Đã hủy']].map(([v, l]) => ({ value: v, label: l, count: all.filter((s) => s.status === v).length }))]} /></FilterBox>}
       actions={<Btn kind="primary" icon="plus" onClick={() => open('paysheet-new', {})}>Bảng tính lương</Btn>}>
       <ErrorBox error={q.error} />
-      <Table rows={q.data ? rows : null} empty="Chưa có bảng lương" onRow={(s) => open('paysheet', { id: s.id })} rowClass={(s) => (s.status === 'huy' ? 'row-void' : '')} columns={[
+      <Table rows={q.data ? rows : null} empty="Chưa có bảng lương" expand={(s, close) => <PaysheetDetail id={s.id} onClose={close} />} rowClass={(s) => (s.status === 'huy' ? 'row-void' : '')} columns={[
         { key: 'c', label: 'Mã', render: (s) => <><div className="cell-main">{s.code}</div><div className="cell-sub">{s.name}</div></> },
         { key: 'k', label: 'Kỳ làm việc', render: (s) => `${dmy(s.period_from)} – ${dmy(s.period_to)}` },
         { key: 'n', label: 'Nhân viên', align: 'right', render: (s) => s.employees },
@@ -321,7 +321,7 @@ export function CommissionPage() {
     <ListPage title="Bảng hoa hồng"
       actions={<Btn kind="primary" icon="plus" onClick={() => open('commission', {})}>Bảng hoa hồng</Btn>}>
       <ErrorBox error={q.error} />
-      <Table rows={q.data} empty="Chưa có bảng hoa hồng" onRow={(t) => open('commission', { table: t })} columns={[
+      <Table rows={q.data} empty="Chưa có bảng hoa hồng" expand={(t, close) => <CommissionForm table={t} onClose={close} />} columns={[
         { key: 'n', label: 'Tên bảng', render: (t) => <><b>{t.name}</b>{!t.active && <> <Pill tone="mute">ngừng</Pill></>}</> },
         { key: 'r', label: 'Số dòng', align: 'right', render: (t) => (t.rules || []).length },
         { key: 'e', label: 'Nhân viên áp dụng', align: 'right', render: (t) => t.employees },
@@ -377,7 +377,7 @@ export function StaffSettingsPage({ go }) {
       <div className="page-head"><div className="grow"><h1 className="page-title">Thiết lập nhân viên</h1></div>
         {can('owner') && <Btn icon="users" onClick={() => go('cai-dat', 'users')}>Tài khoản đăng nhập & quyền</Btn>}</div>
       <Section title="Ca làm việc">
-        <Table dense rows={shifts.data} empty="Chưa có ca làm việc" onRow={(s) => open('shift', { shift: s })} columns={[
+        <Table dense rows={shifts.data} empty="Chưa có ca làm việc" expand={(s, close) => <ShiftForm shift={s} onClose={close} />} columns={[
           { key: 'n', label: 'Tên ca', render: (s) => <><b>{s.name}</b>{!s.active && <> <Pill tone="mute">ngừng</Pill></>}</> },
           { key: 't', label: 'Giờ làm', render: (s) => `${s.start_time} – ${s.end_time}` },
           { key: 'h', label: 'Số giờ', align: 'right', render: (s) => fq(s.hours) },

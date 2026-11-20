@@ -34,7 +34,7 @@ export function QuotesPage() {
       search={<Search value={search} onChange={setSearch} placeholder="Tìm mã, khách, công trình…" />}
       actions={can('ban_hang') && <Btn kind="primary" icon="plus" onClick={() => open('quote-form', {})}>Tạo báo giá</Btn>}>
       <ErrorBox error={q.error} />
-      <Table rows={q.data ? rows : null} empty="Chưa có báo giá" onRow={(x) => open('quote', { id: x.id })} columns={[
+      <Table rows={q.data ? rows : null} empty="Chưa có báo giá" expand={(x, close) => <QuoteDetail id={x.id} onClose={close} />} columns={[
         { key: 'c', label: 'Báo giá', render: (x) => <><b>{x.code}</b><div className="cell-sub">{dmy(x.quote_date)}</div></> },
         { key: 'k', label: 'Khách hàng', render: (x) => <><div>{x.customer_name}</div><div className="cell-sub">{x.site || ''}</div></> },
         { key: 't', label: 'Mẫu', render: (x) => (x.template === 'mosaic' ? 'Tranh mosaic' : 'Ngói / gốm') },

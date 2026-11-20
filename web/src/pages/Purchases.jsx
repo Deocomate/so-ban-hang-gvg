@@ -147,7 +147,7 @@ export function SupplierReturnsPage() {
         {can('nhap_hang') && <Btn kind="primary" icon="plus" onClick={() => open('po-return', {})}>Trả hàng nhập</Btn>}
       </>}>
       <ErrorBox error={error} />
-      <Table rows={data ? rows : null} empty="Không có phiếu trả hàng nhập trong thời gian này" onRow={(r) => open('sret', { id: r.id })}
+      <Table rows={data ? rows : null} empty="Không có phiếu trả hàng nhập trong thời gian này" expand={(r, close) => <SupplierReturnDetail id={r.id} onClose={close} />}
         foot={rows.length ? { c: `${rows.length} phiếu`, g: money(rows.reduce((s, r) => s + (r.goods_total || 0), 0)), v: money(rows.reduce((s, r) => s + (r.value || 0), 0)) } : null} columns={[
           { key: 'c', label: 'Mã trả hàng nhập', render: (r) => <><div className="cell-main">{r.code}</div>{r.po_code && <div className="cell-sub">theo {r.po_code}</div>}</> },
           { key: 't', label: 'Thời gian', render: (r) => dmy(r.return_date) },

@@ -1,11 +1,12 @@
 // Trang chi tiết khách hàng: Sổ công nợ (mọi giao dịch theo thứ tự thực tế) và Chi tiết đơn; phiếu thu theo đợt trừ nợ cho nhiều đơn.
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp, useQ, useRpcData, useAction } from '../lib/store.jsx';
-import { money, dmy, todayVN } from '../lib/format.js';
+import { money, dmy, dmyhm, todayVN } from '../lib/format.js';
 import { useFunds } from '../lib/lookups.js';
 import { TIME_PRESETS, presetRange } from '../components/DocFilters.jsx';
 import { CustomerFiles } from './CustomerFiles.jsx';
 import { DocsBoardMini } from './OrderDocs.jsx';
+import { OrderDetail } from './Sales.jsx';
 import { Btn, Pill, StatusPill, DELIVERY, Field, Input, Select, DateInput, NumInput, Tabs, Loading, ErrorBox, Note, Table, Modal } from '../components/ui.jsx';
 
 const METHODS = ['Chuyển khoản', 'Tiền mặt', 'Quẹt thẻ', 'Bù trừ'];
@@ -29,7 +30,7 @@ export function CustomerDetail({ id, onClose }) {
   const seeLedger = can('xem_thu_chi');
   const cq = useQ('customers', [['id', 'eq', id]]);
   const led = useRpcData('customer_ledger', { customer_id: id }, seeLedger);
-  const [tab, setTab] = useState(seeLedger ? 'ledger' : 'orders');
+  const [tab, setTab] = useState('orders');
   const c = cq.data?.[0];
   if (!c) return <Modal title="Khách hàng" onClose={onClose} size="xl">{cq.error ? <ErrorBox error={cq.error} /> : cq.data ? <Note tone="warn">Không tìm thấy khách hàng này</Note> : <Loading />}</Modal>;
   const L = led.data;
@@ -54,7 +55,7 @@ export function CustomerDetail({ id, onClose }) {
         {c.supplier_id && <span><span className="muted">Đồng thời là nhà cung cấp — </span><DualDebt c={c} /></span>}
       </div>}
       <ErrorBox error={led.error} />
-      <Tabs value={tab} onChange={setTab} tabs={[...(seeLedger ? [{ value: 'ledger', label: 'Sổ công nợ' }] : []), { value: 'orders', label: 'Chi tiết đơn' }, { value: 'docs', label: 'Giấy tờ đơn hàng' }, { value: 'files', label: 'Tài liệu' }]} />
+      <Tabs value={tab} onChange={setTab} tabs={[{ value: 'orders', label: 'Lịch sử bán / trả hàng' }, ...(seeLedger ? [{ value: 'ledger', label: 'Nợ cần thu từ khách' }] : []), { value: 'docs', label: 'Giấy tờ đơn hàng' }, { value: 'files', label: 'Tài liệu' }]} />
       {tab === 'ledger' && <LedgerTab id={id} />}
       {tab === 'orders' && <OrdersTab id={id} usablePrepaid={L?.usable_prepaid || 0} />}
       {tab === 'docs' && <DocsBoardMini params={{ customer_id: id }} showCustomer={false} />}
@@ -134,20 +135,28 @@ function LedgerTab({ id }) {
   );
 }
 
+// Lịch sử bán / trả hàng (như KiotViet): hóa đơn và phiếu trả hàng của khách theo thời gian, mới nhất trước.
+// Bấm một dòng là chi tiết hóa đơn xổ ra ngay dưới dòng.
 function OrdersTab({ id, usablePrepaid }) {
-  const { open, can } = useApp();
+  const { can } = useApp();
   const { run, busy } = useAction();
   const [only, setOnly] = useState('');
   const q = useQ('sales_orders', [['customer_id', 'eq', id]], 'order_date desc', 5000);
+  const rq = useQ('sales_returns', [['customer_id', 'eq', id]], 'return_date desc', 2000);
   const all = q.data || [];
   const owing = all.filter((o) => o.receivable > 0);
-  const rows = q.data ? (only === 'debt' ? owing : all) : null;
-  const tot = (k) => (rows || []).reduce((s, o) => s + (o.status === 'huy' ? 0 : o[k] || 0), 0);
+  const rows = useMemo(() => {
+    if (!q.data || !rq.data) return null;
+    const sales = (only === 'debt' ? owing : all).map((o) => ({ ...o, key: o.id, type: 'ban', at: o.created_at, order_id: o.id }));
+    const rets = only === 'debt' ? [] : rq.data.map((r) => ({ key: r.id, type: 'tra', code: r.code, at: r.created_at, order_id: r.order_id, order_code: r.order_code, revenue: r.revenue, status: 'xac_nhan' }));
+    return [...sales, ...rets].sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  }, [q.data, rq.data, only]);
+  const tot = (k) => (rows || []).reduce((s, o) => s + (o.type !== 'ban' || o.status === 'huy' ? 0 : o[k] || 0), 0);
   return (
     <div className="stack">
       <div className="row gap">
         <div className="seg" role="group" aria-label="Lọc đơn">
-          <button type="button" className={only ? '' : 'on'} onClick={() => setOnly('')}>Tất cả ({all.length})</button>
+          <button type="button" className={only ? '' : 'on'} onClick={() => setOnly('')}>Tất cả ({all.length + (rq.data?.length || 0)})</button>
           <button type="button" className={only === 'debt' ? 'on' : ''} onClick={() => setOnly('debt')}>Còn nợ ({owing.length})</button>
         </div>
         <span className="grow" />
@@ -155,20 +164,25 @@ function OrdersTab({ id, usablePrepaid }) {
           <Btn kind="soft" busy={busy} onClick={() => run('apply_prepaid', { customer_id: id }, (r) => `Đã trừ ${money(r.used)} đ tiền khách trả trước vào ${r.docs.join(', ')}`)}>
             Trừ {money(usablePrepaid)} đ khách trả trước vào đơn còn nợ</Btn>)}
       </div>
-      <ErrorBox error={q.error} />
-      <Table rows={rows} onRow={(o) => open('order', { id: o.id })} rowClass={(o) => (o.status === 'huy' ? 'row-void' : o.overdue_days > 0 ? 'row-late' : '')}
-        empty={only ? 'Không có đơn nào còn nợ' : 'Khách chưa có đơn nào'}
-        foot={rows?.length ? { c: `${rows.length} đơn`, t: money(tot('net_total')), r: money(tot('delivered_value')), p: money(tot('paid_net')), d: money(tot('receivable')) } : null}
+      <ErrorBox error={q.error || rq.error} />
+      <Table rows={rows} rowKey="key" expand={(o, close) => <OrderDetail id={o.order_id} onClose={close} />}
+        rowClass={(o) => (o.status === 'huy' ? 'row-void' : o.overdue_days > 0 ? 'row-late' : '')}
+        empty={only ? 'Không có đơn nào còn nợ' : 'Khách chưa mua hàng'}
+        foot={rows?.length ? { c: `${rows.length} chứng từ`, t: money(tot('net_total')), p: money(tot('paid_net')), d: money(tot('receivable')) } : null}
         columns={[
-          { key: 'c', label: 'Mã đơn', width: 120, render: (o) => <b>{o.code}</b> },
-          { key: 'dt', label: 'Ngày', width: 100, render: (o) => dmy(o.order_date) },
-          { key: 't', label: 'Tổng tiền', align: 'right', width: 120, render: (o) => money(o.net_total) },
-          { key: 'r', label: 'Phải thu', align: 'right', width: 116, render: (o) => (o.delivered_value > 0 ? money(o.delivered_value) : '—') },
-          { key: 'p', label: 'Đã thu', align: 'right', width: 116, render: (o) => (o.paid_net ? money(o.paid_net) : '—') },
-          { key: 'd', label: 'Còn nợ', align: 'right', width: 116, render: (o) => (o.receivable > 0 ? <b className={o.overdue_days > 0 ? 'bad' : ''}>{money(o.receivable)}</b> : '—') },
-          { key: 'h', label: 'Hạn thanh toán', width: 124, render: (o) => (o.pay_due_date ? <>{dmy(o.pay_due_date)}{o.overdue_days > 0 && <div className="cell-sub bad">Quá hạn {o.overdue_days} ngày</div>}</> : '—') },
-          { key: 'g', label: 'Giao hàng', width: 120, render: (o) => <StatusPill map={DELIVERY} value={o.delivery_status} /> },
-          { key: 's', label: 'Thanh toán', width: 128, render: (o) => { const s = orderPayState(o); return s ? <Pill tone={s[1]}>{s[0]}</Pill> : '—'; } },
+          { key: 'c', label: 'Mã chứng từ', render: (o) => <><b>{o.code}</b>{o.type === 'tra' && <span className="muted small"> · trả từ {o.order_code}</span>}</> },
+          { key: 'dt', label: 'Thời gian', className: 'nowrap', render: (o) => dmyhm(o.at) },
+          { key: 'k', label: 'Loại', render: (o) => (o.type === 'tra' ? <Pill tone="warn">Trả hàng</Pill> : o.kind === 'dat_hang' ? 'Đặt hàng' : 'Hóa đơn') },
+          { key: 'st', label: 'Người bán', render: (o) => o.staff || '' },
+          { key: 't', label: 'Tổng cộng', align: 'right', render: (o) => (o.type === 'tra' ? <span className="bad">−{money(o.revenue)}</span> : money(o.net_total)) },
+          { key: 'p', label: 'Đã thu', align: 'right', render: (o) => (o.type === 'ban' && o.paid_net ? money(o.paid_net) : '') },
+          { key: 'd', label: 'Còn nợ', align: 'right', render: (o) => (o.receivable > 0 ? <b className={o.overdue_days > 0 ? 'bad' : ''}>{money(o.receivable)}</b> : '') },
+          { key: 's', label: 'Trạng thái', render: (o) => {
+            if (o.type === 'tra') return 'Đã trả hàng';
+            if (o.status === 'huy') return <Pill tone="mute">Đã hủy</Pill>;
+            const pay = orderPayState(o);
+            return <span className="row gap-s"><StatusPill map={DELIVERY} value={o.delivery_status} />{pay && <Pill tone={pay[1]}>{pay[0]}</Pill>}</span>;
+          } },
         ]} />
     </div>
   );

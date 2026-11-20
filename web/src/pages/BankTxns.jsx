@@ -39,7 +39,7 @@ export function BankPage() {
         <button className="kpi" onClick={() => setTab('all')}><span className="kpi-label">Tổng tiền vào đã nhận</span><span className="kpi-value">{short(rows.filter((t) => t.direction === 'in' && t.status === 'da_ghi').reduce((s, t) => s + Number(t.amount), 0))}</span></button>
       </div>
       <ErrorBox error={q.error} />
-      <Table rows={q.data ? list : null} onRow={(t) => open('bank-txn', { txn: t })} empty={tab === 'cho_xu_ly' ? 'Không có khoản nào cần xử lý' : 'Chưa có giao dịch'} columns={[
+      <Table rows={q.data ? list : null} expand={(t, close) => <BankTxnDialog txn={t} onClose={close} />} empty={tab === 'cho_xu_ly' ? 'Không có khoản nào cần xử lý' : 'Chưa có giao dịch'} columns={[
         { key: 'a', label: 'Số tiền', align: 'right', render: (t) => <b className={t.direction === 'out' ? 'bad' : 'good'}>{t.direction === 'out' ? '−' : '+'}{money(t.amount)}</b> },
         { key: 't', label: 'Thời gian', render: (t) => dmyhm(t.txn_at) },
         { key: 'c', label: 'Nội dung chuyển khoản', render: (t) => <><div className="small">{t.content}</div>{t.counter_name && <div className="cell-sub">{t.counter_name}</div>}</> },

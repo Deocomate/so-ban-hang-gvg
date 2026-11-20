@@ -233,9 +233,15 @@ export function Note({ tone = 'info', children }) { return <div className={`aler
 const PAGE_SIZES = [20, 50, 100, 200];
 const ListCtx = React.createContext(false);
 function readPageSize() { try { return Number(localStorage.getItem('gomsu.page_size')) || 50; } catch (e) { return 50; } }
-// expand(row) + expandKey: như KiotViet, bấm một dòng là chi tiết xổ ra ngay dưới dòng đó (dòng đang mở có khóa = expandKey)
+// expand(row, close): như KiotViet, bấm một dòng là chi tiết xổ ra ngay dưới dòng đó, bấm lại thì thu vào.
+// Bảng tự nhớ dòng đang mở; trang muốn tự quản lý thì truyền expandKey + onRow.
 export function Table({ columns, rows, onRow, empty = 'Chưa có dữ liệu', rowKey = 'id', foot, dense, rowClass, expand, expandKey }) {
   const paged = React.useContext(ListCtx);
+  const [openKey, setOpenKey] = useState(null);
+  const ownExpand = expand && expandKey === undefined;
+  const curKey = ownExpand ? openKey : expandKey;
+  const rowClick = onRow || (ownExpand ? (r) => setOpenKey((k) => (k === r[rowKey] ? null : r[rowKey])) : undefined);
+  const closeOpen = () => setOpenKey(null);
   const [size, setSize0] = useState(readPageSize);
   const [page, setPage] = useState(0);
   const resetKey = rows ? `${rows.length}:${rows[0]?.[rowKey] ?? ''}` : '';
@@ -252,13 +258,13 @@ export function Table({ columns, rows, onRow, empty = 'Chưa có dữ liệu', r
         <tbody>
           {rows.length === 0 && <tr><td colSpan={columns.length} className="tbl-empty">{empty}</td></tr>}
           {shown.map((r, i) => {
-            const open = expand && expandKey != null && r[rowKey] === expandKey;
+            const open = expand && curKey != null && r[rowKey] === curKey;
             return (
               <React.Fragment key={r[rowKey] ?? i}>
-                <tr onClick={onRow ? () => onRow(r) : undefined} className={`${onRow ? 'clickable' : ''}${open ? ' open' : ''} ${rowClass ? rowClass(r) || '' : ''}`} aria-expanded={expand ? open : undefined}>
+                <tr onClick={rowClick ? () => rowClick(r) : undefined} className={`${rowClick ? 'clickable' : ''}${open ? ' open' : ''} ${rowClass ? rowClass(r) || '' : ''}`} aria-expanded={expand ? open : undefined}>
                   {columns.map((c) => <td key={c.key} className={`${c.align === 'right' ? 'r num' : c.align === 'center' ? 'c' : ''} ${c.className || ''}`}>{c.render ? c.render(r, i) : r[c.key]}</td>)}
                 </tr>
-                {open && <tr className="tbl-expand"><td colSpan={columns.length}>{expand(r)}</td></tr>}
+                {open && <tr className="tbl-expand"><td colSpan={columns.length}>{ownExpand ? <InlineDetail>{expand(r, closeOpen)}</InlineDetail> : expand(r)}</td></tr>}
               </React.Fragment>
             );
           })}

@@ -6,6 +6,7 @@ import { useFunds, groupNames } from '../lib/lookups.js';
 import { exportXlsx, loadSheets, readPriceBookFile } from '../lib/excel.js';
 import { Btn, Icon, Pill, Field, Input, TextArea, Select, DateInput, NumInput, Check, Search, ErrorBox, Note, Table, Modal, ConfirmBtn, ListPage, FilterBox, RadioList, Section, Loading } from '../components/ui.jsx';
 import { useTimeFilter, TimeFilter } from '../components/DocFilters.jsx';
+import { OrderDetail } from './Sales.jsx';
 
 // ===================== BẢNG GIÁ =====================
 // "Bảng giá chung" = các mức giá theo khách (sửa nhanh ở đây). Bảng giá có tên: hiệu lực, công thức, phạm vi nhóm khách / người tạo.
@@ -262,7 +263,7 @@ export function DriversPage() {
         <div className="kpi"><span className="kpi-label">Số lái xe</span><span className="kpi-value">{(drivers.data || []).length}</span></div>
         <div className="kpi"><span className="kpi-label">Đã trả</span><span className="kpi-value">{money((drivers.data || []).reduce((s, d) => s + d.paid, 0))}</span></div>
       </div>
-      <Table dense rows={drivers.data} empty="Chưa có lái xe" onRow={(d) => open('driver', { id: d.id })} columns={[
+      <Table dense rows={drivers.data} empty="Chưa có lái xe" expand={(d, close) => <DriverForm id={d.id} onClose={close} />} columns={[
         { key: 'n', label: 'Lái xe', render: (d) => <><div className="cell-main">{d.name}</div><div className="cell-sub">{[d.phone, d.plate].filter(Boolean).join(' · ')}</div></> },
         { key: 't', label: 'Số chuyến', align: 'right', render: (d) => d.trips },
         { key: 'a', label: 'Phải trả', align: 'right', render: (d) => money(d.total) }, { key: 'p', label: 'Đã trả', align: 'right', render: (d) => money(d.paid) },
@@ -296,7 +297,7 @@ export function SalesReturnsPage() {
       filters={<TimeFilter filter={time} />}
       search={<Search value={search} onChange={setSearch} placeholder="Tìm mã phiếu trả, mã đơn, khách…" />}>
       <ErrorBox error={q.error} />
-      <Table rows={q.data ? rows : null} onRow={(r) => open('order', { id: r.order_id })}
+      <Table rows={q.data ? rows : null} expand={(r, close) => <OrderDetail id={r.order_id} onClose={close} />}
         empty={time.from ? 'Không có phiếu trả hàng nào trong khoảng thời gian này. Chọn "Toàn thời gian" để xem các tháng khác.' : 'Chưa có phiếu trả hàng'}
         foot={rows.length ? { c: `${rows.length} phiếu`, v: money(rows.reduce((t, r) => t + (r.revenue || 0), 0)) } : null} columns={[
         { key: 'c', label: 'Phiếu trả', render: (r) => <><b>{r.code}</b><div className="cell-sub">{dmy(r.return_date)}</div></> },

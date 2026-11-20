@@ -233,7 +233,7 @@ export function CashPage() {
       </div>
       <div className="lp-sum"><span>Tổng thu <b className="good">{money(sum('thu'))}</b></span><span>Tổng chi <b className="bad">{money(sum('chi'))}</b></span><span>Chênh lệch <b>{money(sum('thu') - sum('chi'))}</b></span></div>
       <ErrorBox error={pays.error} />
-      <Table rows={pays.data ? rows : null} onRow={(p) => open('pay-detail', { id: p.id })} rowClass={(p) => (p.voided ? 'row-void' : '')} columns={[
+      <Table rows={pays.data ? rows : null} expand={(p, close) => <PaymentDetail id={p.id} onClose={close} />} rowClass={(p) => (p.voided ? 'row-void' : '')} columns={[
         { key: 'c', label: 'Phiếu', render: (p) => <><div className="cell-main">{p.code}</div><div className="cell-sub">{dmy(p.pay_date)}</div></> },
         { key: 'k', label: 'Loại', render: (p) => <>{p.kind_label}<div className="cell-sub">{p.fund_name}{p.to_fund_name ? ' → ' + p.to_fund_name : ''}</div></> },
         { key: 'p', label: 'Đối tượng / nội dung', render: (p) => <>{p.party_name || '—'}<div className="cell-sub">{p.note}</div></> },

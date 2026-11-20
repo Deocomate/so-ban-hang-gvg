@@ -85,7 +85,7 @@ export function ShippingPage() {
         <button className="kpi" onClick={() => setTab('giao_thanh_cong')}><span className="kpi-label">Giao thành công</span><span className="kpi-value">{rows.filter((s) => s.status === 'giao_thanh_cong').length}</span></button>
       </div>
       <ErrorBox error={q.error} />
-      <Table rows={q.data ? list : null} onRow={(s) => open('ship', { id: s.id })} rowClass={(s) => (['giao_that_bai', 'dang_hoan', 'su_co'].includes(s.status) ? 'row-late' : '')}
+      <Table rows={q.data ? list : null} expand={(s, close) => <ShipmentDetail id={s.id} onClose={close} />} rowClass={(s) => (['giao_that_bai', 'dang_hoan', 'su_co'].includes(s.status) ? 'row-late' : '')}
         empty={<span>Chưa có vận đơn. Mở một đơn bán → <b>Tạo vận đơn</b>, hoặc nhập mã vận đơn khi giao hàng.</span>} columns={[
           { key: 't', label: 'Vận đơn', render: (s) => <><div className="row gap-s"><CarrierPill c={s.carrier} /><b>{s.tracking_no}</b></div><div className="cell-sub">{s.code} · đơn {s.order_code}</div></> },
           { key: 'c', label: 'Người nhận', render: (s) => <>{s.receiver_name || s.customer_name}<div className="cell-sub">{s.receiver_phone || s.channel || ''}</div></> },

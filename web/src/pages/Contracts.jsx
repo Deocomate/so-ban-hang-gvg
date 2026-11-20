@@ -60,7 +60,7 @@ export function ContractsPage() {
       search={<Search value={search} onChange={setSearch} placeholder="Tìm số hợp đồng, khách, đơn…" />}
       actions={can('ban_hang') && <Btn kind="primary" icon="plus" onClick={() => open('order-form', { kind: 'dat_hang', then_contract: true })}>Tạo hợp đồng</Btn>}>
       <ErrorBox error={q.error} />
-      <Table rows={q.data ? rows : null} empty="Chưa có hợp đồng" onRow={(k) => open('contract', { id: k.id })} columns={[
+      <Table rows={q.data ? rows : null} empty="Chưa có hợp đồng" expand={(k, close) => <ContractDetail id={k.id} onClose={close} />} columns={[
         { key: 'c', label: 'Số hợp đồng', render: (k) => <><b>{k.code}</b><div className="cell-sub">Ký {dmy(k.sign_date)} · đơn {k.order_code}</div></> },
         { key: 'k', label: 'Khách hàng', render: (k) => k.customer_name },
         { key: 'v', label: 'Giá trị', align: 'right', render: (k) => money(k.order_total) },

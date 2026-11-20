@@ -301,11 +301,13 @@ export function SpecialPage() {
   </>;
   if (view === 'list') {
     const cols = [
-      { key: 'code', label: 'Mã đặt hàng', render: (o) => <div><div className="cell-main">{o.code}</div><div className="cell-sub">{dmy(o.order_date)}</div></div> },
-      { key: 'customer', label: 'Khách hàng', render: (o) => <div><div>{o.customer_name}</div><div className="cell-sub">{o.customer_code || ''}</div></div> },
-      { key: 'due', label: 'Hẹn giao', render: (o) => (o.due_date ? <span className={o.is_late ? 'bad strong' : ''}>{dmy(o.due_date)}</span> : <span className="muted">—</span>) },
-      { key: 'total', label: 'Tổng đơn', align: 'right', render: (o) => money(o.order_total) },
-      { key: 'paid', label: 'Đã thu / cọc', align: 'right', render: (o) => money(o.paid_net) },
+      { key: 'code', label: 'Mã đặt hàng', render: (o) => <span className="strong">{o.code}</span> },
+      { key: 'time', label: 'Thời gian', className: 'nowrap', render: (o) => dmyhm(o.created_at) },
+      { key: 'kh', label: 'Mã KH', render: (o) => o.customer_code || '' },
+      { key: 'customer', label: 'Khách hàng', className: 'col-clip', render: (o) => <span title={o.customer_name}>{o.customer_name}</span> },
+      { key: 'due', label: 'Hẹn giao', className: 'nowrap', render: (o) => (o.due_date ? <span className={o.is_late ? 'bad strong' : ''}>{dmy(o.due_date)}</span> : '') },
+      { key: 'total', label: 'Khách cần trả', align: 'right', render: (o) => money(o.order_total) },
+      { key: 'paid', label: 'Khách đã trả', align: 'right', render: (o) => money(o.paid_net) },
       { key: 'ds', label: 'Giao hàng', render: (o) => {
         const pill = <div className="row gap-s"><StatusPill map={DELIVERY} value={o.delivery_status} />{o.is_late && <Pill tone="bad">trễ hẹn</Pill>}</div>;
         return can('ban_hang') && o.status !== 'huy' ? <HoverCard label={`Giao hàng đơn ${o.code}`} trigger={pill} width={340}>{({ close }) => <QuickDelivery order={o} close={close} />}</HoverCard> : pill;
@@ -317,7 +319,7 @@ export function SpecialPage() {
         search={<Search value={search} onChange={setSearch} placeholder="Tìm mã đặt hàng, khách, SĐT…" />}
         actions={<>{viewSwitch}{createBtn}</>}>
         <ErrorBox error={error} />
-        <Table columns={cols} rows={data ? rows : null} onRow={(o) => open('order', { id: o.id })} rowClass={(o) => (o.is_late ? 'row-late' : '')}
+        <Table columns={cols} rows={data ? rows : null} expand={(o, close) => <OrderDetail id={o.id} onClose={close} />} rowClass={(o) => (o.is_late ? 'row-late' : '')}
           foot={rows.length ? { code: `${rows.length} đơn`, total: money(sum('order_total')), paid: money(sum('paid_net')) } : null}
           empty={time.from ? 'Không có đơn đặt hàng nào trong khoảng thời gian này. Chọn "Toàn thời gian" ở bộ lọc Thời gian để xem các tháng khác.' : 'Không có đơn đặt hàng phù hợp'} />
       </ListPage>
@@ -457,7 +459,6 @@ export function OrderDetail({ id, onClose }) {
                 {d.delivery_count > 0 && <li>Hủy {d.delivery_count} phiếu giao của đơn: hàng nhập lại kho, bỏ doanh thu và điểm tích lũy của đơn</li>}
                 {d.remaining_qty > 0 && <li>Nhả hàng đang giữ cho đơn</li>}
                 {d.paid_net > 0 && <li>Số tiền đã thu {money(d.paid_net)} đ chuyển thành tiền cần hoàn cho khách (bấm "Hoàn tiền cho khách" khi trả lại)</li>}
-                <li>Ghi toàn bộ vào Lịch sử đơn</li>
               </ul>
               <Input value={reason} onChange={setReason} placeholder="Lý do hủy (bắt buộc)" autoFocus />
             </>}
@@ -467,10 +468,9 @@ export function OrderDetail({ id, onClose }) {
       <Tabs value={tab} onChange={setTab} tabs={[
         { value: 'info', label: 'Thông tin' },
         { value: 'pay', label: `Lịch sử thanh toán${pays.data?.length ? ` (${pays.data.length})` : ''}` },
-        { value: 'ship', label: `Giao hàng${dels.data?.length ? ` (${dels.data.length})` : ''}` },
+        { value: 'ship', label: `Lịch sử bán / trả hàng${(dels.data?.length || 0) + (rets.data?.length || 0) ? ` (${(dels.data?.length || 0) + (rets.data?.length || 0)})` : ''}` },
         ...(d.kind === 'dat_hang' && can('nhap_hang') && d.status !== 'huy' ? [{ value: 'prod', label: 'Sản xuất' }] : []),
         ...(d.status !== 'huy' && d.status !== 'nhap' ? [{ value: 'docs', label: 'Giấy tờ' }] : []),
-        { value: 'log', label: 'Lịch sử đơn' },
       ]} />
       {tab === 'info' && <>
         <div className="od-info">
@@ -554,7 +554,7 @@ export function OrderDetail({ id, onClose }) {
           {undo && (
             <div className="card stack-s">
               <b>Hủy phiếu giao {undo.code} ({dmy(undo.delivery_date)})?</b>
-              <div className="small muted">Hàng của đợt này nhập lại kho, doanh thu đợt này bỏ đi, đơn quay lại chờ giao. Tiền đã thu vẫn giữ (thành tiền khách trả trước). Thao tác được ghi vào Lịch sử đơn.</div>
+              <div className="small muted">Hàng của đợt này nhập lại kho, doanh thu đợt này bỏ đi, đơn quay lại chờ giao. Tiền đã thu vẫn giữ (thành tiền khách trả trước).</div>
               <div className="row gap">
                 <Input value={undoReason} onChange={setUndoReason} placeholder="Lý do (bắt buộc), vd. bấm nhầm giao đủ" style={{ maxWidth: 360 }} autoFocus />
                 <ConfirmBtn kind="danger" busy={busy} onConfirm={async () => {
@@ -606,26 +606,6 @@ export function OrderDetail({ id, onClose }) {
       </>}
       {tab === 'docs' && <>
       {d.status !== 'huy' && d.status !== 'nhap' && <Section title="Giấy tờ đơn hàng"><OrderDocsPanel orderId={id} order={d} /></Section>}
-      </>}
-      {tab === 'log' && <>
-      <Section title={`Lịch sử đơn hàng${history.data?.length ? ` (${history.data.length})` : ''}`}>
-        {!history.data ? <Loading /> : !history.data.length ? <div className="muted small">Chưa có thao tác nào được ghi (đơn lập trước khi có lịch sử).</div> : (
-          <div className="order-history">
-            {history.data.map((e) => {
-              const detail = Array.isArray(e.detail) ? e.detail : [];
-              const head = <>
-                <span className="oh-when">{new Date(e.at).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</span>
-                <span className="oh-what">{e.summary}</span>
-                <span className="oh-who">{e.user_name || 'Hệ thống'}</span>
-                {detail.length > 0 ? <Icon name="down" size={14} className="oh-chev" /> : <span className="oh-chev" />}
-              </>;
-              return detail.length > 0
-                ? <details className="oh-item" key={e.id}><summary>{head}</summary><ul>{detail.map((x, i) => <li key={i}>{x}</li>)}</ul></details>
-                : <div className="oh-item" key={e.id}><div className="oh-row">{head}</div></div>;
-            })}
-          </div>
-        )}
-      </Section>
       </>}
     </Modal>
   );
