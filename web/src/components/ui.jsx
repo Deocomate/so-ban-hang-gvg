@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { money, parseNum, qty as fq, match } from '../lib/format.js';
 import {
   Amphora, ArrowDownToLine, Store, ShieldCheck, Lock, Database, Scale, Gift, Hammer, Trash2, UsersRound, Wrench, ArrowUpFromLine, Banknote, Bell, BookOpen, Calculator, Calendar, ChartColumn, Check as CheckIcon, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Copy, Download, Ellipsis, Factory, FilePenLine, FileText, History, House, Info, Landmark, Link, LogOut, Package, PackagePlus, Pencil, Plus, Printer, QrCode, Receipt, ReceiptText, RefreshCw, Route, Search as SearchIcon, Settings, ShoppingCart, Smartphone, Tag, TriangleAlert, Truck, Undo2, Upload, Users, Wallet, X,
@@ -232,7 +233,8 @@ export function Note({ tone = 'info', children }) { return <div className={`aler
 const PAGE_SIZES = [20, 50, 100, 200];
 const ListCtx = React.createContext(false);
 function readPageSize() { try { return Number(localStorage.getItem('gomsu.page_size')) || 50; } catch (e) { return 50; } }
-export function Table({ columns, rows, onRow, empty = 'Chưa có dữ liệu', rowKey = 'id', foot, dense, rowClass }) {
+// expand(row) + expandKey: như KiotViet, bấm một dòng là chi tiết xổ ra ngay dưới dòng đó (dòng đang mở có khóa = expandKey)
+export function Table({ columns, rows, onRow, empty = 'Chưa có dữ liệu', rowKey = 'id', foot, dense, rowClass, expand, expandKey }) {
   const paged = React.useContext(ListCtx);
   const [size, setSize0] = useState(readPageSize);
   const [page, setPage] = useState(0);
@@ -249,11 +251,17 @@ export function Table({ columns, rows, onRow, empty = 'Chưa có dữ liệu', r
         <thead><tr>{columns.map((c) => <th key={c.key} className={c.align === 'right' ? 'r' : c.align === 'center' ? 'c' : ''} style={c.width ? { width: c.width } : null}>{c.label}</th>)}</tr></thead>
         <tbody>
           {rows.length === 0 && <tr><td colSpan={columns.length} className="tbl-empty">{empty}</td></tr>}
-          {shown.map((r, i) => (
-            <tr key={r[rowKey] ?? i} onClick={onRow ? () => onRow(r) : undefined} className={`${onRow ? 'clickable' : ''} ${rowClass ? rowClass(r) || '' : ''}`}>
-              {columns.map((c) => <td key={c.key} className={`${c.align === 'right' ? 'r num' : c.align === 'center' ? 'c' : ''} ${c.className || ''}`}>{c.render ? c.render(r, i) : r[c.key]}</td>)}
-            </tr>
-          ))}
+          {shown.map((r, i) => {
+            const open = expand && expandKey != null && r[rowKey] === expandKey;
+            return (
+              <React.Fragment key={r[rowKey] ?? i}>
+                <tr onClick={onRow ? () => onRow(r) : undefined} className={`${onRow ? 'clickable' : ''}${open ? ' open' : ''} ${rowClass ? rowClass(r) || '' : ''}`} aria-expanded={expand ? open : undefined}>
+                  {columns.map((c) => <td key={c.key} className={`${c.align === 'right' ? 'r num' : c.align === 'center' ? 'c' : ''} ${c.className || ''}`}>{c.render ? c.render(r, i) : r[c.key]}</td>)}
+                </tr>
+                {open && <tr className="tbl-expand"><td colSpan={columns.length}>{expand(r)}</td></tr>}
+              </React.Fragment>
+            );
+          })}
         </tbody>
         {foot && <tfoot><tr>{columns.map((c) => <td key={c.key} className={c.align === 'right' ? 'r num' : c.align === 'center' ? 'c' : ''}>{foot[c.key] ?? ''}</td>)}</tr></tfoot>}
       </table>
@@ -273,14 +281,36 @@ export function Table({ columns, rows, onRow, empty = 'Chưa có dữ liệu', r
   );
 }
 
+// Chi tiết hiển thị ngay trong bảng (dòng xổ ra kiểu KiotViet): Modal bên trong vẽ thành khung chi tiết thay vì hộp thoại
+const InlineCtx = React.createContext(false);
+export const InlineDetail = ({ children }) => <InlineCtx.Provider value>{children}</InlineCtx.Provider>;
+
 export function Modal({ title, onClose, children, footer, size = 'md', subtitle }) {
   const ref = useRef(null);
+  const inline = useContext(InlineCtx);
   useEffect(() => {
+    if (inline) return undefined;
     // Chỉ hộp thoại trên cùng phản ứng với phím Esc
     const h = (e) => { if (e.key !== 'Escape') return; const all = document.querySelectorAll('.overlay'); if (all[all.length - 1] === ref.current) onClose?.(); };
     window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
-  }, [onClose]);
-  return (
+  }, [onClose, inline]);
+  if (inline) {
+    return (
+      <div className="kv-detail" role="region" aria-label={title}>
+        <div className="kv-detail-head">
+          <span className="kv-detail-title">{title}</span>{subtitle && <span className="kv-detail-sub">{subtitle}</span>}
+          <span className="grow" />
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Thu gọn" title="Thu gọn"><Icon name="x" size={16} /></button>
+        </div>
+        {/* hộp thoại con (hủy, xác nhận…) vẫn bật lên giữa màn hình */}
+        <InlineCtx.Provider value={false}>
+          <div className="kv-detail-body">{children}</div>
+          {footer && <div className="kv-detail-foot">{footer}</div>}
+        </InlineCtx.Provider>
+      </div>
+    );
+  }
+  return createPortal(
     <div className="overlay" ref={ref} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
       <div className={`modal modal-${size}`} role="dialog" aria-modal="true" aria-label={title}>
         <div className="modal-head">
@@ -290,7 +320,8 @@ export function Modal({ title, onClose, children, footer, size = 'md', subtitle 
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-foot">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

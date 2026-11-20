@@ -41,11 +41,12 @@ C('Phiếu nhận hàng hiện ở danh sách nhập hàng', [rc.po_mode, rc.sta
 G('Hủy phiếu nhập');
 const pn2 = await api.call('save_purchase_order', { book_id: TH, request_id: rid(), mode: 'nhap', supplier_id: X, order_date: d, receive_now: true,
   deposit: { amount: 50000, fund_id: fund }, lines: [{ product_id: A, qty: 10, unit_price: 9000 }] });
-await E('Đã trả NCC thì phải hủy phiếu chi trước', () => api.call('cancel_purchase_order', { id: pn2.id, reason: 'Nhập nhầm' }), 'hủy phiếu chi');
+await E('Hủy phải có lý do', () => api.call('cancel_purchase_order', { id: pn2.id }), 'lý do');
+const c2 = await api.call('cancel_purchase_order', { id: pn2.id, reason: 'Nhập nhầm' });
+C('Đã trả NCC vẫn hủy được: tự hủy lần nhập, tiền đã trả thành NCC cần hoàn', [c2.paid, c2.receipts.length], [50000, 1]);
+C('NCC đang nợ lại mình 50.000', (await supp(X)).payable, 1000000 - 50000);
 const pay = (await api.q('payments', TH)).find((x) => x.code === pn2.payment_code);
 await api.call('void_payment', { id: pay.id, reason: 'Nhập nhầm' });
-await E('Hủy phải có lý do', () => api.call('cancel_purchase_order', { id: pn2.id }), 'lý do');
-await api.call('cancel_purchase_order', { id: pn2.id, reason: 'Nhập nhầm' });
 o = await po(pn2.id);
 C('Phiếu hủy: tồn và công nợ trở lại', [o.status_label, o.received_value, (await prod(A)).on_hand, (await supp(X)).payable], ['Đã hủy', 0, 100, 1000000]);
 C('Phiếu nhận hàng của phiếu đã hủy hiện Đã hủy', (await api.q('receipts', TH, [['po_id', 'eq', pn2.id]]))[0].status_label, 'Đã hủy');
@@ -96,5 +97,34 @@ t = await api.one('supplier_returns', TH, [['id', 'eq', t1.id]]);
 C('Hủy phiếu theo phiếu nhập: số đã trả của dòng trở lại 0', [t.status_label, (await api.q('receipts', TH, [['po_id', 'eq', pn.id]]))[0].returned_qty], ['Đã hủy', 0]);
 C('Công nợ NCC về như trước khi trả', (await supp(X)).payable, 1100000);
 C('Tồn ngói âm trở lại', (await prod(A)).on_hand, 100);
+
+G('Sửa phiếu nhập đã nhập kho, đổi nhà cung cấp (tự xử lý như KiotViet)');
+const Cp = (await api.call('save_product', { book_id: TH, name: 'Bò nóc', unit: 'Viên', price1: 20000 })).id;
+const Y = (await api.call('save_party', { book_id: TH, type: 'ncc', name: 'Xưởng Hương Canh' })).id;
+const K = (await api.call('save_party', { book_id: TH, type: 'kh', name: 'Anh Tùng' })).id;
+const pn3 = await api.call('save_purchase_order', { book_id: TH, request_id: rid(), mode: 'nhap', supplier_id: X, order_date: d, receive_now: true,
+  deposit: { amount: 20000, fund_id: fund }, lines: [{ product_id: Cp, qty: 10, unit_price: 5000 }] });
+const editPn3 = async (qty, extra = {}) => {
+  const l = (await api.q('purchase_order_lines', TH, [['po_id', 'eq', pn3.id]]))[0];
+  return api.call('save_purchase_order', { book_id: TH, request_id: rid(), id: pn3.id, supplier_id: X, order_date: d, status: 'xac_nhan',
+    lines: [{ id: l.id, product_id: Cp, qty, unit_price: 6000 }], ...extra });
+};
+const e1 = await editPn3(12);
+C('Sửa phiếu đã nhập: kho và giá trị nhập theo số mới', [(await prod(Cp)).on_hand, (await po(pn3.id)).received_value, (await po(pn3.id)).status_label], [12, 72000, 'Đã nhập hàng']);
+C('Báo đã tự hủy lần nhập cũ và nhập lại', e1.notices.some((x) => x.includes('nhập lại')), true);
+await api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: K, kind: 'ban_san', order_date: d, deliver_now: true, lines: [{ product_id: Cp, qty: 8 }] });
+await api.call('update_book_settings', { book_id: TH, settings: { allow_oversell: false } });
+await E('Không giảm dưới số đã bán khi sổ không cho tồn âm', () => editPn3(5), 'tồn kho âm');
+C('Bị chặn thì kho giữ nguyên', (await prod(Cp)).on_hand, 4);
+await editPn3(9);
+C('Giảm nhưng vẫn đủ số đã bán: được', (await prod(Cp)).on_hand, 1);
+await api.call('update_book_settings', { book_id: TH, settings: { allow_oversell: true } });
+const pay3 = (await api.q('payments', TH)).find((x) => x.code === pn3.payment_code);
+const e2 = await editPn3(9, { supplier_id: Y });
+C('Đổi nhà cung cấp: phiếu chi chuyển sang NCC mới', [(await api.one('payments', TH, [['id', 'eq', pay3.id]])).party_id, (await po(pn3.id)).supplier_id], [Y, Y]);
+C('Công nợ NCC mới = giá trị phiếu − đã trả', (await supp(Y)).payable, 54000 - 20000);
+C('Báo đã chuyển phiếu chi', e2.notices.some((x) => x.includes(pay3.code)), true);
+await api.call('update_po_info', { id: pn3.id, note: 'Hàng về đủ', invoice_no: '0009999' });
+C('Lưu nhanh ghi chú và số hóa đơn', [(await po(pn3.id)).note, (await po(pn3.id)).invoice_no], ['Hàng về đủ', '0009999']);
 
 finish('Mua hàng kiểu KiotViet');

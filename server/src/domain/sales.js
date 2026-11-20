@@ -3,7 +3,7 @@ import { ctx, fail, one, all, run, insert, uuid, nowIso, num, bool, nz, trimNz, 
 import { requirePerm, isOwner, checkDate, nextCode, once, bookSettings } from './access.js';
 import { postMove, doAdjust, lineUnit } from './stock.js';
 import { checkPriceBook } from './price-books.js';
-import { doPayment } from './cash.js';
+import { doPayment, moveDocPayments } from './cash.js';
 import { notifyOrderConfirmed } from './notify.js';
 import { saveOrderTrip } from './drivers.js';
 import { logOrder, orderSnapshot, describeChanges, deliveryLinesText } from './order-log.js';
@@ -419,27 +419,7 @@ function undoDelivery(d, reason) {
 // Đổi khách của đơn: các phiếu thu / hoàn tiền gắn với đơn chuyển sang khách mới (phiếu còn gắn đơn khác thì tách riêng
 // phần của đơn này thành phiếu mới), điểm tích / đổi điểm của đơn cũng chuyển theo. Trả về các dòng mô tả để báo người dùng.
 function moveOrderCustomer(o, newCid) {
-  const notes = [];
-  const allocs = all(`select a.id as alloc_id, a.amount as alloc_amount, x.* from payment_allocations a join payments x on x.id = a.payment_id
-    where a.doc_type = 'don_ban' and a.doc_id = ? and x.voided = 0 order by x.pay_date, x.created_at`, o.id);
-  for (const a of allocs) {
-    checkDate(o.book_id, a.pay_date);
-    const shared = a.amount - a.alloc_amount > 0.0001;
-    if (!shared) {
-      run(`update payments set party_id = ? where id = ?`, newCid, a.id);
-      notes.push(`Phiếu ${a.code} (${vnd(a.amount)}) chuyển sang khách mới`);
-      continue;
-    }
-    // Phiếu thu chung cho nhiều đơn (hoặc còn tiền khách gửi trước): tách phần của đơn này ra phiếu mới cùng ngày, cùng quỹ
-    const keepFee = a.fee < a.amount - a.alloc_amount;
-    const code = nextCode(o.book_id, a.direction === 'chi' ? 'PC' : 'PT'); const pid = uuid();
-    insert('payments', { id: pid, book_id: o.book_id, code, pay_date: a.pay_date, kind: a.kind, direction: a.direction, fund_id: a.fund_id, to_fund_id: null,
-      party_type: 'kh', party_id: newCid, amount: a.alloc_amount, fee: keepFee ? 0 : a.fee, method: a.method,
-      note: `Tách từ phiếu ${a.code} khi đổi khách đơn ${o.code}`, ref_no: a.ref_no, created_by: ctx.uid, created_at: nowIso() });
-    run(`update payments set amount = amount - ?, fee = ? where id = ?`, a.alloc_amount, keepFee ? a.fee : 0, a.id);
-    run(`update payment_allocations set payment_id = ? where id = ?`, pid, a.alloc_id);
-    notes.push(`Tách ${vnd(a.alloc_amount)} từ phiếu ${a.code} thành phiếu ${code} của khách mới`);
-  }
+  const notes = moveDocPayments(o.book_id, 'don_ban', o.id, o.code, newCid, 'khách');
   const docs = [o.id, ...all(`select id from deliveries where order_id = ?`, o.id).map((r) => r.id),
     ...all(`select id from sales_returns where order_id = ?`, o.id).map((r) => r.id)];
   const pts = run(`update point_moves set customer_id = ? where doc_id in (select value from json_each(?))`, newCid, JSON.stringify(docs)).changes;

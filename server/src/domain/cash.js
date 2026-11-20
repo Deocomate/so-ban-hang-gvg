@@ -260,3 +260,29 @@ export function void_expense(p) {
   run(`update expenses set voided = 1, void_reason = ? where id = ? or split_of = ?`, p.reason, e.id, e.id);
   return { ok: true };
 }
+
+// Đổi khách / nhà cung cấp của một chứng từ: các phiếu thu chi gắn với chứng từ chuyển sang đối tượng mới. Phiếu còn gắn
+// chứng từ khác (hoặc còn tiền trả trước) thì tách riêng phần của chứng từ này thành phiếu mới cùng ngày, cùng quỹ.
+// who: 'khách' | 'nhà cung cấp' (chỉ để ghi lời nhắn). Trả về các dòng mô tả để báo người dùng.
+export function moveDocPayments(b, docType, docId, docCode, newParty, who) {
+  const notes = [];
+  const allocs = all(`select a.id as alloc_id, a.amount as alloc_amount, x.* from payment_allocations a join payments x on x.id = a.payment_id
+    where a.doc_type = ? and a.doc_id = ? and x.voided = 0 order by x.pay_date, x.created_at`, docType, docId);
+  for (const a of allocs) {
+    checkDate(b, a.pay_date);
+    if (a.amount - a.alloc_amount <= 0.0001) {
+      run(`update payments set party_id = ? where id = ?`, newParty, a.id);
+      notes.push(`Phiếu ${a.code} (${vnd(a.amount)}) chuyển sang ${who} mới`);
+      continue;
+    }
+    const keepFee = a.fee < a.amount - a.alloc_amount;
+    const code = nextCode(b, a.direction === 'chi' ? 'PC' : 'PT'); const pid = uuid();
+    insert('payments', { id: pid, book_id: b, code, pay_date: a.pay_date, kind: a.kind, direction: a.direction, fund_id: a.fund_id, to_fund_id: null,
+      party_type: a.party_type, party_id: newParty, amount: a.alloc_amount, fee: keepFee ? 0 : a.fee, method: a.method,
+      note: `Tách từ phiếu ${a.code} khi đổi ${who} của ${docCode}`, ref_no: a.ref_no, created_by: ctx.uid, created_at: nowIso() });
+    run(`update payments set amount = amount - ?, fee = ? where id = ?`, a.alloc_amount, keepFee ? a.fee : 0, a.id);
+    run(`update payment_allocations set payment_id = ? where id = ?`, pid, a.alloc_id);
+    notes.push(`Tách ${vnd(a.alloc_amount)} từ phiếu ${a.code} thành phiếu ${code} của ${who} mới`);
+  }
+  return notes;
+}

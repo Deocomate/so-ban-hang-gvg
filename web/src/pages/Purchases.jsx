@@ -8,8 +8,8 @@ import { exportXlsx } from '../lib/excel.js';
 import { moneyWords } from '../lib/docs/model.js';
 import { useTimeFilter, TimeFilter } from '../components/DocFilters.jsx';
 import {
-  Btn, Icon, Pill, Field, Input, DateInput, NumInput, Check, Search, Loading,
-  ErrorBox, Note, Table, Modal, ConfirmBtn, KV, Section, ListPage, FilterBox, RadioList,
+  Btn, Icon, Pill, Field, Input, TextArea, DateInput, NumInput, Check, Search, Loading, Tabs,
+  ErrorBox, Note, Table, Modal, ConfirmBtn, KV, Section, ListPage, FilterBox, RadioList, InlineDetail,
 } from '../components/ui.jsx';
 import { ExtraCosts } from '../components/ExtraCosts.jsx';
 
@@ -34,6 +34,7 @@ export function PurchasesPage() {
   const time = useTimeFilter('month');
   const [st, setSt] = useState(['Phiếu tạm', 'Đã nhập hàng']);
   const [search, setSearch] = useState('');
+  const [openId, setOpenId] = useState(null); // phiếu đang xổ chi tiết ngay trong bảng (như KiotViet)
   const pos = useQ('purchase_orders', [['mode', 'eq', 'nhap']], 'created_at desc', 5000);
   const recs = useQ('receipts', [['po_mode', 'eq', 'dat']], 'created_at desc', 5000);
   const all = useMemo(() => (pos.data && recs.data ? [
@@ -58,12 +59,14 @@ export function PurchasesPage() {
         {can('nhap_hang') && <Btn kind="primary" icon="plus" onClick={() => open('po-form', { mode: 'nhap' })}>Nhập hàng</Btn>}
       </>}>
       <ErrorBox error={pos.error || recs.error} />
-      <Table rows={rows && all ? rows : null} onRow={(r) => open('po', { id: r.po_id })} empty="Không tìm thấy phiếu nhập hàng nào trong thời gian này"
+      <Table rows={rows && all ? rows : null} onRow={(r) => setOpenId((x) => (x === r.id ? null : r.id))} empty="Không tìm thấy phiếu nhập hàng nào trong thời gian này"
+        expandKey={openId} expand={(r) => <InlineDetail><PoDetail id={r.po_id} onClose={() => setOpenId(null)} /></InlineDetail>}
         foot={rows.length ? { c: `${rows.length} phiếu`, n: money(rows.reduce((s, r) => s + (r.need || 0), 0)) } : null} columns={[
-          { key: 'c', label: 'Mã nhập hàng', render: (r) => <><div className="cell-main">{r.code}</div>{r.sub && <div className="cell-sub">{r.sub}</div>}</> },
-          { key: 't', label: 'Thời gian', render: (r) => <>{dmy(r.date)}<div className="cell-sub">{dmyhm(r.at).slice(11)}</div></> },
+          { key: 'c', label: 'Mã nhập hàng', render: (r) => <><span className="strong">{r.code}</span>{r.sub && <span className="muted small"> · {r.sub}</span>}</> },
+          { key: 't', label: 'Thời gian', className: 'nowrap', render: (r) => `${dmy(r.date)} ${dmyhm(r.at).slice(11)}` },
           { key: 'sc', label: 'Mã NCC', render: (r) => r.supplier_code },
-          { key: 's', label: 'Nhà cung cấp', render: (r) => <>{r.supplier_name}{r.invoice_no && <div className="cell-sub">HĐ {r.invoice_no}</div>}</> },
+          { key: 's', label: 'Nhà cung cấp', className: 'col-clip', render: (r) => <span title={r.supplier_name}>{r.supplier_name}</span> },
+          { key: 'hd', label: 'Số hóa đơn', render: (r) => r.invoice_no || '' },
           { key: 'n', label: 'Cần trả NCC', align: 'right', render: (r) => money(r.need) },
           { key: 'st', label: 'Trạng thái', render: (r) => <StatusTag label={r.status_label} /> },
         ]} />
@@ -80,6 +83,7 @@ export function PurchaseOrdersPage() {
   const [kind, setKind] = useState('');
   const [extra, setExtra] = useState('');
   const [search, setSearch] = useState('');
+  const [openId, setOpenId] = useState(null);
   const { data, error } = useQ('purchase_orders', [['mode', 'eq', 'dat']], 'created_at desc', 5000);
   // Đơn chưa xong luôn hiện dù đặt từ trước kỳ đang xem
   const inTime = (data || []).filter((o) => (time.inRange(o.order_date) || (o.status !== 'huy' && o.remaining_qty > 0))
@@ -104,7 +108,8 @@ export function PurchaseOrdersPage() {
         {can('nhap_hang') && <Btn kind="primary" icon="plus" onClick={() => open('po-form', { mode: 'dat' })}>Đặt hàng nhập</Btn>}
       </>}>
       <ErrorBox error={error} />
-      <Table rows={data ? rows : null} onRow={(o) => open('po', { id: o.id })} rowClass={(o) => (o.is_late ? 'row-late' : '')} empty="Không có đơn đặt hàng nhập phù hợp"
+      <Table rows={data ? rows : null} onRow={(o) => setOpenId((x) => (x === o.id ? null : o.id))} rowClass={(o) => (o.is_late ? 'row-late' : '')} empty="Không có đơn đặt hàng nhập phù hợp"
+        expandKey={openId} expand={(o) => <InlineDetail><PoDetail id={o.id} onClose={() => setOpenId(null)} /></InlineDetail>}
         foot={rows.length ? { c: `${rows.length} đơn`, t: money(rows.reduce((s, o) => s + (o.order_total || 0), 0)) } : null} columns={[
           { key: 'c', label: 'Mã đặt hàng nhập', render: (o) => <><div className="cell-main">{o.code}</div><div className="cell-sub">{KIND_LABEL[o.kind]}{o.sales_order_code ? ` · cho ${o.sales_order_code}` : ''}</div></> },
           { key: 'd', label: 'Thời gian', render: (o) => dmy(o.order_date) },
@@ -174,6 +179,8 @@ const exportLines = (code, lines) => exportXlsx(`${code}.xlsx`, [{ name: code, r
   { key: 'unit_price', label: 'Đơn giá' }, { key: 'discount', label: 'Giảm giá' }, { key: 'price_net', label: 'Giá nhập' }, { key: 'goods_total', label: 'Thành tiền' }] }]);
 
 // ===================== CHI TIẾT PHIẾU NHẬP / ĐƠN ĐẶT =====================
+// Như KiotViet: nhà cung cấp, mã phiếu, trạng thái; thẻ Thông tin (người tạo, ngày nhập, bảng hàng, ghi chú + tổng tiền) trước,
+// lịch sử thanh toán, nhập kho / trả hàng, tiến độ sản xuất để ở thẻ riêng. Nút: Hủy · Sao chép · Xuất file … Mở phiếu · Lưu · Trả hàng nhập · In
 export function PoDetail({ id, onClose }) {
   const { open, can, settings } = useApp();
   const o = useQ('purchase_orders', [['id', 'eq', id]]);
@@ -182,102 +189,145 @@ export function PoDetail({ id, onClose }) {
   const rets = useQ('supplier_returns', [['po_id', 'eq', id]], 'created_at');
   const pays = useQ('doc_payments', [['doc_id', 'eq', id]], 'pay_date');
   const { run, busy } = useAction();
+  const [tab, setTab] = useState('info');
+  const [info, setInfo] = useState(null); // ghi chú / số hóa đơn đang sửa ngay trong chi tiết (nút Lưu)
+  const [askCancel, setAskCancel] = useState(false);
+  const [reason, setReason] = useState('');
   const d = o.data?.[0];
   if (!d) return <Modal title="Phiếu nhập" onClose={onClose} size="lg">{o.error ? <ErrorBox error={o.error} /> : <Loading />}</Modal>;
   const isNhap = d.mode === 'nhap';
   const steps = settings.prod_steps || [];
   const curIdx = steps.indexOf(d.prod_step);
   const payKind = d.prepaid > 0 && d.remaining_to_pay < 0 ? 'ncc_hoan' : 'tra_ncc';
-  const editable = can('nhap_hang') && d.status !== 'huy' && d.received_qty === 0;
+  const canBuy = can('nhap_hang');
+  const live = d.status !== 'huy';
+  // Phiếu nhập: mở lại sửa được cả khi đã nhập kho (phần mềm tự nhập lại); đơn đặt: chỉ khi chưa nhận hàng
+  const editable = canBuy && live && (isNhap || d.received_qty === 0);
   const activeRecs = (recs.data || []).filter((r) => !r.cancelled_at);
+  const hasReturn = (rets.data || []).some((r) => !r.cancelled_at);
+  const cur = info || { note: d.note || '', invoice_no: d.invoice_no || '' };
+  const dirty = !!info && (cur.note !== (d.note || '') || cur.invoice_no !== (d.invoice_no || ''));
+  const setCur = (k, v) => setInfo({ ...cur, [k]: v });
+  const saveInfo = async () => { if (await run('update_po_info', { id, ...cur }, 'Đã lưu thông tin phiếu')) setInfo(null); };
+  const doCancel = async () => {
+    if (!reason.trim()) return;
+    const r = await run('cancel_purchase_order', { id, reason: reason.trim() }, (x) => `Đã hủy ${d.code}`
+      + (x.receipts?.length ? ` · tự hủy lần nhập ${x.receipts.join(', ')}, hàng đã xuất lại khỏi kho` : '') + (x.paid > 0 ? ` · nhà cung cấp cần hoàn lại ${money(x.paid)} đ` : ''));
+    if (r) { setAskCancel(false); setReason(''); }
+  };
+  const qtySum = (lines.data || []).reduce((t, l) => t + (l.unit_conv && l.unit_conv !== 1 ? l.eff_qty / l.unit_conv : l.eff_qty), 0);
   return (
-    <Modal title={`${isNhap ? 'Phiếu nhập' : 'Đặt hàng nhập'} ${d.code}`} onClose={onClose} size="xl"
-      subtitle={<span className="row gap-s">{isNhap ? 'Nhập hàng' : KIND_LABEL[d.kind]} · {d.supplier_name} · {dmy(d.order_date)} <StatusTag label={d.status_label} /> {d.is_late && <Pill tone="bad">trễ hẹn nhận</Pill>}</span>}
+    <Modal title={d.supplier_name} onClose={onClose} size="xl"
+      subtitle={<span className="row gap-s">{d.code} · {isNhap ? 'Phiếu nhập hàng' : KIND_LABEL[d.kind]} <StatusTag label={d.status_label} /> {d.is_late && <Pill tone="bad">trễ hẹn nhận</Pill>}</span>}
       footer={<>
-        <Btn icon="print" onClick={() => open('po-print', { kind: 'po', id })}>In</Btn>
+        {canBuy && live && <Btn icon="trash" onClick={() => { setReason(''); setAskCancel(true); }}>Hủy</Btn>}
+        {canBuy && <Btn icon="copy" onClick={() => { onClose(); open('po-form', { copy_id: id }); }}>Sao chép</Btn>}
         <Btn icon="dl" onClick={() => exportLines(d.code, lines.data || [])}>Xuất file</Btn>
-        {can('nhap_hang') && <Btn icon="copy" onClick={() => { onClose(); open('po-form', { copy_id: id }); }}>Sao chép</Btn>}
         <span className="grow" />
-        {editable && <Btn icon="edit" onClick={() => { onClose(); open('po-form', { id }); }}>{isNhap && d.status === 'nhap' ? 'Mở phiếu' : 'Sửa'}</Btn>}
-        {!isNhap && d.status === 'nhap' && can('nhap_hang') && <Btn kind="soft" busy={busy} onClick={() => run('confirm_purchase_order', { id }, 'Đã xác nhận với nhà cung cấp')}>Xác nhận NCC</Btn>}
-        {can('thu_chi') && d.status !== 'nhap' && d.status !== 'huy' && (d.remaining_to_pay > 0 || payKind === 'ncc_hoan') && <Btn kind="soft" icon="out" onClick={() => open('payment', { kind: payKind, party_id: d.supplier_id,
+        {!isNhap && d.status === 'nhap' && canBuy && <Btn kind="soft" busy={busy} onClick={() => run('confirm_purchase_order', { id }, 'Đã xác nhận với nhà cung cấp')}>Xác nhận NCC</Btn>}
+        {can('thu_chi') && d.status !== 'nhap' && live && (d.remaining_to_pay > 0 || payKind === 'ncc_hoan') && <Btn kind="soft" icon="out" onClick={() => open('payment', { kind: payKind, party_id: d.supplier_id,
           alloc: { doc_type: 'don_mua', doc_id: d.id, code: d.code, amount: payKind === 'tra_ncc' ? d.remaining_to_pay : d.paid_net - d.received_value } })}>{payKind === 'tra_ncc' ? (d.received_value === 0 ? 'Đặt cọc / trả tiền' : 'Trả tiền NCC') : 'NCC hoàn tiền'}</Btn>}
-        {can('nhap_hang') && d.received_value > 0 && <Btn icon="return" onClick={() => open('po-return', { po_id: d.id })}>Trả hàng nhập</Btn>}
-        {can('nhap_hang') && !isNhap && d.status === 'xac_nhan' && d.remaining_qty > 0 && <Btn kind="primary" icon="in" onClick={() => open('receive', { po: d })}>Nhận hàng</Btn>}
+        {canBuy && !isNhap && d.status === 'xac_nhan' && d.remaining_qty > 0 && <Btn kind="soft" icon="in" onClick={() => open('receive', { po: d })}>Nhận hàng</Btn>}
+        {editable && <Btn kind="primary" icon="edit" onClick={() => { onClose(); open('po-form', { id }); }}>{isNhap ? 'Mở phiếu' : 'Chỉnh sửa'}</Btn>}
+        {canBuy && live && <Btn icon="check" busy={busy} disabled={!dirty} onClick={saveInfo} title="Lưu ghi chú, số hóa đơn vừa sửa">Lưu</Btn>}
+        {canBuy && d.received_value > 0 && live && <Btn icon="return" onClick={() => open('po-return', { po_id: d.id })}>Trả hàng nhập</Btn>}
+        <Btn icon="print" onClick={() => open('po-print', { kind: 'po', id })}>In</Btn>
       </>}>
-      {d.kind === 'dat_sx' && d.status === 'xac_nhan' && d.remaining_qty > 0 && (
+      {askCancel && (
+        <Modal title={isNhap ? 'Hủy phiếu nhập' : 'Hủy đơn đặt hàng nhập'} size="sm" onClose={() => setAskCancel(false)}
+          footer={<><Btn onClick={() => setAskCancel(false)}>Bỏ qua</Btn><Btn kind="danger" busy={busy} disabled={!reason.trim() || hasReturn} onClick={doCancel}>Đồng ý</Btn></>}>
+          <div className="stack-s">
+            {hasReturn ? <Note tone="warn">{d.code} đã có phiếu trả hàng nhập nên không hủy được. Hàng còn lại muốn trả nhà cung cấp: dùng "Trả hàng nhập".</Note> : <>
+              <div>Khi hủy <b>{d.code}</b>, phần mềm sẽ tự động:</div>
+              <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
+                {activeRecs.length > 0 && <li>Hủy {activeRecs.length} lần nhập kho: hàng xuất lại khỏi kho, công nợ nhà cung cấp giảm theo</li>}
+                {d.paid_net > 0 && <li>Số tiền đã trả {money(d.paid_net)} đ thành tiền nhà cung cấp cần hoàn lại (bấm "NCC hoàn tiền" khi nhận lại)</li>}
+                {d.remaining_qty > 0 && !isNhap && <li>Bỏ phần hàng chưa nhận</li>}
+              </ul>
+              <Input value={reason} onChange={setReason} placeholder="Lý do hủy (bắt buộc)" autoFocus />
+            </>}
+          </div>
+        </Modal>
+      )}
+      <Tabs value={tab} onChange={setTab} tabs={[
+        { value: 'info', label: 'Thông tin' },
+        { value: 'pay', label: `Lịch sử thanh toán${pays.data?.length ? ` (${pays.data.length})` : ''}` },
+        { value: 'stock', label: `${isNhap ? 'Nhập kho & trả hàng' : 'Nhận hàng & trả hàng'}${activeRecs.length ? ` (${activeRecs.length})` : ''}` },
+        ...(d.kind === 'dat_sx' && live ? [{ value: 'prod', label: 'Tiến độ sản xuất' }] : []),
+      ]} />
+      {tab === 'info' && <>
+        {isNhap && d.status === 'nhap' && <Note tone="warn">Phiếu tạm chưa nhập kho. Bấm “Mở phiếu” rồi “Hoàn thành” để nhập kho và ghi công nợ nhà cung cấp.</Note>}
+        <div className="od-info">
+          <label><span>Người tạo</span><b>{d.created_by_name || '—'}</b></label>
+          <label><span>{isNhap ? 'Ngày nhập' : 'Ngày đặt'}</span><b>{dmy(activeRecs[0]?.receipt_date || d.order_date)}</b></label>
+          <label><span>Nhà cung cấp</span><a href="#" onClick={(e) => { e.preventDefault(); open('party-detail', { type: 'ncc', id: d.supplier_id }); }}>{d.supplier_name}{d.supplier_code ? ` (${d.supplier_code})` : ''}</a></label>
+          {d.supplier_phone && <label><span>Điện thoại</span><b>{d.supplier_phone}</b></label>}
+          <label><span>Số hóa đơn</span>{canBuy && live ? <Input value={cur.invoice_no} onChange={(v) => setCur('invoice_no', v)} placeholder="Số hóa đơn đầu vào" aria-label="Số hóa đơn" /> : <b>{d.invoice_no || '—'}</b>}</label>
+          {!isNhap && <label><span>Dự kiến nhận</span><b className={d.is_late ? 'bad' : ''}>{d.expected_date ? dmy(d.expected_date) : '—'}{d.wait_days != null ? ` · chờ ${fq(d.wait_days)} ngày` : ''}</b></label>}
+          {d.sales_order_code && <label><span>Cho đơn bán</span><a href="#" onClick={(e) => { e.preventDefault(); open('order', { id: d.sales_order_id }); }}>{d.sales_order_code} · {d.sales_customer_name}</a></label>}
+          {d.cancel_reason && <label><span>Lý do hủy</span><b className="bad">{d.cancel_reason}</b></label>}
+        </div>
+        <Table dense rows={lines.data} columns={[
+          { key: 'sku', label: 'Mã hàng', render: (l) => <a href="#" onClick={(e) => { e.preventDefault(); open('product-detail', { id: l.product_id }); }}>{l.sku}</a> },
+          { key: 'n', label: 'Tên hàng', render: (l) => <><div>{l.product_name}{l.unit ? ` (${l.unit_name || l.unit})` : ''}</div>{l.note && <div className="cell-sub">{l.note}</div>}{l.sales_order_code && <div className="cell-sub">giữ cho đơn {l.sales_order_code}</div>}</> },
+          { key: 'q', label: 'Số lượng', align: 'right', render: (l) => <>{fq(l.unit_conv && l.unit_conv !== 1 ? l.eff_qty / l.unit_conv : l.eff_qty)}{l.cancelled_qty > 0 && <div className="cell-sub">hủy {fq(l.cancelled_qty)}</div>}</> },
+          { key: 'u', label: 'Đơn giá', align: 'right', render: (l) => money(l.unit_price * (l.unit_conv || 1)) },
+          { key: 'dc', label: 'Giảm giá', align: 'right', render: (l) => (l.discount ? money(l.discount * (l.unit_conv || 1)) : '') },
+          { key: 'c', label: 'Giá nhập', align: 'right', render: (l) => money(l.price_net * (l.unit_conv || 1)) },
+          { key: 't', label: 'Thành tiền', align: 'right', render: (l) => <b>{money(l.goods_total)}</b> },
+          ...(!isNhap ? [{ key: 'r', label: 'Đã nhận', align: 'right', render: (l) => <>{fq(l.received_qty)}{l.remaining_qty > 0 && <div className="cell-sub">còn chờ {fq(l.remaining_qty)}</div>}</> }] : []),
+          ...((lines.data || []).some((l) => l.returned_qty > 0) ? [{ key: 'rt', label: 'Đã trả NCC', align: 'right', render: (l) => (l.returned_qty > 0 ? fq(l.returned_qty) : '') }] : []),
+        ]} />
+        <div className="od-foot">
+          <div className="od-note">
+            {canBuy && live ? <TextArea rows={4} value={cur.note} onChange={(v) => setCur('note', v)} placeholder="Ghi chú…" aria-label="Ghi chú" />
+              : <div className="od-note-text">{d.note || <span className="muted">Không có ghi chú</span>}</div>}
+            {d.discount > 0 && <div className="muted small">Giảm giá cả phiếu được chia vào giá nhập từng dòng theo tỷ lệ tiền hàng (giá vốn tính theo giá đã giảm).</div>}
+          </div>
+          <div className="totals od-totals">
+            <span>Tổng số lượng</span><span className="r">{fq(qtySum)}</span>
+            <span>Tổng tiền hàng ({fq(d.line_count)})</span><span className="r">{money(d.goods_total)}</span>
+            <span>Giảm giá</span><span className="r">{money(d.discount || 0)}</span>
+            <span>Cần trả NCC</span><span className="r strong">{money(d.order_total)}</span>
+            {!isNhap && <><span>Đã nhận (giá trị)</span><span className="r">{money(d.received_value)}</span></>}
+            <span>Tiền đã trả NCC</span><span className="r strong">{money(d.paid_net)}</span>
+            {d.payable > 0 && <><span className="strong bad">Còn nợ NCC</span><span className="r strong bad">{money(d.payable)}</span></>}
+            {payKind === 'ncc_hoan' && <><span className="strong bad">NCC cần hoàn lại</span><span className="r strong bad">{money(d.paid_net - d.received_value)}</span></>}
+            {d.prepaid > 0 && payKind !== 'ncc_hoan' && <><span>Đã cọc / trả trước</span><span className="r good">{money(d.prepaid)}</span></>}
+            {d.pay_due_date && <><span>Hạn trả</span><span className={`r ${d.overdue_days > 0 ? 'bad' : ''}`}>{dmy(d.pay_due_date)}{d.overdue_days > 0 ? ` (quá ${d.overdue_days} ngày)` : ''}</span></>}
+          </div>
+        </div>
+      </>}
+      {tab === 'pay' && (
+        <Table dense rows={pays.data} empty="Chưa trả tiền" onRow={(r) => open('pay-detail', { id: r.payment_id })} rowKey="payment_id" columns={[
+          { key: 'c', label: 'Phiếu', render: (r) => <><b>{r.code}</b><div className="cell-sub">{dmy(r.pay_date)} · {r.fund_name}</div></> },
+          { key: 'k', label: 'Loại', render: (r) => (r.kind === 'ncc_hoan' ? <Pill tone="warn">NCC hoàn tiền</Pill> : 'Trả tiền NCC') },
+          { key: 'a', label: 'Số tiền', align: 'right', render: (r) => money(r.signed_amount) },
+        ]} />
+      )}
+      {tab === 'stock' && <>
+        <Table dense rows={recs.data} empty={isNhap ? 'Chưa nhập kho (phiếu tạm)' : 'Chưa nhận hàng'} columns={[
+          { key: 'c', label: isNhap ? 'Lần nhập kho' : 'Đợt nhận', render: (r) => <><b>{r.code}</b><div className="cell-sub">{dmy(r.receipt_date)}{r.note ? ' · ' + r.note : ''}</div></> },
+          { key: 'l', label: 'Hàng', render: (r) => (r.lines || []).map((x) => `${x.sku} × ${fq(x.qty)}`).join('; ') },
+          { key: 'v', label: 'Giá trị', align: 'right', render: (r) => (r.cancelled_at ? <Pill tone="mute">Đã hủy</Pill> : money(r.value)) },
+          ...(!isNhap && canBuy ? [{ key: 'x', label: '', render: (r) => (!r.cancelled_at && !r.returned_qty ? <ReceiptCancel id={r.id} code={r.code} /> : null) }] : []),
+        ]} />
+        {(rets.data || []).length > 0 && <Table dense rows={rets.data} onRow={(r) => open('sret', { id: r.id })} columns={[
+          { key: 'c', label: 'Trả hàng nhập', render: (r) => <><b>{r.code}</b><div className="cell-sub">{dmy(r.return_date)}{r.reason ? ' · ' + r.reason : ''}</div></> },
+          { key: 'v', label: 'NCC cần trả', align: 'right', render: (r) => (r.cancelled_at ? <Pill tone="mute">Đã hủy</Pill> : money(r.value)) },
+        ]} />}
+        {!isNhap && live && canBuy && d.received_qty > 0 && d.remaining_qty > 0 && (
+          <Section title="Hủy phần chưa nhận"><CancelBox busy={busy} label="Hủy phần chưa nhận" hint="Hàng đã nhận giữ nguyên; muốn bỏ một đợt đã nhận thì hủy đợt đó ở bảng trên."
+            onCancel={(why) => run('cancel_po_remaining', { id, reason: why }, 'Đã hủy phần chưa nhận')} /></Section>
+        )}
+      </>}
+      {tab === 'prod' && (
         <Section title="Tiến độ sản xuất" actions={d.prod_step_at && <span className="muted small">cập nhật {dmyhm(d.prod_step_at)}</span>}>
           <div className="steps">
-            {steps.map((s, i) => <button key={s} className={`step${i < curIdx ? ' done' : i === curIdx ? ' cur' : ''}`} disabled={busy} onClick={() => run('set_prod_step', { id, step: s }, 'Đã cập nhật: ' + s)}>{i < curIdx && <Icon name="check" size={13} />}{s}</button>)}
+            {steps.map((st, i) => <button key={st} className={`step${i < curIdx ? ' done' : i === curIdx ? ' cur' : ''}`} disabled={busy || !(d.status === 'xac_nhan' && d.remaining_qty > 0)} onClick={() => run('set_prod_step', { id, step: st }, 'Đã cập nhật: ' + st)}>{i < curIdx && <Icon name="check" size={13} />}{st}</button>)}
             <span className={`step${d.received_qty > 0 ? ' cur' : ''}`} style={{ cursor: 'default' }}>{d.received_qty > 0 ? 'Đã nhận một phần' : 'Nhận hàng (tự động)'}</span>
           </div>
           <div className="muted small">Bấm vào bước để cập nhật khi xưởng báo. “Đã nhận một phần / đã nhận đủ” tự chuyển khi lập phiếu nhận hàng.</div>
-        </Section>
-      )}
-      {isNhap && d.status === 'nhap' && <Note tone="warn">Phiếu tạm chưa nhập kho. Bấm “Mở phiếu” rồi “Hoàn thành” để nhập kho và ghi công nợ nhà cung cấp.</Note>}
-      <div className="grid-2">
-        <KV items={[
-          ['Nhà cung cấp', <a href="#" onClick={(e) => { e.preventDefault(); open('party-detail', { type: 'ncc', id: d.supplier_id }); }}>{d.supplier_name}</a>],
-          ['Điện thoại', d.supplier_phone || '—'],
-          d.invoice_no && ['Số hóa đơn đầu vào', d.invoice_no],
-          d.created_by_name && ['Người tạo', d.created_by_name],
-          !isNhap && ['Ngày nhập dự kiến', d.expected_date ? dmy(d.expected_date) : '—'],
-          !isNhap && d.wait_days != null && ['Số ngày chờ', `${fq(d.wait_days)} ngày`],
-          d.sales_order_code && ['Cho đơn bán', <a href="#" onClick={(e) => { e.preventDefault(); open('order', { id: d.sales_order_id }); }}>{d.sales_order_code} · {d.sales_customer_name}</a>],
-          d.note && ['Ghi chú', <span style={{ whiteSpace: 'pre-wrap' }}>{d.note}</span>], d.cancel_reason && ['Lý do hủy', d.cancel_reason],
-        ]} />
-        <div className="card"><div className="totals">
-          <span>Số lượng mặt hàng</span><span className="r">{fq(d.line_count)}</span>
-          <span>Tổng tiền hàng</span><span className="r">{money(d.goods_total)}</span>
-          <span>Giảm giá</span><span className="r">{money(d.discount)}</span>
-          <span className="strong">Cần trả NCC</span><span className="r strong">{money(d.order_total)}</span>
-          {!isNhap && <><span>Đã nhận (giá trị)</span><span className="r">{money(d.received_value)}</span></>}
-          <span>Tiền đã trả NCC</span><span className="r">{money(d.paid_net)}</span>
-          <span className="strong">Còn nợ NCC</span><span className={`r strong ${d.payable > 0 ? 'bad' : ''}`}>{money(d.payable)}</span>
-          {d.prepaid > 0 && <><span>Đã cọc / trả trước</span><span className="r good">{money(d.prepaid)}</span></>}
-          {d.pay_due_date && <><span>Hạn trả</span><span className={`r ${d.overdue_days > 0 ? 'bad' : ''}`}>{dmy(d.pay_due_date)}{d.overdue_days > 0 ? ` (quá ${d.overdue_days} ngày)` : ''}</span></>}
-        </div></div>
-      </div>
-      <Section title="Hàng hóa">
-        <Table dense rows={lines.data} columns={[
-          { key: 'p', label: 'Hàng hóa', render: (l) => <><div className="cell-main">{l.sku} · {l.product_name}</div>{l.note && <div className="cell-sub">{l.note}</div>}{l.sales_order_code && <div className="cell-sub">giữ cho đơn {l.sales_order_code}</div>}</> },
-          { key: 'q', label: 'Số lượng', align: 'right', render: (l) => <>{fq(l.eff_qty)} {l.unit}{l.unit_name && l.unit_conv !== 1 && <div className="cell-sub">= {fq(l.eff_qty / l.unit_conv)} {l.unit_name}</div>}{l.cancelled_qty > 0 && <div className="cell-sub">hủy {fq(l.cancelled_qty)}</div>}</> },
-          { key: 'u', label: 'Đơn giá', align: 'right', render: (l) => money(l.unit_price) },
-          { key: 'dc', label: 'Giảm giá', align: 'right', render: (l) => (l.discount ? money(l.discount) : '—') },
-          { key: 'c', label: 'Giá nhập', align: 'right', render: (l) => money(l.price_net) },
-          { key: 't', label: 'Thành tiền', align: 'right', render: (l) => money(l.goods_total) },
-          ...(!isNhap ? [{ key: 'r', label: 'Đã nhận', align: 'right', render: (l) => <>{fq(l.received_qty)}{l.remaining_qty > 0 && <div className="cell-sub">còn chờ {fq(l.remaining_qty)}</div>}</> }] : []),
-          { key: 'rt', label: 'Đã trả NCC', align: 'right', render: (l) => (l.returned_qty > 0 ? fq(l.returned_qty) : '—') },
-        ]} />
-        {d.discount > 0 && <div className="muted small">Giảm giá cả phiếu {money(d.discount)} đ được chia vào giá nhập từng dòng theo tỷ lệ tiền hàng (giá vốn tính theo giá đã giảm).</div>}
-      </Section>
-      <div className="grid-2">
-        <Section title={isNhap ? 'Nhập kho và trả hàng' : 'Các đợt nhận hàng'}>
-          <Table dense rows={recs.data} empty={isNhap ? 'Chưa nhập kho (phiếu tạm)' : 'Chưa nhận hàng'} columns={[
-            { key: 'c', label: 'Phiếu', render: (r) => <><b>{r.code}</b><div className="cell-sub">{dmy(r.receipt_date)}{r.note ? ' · ' + r.note : ''}</div></> },
-            { key: 'l', label: 'Hàng', render: (r) => (r.lines || []).map((x) => `${x.sku} × ${fq(x.qty)}`).join('; ') },
-            { key: 'v', label: 'Giá trị', align: 'right', render: (r) => (r.cancelled_at ? <Pill tone="mute">Đã hủy</Pill> : money(r.value)) },
-            ...(!isNhap && can('nhap_hang') ? [{ key: 'x', label: '', render: (r) => (!r.cancelled_at && !r.returned_qty ? <ReceiptCancel id={r.id} code={r.code} /> : null) }] : []),
-          ]} />
-          {(rets.data || []).length > 0 && <Table dense rows={rets.data} onRow={(r) => open('sret', { id: r.id })} columns={[
-            { key: 'c', label: 'Trả hàng nhập', render: (r) => <><b>{r.code}</b><div className="cell-sub">{dmy(r.return_date)}{r.reason ? ' · ' + r.reason : ''}</div></> },
-            { key: 'v', label: 'NCC cần trả', align: 'right', render: (r) => (r.cancelled_at ? <Pill tone="mute">Đã hủy</Pill> : money(r.value)) },
-          ]} />}
-        </Section>
-        <Section title="Thanh toán">
-          <Table dense rows={pays.data} empty="Chưa trả tiền" columns={[
-            { key: 'c', label: 'Phiếu', render: (r) => <><b>{r.code}</b><div className="cell-sub">{dmy(r.pay_date)} · {r.fund_name}</div></> },
-            { key: 'a', label: 'Số tiền', align: 'right', render: (r) => money(r.signed_amount) },
-          ]} />
-        </Section>
-      </div>
-      {d.status !== 'huy' && can('nhap_hang') && (
-        <Section title="Hủy">
-          {(isNhap || d.received_qty === 0) && <CancelBox busy={busy} label={isNhap ? 'Hủy phiếu nhập' : 'Hủy đơn đặt'}
-            hint={isNhap && d.status !== 'nhap' ? 'Hàng đã nhập sẽ được xuất lại khỏi kho. Cần hủy phiếu chi và phiếu trả hàng nhập (nếu có) trước.' : null}
-            onCancel={(reason) => run('cancel_purchase_order', { id, reason }, 'Đã hủy')} />}
-          {!isNhap && d.received_qty > 0 && d.remaining_qty > 0 && <CancelBox busy={busy} label="Hủy phần chưa nhận" hint="Hàng đã nhận giữ nguyên; muốn bỏ một đợt đã nhận thì hủy đợt đó ở bảng trên."
-            onCancel={(reason) => run('cancel_po_remaining', { id, reason }, 'Đã hủy phần chưa nhận')} />}
         </Section>
       )}
     </Modal>

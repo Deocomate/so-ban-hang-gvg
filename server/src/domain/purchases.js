@@ -4,7 +4,7 @@ import { ctx, fail, one, all, run, val, insert, uuid, nowIso, num, bool, nz, tri
 import { checkTxnDate } from './order-rules.js';
 import { requirePerm, checkDate, nextCode, once, setting, bookSettings } from './access.js';
 import { postMove, lineUnit, avgCost } from './stock.js';
-import { doPayment } from './cash.js';
+import { doPayment, moveDocPayments } from './cash.js';
 
 // Chi phí nhập hàng (phí vận chuyển, bốc xếp, lưu kho…): [{name, amount, payer: 'ncc' | 'khac'}].
 // Chia vào từng dòng theo giá trị hàng → cộng vào giá vốn nhập kho. Phần NCC thu hộ cộng vào công nợ phải trả NCC;
@@ -17,13 +17,13 @@ function extraCostsOf(b, list) {
   return items;
 }
 
-export function doReceive(poId, date, lines, note, extraCosts) {
+export function doReceive(poId, date, lines, note, extraCosts, redo = false) {
   const po = one(`select * from purchase_orders where id = ?`, poId);
   if (!po) fail('Không tìm thấy đơn nhập');
   if (po.status === 'nhap') fail(`Đơn ${po.code} đang là nháp — hãy xác nhận trước khi nhận hàng`);
   if (po.status === 'huy') fail(`Đơn ${po.code} đã hủy`);
   checkDate(po.book_id, date);
-  checkTxnDate(po.book_id, 'nhap_hang', date);
+  checkTxnDate(po.book_id, 'nhap_hang', date, redo ? date : null);
   const gc = nextCode(po.book_id, 'NK'); const gid = uuid();
   const extras = extraCostsOf(po.book_id, extraCosts);
   insert('goods_receipts', { id: gid, book_id: po.book_id, code: gc, po_id: po.id, receipt_date: date, note: note ?? null, created_by: ctx.uid, created_at: nowIso(),
@@ -97,7 +97,7 @@ export function save_purchase_order(p) {
     const steps = setting(b, 'prod_steps') || [];
     const st = receiveNow || p.status === 'xac_nhan' ? 'xac_nhan' : 'nhap';
     const invoiceNo = trimNz(p.invoice_no);
-    let po;
+    let po; let redo = null; const notices = [];
     if (!old) {
       const id = uuid();
       insert('purchase_orders', { id, book_id: b, code: nextCode(b, mode === 'nhap' ? 'PN' : 'DN'), kind, mode, status: st, supplier_id: p.supplier_id, order_date: d,
@@ -108,7 +108,18 @@ export function save_purchase_order(p) {
     } else {
       po = old;
       if (po.status === 'huy') fail('Đơn đã hủy');
-      if (one(`select 1 from goods_receipts where po_id = ? and cancelled_at is null`, po.id)) fail(`Đơn ${po.code} đã nhận hàng — không sửa được. Hãy dùng "Hủy phần chưa nhận".`);
+      // Đổi nhà cung cấp: tự chuyển phiếu chi / phiếu NCC hoàn tiền của phiếu sang nhà cung cấp mới
+      if (p.supplier_id !== po.supplier_id) notices.push(...moveDocPayments(b, 'don_mua', po.id, po.code, p.supplier_id, 'nhà cung cấp'));
+      const recs = all(`select * from goods_receipts where po_id = ? and cancelled_at is null order by created_at`, po.id);
+      if (recs.length) {
+        // Như KiotViet "Mở phiếu": phiếu nhập đã vào kho vẫn sửa được — tự hủy lần nhập cũ rồi nhập lại theo phiếu mới, cùng ngày nhập
+        if (po.mode !== 'nhap') fail(`Đơn đặt hàng nhập ${po.code} đã nhận hàng nên không sửa được. Phần chưa nhận: bấm "Hủy phần chưa nhận"; lần nhận sai: hủy lần nhận đó ở thẻ Nhận hàng.`);
+        if (hasSupplierReturn(po.id)) fail(`Phiếu ${po.code} đã có phiếu trả hàng nhập nên không sửa được. Hàng trả thêm: dùng "Trả hàng nhập".`);
+        redo = { date: recs[0].receipt_date, codes: recs.map((g) => g.code),
+          extras: recs.flatMap((g) => { try { return JSON.parse(g.extra_costs || '[]'); } catch (e) { return []; } }),
+          products: all(`select distinct l.product_id from goods_receipt_lines l join goods_receipts g on g.id = l.receipt_id where g.po_id = ? and g.cancelled_at is null`, po.id).map((r) => r.product_id) };
+        for (const g of recs) doCancelReceipt(g, 'Tự hủy để sửa phiếu nhập', true);
+      }
       run(`update purchase_orders set supplier_id = ?, order_date = ?, expected_date = ?, sales_order_id = ?, note = ?, discount = ?, invoice_no = ?,
           status = case when ? = 'xac_nhan' then 'xac_nhan' else status end,
           confirmed_at = case when ? = 'xac_nhan' and confirmed_at is null then ? else confirmed_at end where id = ?`,
@@ -154,11 +165,22 @@ export function save_purchase_order(p) {
       dep = doPayment(b, { kind: 'tra_ncc', date: d, fund_id: p.deposit.fund_id, party_id: po.supplier_id, amount: depAmt, method: p.deposit.method,
         note: (receiveNow ? 'Trả tiền ' : 'Đặt cọc ') + (mode === 'nhap' ? 'phiếu nhập ' : 'đơn ') + po.code, allocations: [{ doc_type: 'don_mua', doc_id: po.id, amount: depAmt }] });
     }
-    if (receiveNow) {
+    if (redo) {
+      const rem = all(`select id as po_line_id, qty - cancelled_qty - received_qty as qty from purchase_order_lines where po_id = ?`, po.id);
+      rcv = doReceive(po.id, redo.date, rem, null, p.extra_costs !== undefined ? p.extra_costs : redo.extras, true);
+      // Đã bán bớt hàng của phiếu: số mới không được làm tồn kho âm (trừ khi sổ cho bán vượt tồn)
+      if (!bookSettings(b).allow_oversell) {
+        const ids = [...new Set([...redo.products, ...all(`select product_id from purchase_order_lines where po_id = ?`, po.id).map((r) => r.product_id)])];
+        for (const x of all(`select sku, name, on_hand from products where id in (select value from json_each(?)) and on_hand < 0`, JSON.stringify(ids))) {
+          fail(`Không sửa được: ${x.sku} – ${x.name} đã bán bớt, sửa số lượng như vậy làm tồn kho âm ${-x.on_hand}. Hãy giữ số lượng nhập ít nhất bằng số đã bán, hoặc dùng "Trả hàng nhập".`);
+        }
+      }
+      notices.push(`Phiếu đã nhập kho: tự hủy lần nhập ${redo.codes.join(', ')} và nhập lại theo phiếu mới (${rcv.code}), cùng ngày nhập`);
+    } else if (receiveNow) {
       const rem = all(`select id as po_line_id, qty - cancelled_qty - received_qty as qty from purchase_order_lines where po_id = ?`, po.id);
       rcv = doReceive(po.id, asDate(p.receive_date) || d, rem, null, p.extra_costs);
     }
-    return { id: po.id, code: po.code, payment_code: dep?.code ?? null, receipt_code: rcv?.code ?? null };
+    return { id: po.id, code: po.code, payment_code: dep?.code ?? null, receipt_code: rcv?.code ?? null, notices };
   });
 }
 
@@ -173,17 +195,29 @@ export function confirm_purchase_order(p) {
 }
 
 // Hủy một phiếu nhận hàng đã vào kho: xuất lại đúng giá trị đã nhập, số đã nhận của đơn giảm theo
-function doCancelReceipt(g, reason) {
+const hasSupplierReturn = (poId) => !!one(`select 1 from supplier_return_lines l join supplier_returns r on r.id = l.return_id
+  join goods_receipt_lines x on x.id = l.receipt_line_id join goods_receipts g on g.id = x.receipt_id where g.po_id = ? and r.cancelled_at is null`, poId);
+
+function doCancelReceipt(g, reason, redo = false) {
   checkDate(g.book_id, today());
   if (one(`select 1 from supplier_return_lines l join supplier_returns r on r.id = l.return_id join goods_receipt_lines x on x.id = l.receipt_line_id
       where x.receipt_id = ? and r.cancelled_at is null`, g.id)) fail(`Phiếu ${g.code} đã có phiếu trả hàng nhập — hãy hủy phiếu trả trước`);
   for (const l of all(`select * from goods_receipt_lines where receipt_id = ?`, g.id)) {
     const pr = one(`select sku, on_hand from products where id = ?`, l.product_id);
-    if (pr.on_hand < l.qty) fail(`Tồn kho của ${pr.sku} chỉ còn ${pr.on_hand}, không đủ để hủy phiếu nhập ${g.code} (đã nhập ${l.qty})`);
+    if (!redo && pr.on_hand < l.qty) fail(`Tồn kho của ${pr.sku} chỉ còn ${pr.on_hand}, không đủ để hủy phiếu nhập ${g.code} (đã nhập ${l.qty})`);
     postMove(g.book_id, l.product_id, today(), -l.qty, null, 'nhap', g.id, g.code, l.id, 'Hủy phiếu nhập ' + g.code, rnd(l.qty * l.unit_cost) + l.extra_cost);
     run(`update purchase_order_lines set received_qty = received_qty - ? where id = ?`, l.qty, l.po_line_id);
   }
   run(`update goods_receipts set cancelled_at = ?, cancel_reason = ? where id = ?`, nowIso(), reason, g.id);
+}
+
+// Nút "Lưu" trong chi tiết phiếu nhập: sửa nhanh ghi chú, số hóa đơn đầu vào mà không mở lại phiếu
+export function update_po_info(p) {
+  const po = getPo(p.id);
+  requirePerm(po.book_id, 'nhap_hang');
+  if (po.status === 'huy') fail('Phiếu đã hủy, không thể sửa');
+  run(`update purchase_orders set note = ?, invoice_no = ? where id = ?`, trimNz(p.note), trimNz(p.invoice_no), po.id);
+  return { ok: true };
 }
 
 export function cancel_purchase_order(p) {
@@ -191,16 +225,14 @@ export function cancel_purchase_order(p) {
   requirePerm(po.book_id, 'nhap_hang');
   if (po.status === 'huy') fail('Đơn đã hủy');
   if (!trimNz(p.reason)) fail('Hãy ghi lý do hủy');
+  // Như KiotViet: hủy phiếu đã nhập kho thì tự hủy các lần nhập (xuất lại kho); tiền đã trả NCC thành tiền NCC cần hoàn lại
+  if (hasSupplierReturn(po.id)) fail(`Phiếu ${po.code} đã có phiếu trả hàng nhập nên không hủy được. Hàng còn lại muốn trả: dùng "Trả hàng nhập".`);
   const recs = all(`select * from goods_receipts where po_id = ? and cancelled_at is null order by created_at desc`, po.id);
-  if (recs.length) {
-    if (po.mode !== 'nhap') fail(`Đơn ${po.code} đã nhận hàng. Dùng "Hủy phần chưa nhận", hủy từng phiếu nhập hoặc "Trả hàng nhập".`);
-    const paid = val(`select paid_net from v_purchase_orders where id = ?`, po.id) || 0;
-    if (paid !== 0) fail(`Phiếu ${po.code} đã ghi trả NCC ${vnd(paid)} — hãy hủy phiếu chi trước`);
-    for (const g of recs) doCancelReceipt(g, p.reason);
-  }
+  for (const g of recs) doCancelReceipt(g, p.reason);
   run(`update purchase_orders set status = 'huy', cancel_reason = ?, cancelled_at = ? where id = ?`, p.reason, nowIso(), po.id);
   run(`update sales_order_lines set po_line_id = null where po_line_id in (select id from purchase_order_lines where po_id = ?)`, po.id);
-  return { ok: true };
+  const paid = val(`select paid_net from v_purchase_orders where id = ?`, po.id) || 0;
+  return { ok: true, paid, receipts: recs.map((g) => g.code) };
 }
 
 // Hủy một phiếu nhập: phiếu nhập thẳng thì hủy cả phiếu, phiếu nhận theo đơn đặt thì đơn quay lại chờ hàng

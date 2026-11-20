@@ -1561,3 +1561,5 @@ body { font-size: 13px; line-height: 1.45; }
 .kv-detail .od-foot { margin-top: 2px; }
 .kv-detail .od-totals { gap: 6px 28px; }
 .kv-detail .totals .strong { font-weight: 600; }
+.tbl th { text-transform: none; letter-spacing: 0; }
+.tbl td.nowrap { white-space: nowrap; }

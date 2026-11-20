@@ -54,7 +54,7 @@ export function SalesPage() {
   const count = (f) => inTime.filter((o) => status.pass(o) && f(o)).length;
   const cols = [
     { key: 'code', label: 'Mã hóa đơn', render: (o) => <span className="strong">{o.code}</span> },
-    { key: 'time', label: 'Thời gian', render: (o) => (o.kind === 'dat_hang' ? dmy(invoiceDate(o)) : dmyhm(o.created_at)) },
+    { key: 'time', label: 'Thời gian', className: 'nowrap', render: (o) => (o.kind === 'dat_hang' ? dmy(invoiceDate(o)) : dmyhm(o.created_at)) },
     { key: 'kh', label: 'Mã KH', render: (o) => o.customer_code || '' },
     { key: 'customer', label: 'Khách hàng', className: 'col-clip', render: (o) => <span title={o.customer_name}>{o.customer_name}</span> },
     { key: 'disc', label: 'Giảm giá', align: 'right', render: (o) => money(o.discount || 0) },

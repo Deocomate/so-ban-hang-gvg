@@ -7,7 +7,7 @@ import { useProducts, useSuppliers, useFunds, productSub, unitsOf, findUnit } fr
 import { packing } from '../lib/docs/model.js';
 import { packView } from '../lib/book-profile.js';
 import { loadSheets, readLineFile, exportXlsx, LINE_FILE_COLUMNS } from '../lib/excel.js';
-import { Icon, Select, DateInput, NumInput, Loading, Picker } from '../components/ui.jsx';
+import { Icon, Select, DateInput, NumInput, Loading, Picker, Modal, Btn } from '../components/ui.jsx';
 import { ExtraCosts } from '../components/ExtraCosts.jsx';
 import { PosMenu } from '../components/PosMenu.jsx';
 
@@ -206,7 +206,7 @@ export function PurchasePos({ id, copy_id, mode: mode0, kind: kind0, sales_order
       const [o] = await rpc('q', { view: 'purchase_orders', filters: [['id', 'eq', src]] });
       const ls = await rpc('q', { view: 'purchase_order_lines', filters: [['po_id', 'eq', src]], order: 'line_no' });
       setF((s) => ({ ...s, mode: o.mode, kind: o.kind, supplier_id: o.supplier_id, discount: o.discount || 0,
-        ...(id ? { code: o.code, status0: o.status, status: o.status, order_date: o.order_date, expected_date: o.expected_date || '', sales_order_id: o.sales_order_id || '', invoice_no: o.invoice_no || '', note: o.note || '' } : {}),
+        ...(id ? { code: o.code, status0: o.status, supplier0: o.supplier_id, paid0: o.paid_net || 0, received0: (o.received_qty || 0) > 0, status: o.status, order_date: o.order_date, expected_date: o.expected_date || '', sales_order_id: o.sales_order_id || '', invoice_no: o.invoice_no || '', note: o.note || '' } : {}),
         lines: ls.filter((l) => id || l.eff_qty > 0).map((l) => { const c = l.unit_conv || 1; return { key: ++seq, id: id ? l.id : null, product_id: l.product_id, qty: (id ? l.qty : l.eff_qty) / c,
           unit_price: l.unit_price * c, discount: l.discount * c, unit: l.unit_name || l.unit, conv: c, note: l.note || '', sales_order_line_id: id ? l.sales_order_line_id : null }; }) }));
       setLoaded(true);
@@ -249,19 +249,32 @@ export function PurchasePos({ id, copy_id, mode: mode0, kind: kind0, sales_order
   const ready = loaded && !!products.data && !!suppliers.data;
   useEffect(() => { if (ready) setTimeout(() => searchRef.current?.focus(), 50); }, [ready]);
 
-  const submit = async (action) => {
+  // Phiếu nhập đã vào kho mở ra sửa (như KiotViet "Mở phiếu"): lưu là tự hủy lần nhập cũ và nhập lại, giữ chi phí nhập hàng cũ
+  const completedEdit = editing && isNhap && !!f.received0;
+  const [upd, setUpd] = useState(null);
+  const submit = async (action, agreed) => {
     const lines = f.lines.filter((l) => l.product_id && num(l.qty) > 0);
     if (!lines.length) { toast('Phiếu chưa có hàng hóa — gõ tên hoặc mã hàng vào ô tìm kiếm', 'err'); searchRef.current?.focus(); return; }
     if (!f.supplier_id) { toast('Chưa chọn nhà cung cấp', 'err'); return; }
+    if (editing && !agreed) {
+      const items = [];
+      if (completedEdit) items.push('Phiếu đã nhập kho: tự hủy lần nhập cũ rồi nhập lại theo phiếu mới, cùng ngày nhập; tồn kho, giá vốn và công nợ nhà cung cấp tính lại');
+      if (f.supplier0 && f.supplier_id !== f.supplier0 && f.paid0 > 0) items.push(`Tiền đã trả cho phiếu (${money(f.paid0)} đ) tự chuyển sang nhà cung cấp mới; phiếu chi chung với phiếu khác sẽ được tách riêng phần của phiếu này`);
+      if (items.length) { setUpd({ action, items }); return; }
+    }
     const r = await run('save_purchase_order', {
       id: id || null, mode: f.mode, kind: f.kind, supplier_id: f.supplier_id, order_date: f.order_date, expected_date: f.expected_date || null,
       sales_order_id: f.sales_order_id || null, prod_step: f.prod_step || null, invoice_no: f.invoice_no, discount: num(f.discount), note: f.note,
-      status: action === 'draft' ? 'nhap' : 'xac_nhan', receive_now: action === 'receive', extra_costs: action === 'receive' ? f.extra_costs || [] : undefined,
+      status: action === 'draft' ? 'nhap' : 'xac_nhan', receive_now: action === 'receive' && !completedEdit, extra_costs: action === 'receive' && !completedEdit ? f.extra_costs || [] : undefined,
       lines: lines.map((l) => ({ id: l.id || null, product_id: l.product_id, qty: baseQty(l), unit_price: num(l.unit_price) / (l.conv || 1), discount: num(l.discount) / (l.conv || 1),
         unit_name: (l.conv || 1) !== 1 ? l.unit : null, sales_order_line_id: l.sales_order_line_id || null, note: (l.note || '').trim() || null })),
       deposit: payAmt > 0 && action !== 'draft' ? { amount: payAmt, fund_id: f.pay.fund_id, method: f.pay.method } : null,
     }, (x) => `Đã lưu ${isNhap ? 'phiếu nhập' : 'đơn đặt hàng nhập'} ${x.code}${x.receipt_code ? ' · đã nhập kho' : ''}${x.payment_code ? ' · phiếu chi ' + x.payment_code : ''}`);
-    if (r) { onClose(); if (!editing) open('po', { id: r.id }); }
+    if (r) {
+      onClose();
+      if (r.notices?.length) toast(`Đã tự động xử lý ${r.code}: ${r.notices.join('; ')}`);
+      if (!editing) open('po', { id: r.id });
+    }
   };
 
   const shellProps = { rootRef, onClose, dirty: f.lines.length > 0, label: isNhap ? 'Nhập hàng' : 'Đặt hàng nhập', onImport: file.pick };
@@ -320,10 +333,15 @@ export function PurchasePos({ id, copy_id, mode: mode0, kind: kind0, sales_order
     {can('thu_chi') && <PayBox label={isNhap ? 'Tiền trả NCC' : 'Đặt cọc cho NCC'} amount={f.pay.amount} onAmount={(v) => setPay('amount', v)} full={need}
       fundId={f.pay.fund_id} onFund={(v) => setPay('fund_id', v)} method={f.pay.method} onMethod={(v) => setPay('method', v)} funds={funds.data}
       restLabel={isNhap ? 'Tính vào công nợ' : 'Còn lại khi nhận hàng'} rest={need - payAmt} />}
-    {isNhap && <ExtraCosts value={f.extra_costs} onChange={(v) => set('extra_costs', v)} />}
+    {isNhap && !completedEdit && <ExtraCosts value={f.extra_costs} onChange={(v) => set('extra_costs', v)} />}
+    {completedEdit && <div className="small muted">Phiếu đã nhập kho. Lưu là phần mềm tự nhập lại theo số mới, giữ nguyên chi phí nhập hàng của lần nhập trước.</div>}
     <textarea className="inp" rows={2} value={f.note} onChange={(e) => set('note', e.target.value)} placeholder="Ghi chú" maxLength={1000} />
     <span className="grow" />
-    {isNhap ? (
+    {completedEdit ? (
+      <div className="pos-actions one">
+        <button className="pos-btn pos-btn-main" disabled={busy} onClick={() => submit('receive')}>{busy ? <span className="spin" /> : 'Lưu phiếu'}</button>
+      </div>
+    ) : isNhap ? (
       <div className="pos-actions two">
         <button className="pos-btn pos-btn-soft" disabled={busy} onClick={() => submit('draft')}>Lưu tạm</button>
         <button className="pos-btn pos-btn-main" disabled={busy} onClick={() => submit('receive')}>{busy ? <span className="spin" /> : 'Hoàn thành'}</button>
@@ -335,6 +353,7 @@ export function PurchasePos({ id, copy_id, mode: mode0, kind: kind0, sales_order
     )}
   </>;
   return (
+    <>
     <PosShell {...shellProps} title={editing ? `${isNhap ? 'Sửa phiếu' : 'Sửa đơn'} ${f.code}` : isNhap ? 'Nhập hàng' : 'Đặt hàng nhập'} icon={isNhap ? 'import' : 'truck'}
       search={<ItemSearch products={buyable} onPick={addProduct} inputRef={searchRef} />}
       top={<>
@@ -346,6 +365,15 @@ export function PurchasePos({ id, copy_id, mode: mode0, kind: kind0, sales_order
       </>}
       empty={<FileEmpty text="Gõ tên hoặc mã hàng vào ô tìm kiếm phía trên" onPick={file.pick} onTemplate={() => file.template(isNhap ? 'nhap-hang' : 'dat-hang-nhap')} />}
       lines={lines} right={right} />
+    {upd && <Modal title={isNhap ? 'Cập nhật phiếu nhập' : 'Cập nhật đơn đặt hàng nhập'} size="sm" onClose={() => setUpd(null)}
+          footer={<><Btn onClick={() => setUpd(null)}>Bỏ qua</Btn><Btn kind="primary" busy={busy} onClick={() => { const u = upd; setUpd(null); submit(u.action, true); }}>Đồng ý</Btn></>}>
+          <div className="stack-s">
+            <div>Khi lưu thay đổi trên {isNhap ? 'phiếu' : 'đơn'} <b>{f.code}</b>, phần mềm sẽ tự động:</div>
+            <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>{upd.items.map((x) => <li key={x}>{x}</li>)}</ul>
+            <div>Bạn có muốn tiếp tục?</div>
+          </div>
+        </Modal>}
+    </>
   );
 }
 
