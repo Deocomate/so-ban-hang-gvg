@@ -23,3 +23,6 @@ du-lieu-kiotviet/
 
 # File Excel mẫu nhập hàng của khách (hơn 400 MB, có dữ liệu cửa hàng), chỉ để ở máy
 docs/*.xlsx
+
+# Báo cáo khảo sát có số liệu kinh doanh của khách, chỉ để ở máy
+plans/reports/khao-sat-261105-1448-kiotviet-thanh-hai.md
