@@ -5,6 +5,7 @@ import { requirePerm, nextCode, once } from './access.js';
 import { CARRIERS, isShipStatus, shipStatusLabel, carrierShort, carrierName, shipRank, mapTmStatus } from '../lib/labels.js';
 import { doPayment } from './cash.js';
 import { notify } from './notify.js';
+import { syncShipmentTrip } from './drivers.js';
 
 const normTracking = (t) => String(t ?? '').replace(/\s/g, '').toUpperCase();
 const minuteKey = (ts) => (ts ? ts.slice(0, 16).replace(/[-T:]/g, '') : '');
@@ -86,8 +87,9 @@ export function create_shipment(p) {
       ship_fee: rnd(num(p.ship_fee)) ?? 0, cod_status: cod > 0 ? 'chua_thu' : 'khong_cod',
       receiver_name: nz(p.receiver_name) || o.customer_name, receiver_phone: nz(p.receiver_phone) || o.customer_phone,
       receiver_address: nz(p.receiver_address) || o.customer_address, note: p.note ?? null, created_by: ctx.uid, created_at: now });
+    const trip = syncShipmentTrip(b, one(`select * from shipments where id = ?`, id));
     addShipEvent(id, now, 'cho_lay_hang', drv ? `Tạo vận đơn trong sổ · lái xe ${drv.name}${drv.plate ? ' · ' + drv.plate : ''}` : 'Tạo vận đơn trong sổ', null, 'he_thong');
-    return { id, code, tracking_no: tn, driver_name: drv?.name ?? null };
+    return { id, code, tracking_no: tn, driver_name: drv?.name ?? null, trip_code: trip?.code ?? null };
   });
 }
 
@@ -107,6 +109,7 @@ export function update_shipment(p) {
       receiver_name = coalesce(?, receiver_name), receiver_phone = coalesce(?, receiver_phone), receiver_address = coalesce(?, receiver_address),
       updated_at = ? where id = ?`,
   driverId, cod, codStatus, rnd(num(p.ship_fee)), p.note ?? null, p.receiver_name ?? null, p.receiver_phone ?? null, p.receiver_address ?? null, nowIso(), s.id);
+  syncShipmentTrip(s.book_id, one(`select * from shipments where id = ?`, s.id));
   return { ok: true };
 }
 

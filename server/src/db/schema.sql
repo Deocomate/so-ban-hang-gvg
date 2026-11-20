@@ -735,6 +735,7 @@ create table if not exists driver_trips (
   code text not null,
   order_id text references sales_orders(id),
   delivery_id text references deliveries(id),
+  shipment_id text references shipments(id),   -- chuyến sinh ra từ cước của vận đơn đi bằng lái xe
   driver_id text not null references drivers(id),
   trip_date text not null,
   amount real not null check (amount >= 0),

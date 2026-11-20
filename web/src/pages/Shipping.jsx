@@ -118,7 +118,7 @@ export function ShipmentForm({ order_id, delivery_id, cod, onClose }) {
     <Modal title={`Tạo vận đơn – đơn ${d.code}`} subtitle={d.customer_name} onClose={onClose} size="md"
       footer={<><Btn onClick={onClose}>Thôi</Btn><Btn kind="primary" busy={busy} onClick={async () => {
         const r = await run('create_shipment', { order_id, ...f, tracking_no: own ? null : f.tracking_no, driver_id: own ? f.driver_id : null, delivery_id: f.delivery_id || null },
-          (x) => (own ? `Đã tạo vận đơn ${x.code} · lái xe ${x.driver_name}` : `Đã tạo vận đơn ${carrier(f.carrier).short} ${x.tracking_no}`));
+          (x) => (own ? `Đã tạo vận đơn ${x.code} · lái xe ${x.driver_name}${x.trip_code ? ` · ghi công nợ lái xe (chuyến ${x.trip_code})` : ''}` : `Đã tạo vận đơn ${carrier(f.carrier).short} ${x.tracking_no}`));
         if (r) { rememberCarrier(f.carrier); onClose(); }
       }}>Lưu vận đơn</Btn></>}>
       {own ? <Note>Đơn vị khác không có mã vận đơn: chọn <b>lái xe</b> chở hàng (tên, SĐT, biển số lấy từ danh sách lái xe). Chưa có thì bấm <b>+</b> để thêm nhanh. Trạng thái giao và tiền lái xe thu hộ (COD) vẫn theo dõi ở mục Vận chuyển.</Note>
@@ -128,7 +128,7 @@ export function ShipmentForm({ order_id, delivery_id, cod, onClose }) {
         {own ? <Field label="Lái xe" required wide><DriverSelect value={f.driver_id} onChange={(v) => set('driver_id', v)} /></Field>
           : <Field label={`Mã vận đơn ${carrier(f.carrier).short}`} required wide><Input value={f.tracking_no} onChange={(v) => set('tracking_no', v.toUpperCase())} placeholder={carrier(f.carrier).hint} autoFocus /></Field>}
         <Field label={own ? 'Lái xe thu hộ (COD)' : 'Tiền thu hộ (COD)'} hint={`Đơn còn phải trả ${money(d.remaining_to_pay)}. Để 0 nếu khách đã chuyển khoản.`}><NumInput value={f.cod_amount} onChange={(v) => set('cod_amount', v || 0)} /></Field>
-        <Field label="Cước vận chuyển (dự kiến)"><NumInput value={f.ship_fee} onChange={(v) => set('ship_fee', v)} /></Field>
+        <Field label={own ? 'Tiền trả lái xe' : 'Cước vận chuyển (dự kiến)'} hint={own ? 'Ghi vào công nợ lái xe (mục Lái xe), trả qua phiếu chi' : undefined}><NumInput value={f.ship_fee} onChange={(v) => set('ship_fee', v)} /></Field>
         <Field label="Gắn với phiếu giao"><Select value={f.delivery_id} onChange={(v) => set('delivery_id', v)} placeholder="(chưa giao trong sổ)" options={(dels.data || []).map((x) => ({ value: x.id, label: `${x.code} · ${dmy(x.delivery_date)}` }))} /></Field>
         <Field label="Người nhận"><Input value={f.receiver_name} onChange={(v) => set('receiver_name', v)} /></Field>
         <Field label="SĐT người nhận"><Input value={f.receiver_phone} onChange={(v) => set('receiver_phone', v)} inputMode="tel" /></Field>
@@ -163,7 +163,7 @@ export function ShipmentDetail({ id, onClose }) {
       </>}>
       <div className="grid-2">
         <KV items={[['Đơn vị vận chuyển', cinfo.name], cinfo.own && ['Lái xe', s.driver_name ? [s.driver_name, s.driver_phone, s.driver_plate].filter(Boolean).join(' · ') : 'Chưa chọn'], ['Người nhận', `${s.receiver_name || '—'}${s.receiver_phone ? ' · ' + s.receiver_phone : ''}`], ['Địa chỉ', s.receiver_address || '—'],
-          ['Tiền thu hộ (COD)', s.cod_amount > 0 ? `${money(s.cod_amount)} đ` : 'Không'], ['Cước vận chuyển', s.ship_fee ? money(s.ship_fee) + ' đ' : '—'],
+          ['Tiền thu hộ (COD)', s.cod_amount > 0 ? `${money(s.cod_amount)} đ` : 'Không'], [cinfo.own ? 'Tiền trả lái xe' : 'Cước vận chuyển', s.ship_fee ? money(s.ship_fee) + ' đ' : '—'],
           s.cod_payment_codes?.length > 0 && ['Phiếu thu COD', s.cod_payment_codes.join(', ')], ['Phiếu giao', s.delivery_code || 'chưa gắn'],
           ['Theo dõi tự động', s.tracking_registered_at ? `Đã bật · lần cập nhật ${dmyhm(s.last_sync_at)}` : (s.last_sync_at ? `Có · lần nhận gần nhất ${dmyhm(s.last_sync_at)}` : 'Chưa (cập nhật tay hoặc nhập file Excel)')], s.note && ['Ghi chú', s.note]]} />
         {can('ban_hang') && !s.order_cancelled && (
@@ -179,7 +179,7 @@ export function ShipmentDetail({ id, onClose }) {
       {edit && <div className="section"><div className="grid">
         {cinfo.own && <Field label="Lái xe" wide><DriverSelect value={edit.driver_id} onChange={(v) => setEdit((x) => ({ ...x, driver_id: v }))} /></Field>}
         <Field label="COD"><NumInput value={edit.cod_amount} onChange={(v) => setEdit((x) => ({ ...x, cod_amount: v || 0 }))} /></Field>
-        <Field label="Cước vận chuyển"><NumInput value={edit.ship_fee} onChange={(v) => setEdit((x) => ({ ...x, ship_fee: v || 0 }))} /></Field>
+        <Field label={cinfo.own ? 'Tiền trả lái xe' : 'Cước vận chuyển'}><NumInput value={edit.ship_fee} onChange={(v) => setEdit((x) => ({ ...x, ship_fee: v || 0 }))} /></Field>
         <Field label="SĐT nhận"><Input value={edit.receiver_phone} onChange={(v) => setEdit((x) => ({ ...x, receiver_phone: v }))} /></Field>
         <Field label="Địa chỉ" wide><Input value={edit.receiver_address} onChange={(v) => setEdit((x) => ({ ...x, receiver_address: v }))} /></Field>
         <Field label="Ghi chú" wide><Input value={edit.note} onChange={(v) => setEdit((x) => ({ ...x, note: v }))} /></Field>

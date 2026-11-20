@@ -82,6 +82,25 @@ await api.call('update_shipment', { id: sK.id, driver_id: drvK2 });
 C('Đổi lái xe của vận đơn', (await ship(sK.id)).driver_name, 'Chú Tâm');
 await E('Không đổi sang lái xe không có trong sổ', () => api.call('update_shipment', { id: sK.id, driver_id: 'khong-co' }), 'lái xe');
 C('Vận đơn SPX không gắn lái xe', (await ship(s1.id)).driver_id, null);
+const tripsOf = async (sid) => (await api.q('driver_trips', VG)).filter((t) => t.shipment_id === sid);
+C('Vận đơn chưa có tiền trả lái xe thì chưa ghi công nợ', (await tripsOf(sK.id)).length, 0);
+await api.call('update_shipment', { id: sK.id, ship_fee: 150000 });
+let TK = await tripsOf(sK.id);
+C('Nhập tiền trả lái xe → ghi chuyến, cửa hàng nợ lái xe', [TK.length, TK[0]?.driver_name, TK[0]?.amount, TK[0]?.unpaid, TK[0]?.shipment_code], [1, 'Chú Tâm', 150000, 150000, sK.code]);
+C('Công nợ hiện ở lái xe', (await api.one('drivers', VG, [['id', 'eq', drvK2]])).unpaid, 150000);
+await api.call('update_shipment', { id: sK.id, driver_id: drvK, ship_fee: 120000 });
+TK = await tripsOf(sK.id);
+C('Đổi lái xe / tiền → chuyển công nợ sang lái xe mới', [TK.length, TK[0]?.driver_name, TK[0]?.amount, (await api.one('drivers', VG, [['id', 'eq', drvK2]])).unpaid], [1, 'Anh Đức', 120000, 0]);
+await api.call('update_shipment', { id: sK.id, ship_fee: 0 });
+C('Bỏ tiền trả lái xe → bỏ chuyến', (await tripsOf(sK.id)).length, 0);
+const oK2 = await sell(VG, K2, VP['AC-01'], 1, 450000);
+const dK2 = (await api.q('deliveries', VG, [['order_id', 'eq', oK2.id]]))[0].id;
+const sK2 = await api.call('create_shipment', { book_id: VG, request_id: rid(), order_id: oK2.id, delivery_id: dK2, carrier: 'KHAC', driver_id: drvK, ship_fee: 80000 });
+TK = await tripsOf(sK2.id);
+C('Tạo vận đơn kèm tiền trả lái xe → ghi chuyến ngay, gắn đợt giao', [!!sK2.trip_code, TK[0]?.amount, TK[0]?.delivery_id === dK2], [true, 80000, true]);
+await api.call('pay_driver', { id: TK[0].id, amount: 80000, fund_id: (await api.q('funds', VG))[0].id });
+await E('Đã trả lái xe thì không đổi tiền được nữa', () => api.call('update_shipment', { id: sK2.id, ship_fee: 90000 }), 'hủy phiếu chi');
+await api.call('update_shipment_status', { id: sK2.id, status: 'da_huy' });
 await api.call('update_shipment_status', { id: sK.id, status: 'da_huy' });
 api.as(owner);
 
@@ -142,7 +161,8 @@ C('Cước SPX trừ = 1.100.000 − 1.060.000', st.fee_total, 40000);
 C('Vận đơn chuyển “Đã về tài khoản”', [(await ship(s1.id)).cod_status, (await ship(s2.id)).cod_status], ['da_ve_tk', 'da_ve_tk']);
 C('Đơn của chị Hoa đã thu đủ', (await ord(VG, o1.id)).payment_status, 'da_thanh_toan_du');
 C('Quỹ ngân hàng tăng đúng số tiền thực về', (await api.one('funds', VG, [['id', 'eq', NH_VG]])).balance - fundBefore, 1060000);
-const fees = await api.sql(`select sum(amount) s, min(category) c, min(expense_group) g from expenses where book_id = ? and category = 'Phí vận chuyển (ship, COD)'`, [VG]);
+const fees = await api.sql(`select sum(amount) s, min(category) c, min(expense_group) g from expenses where book_id = ? and category = 'Phí vận chuyển (ship, COD)' and voided = 0
+  and id not in (select expense_id from driver_trips where expense_id is not null)`, [VG]);   // bỏ tiền trả lái xe
 C('Cước bị trừ ghi vào “Chi phí bán hàng · Phí vận chuyển (ship, COD)”', [fees[0].s, fees[0].g], [40000, 'Chi phí bán hàng']);
 C('Giao dịch ngân hàng đã ghi', (await api.one('bank_txns', VG, [['id', 'eq', codTx.id]])).status, 'da_ghi');
 await E('Đối soát lại vận đơn đã về tài khoản bị chặn', () => api.call('settle_cod', { book_id: VG, shipment_ids: [s1.id], fund_id: NH_VG, received: 600000 }), 'đối soát');
@@ -265,7 +285,7 @@ for (const [b, name] of [[TH, 'Thanh Hải'], [VG, 'Vũ Gia']]) {
 const bt = await api.sql(`select count(*) filter (where status = 'da_ghi' and json_array_length(payment_ids) = 0) bad from bank_txns`);
 C('Mọi giao dịch “đã ghi” đều có phiếu thu', bt[0].bad, 0);
 const exp = await api.call('export_book', { book_id: VG });
-C('Sao lưu có vận đơn, lịch sử vận chuyển, tiền về', [exp.shipments.length, exp.shipment_events.length > 5, exp.bank_txns.length > 0], [5, true, true]);
+C('Sao lưu có vận đơn, lịch sử vận chuyển, tiền về', [exp.shipments.length, exp.shipment_events.length > 5, exp.bank_txns.length > 0], [6, true, true]);
 
 // ---------- 9. Bổ sung: đơn mới, hủy phiếu, nhập trạng thái hàng loạt, tài khoản nhận tiền ----------
 G('9. Đơn mới · hủy phiếu thu · nhập trạng thái từ file SPX');

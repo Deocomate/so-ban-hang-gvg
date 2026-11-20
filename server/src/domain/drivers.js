@@ -35,7 +35,7 @@ function insertTrip(b, t) {
   const code = nextCode(b, 'VC'); const id = uuid();
   const exp = owesDriver(payer, collect)
     ? insertExpense(b, { exp_date: date, category: FREIGHT_CATEGORY, description: `Vận chuyển ${code} – lái xe ${drv.name}`, amount }) : null;
-  insert('driver_trips', { id, book_id: b, code, order_id: nz(t.order_id), delivery_id: nz(t.delivery_id), driver_id: drv.id, trip_date: date, amount, payer, collect,
+  insert('driver_trips', { id, book_id: b, code, order_id: nz(t.order_id), delivery_id: nz(t.delivery_id), shipment_id: nz(t.shipment_id), driver_id: drv.id, trip_date: date, amount, payer, collect,
     expense_id: exp?.id ?? null, note: t.note ?? null, created_by: ctx.uid, created_at: nowIso() });
   const paid = rnd(num(t.paid) ?? 0);
   if (paid > 0) {
@@ -60,11 +60,26 @@ function removeTrip(t) {
 
 // Đơn hàng chỉ có 1 chuyến khai trong màn bán hàng: lưu lại đơn thì thay chuyến cũ. Chuyến của từng đợt giao gắn delivery_id nên không bị đụng.
 export function saveOrderTrip(b, order, date, t) {
-  const old = one(`select * from driver_trips where order_id = ? and delivery_id is null`, order.id);
+  const old = one(`select * from driver_trips where order_id = ? and delivery_id is null and shipment_id is null`, order.id);
   if (!t?.driver_id) { if (old) removeTrip(old); return null; }
   if (old && old.driver_id === t.driver_id && old.amount === rnd(num(t.amount) ?? 0) && old.payer === (t.payer || 'khach') && old.collect === (t.collect || 'hoa_don')) return { id: old.id, code: old.code };
   if (old) removeTrip(old);
   return insertTrip(b, { ...t, order_id: order.id, date: t.date || date });
+}
+
+// Vận đơn đi bằng lái xe: cước vận chuyển là khoản cửa hàng phải trả lái xe, giữ 1 chuyến khớp với lái xe + cước của vận đơn
+export function syncShipmentTrip(b, s) {
+  const old = one(`select * from driver_trips where shipment_id = ?`, s.id);
+  const amount = rnd(num(s.ship_fee) ?? 0);
+  const want = s.carrier === 'KHAC' && s.driver_id && amount > 0;
+  if (old && want && old.driver_id === s.driver_id && old.amount === amount) {
+    if (old.delivery_id !== s.delivery_id) run(`update driver_trips set delivery_id = ? where id = ?`, s.delivery_id ?? null, old.id);
+    return { id: old.id, code: old.code };
+  }
+  if (old) removeTrip(old);
+  if (!want) return null;
+  return insertTrip(b, { driver_id: s.driver_id, amount, payer: 'cua_hang', collect: 'hoa_don', order_id: s.order_id, delivery_id: s.delivery_id,
+    shipment_id: s.id, date: old?.trip_date || today(), note: `Cước vận đơn ${s.code}` });
 }
 
 export function save_trip(p) {

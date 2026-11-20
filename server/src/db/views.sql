@@ -673,12 +673,12 @@ left join users u on u.id = t.handled_by left join book_members m on m.user_id =
 
 -- ---------- LÁI XE ----------
 create view v_driver_trips as
-select t.id, t.book_id, t.code, t.order_id, o.code as order_code, c.name as customer_name, t.delivery_id, d.code as delivery_code,
+select t.id, t.book_id, t.code, t.order_id, o.code as order_code, c.name as customer_name, t.delivery_id, d.code as delivery_code, t.shipment_id, sh.code as shipment_code,
   t.driver_id, r.name as driver_name, r.phone as driver_phone, r.plate, t.trip_date, t.amount, t.payer, t.collect, t.note, t.expense_id, t.created_at,
   coalesce(e.amount, 0) as payable_total, coalesce(e.paid, 0) as paid, coalesce(e.unpaid, 0) as unpaid
 from driver_trips t join drivers r on r.id = t.driver_id
 left join sales_orders o on o.id = t.order_id left join customers c on c.id = o.customer_id
-left join deliveries d on d.id = t.delivery_id left join v_expenses e on e.id = t.expense_id;
+left join deliveries d on d.id = t.delivery_id left join shipments sh on sh.id = t.shipment_id left join v_expenses e on e.id = t.expense_id;
 
 create view v_drivers as
 select r.id, r.book_id, r.code, r.name, r.phone, r.plate, r.id_no, r.note, r.active, r.created_at,

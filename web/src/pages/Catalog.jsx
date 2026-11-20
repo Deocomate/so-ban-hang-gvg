@@ -270,7 +270,7 @@ export function DriversPage() {
       <Table dense rows={trips.data ? rows : null} empty="Không có chuyến phù hợp" columns={[
         { key: 'c', label: 'Chuyến', render: (t) => <><b>{t.code}</b><div className="cell-sub">{dmy(t.trip_date)}</div></> },
         { key: 'd', label: 'Lái xe', render: (t) => t.driver_name },
-        { key: 'o', label: 'Đơn / khách', render: (t) => (t.order_id ? <a href="#" onClick={(e) => { e.preventDefault(); open('order', { id: t.order_id }); }}>{t.order_code}</a> : '—') },
+        { key: 'o', label: 'Đơn / khách', render: (t) => (t.order_id ? <><a href="#" onClick={(e) => { e.preventDefault(); open('order', { id: t.order_id }); }}>{t.order_code}</a>{t.shipment_code && <div className="cell-sub">Vận đơn {t.shipment_code}</div>}</> : '—') },
         { key: 'h', label: 'Thanh toán', render: (t) => <span className="small">{WHO[t.payer]}{t.payer === 'khach' ? ` · ${HOW[t.collect]}` : ''}</span> },
         { key: 'a', label: 'Tiền', align: 'right', render: (t) => money(t.amount) },
         { key: 'u', label: 'Còn phải trả', align: 'right', render: (t) => (t.unpaid > 0 ? <b className="bad">{money(t.unpaid)}</b> : t.expense_id ? <Pill tone="good">đã trả</Pill> : <Pill tone="neutral">khách trả</Pill>) },

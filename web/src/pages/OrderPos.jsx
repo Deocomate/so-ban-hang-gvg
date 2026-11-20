@@ -117,7 +117,7 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
     (async () => {
       const [o] = await rpc('q', { view: 'sales_orders', filters: [['id', 'eq', id]] });
       const ls = await rpc('q', { view: 'sales_order_lines', filters: [['order_id', 'eq', id]], order: 'line_no' });
-      const trip = (await rpc('q', { view: 'driver_trips', filters: [['order_id', 'eq', id]] })).find((t) => !t.delivery_id);
+      const trip = (await rpc('q', { view: 'driver_trips', filters: [['order_id', 'eq', id]] })).find((t) => !t.delivery_id && !t.shipment_id);
       const op = await rpc('order_promos', { order_id: id });
       setPromos(op.map((x) => (x.kind === 'promo' ? { kind: 'promo', id: x.ref_id } : x.kind === 'points' ? { kind: 'points', points: x.points } : { kind: x.kind, code: x.code })));
       const promoSum = op.reduce((t, x) => t + x.amount, 0);
