@@ -166,7 +166,7 @@ Nếu bản mới đổi cấu trúc dữ liệu, máy chủ tự sao lưu rồi
 | Bước sản xuất | Chờ sản xuất → Đang sản xuất → Đang trong lò → Đã sản xuất, chưa giao hàng → Đang giao về. "Đã nhận một phần / đủ" do phần mềm tự cập nhật |
 | **Khách trả hàng** | Đảo doanh thu và giá vốn theo đúng giá lúc giao. Hàng lỗi không nhập lại thì ghi vào hao hụt |
 | **Vỡ, lỗi, thất thoát** | Phiếu điều chỉnh kho có lý do; giá trị tính vào chi phí vận hành |
-| **TikTok** | Phí sàn ghi vào phiếu thu → tự tạo chi phí "Phí sàn TMĐT"; quỹ nhận số tiền thực về |
+| **TikTok** | Phiếu thu ghi đủ số tiền đơn; phí sàn ghi riêng ở **Chi phí** (nhóm "Phí sàn TMĐT") |
 | Xóa / sửa | Không xóa lịch sử. Phiếu sai thì **hủy** (vẫn lưu, có lý do) rồi lập lại. Mọi thay đổi ghi vào Nhật ký |
 | Bấm lưu 2 lần | Không ghi trùng (mỗi lần bấm có một mã yêu cầu) |
 | Bán vượt tồn | Bị chặn (có thể mở trong Thiết lập) |
@@ -294,7 +294,7 @@ Hiện tại trạng thái vận đơn được cập nhật bằng tay hoặc t
 - **Phân bổ dần:** dùng cho khoản trả một lần nhưng dùng nhiều tháng, như kệ, camera, máy in, hoặc tiền nhà trả trước 3–6 tháng. Chọn "Chia đều N tháng". Tiền ra khỏi quỹ một lần, còn lãi lỗ mỗi tháng chỉ tính một phần, nên tháng mua đồ không bị lỗ ảo. Ví dụ: camera 12.000.000 đ chia 12 tháng thì mỗi tháng tính 1.000.000 đ.
 - **Phân bổ cho nhiều thương hiệu:** trong form ghi chi phí, khung "Phân bổ cho thương hiệu" cho chia 1 khoản (vd. lương kế toán làm chung) cho Thanh Hải, Vũ Gia, Anamtile theo %. Kéo thẻ thương hiệu vào thanh màu để thêm, kéo vạch trắng giữa hai đoạn để đổi tỷ lệ, kéo một đoạn lên trên (hoặc bấm ×) để bỏ; ô % bên dưới nhập được số chính xác. Sổ đang mở là sổ trả tiền: giữ đủ số tiền trong quỹ và công nợ nhưng lãi lỗ chỉ tính phần của mình. Mỗi thương hiệu khác tự có 1 khoản "phần chia" (ghi rõ nguồn, không động tới quỹ của sổ đó). Sửa hay hủy khoản gốc thì phần chia đổi theo; phần chia không sửa riêng được. Muốn chia cho sổ nào, tài khoản phải có quyền ghi chi phí ở sổ đó.
 - **Chi phí định kỳ hằng tháng:** tab **Chi phí → Định kỳ hằng tháng** dành cho khoản lặp lại như thuê nhà, Claude AI, internet, lương cố định. Kéo một mẫu nhanh vào ngày trên lịch (hoặc bấm "Khoản định kỳ mới"), nhập số tiền, tháng bắt đầu, có thể chọn quỹ để tự lập phiếu chi và chia cho nhiều thương hiệu như trên. Đến ngày hẹn phần mềm tự ghi khoản chi phí; máy chủ tắt vài hôm thì kỳ đã qua được ghi bù, không ghi trùng. Ngày 29–31 rơi vào tháng ngắn hơn thì ghi vào ngày cuối tháng. Kéo thẻ sang ngày khác để đổi ngày ghi; nút tạm dừng / chạy lại và "Ghi ngay" (ghi kỳ tháng này trước ngày hẹn) nằm ở bảng dưới lịch. Xóa khoản định kỳ không xóa các kỳ đã ghi.
-- **Tự ghi, không cần nhập lại:** phí sàn TikTok (ghi khi thu tiền có phí sàn) và cước, phí COD bị trừ khi đối soát SPX hoặc BEST. Cả hai tự vào nhóm "Chi phí bán hàng".
+- **Tự ghi, không cần nhập lại:** cước, phí COD bị trừ khi đối soát SPX hoặc BEST, tự vào nhóm "Chi phí bán hàng". Phí sàn TikTok ghi ở mục Chi phí (phiếu thu tiền không còn ô phí sàn).
 - **Không ghi ở đây:**
   - tiền nhập hàng, vì đã nằm trong giá vốn;
   - thuế GTGT 1% và thuế TNCN 17%, vì phần mềm tự ước tính trong lãi lỗ.

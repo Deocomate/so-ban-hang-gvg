@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useApp, useQ, useAction } from '../lib/store.jsx';
 import { money, dmy, todayVN } from '../lib/format.js';
-import { useFunds } from '../lib/lookups.js';
+import { useFunds, isCashFund } from '../lib/lookups.js';
 import { Btn, NumInput, Input, Select, DateInput, Check } from '../components/ui.jsx';
 import { hushHoverCards } from '../components/HoverCard.jsx';
 import { reserveTab } from './Documents.jsx';
@@ -12,8 +12,7 @@ import { QUICK_FUND_KEY, readFund } from './Sales.jsx';
 const ENTER_SUBMITS = new Set(['Số tiền', 'Ghi chú']); // Enter ở ô ngày/chọn để dành cho chính ô đó
 const PRINT_KEY ='gomsu.debt_quick_print';
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* bỏ qua */ } } };
-// Hình thức gắn liền với quỹ: quỹ tiền mặt (tên có "mặt"/"két") ↔ Tiền mặt, các quỹ còn lại là tài khoản ngân hàng ↔ Chuyển khoản
-const isCash = (f) => /mặt|két/i.test(f?.name || '');
+const isCash = isCashFund;
 
 // Số ngày quá hạn (âm = còn bao nhiêu ngày nữa mới đến hạn); null khi chứng từ chưa có hạn trả
 export const overdueDays = (d, today = todayVN()) => (d.due_date ? Math.round((new Date(today) - new Date(d.due_date)) / 864e5) : null);

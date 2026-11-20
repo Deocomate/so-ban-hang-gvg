@@ -296,7 +296,7 @@ const C1 = (await api.call('save_party', { book_id: VG, type: 'kh', name: 'Khác
 const v1 = await api.call('save_sales_order', { book_id: VG, request_id: rid(), customer_id: C1, channel: 'TikTok', order_date: D(2), lines: [{ product_id: BHL, qty: 1 }], deliver_now: true });
 const v2 = await api.call('save_sales_order', { book_id: VG, request_id: rid(), customer_id: C1, channel: 'TikTok', order_date: D(2), lines: [{ product_id: BHL, qty: 1 }], deliver_now: true });
 await E('Phân bổ vượt số tiền phiếu bị chặn', () => api.call('create_payment', { book_id: VG, kind: 'thu_khach', fund_id: VNH, party_id: C1, amount: 1000000,
-  allocations: [{ doc_type: 'don_ban', doc_id: v1.id, amount: 650000 }, { doc_type: 'don_ban', doc_id: v2.id, amount: 650000 }] }), 'vượt');
+  allocations: [{ doc_type: 'don_ban', doc_id: v1.id, amount: 650000 }, { doc_type: 'don_ban', doc_id: v2.id, amount: 650000 }] }), 'nhiều hơn số tiền phiếu');
 await api.call('create_payment', { book_id: VG, request_id: rid(), kind: 'thu_khach', date: D(1), fund_id: VNH, party_id: C1, amount: 1300000, fee: 130000,
   note: 'TikTok thanh toán', allocations: [{ doc_type: 'don_ban', doc_id: v1.id, amount: 650000 }, { doc_type: 'don_ban', doc_id: v2.id, amount: 650000 }] });
 const vo1 = await api.one('sales_orders', VG, [['id', 'eq', v1.id]]), vo2 = await api.one('sales_orders', VG, [['id', 'eq', v2.id]]);

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp, useQ, useAction } from '../lib/store.jsx';
 import { money, dmy, todayVN, match, short } from '../lib/format.js';
-import { useCustomers, useSuppliers, useFunds } from '../lib/lookups.js';
+import { useCustomers, useSuppliers, useFunds, isCashFund } from '../lib/lookups.js';
 import { exportXlsx } from '../lib/excel.js';
 import { useTimeFilter, TimeFilter, dateFilters, CheckList } from '../components/DocFilters.jsx';
 import { cats, groupOf, GROUP_HINT, GROUP_COLORS } from '../lib/expenseCats.js';
@@ -40,7 +40,15 @@ export function PaymentForm({ kind: kind0 = 'thu_khach', party_id: party0, alloc
   const [fund, setFund] = useState(''); const [toFund, setToFund] = useState('');
   const [date, setDate] = useState(todayVN()); const [method, setMethod] = useState('Chuyển khoản'); const [note, setNote] = useState(''); const [refNo, setRefNo] = useState('');
   const [al, setAl] = useState(alloc ? { [alloc.doc_id]: alloc.amount > 0 ? alloc.amount : null } : {});
+  // Như KiotViet: tiền trả cho từng chứng từ tự chia theo số tiền thu, cho đến khi người dùng tự sửa một dòng
+  const [manual, setManual] = useState(false);
   const def = PAY_KINDS.find((k) => k.value === kind);
+  // Phiếu thu: chỉ chọn Tiền mặt / Chuyển khoản, quỹ đi theo hình thức (không hỏi quỹ, phí sàn, mã giao dịch)
+  const isThu = def?.dir === 'thu';
+  const allFunds = funds.data || [];
+  const cashFunds = allFunds.filter(isCashFund); const bankFunds = allFunds.filter((f) => !isCashFund(f));
+  const thuMethod = isCashFund(allFunds.find((f) => f.id === fund)) ? 'Tiền mặt' : 'Chuyển khoản';
+  const pickThuMethod = (m) => { const list = m === 'Tiền mặt' ? cashFunds : bankFunds; if (!list.some((f) => f.id === fund)) setFund(list[0]?.id || ''); };
   const docTypes = kind === 'thu_khach' || kind === 'hoan_khach' ? ['don_ban', 'no_dau_ky'] : kind === 'tra_ncc' || kind === 'ncc_hoan' ? ['don_mua', 'no_dau_ky', 'chi_phi'] : kind === 'chi_phi' ? ['chi_phi'] : [];
   const docsQ = useQ('open_docs', kind === 'chi_phi' ? [['doc_type', 'eq', 'chi_phi'], ['party_id', 'is_null']] : [['party_id', 'eq', party || '00000000-0000-0000-0000-000000000000']], 'doc_date', 500, docTypes.length > 0 && (!!party || kind === 'chi_phi'));
   const refund = kind === 'hoan_khach' || kind === 'ncc_hoan';
@@ -48,32 +56,56 @@ export function PaymentForm({ kind: kind0 = 'thu_khach', party_id: party0, alloc
     ...d, limit: refund ? (d.doc_type === 'no_dau_ky' ? -d.remaining_total : d.paid_net - d.due_now) : d.remaining_total,
   })).filter((d) => d.limit > 0 && (refund || d.status !== 'huy') || al[d.doc_id]), [docsQ.data, kind, al]);
   useEffect(() => { if (!fund && funds.data?.length) setFund(funds.data[0].id); }, [funds.data]);
-  useEffect(() => { if (!alloc) setAl({}); }, [kind, party]);
+  useEffect(() => { if (!alloc) { setAl({}); setManual(false); } }, [kind, party]);
   const allocated = Object.values(al).reduce((s, v) => s + (Number(v) || 0), 0);
-  const autoFill = () => {
-    let left = Number(amount) || 0; const next = {};
-    const order = [...docs].sort((a, b) => (a.doc_date < b.doc_date ? -1 : 1));
+  // Chia số tiền cho các chứng từ: chứng từ đang mở (nếu mở phiếu từ một đơn) trước, rồi chứng từ cũ trước; phần dư là trả trước
+  const distribute = (total) => {
+    let left = Number(total) || 0; const next = {};
+    const order = [...docs].sort((a, b) => (a.doc_id === alloc?.doc_id ? -1 : b.doc_id === alloc?.doc_id ? 1 : a.doc_date < b.doc_date ? -1 : 1));
+    if (alloc && !order.some((d) => d.doc_id === alloc.doc_id)) order.unshift({ doc_id: alloc.doc_id, limit: Infinity, remaining_due: Infinity });
     for (const pass of ['due', 'total']) for (const d of order) {
       if (left <= 0) break;
       const cap = pass === 'due' && !refund ? Math.min(d.limit, Math.max(0, d.remaining_due)) : d.limit;
       const already = next[d.doc_id] || 0; const a = Math.min(cap - already, left);
       if (a > 0) { next[d.doc_id] = already + a; left -= a; }
     }
-    setAl(next);
+    return next;
   };
+  // Bớt tiền ở các dòng sau cùng cho tổng không vượt số tiền phiếu (giữ thứ tự người dùng đã chia)
+  const trim = (cur, total) => {
+    let over = Object.values(cur).reduce((s, v) => s + (Number(v) || 0), 0) - (Number(total) || 0); const next = { ...cur };
+    for (const k of Object.keys(next).reverse()) {
+      if (over <= 0) break;
+      const cut = Math.min(Number(next[k]) || 0, over); next[k] = (Number(next[k]) || 0) - cut || null; over -= cut;
+    }
+    return next;
+  };
+  const autoFill = () => { setManual(false); setAl(distribute(amount)); };
+  // Đổi số tiền thu: chưa sửa tay thì chia lại; đã sửa tay thì chỉ bớt khi tổng đang vượt
+  const changeAmount = (v) => { setAmount(v); setAl((cur) => (!manual ? distribute(v) : trim(cur, v))); };
+  // Sửa tiền một dòng: tổng các dòng vượt số tiền thu thì tăng số tiền thu cho bằng
+  const changeLine = (id, v) => {
+    setManual(true);
+    const next = { ...al, [id]: v }; setAl(next);
+    const sum = Object.values(next).reduce((s, x) => s + (Number(x) || 0), 0);
+    if (!fxCur && sum > (Number(amount) || 0)) setAmount(sum);
+  };
+  const over = allocated - (Number(amount) || 0);
   const partyList = def?.party === 'kh' ? customers.data : def?.party === 'ncc' ? suppliers.data : null;
   const partyRow = partyList?.find((p) => p.id === party);
   const submit = async () => {
+    if (over > 0) return;
     const allocations = Object.entries(al).filter(([, v]) => Number(v) > 0).map(([doc_id, v]) => ({ doc_id, doc_type: docs.find((d) => d.doc_id === doc_id)?.doc_type || alloc?.doc_type, amount: Number(v) }));
     const fxp = fxCur ? { fx: { code: fx.code, amount: fx.amount, rate: fx.rate ?? fxCur.rate } } : {};
-    const r = await run('create_payment', { kind, date, fund_id: fund, to_fund_id: toFund || null, party_id: party || null, amount, fee, method, ref_no: refNo, note, allocations, ...fxp },
+    const r = await run('create_payment', { kind, date, fund_id: fund, to_fund_id: toFund || null, party_id: party || null, amount,
+      fee: isThu ? 0 : fee, method: isThu ? thuMethod : method, ref_no: isThu ? null : refNo, note, allocations, ...fxp },
       (x) => `Đã lập ${def.dir === 'thu' ? 'phiếu thu' : def.dir === 'chi' ? 'phiếu chi' : 'phiếu chuyển quỹ'} ${x.code}`);
     if (r) onClose();
   };
   const kinds = PAY_KINDS.filter((k) => !k.owner || can('owner'));
   return (
     <Modal title={def?.dir === 'thu' ? 'Thu tiền' : def?.dir === 'chi' ? 'Chi tiền' : 'Chuyển quỹ'} onClose={onClose} size="lg"
-      footer={<><Btn onClick={onClose}>Thôi</Btn><Btn kind="primary" busy={busy} onClick={submit} icon={def?.dir === 'thu' ? 'in' : 'out'}>Lưu phiếu</Btn></>}>
+      footer={<><Btn onClick={onClose}>Thôi</Btn><Btn kind="primary" busy={busy} disabled={over > 0} onClick={submit} icon={def?.dir === 'thu' ? 'in' : 'out'}>Lưu phiếu</Btn></>}>
       <div className="grid">
         <Field label="Loại phiếu"><Select value={kind} onChange={(v) => { setKind(v); if (PAY_KINDS.find((k) => k.value === v)?.party !== def?.party) setParty(''); }}
           options={kinds.map((k) => ({ value: k.value, label: (k.dir === 'thu' ? 'Thu · ' : k.dir === 'chi' ? 'Chi · ' : '') + k.label }))} /></Field>
@@ -81,18 +113,23 @@ export function PaymentForm({ kind: kind0 = 'thu_khach', party_id: party0, alloc
           <Picker items={partyList || []} value={party} onChange={setParty} getLabel={(p) => p.name} getSub={(p) => p.code + (p.phone ? ' · ' + p.phone : '')} />
         </Field>}
         {curs.length > 0 && <Field label="Tiền tệ"><Select value={fx.code} onChange={(v) => { setFx({ code: v, amount: null, rate: null }); }} options={[{ value: '', label: 'VND' }, ...curs.map((c) => ({ value: c.code, label: `${c.code} · ${c.name}` }))]} /></Field>}
-        {fxCur && <Field label={`Số tiền ${fxCur.code}`} required><NumInput money={false} min={0} value={fx.amount} onChange={(v) => { setFx((s) => ({ ...s, amount: v })); setAmount(Math.round((Number(v) || 0) * (Number(fx.rate ?? fxCur.rate) || 0))); }} /></Field>}
-        {fxCur && <Field label="Tỷ giá" hint={`Mặc định ${money(fxCur.rate)} đ/${fxCur.code}`}><NumInput min={0} value={fx.rate ?? fxCur.rate} onChange={(v) => { setFx((s) => ({ ...s, rate: v })); setAmount(Math.round((Number(fx.amount) || 0) * (Number(v) || 0))); }} /></Field>}
-        <Field label={fxCur ? 'Quy đổi ra đồng' : 'Số tiền'} required><NumInput value={amount} onChange={setAmount} placeholder="0" disabled={!!fxCur} /></Field>
-        {kind === 'thu_khach' && <Field label="Phí sàn / thu hộ bị trừ" hint="vd. TikTok trừ phí trước khi chuyển tiền. Ghi tự động vào chi phí."><NumInput value={fee} onChange={setFee} placeholder="0" /></Field>}
-        <Field label={def?.dir === 'thu' ? 'Vào quỹ' : 'Từ quỹ'}><Select value={fund} onChange={setFund} options={(funds.data || []).map((f) => ({ value: f.id, label: `${f.name} (${money(f.balance)})` }))} /></Field>
-        {kind === 'chuyen_quy' && <Field label="Sang quỹ"><Select value={toFund} onChange={setToFund} placeholder="Chọn quỹ nhận" options={(funds.data || []).filter((f) => f.id !== fund).map((f) => ({ value: f.id, label: f.name }))} /></Field>}
+        {fxCur && <Field label={`Số tiền ${fxCur.code}`} required><NumInput money={false} min={0} value={fx.amount} onChange={(v) => { setFx((s) => ({ ...s, amount: v })); changeAmount(Math.round((Number(v) || 0) * (Number(fx.rate ?? fxCur.rate) || 0))); }} /></Field>}
+        {fxCur && <Field label="Tỷ giá" hint={`Mặc định ${money(fxCur.rate)} đ/${fxCur.code}`}><NumInput min={0} value={fx.rate ?? fxCur.rate} onChange={(v) => { setFx((s) => ({ ...s, rate: v })); changeAmount(Math.round((Number(fx.amount) || 0) * (Number(v) || 0))); }} /></Field>}
+        <Field label={fxCur ? 'Quy đổi ra đồng' : isThu ? 'Số tiền thu' : 'Số tiền'} required><NumInput value={amount} onChange={changeAmount} placeholder="0" disabled={!!fxCur} /></Field>
+        {isThu ? <>
+          <Field label="Hình thức"><div className="seg" role="radiogroup" aria-label="Hình thức">{['Tiền mặt', 'Chuyển khoản'].map((m) => (
+            <button type="button" key={m} role="radio" aria-checked={thuMethod === m} className={thuMethod === m ? 'on' : ''}
+              disabled={!(m === 'Tiền mặt' ? cashFunds : bankFunds).length} onClick={() => pickThuMethod(m)}>{m}</button>))}</div></Field>
+          {thuMethod === 'Chuyển khoản' && bankFunds.length > 1 && <Field label="Vào tài khoản"><Select value={fund} onChange={setFund} options={bankFunds.map((f) => ({ value: f.id, label: f.name }))} /></Field>}
+        </> : <>
+          <Field label="Từ quỹ"><Select value={fund} onChange={setFund} options={allFunds.map((f) => ({ value: f.id, label: `${f.name} (${money(f.balance)})` }))} /></Field>
+          {kind === 'chuyen_quy' && <Field label="Sang quỹ"><Select value={toFund} onChange={setToFund} placeholder="Chọn quỹ nhận" options={allFunds.filter((f) => f.id !== fund).map((f) => ({ value: f.id, label: f.name }))} /></Field>}
+        </>}
         <Field label="Ngày"><DateInput value={date} onChange={setDate} max={todayVN()} /></Field>
-        <Field label="Hình thức"><Select value={method} onChange={setMethod} options={['Tiền mặt', 'Chuyển khoản', 'Thẻ / POS', 'TikTok Shop', 'COD', 'Bù trừ']} /></Field>
-        <Field label="Mã giao dịch" hint="Nếu có"><Input value={refNo} onChange={setRefNo} /></Field>
+        {!isThu && <Field label="Hình thức"><Select value={method} onChange={setMethod} options={['Tiền mặt', 'Chuyển khoản', 'Thẻ / POS', 'TikTok Shop', 'COD', 'Bù trừ']} /></Field>}
+        {!isThu && <Field label="Mã giao dịch" hint="Nếu có"><Input value={refNo} onChange={setRefNo} /></Field>}
         <Field label="Nội dung" wide><Input value={note} onChange={setNote} placeholder="vd. Đại lý chuyển khoản đợt 2" /></Field>
       </div>
-      {kind === 'thu_khach' && fee > 0 && <Note>Tiền thực vào quỹ: {money((amount || 0) - fee)} đ. Công nợ của khách giảm đủ {money(amount)} đ; phí {money(fee)} đ ghi vào chi phí "Phí sàn".</Note>}
       {docTypes.length > 0 && (party || kind === 'chi_phi') && (
         <Section title={refund ? 'Hoàn theo chứng từ' : 'Trả cho chứng từ nào'} actions={<Btn small onClick={autoFill}>{refund ? 'Tự chia' : 'Trả chứng từ cũ trước'}</Btn>}>
           {!docsQ.data ? <Loading /> : docs.length === 0 ? <div className="muted small">Không có chứng từ nào đang mở{refund ? ' có tiền trả dư' : ''}. {kind === 'thu_khach' ? 'Toàn bộ số tiền sẽ ghi là khách trả trước.' : ''}</div> : (
@@ -101,12 +138,21 @@ export function PaymentForm({ kind: kind0 = 'thu_khach', party_id: party0, alloc
               { key: 't', label: 'Tổng', align: 'right', render: (d) => money(d.total) },
               { key: 'p', label: 'Đã trả', align: 'right', render: (d) => money(d.paid_net) },
               { key: 'r', label: refund ? 'Có thể hoàn' : 'Còn phải trả', align: 'right', render: (d) => <>{money(d.limit)}{!refund && d.remaining_due > 0 && d.remaining_due < d.limit && <div className="cell-sub">đến hạn {money(d.remaining_due)}</div>}</> },
-              { key: 'a', label: refund ? 'Số tiền hoàn' : 'Số tiền trả', align: 'right', render: (d) => <NumInput value={al[d.doc_id]} onChange={(v) => setAl((s) => ({ ...s, [d.doc_id]: v }))} style={{ maxWidth: 130 }} /> },
+              { key: 'a', label: refund ? 'Số tiền hoàn' : 'Số tiền trả', align: 'right', render: (d) => <NumInput value={al[d.doc_id]} onChange={(v) => changeLine(d.doc_id, v)} style={{ maxWidth: 130 }} /> },
             ]} />
           )}
-          <div className={`small ${allocated > (Number(amount) || 0) ? 'bad' : 'muted'}`}>Đã chia {money(allocated)} / {money(amount || 0)}.{' '}
-            {(Number(amount) || 0) - allocated > 0 && (kind === 'thu_khach' ? `Còn ${money((amount || 0) - allocated)} sẽ ghi là khách trả trước.` : kind === 'tra_ncc' ? `Phần còn lại ghi là trả trước cho nhà cung cấp.` : '')}
-            {allocated > (Number(amount) || 0) && ' Số tiền chia cho các chứng từ đang lớn hơn số tiền phiếu.'}</div>
+          {over > 0 ? (
+            <Note tone="warn">
+              <div>Bạn đang ghi trả cho các {refund ? 'chứng từ' : 'đơn'} tổng <b>{money(allocated)} đ</b>, nhiều hơn số tiền {isThu ? 'thu' : 'của phiếu'} <b>{money(amount || 0)} đ</b>. Chọn một cách để sửa:</div>
+              <div className="row gap-s" style={{ marginTop: 8, flexWrap: 'wrap' }}>
+                <Btn small kind="primary" onClick={() => setAl(trim(al, amount))}>Giữ {money(amount || 0)} đ, bớt tiền ở các dòng</Btn>
+                {!fxCur && <Btn small onClick={() => setAmount(allocated)}>Tăng số tiền {isThu ? 'thu' : 'phiếu'} lên {money(allocated)} đ</Btn>}
+              </div>
+            </Note>
+          ) : (
+            <div className="small muted">Đã chia {money(allocated)} / {money(amount || 0)}.{' '}
+              {(Number(amount) || 0) - allocated > 0 && (kind === 'thu_khach' ? `Còn ${money((amount || 0) - allocated)} sẽ ghi là khách trả trước.` : kind === 'tra_ncc' ? `Phần còn lại ghi là trả trước cho nhà cung cấp.` : '')}</div>
+          )}
         </Section>
       )}
       {kind === 'chi_phi' && <Note>Chi phí mới hãy ghi ở mục <b>Chi phí</b> (có tùy chọn trả ngay). Mục này để trả các chi phí đã ghi nhưng chưa trả.</Note>}

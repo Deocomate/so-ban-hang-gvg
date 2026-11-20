@@ -97,7 +97,7 @@ export function doPayment(book, p) {
     }
     tot += aa;
   }
-  if (tot > amt) fail(`Tổng số tiền gắn vào chứng từ (${tot}) vượt số tiền phiếu (${amt})`);
+  if (tot > amt) fail(`Số tiền trả cho các chứng từ (${vnd(tot)}) nhiều hơn số tiền phiếu (${vnd(amt)}). Hãy bớt tiền ở từng chứng từ hoặc tăng số tiền phiếu lên ${vnd(tot)}.`);
   if (k === 'chi_phi' && tot !== amt) fail('Phiếu chi phí phải gắn đủ vào khoản chi phí. Khoản chi không có chứng từ hãy chọn "Chi khác".');
 
   if (fee > 0) {

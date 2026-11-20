@@ -6,6 +6,8 @@ export const useAllProducts = () => useQ('products', [], 'sku', 5000);
 export const useCustomers = () => useQ('customers', [], 'name', 5000);
 export const useSuppliers = () => useQ('suppliers', [], 'name', 5000);
 export const useFunds = (enabled = true) => useQ('funds', [['active', 'eq', 'true']], 'sort', 50, enabled);
+// Hình thức gắn liền với quỹ: quỹ tiền mặt (tên có "mặt"/"két") ↔ Tiền mặt, các quỹ còn lại là tài khoản ngân hàng ↔ Chuyển khoản
+export const isCashFund = (f) => /mặt|két/i.test(f?.name || '');
 
 export const KIND_LABEL = { ban_san: 'Bán sẵn', dat_hang: 'Đặt hàng riêng', mua_san: 'Mua hàng sẵn', dat_sx: 'Đặt xưởng sản xuất' };
 export const tierPrice = (p, tier) => p[`price${tier}`] ?? p.price1;
