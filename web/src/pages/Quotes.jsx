@@ -198,6 +198,13 @@ export function QuoteForm({ id, onClose, onSaved }) {
     return { product_id: p.id, name: mosaic ? 'Tranh mosaic khảm trai' : p.name, spec: specOf(p), image: p.image_url || '', measure_unit: byM ? 'm' : 'm2', norm: (byM ? p.norm_m : p.norm_m2) || null,
       unit: String(p.unit || 'viên').toLowerCase(), price: priceOf(p, { tier, book: pbook }) };
   };
+  // Đổi bảng giá / mức giá: tính lại giá mọi dòng có gắn hàng hóa theo lựa chọn mới
+  const pickPriceSource = (v) => {
+    const next = parsePriceSource(v, custTier);
+    const nb = myBooks.find((b) => b.id === next.price_book_id) || null;
+    const nt = levelTier(next.price_level, custTier);
+    setF((s) => ({ ...s, ...next, groups: s.groups.map((g) => ({ ...g, lines: g.lines.map((l) => (pmap[l.product_id] ? { ...l, price: priceOf(pmap[l.product_id], { tier: nt, book: nb }) } : l)) })) }));
+  };
   const groupKey = f.groups.some((g) => g.key === active) ? active : f.groups[f.groups.length - 1].key;
   const addProduct = (p) => {
     const x = fromProduct(p); if (!x) return;
@@ -289,7 +296,7 @@ export function QuoteForm({ id, onClose, onSaved }) {
           <input className="pos-staff" value={f.customer_name} onChange={(e) => set('customer_name', e.target.value)} placeholder="Kính gửi (có thể gõ tên khách chưa có trong danh sách)" aria-label="Kính gửi" />
           <input className="pos-staff" value={f.address} onChange={(e) => set('address', e.target.value)} placeholder="Địa chỉ" aria-label="Địa chỉ" />
           <input className="pos-staff" value={f.site} onChange={(e) => set('site', e.target.value)} placeholder="Địa điểm công trình" aria-label="Địa điểm công trình" />
-          <Select value={priceSourceValue(f, custTier)} onChange={(v) => setF((s) => ({ ...s, ...parsePriceSource(v, custTier) }))} aria-label="Bảng giá"
+          <Select value={priceSourceValue(f, custTier)} onChange={pickPriceSource} aria-label="Bảng giá"
             options={priceSourceOptions(priceNames, myBooks, can('xem_gia_von'), cust ? custTier : null)} />
 
           <div className="pos-sum">

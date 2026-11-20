@@ -175,6 +175,14 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
   useEffect(() => {
     setF((s) => ({ ...s, lines: s.lines.map((l) => (!l.manual && pmap[l.product_id] ? { ...l, unit_price: linePrice(pmap[l.product_id], l) } : l)) }));
   }, [tier, pmap, pbook]);
+  // Người bán đổi bảng giá / mức giá: tính lại giá mọi dòng theo lựa chọn mới, kể cả dòng đã sửa tay hoặc mở từ đơn cũ
+  const pickPriceSource = (v) => {
+    const next = parsePriceSource(v, custTier);
+    const nb = (priceBooks.data || []).find((b) => b.id === next.price_book_id) || null;
+    const nt = levelTier(next.price_level, custTier);
+    setF((s) => ({ ...s, ...next, lines: s.lines.map((l) => { const p = pmap[l.product_id];
+      return p ? { ...l, unit_price: priceOf(p, { tier: nt, book: nb, unit: findUnit(p, l.unit) }), manual: false } : l; }) }));
+  };
   const sellable = useMemo(() => (products.data || []).filter((p) => p.sell_direct), [products.data]);
 
   const addProduct = (p) => {
@@ -410,7 +418,7 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
               onCreate={(name) => open('party', { type: 'kh', name, onSaved: (r) => set('customer_id', r.id) })} createLabel="Thêm khách mới" />
             <button className="pos-cust-add" title="Thêm khách mới" onClick={() => open('party', { type: 'kh', onSaved: (r) => set('customer_id', r.id) })}><Icon name="plus" size={18} /></button>
           </div>
-          <Select value={priceSourceValue(f, custTier)} onChange={(v) => setF((s) => ({ ...s, ...parsePriceSource(v, custTier) }))} aria-label="Bảng giá"
+          <Select value={priceSourceValue(f, custTier)} onChange={pickPriceSource} aria-label="Bảng giá"
             options={priceSourceOptions(priceNames, myBooks, can('xem_gia_von'), cust ? custTier : null)} />
           {cust && cust.code !== 'KL' && <div className="small muted pos-cust-info">{cust.phone || 'Chưa có SĐT'} · {priceNames[custTier - 1]}{cust.receivable > 0 ? <> · <span className="bad">đang nợ {money(cust.receivable)}</span></> : ''}{cust.prepaid > 0 ? ` · trả trước ${money(cust.prepaid)}` : ''}</div>}
           {cust && cust.code !== 'KL' && <label className="pos-cust-group"><span className="muted small">Nhóm khách</span>
