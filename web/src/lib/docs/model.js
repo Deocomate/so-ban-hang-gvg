@@ -238,8 +238,12 @@ export const RECONCILE = ['doi_chieu_sl', 'doi_chieu_tt'];
 
 // Thông tin xuất hóa đơn khai ở hồ sơ khách (thẻ "Thông tin xuất hóa đơn")
 export const custExtra = (c) => { const x = c?.extra; if (!x) return {}; if (typeof x === 'string') { try { return JSON.parse(x) || {}; } catch (e) { return {}; } } return x; };
-// Khách là công ty: loại khách "Công ty" hoặc đã khai mã số thuế — cần xuất hóa đơn VAT sau khi giao
-export const isCompany = (c) => { const x = custExtra(c); return x.customer_type === 'Công ty' || !!String(x.tax_code || '').trim(); };
+// Nhóm khách cũng là loại khách: nhóm đánh dấu "Nhóm công ty" (Khách hàng → Nhóm khách hàng)
+export const isCompanyGroup = (settings, name) => !!(name && settings?.customer_group_info?.[name]?.company);
+// Tên nhóm kèm ghi chú "(công ty)" khi là nhóm công ty mà tên chưa nói rõ
+export const groupLabel = (settings, name) => (isCompanyGroup(settings, name) && !/công ty|cty/i.test(name) ? `${name} (công ty)` : name);
+// Khách là công ty: thuộc nhóm công ty hoặc đã khai mã số thuế — cần xuất hóa đơn VAT sau khi giao
+export const isCompany = (c, settings) => isCompanyGroup(settings, c?.kind) || !!String(custExtra(c).tax_code || '').trim();
 
 // Các ô sửa được cho từng loại chứng từ
 export function editableFields(type, data) {

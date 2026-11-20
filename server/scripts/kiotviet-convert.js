@@ -106,7 +106,7 @@ export function convertKiotViet(K0, { today, ledger = null, hidden = null, catal
   const warn = (m) => report.warnings.push(m);
 
   // ---------- cài đặt sổ ----------
-  const groups = [...new Set(['Khách lẻ', ...(K.customerGroups || []).map((g) => g.Name)])];
+  const groups = [...new Set(['Khách lẻ', 'Công ty', ...(K.customerGroups || []).map((g) => g.Name)])];
   call('update_book_settings', { settings: { customer_groups: groups, allow_oversell: true, lock_date: null } });
   const settingsPatch = { customer_groups: groups };
 
@@ -175,12 +175,13 @@ export function convertKiotViet(K0, { today, ledger = null, hidden = null, catal
     let code = c.Code || `KV-KH-${c.Id}`;
     if (custCode.has(code.toLowerCase())) code = `${code}-${c.Id}`;
     // Nhóm khách: Groups là chuỗi tên nhóm, CustomerGroupNames là mảng (mỗi khách KiotViet ở tối đa 1 nhóm)
-    const group = (Array.isArray(c.CustomerGroupNames) ? c.CustomerGroupNames[0] : null) || c.Groups || null;
+    // Khách KiotViet loại công ty chưa có nhóm thì vào nhóm "Công ty" (nhóm khách cũng là loại khách)
+    const group = (Array.isArray(c.CustomerGroupNames) ? c.CustomerGroupNames[0] : null) || c.Groups || ((c.CustomerType || (c.Type === 1 ? 'Công ty' : '')) === 'Công ty' ? 'Công ty' : null);
     const r = call('save_party', {
       type: 'kh', code, name: undel(c.Name) || code, phone: c.ContactNumber || null, address: c.Address || null,
       kind: group, price_tier: GROUP_TIER[group] || 1, note: c.Comments || null,
       extra: Object.fromEntries(Object.entries({
-        customer_type: c.CustomerType || (c.Type === 1 ? 'Công ty' : null), email: c.Email, tax_code: c.TaxCode, tax_name: c.Organization,
+        email: c.Email, tax_code: c.TaxCode, tax_name: c.Organization,
         gender: c.Gender === true ? 'Nam' : c.Gender === false ? 'Nữ' : null, birthday: c.BirthDate ? kvDate(c.BirthDate) : null,
         province: c.LocationName, ward: c.WardName,
       }).filter(([, v]) => v != null && v !== '')),
@@ -221,13 +222,20 @@ export function convertKiotViet(K0, { today, ledger = null, hidden = null, catal
   for (const pb of catalog?.price_books || []) {
     const group = String(pb.name).replace(/^giá\s+/i, '').trim();
     const named = (K.customers || []).filter((c) => plain(c.Name).includes(plain(group)));
-    // Khách đã ở nhóm khác thì giữ nhóm cũ (đổi nhóm làm mất mức giá / ưu đãi của nhóm đó), chỉ báo lại
-    const members = named.filter((c) => !get(`select kind from customers where id = ?`, custId.get(c.Id)).kind);
+    // Khách đã ở nhóm khác thì giữ nhóm cũ (đổi nhóm làm mất mức giá / ưu đãi của nhóm đó), chỉ báo lại.
+    // Nhóm "Công ty" tự gán theo loại khách KiotViet thì nhường cho nhóm của bảng giá; nhóm đó thành nhóm công ty.
+    const kindOf = (c) => get(`select kind from customers where id = ?`, custId.get(c.Id)).kind;
+    const members = named.filter((c) => !kindOf(c) || kindOf(c) === 'Công ty');
+    const fromCompany = members.some((c) => kindOf(c) === 'Công ty');
     for (const c of named.filter((x) => !members.includes(x))) warn(`${c.Code} ${c.Name} đã thuộc nhóm khác, chưa đưa vào nhóm "${group}" của bảng giá "${pb.name}"`);
     for (const c of members) sql(`update customers set kind = ? where id = ?`, group, custId.get(c.Id));
     if (!settingsPatch.customer_groups.includes(group)) {
       settingsPatch.customer_groups = [...settingsPatch.customer_groups, group];
       call('update_book_settings', { settings: { customer_groups: settingsPatch.customer_groups } });
+    }
+    if (fromCompany) {
+      const info = JSON.parse(get(`select settings from books where id = ?`, B).settings).customer_group_info || {};
+      call('update_book_settings', { settings: { customer_group_info: { ...info, [group]: { ...(info[group] || {}), company: true } } } });
     }
     const { id } = call('save_price_book', { name: pb.name, cust_groups: [group], allow_others: true });
     const rows = []; const missing = [];

@@ -9,7 +9,7 @@ api.as(owner);
 const books = await api.call('bootstrap');
 const TH = books.find((b) => b.short_name === 'TH').id;
 await api.call('upsert_member', { book_id: TH, email: 'xem@gomsu.vn', role: 'staff', perms: { xem_ban_hang: true } });
-const cty = (await api.call('save_party', { book_id: TH, type: 'kh', name: 'Công ty Thăng Long', extra: { customer_type: 'Công ty', tax_code: '0500383583' } })).id;
+const cty = (await api.call('save_party', { book_id: TH, type: 'kh', name: 'Công ty Thăng Long', kind: 'Công ty', extra: { tax_code: '0500383583' } })).id;
 const le = (await api.call('save_party', { book_id: TH, type: 'kh', name: 'Anh Hòa' })).id;
 const p1 = (await api.call('save_product', { book_id: TH, name: 'Ngói âm 80 gốm', unit: 'Viên', price1: 4130 })).id;
 const order = (kh, deliver) => api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: kh, lines: [{ product_id: p1, qty: 100, unit_price: 4130 }], deliver_now: deliver });
@@ -22,7 +22,7 @@ C('Mặc định chỉ theo dõi đơn của khách cần xuất VAT', await boa
 C('Đơn khách lẻ nằm trong danh sách không theo dõi', (await board('off')).includes(o2), true);
 await api.call('set_order_docs_track', { book_id: TH, order_id: o2, track: 'on' });
 C('Bật riêng cho một đơn', (await board('on')).sort(), [o1, o2].sort());
-await api.call('save_party', { book_id: TH, type: 'kh', id: cty, name: 'Công ty Thăng Long', extra: { customer_type: 'Công ty', tax_code: '0500383583', docs_track: 'off' } });
+await api.call('save_party', { book_id: TH, type: 'kh', id: cty, name: 'Công ty Thăng Long', kind: 'Công ty', extra: { tax_code: '0500383583', docs_track: 'off' } });
 C('Khách đặt "Không theo dõi" → đơn của khách ra khỏi danh sách', await board('on'), [o2]);
 await api.call('set_order_docs_track', { book_id: TH, order_id: o1, track: 'on' });
 C('Đơn bật riêng thắng thiết lập của khách', (await board('on')).includes(o1), true);
@@ -64,7 +64,7 @@ await api.call('set_order_docs_need', { book_id: TH, order_id: o1, keys: ['bien_
 d = await api.call('order_docs', { book_id: TH, order_id: o1 });
 C('Đơn chọn riêng giấy tờ cần có', [d.need, d.need_by, d.slots.hop_dong.skip, d.slots.cn_xuat_xuong.skip], [['bien_ban', 'hoa_don_vat'], 'order', true, true]);
 await api.call('set_order_docs_need', { book_id: TH, order_id: o1, keys: null });
-await api.call('save_party', { book_id: TH, type: 'kh', id: cty, name: 'Công ty Thăng Long', extra: { customer_type: 'Công ty', tax_code: '0500383583', docs_need: 'hop_dong,hoa_don_vat' } });
+await api.call('save_party', { book_id: TH, type: 'kh', id: cty, name: 'Công ty Thăng Long', kind: 'Công ty', extra: { tax_code: '0500383583', docs_need: 'hop_dong,hoa_don_vat' } });
 d = await api.call('order_docs', { book_id: TH, order_id: o1 });
 C('Đơn theo mặc định giấy tờ của khách', [d.need, d.need_by, d.cust_need], [['hop_dong', 'hoa_don_vat'], 'customer', ['hop_dong', 'hoa_don_vat']]);
 await api.call('set_order_doc_skip', { book_id: TH, order_id: o1, doc_key: 'bien_ban', skip: false });
@@ -72,7 +72,7 @@ C('Thêm một giấy tờ ngoài mặc định của khách', (await api.call('
 C('Bảng theo dõi trả về danh sách cần có', (await api.call('order_docs_board', { book_id: TH, track: 'on' })).find((r) => r.id === o1).need, ['hop_dong', 'bien_ban', 'hoa_don_vat']);
 await E('Giấy tờ lạ bị chặn', () => api.call('set_order_docs_need', { book_id: TH, order_id: o1, keys: ['x'] }), 'không hợp lệ');
 await api.call('set_order_docs_need', { book_id: TH, order_id: o1, keys: null });
-await api.call('save_party', { book_id: TH, type: 'kh', id: cty, name: 'Công ty Thăng Long', extra: { customer_type: 'Công ty', tax_code: '0500383583' } });
+await api.call('save_party', { book_id: TH, type: 'kh', id: cty, name: 'Công ty Thăng Long', kind: 'Công ty', extra: { tax_code: '0500383583' } });
 await api.call('delete_order_doc', { id: f1 });
 C('Xóa tệp → ô trở lại thiếu', (await api.call('order_docs', { book_id: TH, order_id: o1 })).slots.bien_ban.sides.doi_tac.state, 'thieu');
 
@@ -96,5 +96,20 @@ api.as(viewer);
 C('Người chỉ xem đọc được bảng theo dõi', (await board('on')).length > 0, true);
 await E('Người chỉ xem không tải lên được', () => api.call('mark_order_doc_paper', { book_id: TH, order_id: o3, doc_key: 'hop_dong', side: 'doi_tac' }), 'quyền');
 await E('Người chỉ xem không sửa hợp đồng', () => api.call('save_contract_doc', { book_id: TH, id: k, kind: 'kinh_te' }), 'quyền');
+
+G('5. Nhóm khách là loại khách');
+api.as(owner);
+const st = (await api.call('bootstrap')).find((b) => b.id === TH).settings;
+C('Sổ mới có 4 nhóm, nhóm Công ty là nhóm công ty', [st.customer_groups.slice(0, 4), st.customer_group_info['Công ty'].company], [['Công ty', 'Khách lẻ CK', 'Khách lẻ TM', 'Khách lẻ CK-HKD'], true]);
+const hkd = (await api.call('save_party', { book_id: TH, type: 'kh', name: 'Hộ kinh doanh Lý Hoa', kind: 'Hộ kinh doanh' })).id;
+const st2 = (await api.call('bootstrap')).find((b) => b.id === TH).settings;
+C('Nhóm mới gõ ở hồ sơ khách được thêm vào danh sách nhóm', st2.customer_groups.includes('Hộ kinh doanh'), true);
+const o5 = (await order(hkd, true)).id;
+C('Nhóm chưa đánh dấu công ty: đơn không tự theo dõi', (await board('on')).includes(o5), false);
+await api.call('save_customer_group', { book_id: TH, old_name: 'Hộ kinh doanh', name: 'Hộ kinh doanh', company: true });
+C('Đánh dấu nhóm công ty: đơn của khách (không MST) được theo dõi', (await board('on')).includes(o5), true);
+C('Chi tiết đơn nhận khách là công ty', (await api.call('order_docs', { book_id: TH, order_id: o5 })).company, true);
+await api.call('set_customer_group', { book_id: TH, customer_ids: [hkd], name: 'Khách lẻ TM' });
+C('Chuyển khách sang nhóm khách lẻ: đơn ra khỏi theo dõi', (await board('on')).includes(o5), false);
 
 finish('Giấy tờ đơn hàng & soạn hợp đồng');

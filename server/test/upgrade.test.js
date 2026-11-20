@@ -72,7 +72,7 @@ C('Đã sao lưu trước khi nâng cấp', fs.existsSync(`${file}.truoc-nang-ca
 const bak = new Database(`${file}.truoc-nang-cap-v1.bak`, { readonly: true });
 C('Bản sao lưu còn cấu trúc cũ', bak.prepare(`select 1 from pragma_table_info('products') where name = 'price4'`).get(), undefined);
 bak.close();
-C('Lên phiên bản mới', db.pragma('user_version', { simple: true }), 13);
+C('Lên phiên bản mới', db.pragma('user_version', { simple: true }), 14);
 C('Đơn nhập kho ngay lúc lập thành phiếu nhập, đơn đặt giữ nguyên', db.prepare(`select id, mode from purchase_orders order by id`).all(), [{ id: 'po1', mode: 'nhap' }, { id: 'po2', mode: 'dat' }]);
 C('Giá trước giảm giá của dòng cũ bằng giá nhập', db.prepare(`select unit_price, discount from purchase_order_lines where id = 'pl2'`).get(), { unit_price: 120, discount: 0 });
 C('Phiếu trả cũ nhận nhà cung cấp của đơn, giá trả lại = giá nhập', db.prepare(`select r.supplier_id, l.unit_price, l.cost_value, l.value from supplier_returns r join supplier_return_lines l on l.return_id = r.id`).get(),
@@ -132,6 +132,25 @@ C('Không tự thêm lại mức 4 đã bỏ', JSON.parse(again.prepare(`select 
 C('Dữ liệu còn nguyên', again.prepare(`select count(*) n from customers where book_id in ('th', 'vg')`).get().n, 1);
 C('Có thêm sổ Anamtile đúng 1 lần', again.prepare(`select count(*) n from books where short_name = 'AN'`).get().n, 1);
 again.close();
+
+G('Gộp loại khách vào nhóm khách');
+const f2 = path.join(dir, 'so2.db');
+const v13 = openDb(f2);
+const ts = new Date().toISOString();
+v13.prepare(`insert into books (id, name, short_name, settings, created_at) values ('b1', 'Sổ', 'TH', ?, ?)`).run(JSON.stringify({ customer_groups: ['Khách lẻ', 'Đại lý'] }), ts);
+const ins = v13.prepare(`insert into customers (id, book_id, code, name, kind, extra, created_at) values (?, 'b1', ?, ?, ?, ?, ?)`);
+ins.run('k1', 'K1', 'Công ty A', null, JSON.stringify({ customer_type: 'Công ty', email: 'a@x.vn' }), ts);
+ins.run('k2', 'K2', 'Đại lý B', 'Đại lý', JSON.stringify({ customer_type: 'Công ty', tax_code: '01' }), ts);
+ins.run('k3', 'K3', 'Anh C', null, JSON.stringify({ customer_type: 'Cá nhân' }), ts);
+v13.pragma('user_version = 13');
+v13.close();
+const v14 = openDb(f2);
+const s14 = JSON.parse(v14.prepare(`select settings from books where id = 'b1'`).get().settings);
+C('Sổ có thêm nhóm Công ty là nhóm công ty', [s14.customer_groups, s14.customer_group_info['Công ty'].company], [['Khách lẻ', 'Đại lý', 'Công ty'], true]);
+C('Khách loại Công ty chưa có nhóm vào nhóm Công ty, khách đã có nhóm giữ nhóm',
+  v14.prepare(`select id, kind from customers order by id`).all(), [{ id: 'k1', kind: 'Công ty' }, { id: 'k2', kind: 'Đại lý' }, { id: 'k3', kind: null }]);
+C('Bỏ trường loại khách cũ, giữ thông tin khác', v14.prepare(`select extra from customers where id = 'k1'`).get().extra, '{"email":"a@x.vn"}');
+v14.close();
 
 fs.rmSync(dir, { recursive: true, force: true });
 finish('Nâng cấp CSDL');

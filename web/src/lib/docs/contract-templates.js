@@ -12,7 +12,7 @@ export const CONTRACT_KINDS = {
   nguyen_tac: { label: 'Hợp đồng nguyên tắc', short: 'HĐNT', sub: 'Bạn hàng mua nhiều lô, ký khung một lần', suffix: 'HĐNT' },
 };
 // Loại gợi ý cho khách: lần trước đã chọn, không thì theo loại khách
-export function suggestKind(cust) { const x = custExtra(cust); return CONTRACT_KINDS[x.contract_kind] ? x.contract_kind : isCompany(cust) ? 'kinh_te' : 'ca_nhan'; }
+export function suggestKind(cust, settings) { const x = custExtra(cust); return CONTRACT_KINDS[x.contract_kind] ? x.contract_kind : isCompany(cust, settings) ? 'kinh_te' : 'ca_nhan'; }
 
 const ALL = ['kinh_te', 'ca_nhan', 'nguyen_tac'];
 const SALE = ['kinh_te', 'ca_nhan'];

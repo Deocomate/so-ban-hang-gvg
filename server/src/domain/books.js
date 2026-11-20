@@ -43,7 +43,10 @@ export function defaultSettings(variant) {
     ...(VARIANTS[variant] || VARIANTS.TH),
     docs: defaultDocs(variant),
     units: ['Cái', 'Viên', 'Cặp', 'Bộ', 'Đôi', 'Chiếc', 'm²', 'Thùng'],
-    customer_groups: ['Khách lẻ', 'Khách sỉ', 'Công trình'],
+    // Khách lẻ CK: chuyển khoản, có hóa đơn VAT; Khách lẻ CK-HKD: chuyển khoản hộ kinh doanh, không hóa đơn VAT
+    customer_groups: ['Công ty', 'Khách lẻ CK', 'Khách lẻ TM', 'Khách lẻ CK-HKD'],
+    // Nhóm công ty: xuất VAT, theo dõi giấy tờ đơn hàng (Khách lẻ CK cũng cần giấy tờ)
+    customer_group_info: { 'Công ty': { company: true }, 'Khách lẻ CK': { company: true } },
     default_vat: 8,
     monthly_target: 0,
     expense_groups: DEFAULT_EXPENSE_CATS.map((g) => g.group),

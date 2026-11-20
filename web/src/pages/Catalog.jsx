@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp, useQ, useAction } from '../lib/store.jsx';
 import { money, qty as fq, dmy, match, todayVN } from '../lib/format.js';
-import { useFunds } from '../lib/lookups.js';
+import { useFunds, groupNames } from '../lib/lookups.js';
 import { exportXlsx, loadSheets, readPriceBookFile } from '../lib/excel.js';
 import { Btn, Icon, Pill, Field, Input, TextArea, Select, DateInput, NumInput, Check, Search, ErrorBox, Note, Table, Modal, ConfirmBtn, ListPage, FilterBox, RadioList, Section, Loading } from '../components/ui.jsx';
 import { useTimeFilter, TimeFilter } from '../components/DocFilters.jsx';
@@ -121,7 +121,7 @@ export function PriceBookForm({ id, onClose, onSaved }) {
   const setFm = (k, v) => setF((s) => ({ ...s, formula: { ...s.formula, [k]: v } }));
   useEffect(() => { if (id) rpc('q', { view: 'price_books', filters: [['id', 'eq', id]] }).then(([b]) => { setF({ ...b, valid_from: b.valid_from || '', valid_to: b.valid_to || '', formula: { base: '', op: '+', value: 0, pct: true, ...b.formula } }); setLoaded(true); }).catch((e) => toast(e.message, 'err')); }, [id]);
   const pn = settings.price_names || [];
-  const groups = [...new Set([...(settings.customer_groups || []), ...(custs.data || []).map((c) => c.kind).filter(Boolean)])];
+  const groups = groupNames(settings, custs.data);
   const toggle = (k, v, on) => set(k, on ? [...(f[k] || []), v] : (f[k] || []).filter((x) => x !== v));
   if (!loaded) return <Modal title="Bảng giá" onClose={onClose}><Loading /></Modal>;
   return (

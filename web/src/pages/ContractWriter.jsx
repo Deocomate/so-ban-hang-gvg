@@ -52,14 +52,14 @@ export default function ContractWriter({ id: id0, order_id, onClose }) {
         // Hợp đồng mới: số theo ngày ký đã có người dùng (hai hợp đồng ký cùng ngày) thì thêm hậu tố -2, -3…
         let start = {};
         if (!kid) {
-          const k0 = suggestKind(dd.cust); const base = contractDefaults(k0, dd, ds).so_hd;
+          const k0 = suggestKind(dd.cust, settings); const base = contractDefaults(k0, dd, ds).so_hd;
           const taken = new Set((await q('contracts', [], 'sign_date desc', 2000)).map((x) => x.code));
           if (taken.has(base)) { let n = 2; const [head, ...rest] = base.split('/'); while (taken.has([`${head}-${n}`, ...rest].join('/'))) n++; start = { so_hd: [`${head}-${n}`, ...rest].join('/') }; }
         }
         if (!alive) return;
         setData(dd); setId(kid);
         const hasSaved = saved && (Object.keys(saved.fields || {}).length || saved.body_html || saved.gdoc_url);
-        setKind(hasSaved ? saved.kind : suggestKind(dd.cust));
+        setKind(hasSaved ? saved.kind : suggestKind(dd.cust, settings));
         setFields(saved?.fields || start); setBody(saved?.body_html || null); setGdoc(saved?.gdoc_url || '');
         if (saved?.gdoc_url && !saved.body_html && !Object.keys(saved.fields || {}).length) setMode('gdoc');
       } catch (e) { if (alive) setErr(e.message); }

@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useApp, useRpcData } from '../lib/store.jsx';
 import { useSuppliers } from '../lib/lookups.js';
 import { NeedChecks, DOC_LABEL } from './OrderDocs.jsx';
+import { isCompanyGroup } from '../lib/docs/model.js';
 import { Field, Input, TextArea, Select, DateInput, NumInput, Check, Tabs, Section, Picker } from '../components/ui.jsx';
 
 export function CustomerFields({ f, set, id }) {
@@ -18,7 +19,7 @@ export function CustomerFields({ f, set, id }) {
   const pn = settings.price_names || [];
   const same = !!x.ship_same;
   const toggleSame = (v) => set('extra', { ...x, ship_same: v, ...(v ? { ship_name: f.name, ship_phone: f.phone, ship_address: f.address, ship_province: x.province, ship_ward: x.ward } : {}) });
-  const groups = [...new Set([...(settings.customer_groups || []), f.kind].filter(Boolean))];
+  const groups = settings.customer_groups || [];
   return (
     <>
       <Tabs value={tab} onChange={setTab} tabs={[{ value: 'chung', label: 'Thông tin chung' }, { value: 'hd', label: 'Thông tin xuất hóa đơn' }]} />
@@ -28,7 +29,7 @@ export function CustomerFields({ f, set, id }) {
         <Field label="Email nhận hóa đơn"><Input value={x.tax_email} onChange={(v) => setX('tax_email', v)} /></Field>
         <Field label="Địa chỉ xuất hóa đơn" wide required={req('tax_address')}><Input value={x.tax_address} onChange={(v) => setX('tax_address', v)} /></Field>
         <Field label="Theo dõi giấy tờ đơn hàng" wide hint="Hợp đồng, biên bản giao hàng, chứng nhận xuất xưởng, hóa đơn VAT của từng đơn">
-          <Select value={x.docs_track || ''} onChange={(v) => setX('docs_track', v || undefined)} options={[{ value: '', label: 'Theo nhóm khách / tự động (theo dõi khi khách cần xuất VAT)' },
+          <Select value={x.docs_track || ''} onChange={(v) => setX('docs_track', v || undefined)} options={[{ value: '', label: 'Theo nhóm khách / tự động (theo dõi khi khách thuộc nhóm công ty hoặc có mã số thuế)' },
             { value: 'on', label: 'Luôn theo dõi' }, { value: 'off', label: 'Không theo dõi' }]} /></Field>
         <Field label="Giấy tờ khách này thường cần" wide hint="Mặc định cho đơn mới của khách; từng đơn vẫn chọn lại được">
           <NeedChecks value={x.docs_need != null ? String(x.docs_need).split(',').filter(Boolean) : Object.keys(DOC_LABEL)}
@@ -46,8 +47,8 @@ export function CustomerFields({ f, set, id }) {
             <Field label="Phường/Xã"><Input value={x.ward} onChange={(v) => setX('ward', v)} /></Field>
           </div></Section>
           <Section title="Thông tin bổ sung"><div className="grid">
-            <Field label="Nhóm khách" required={req('kind')}><Input value={f.kind} onChange={(v) => set('kind', v)} list="cust-groups" placeholder="Chọn hoặc gõ nhóm mới" /><datalist id="cust-groups">{groups.map((g) => <option key={g} value={g} />)}</datalist></Field>
-            <Field label="Loại khách"><Select value={x.customer_type || ''} onChange={(v) => setX('customer_type', v)} options={['Cá nhân', 'Công ty']} placeholder="Chọn" /></Field>
+            <Field label="Nhóm khách" required={req('kind')} hint={isCompanyGroup(settings, f.kind) ? 'Nhóm công ty: xuất hóa đơn VAT, theo dõi giấy tờ đơn hàng' : f.kind && !groups.includes(f.kind) ? 'Nhóm mới, sẽ được thêm vào danh sách nhóm khi lưu' : 'Chọn nhóm có sẵn hoặc gõ tên nhóm mới'}>
+              <Input value={f.kind} onChange={(v) => set('kind', v)} list="cust-groups" placeholder="vd. Khách lẻ, Công ty" /><datalist id="cust-groups">{groups.map((g) => <option key={g} value={g} />)}</datalist></Field>
             <Field label="Mức giá áp dụng"><Select value={String(f.price_tier)} onChange={(v) => set('price_tier', Number(v))} options={pn.map((n, i) => ({ value: String(i + 1), label: n }))} /></Field>
             <Field label="Giai đoạn"><Select value={f.stage || 'moi'} onChange={(v) => set('stage', v)} options={[{ value: 'moi', label: 'Khách mới' }, { value: 'tu_van', label: 'Đã tư vấn' }]} /></Field>
             <Field label="Ngày sinh" required={req('birthday')}><DateInput value={x.birthday || ''} onChange={(v) => setX('birthday', v)} /></Field>

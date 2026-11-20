@@ -128,8 +128,8 @@ function addProduct(p) {
 function addCustomer(c) {
   if (exists('customers', c.Code)) return skipped.push(`${c.Code}: khách đã có`);
   const r = call('save_party', { type: 'kh', code: c.Code, name: c.Name || c.Code, phone: c.ContactNumber || null, address: c.Address || null,
-    kind: c.Groups || null, note: c.Comments || null,
-    extra: Object.fromEntries(Object.entries({ customer_type: c.Type === 1 ? 'Công ty' : null, email: c.Email, tax_code: c.TaxCode, tax_name: c.Organization,
+    kind: c.Groups || (c.Type === 1 ? 'Công ty' : null), note: c.Comments || null,
+    extra: Object.fromEntries(Object.entries({ email: c.Email, tax_code: c.TaxCode, tax_name: c.Organization,
       gender: c.Gender === true ? 'Nam' : c.Gender === false ? 'Nữ' : null, province: c.LocationName, ward: c.WardName }).filter(([, v]) => v != null && v !== '')) });
   sql('update customers set created_at = ? where id = ?', kvIso(c.CreatedDate), r.id);
   done.push(`khách ${c.Code} ${c.Name}`);

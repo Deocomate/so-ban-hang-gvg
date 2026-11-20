@@ -169,6 +169,11 @@ export function save_party(p) {
       const miss = (st.customer_required || []).filter((f) => CUSTOMER_FIELDS[f] && !String(val(f) ?? '').trim());
       if (miss.length) fail(`Còn thiếu thông tin bắt buộc: ${miss.map((f) => CUSTOMER_FIELDS[f]).join(', ')}`);
     }
+    // Nhóm khách mới gõ ở hồ sơ khách: thêm vào danh sách nhóm của sổ
+    extra.kind = trimNz(extra.kind);
+    if (extra.kind && !(st.customer_groups || []).includes(extra.kind)) {
+      run(`update books set settings = ? where id = ?`, { ...st, customer_groups: [...(st.customer_groups || []), extra.kind] }, b);
+    }
     // Người phụ trách: thành viên của sổ
     if ('owner_ids' in p) {
       const ids = [...new Set((Array.isArray(p.owner_ids) ? p.owner_ids : []).filter(Boolean))];

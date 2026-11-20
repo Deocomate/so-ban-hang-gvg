@@ -10,7 +10,7 @@ const books = await api.call('bootstrap');
 const TH = books.find((b) => b.short_name === 'TH').id; const VG = books.find((b) => b.short_name === 'VG').id;
 await api.call('upsert_member', { book_id: TH, email: 'nv@gomsu.vn', role: 'staff', perms: { ban_hang: true, xem_ban_hang: true } });
 await api.call('upsert_member', { book_id: TH, email: 'xem@gomsu.vn', role: 'staff', perms: { xem_ban_hang: true } });
-const kh = (await api.call('save_party', { book_id: TH, type: 'kh', name: 'Công ty Thăng Long', extra: { customer_type: 'Công ty', tax_code: '0500383583', tax_name: 'CÔNG TY CP THĂNG LONG' } })).id;
+const kh = (await api.call('save_party', { book_id: TH, type: 'kh', name: 'Công ty Thăng Long', kind: 'Công ty', extra: { tax_code: '0500383583', tax_name: 'CÔNG TY CP THĂNG LONG' } })).id;
 const kh2 = (await api.call('save_party', { book_id: TH, type: 'kh', name: 'Anh Hòa' })).id;
 const b64 = (s) => Buffer.from(s).toString('base64');
 

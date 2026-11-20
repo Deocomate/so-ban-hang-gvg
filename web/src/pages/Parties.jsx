@@ -6,6 +6,7 @@ import { CustomerDetail } from './CustomerLedger.jsx';
 import { SupplierOrdersTab } from './SupplierOrders.jsx';
 import { exportXlsx } from '../lib/excel.js';
 import { CustomerFields } from './CustomerFields.jsx';
+import { groupNames } from '../lib/lookups.js';
 import { Btn, Icon, Pill, StatusPill, DELIVERY, PAYMENT, RECEIVE, Field, Input, TextArea, Select, DateInput, NumInput, Check, Search, Tabs, Loading, ErrorBox, Note, Table, Modal, KV, Section, ListPage, FilterBox, RadioList } from '../components/ui.jsx';
 
 // Mốc "quá hạn bao lâu" (theo khoản quá hạn lâu nhất), giống cách KiotViet chia tuổi nợ
@@ -64,7 +65,7 @@ export function PartiesPage({ type }) {
     const r = only ? base.filter(debtTest[only]) : base;
     return only === 'over' || od ? [...r].sort((a, b) => b.max_overdue_days - a.max_overdue_days || b.overdue - a.overdue) : r;
   }, [base, only, od]);
-  const groups = isKh ? [...new Set([...(settings.customer_groups || []), ...all.map((c) => c.kind).filter(Boolean)])] : [];
+  const groups = isKh ? groupNames(settings, all) : [];
   const tot = (k) => rows.reduce((s, c) => s + (c[k] || 0), 0);
   const nOver = rows.filter((c) => c.overdue > 0).length;
   const allTime = { mode: 'preset', preset: 'all', from: '', to: '' };
@@ -101,7 +102,7 @@ export function PartiesPage({ type }) {
       actions={<>
         <Btn icon="dl" onClick={() => exportXlsx(isKh ? 'cong-no-khach-hang.xlsx' : 'cong-no-ncc.xlsx', [{ name: isKh ? 'Khách hàng' : 'Nhà cung cấp', rows, columns: [
           { key: 'code', label: 'Mã' }, { key: 'name', label: 'Tên' }, { key: 'phone', label: 'Điện thoại' }, { key: 'address', label: 'Địa chỉ' }, { key: 'contact', label: 'Người liên hệ' },
-          ...(isKh ? [{ key: 'kind', label: 'Loại khách' }, { key: 'price_tier', label: 'Mức giá', get: (c) => pn[c.price_tier - 1] }] : []), { key: 'credit_days', label: 'Số ngày được nợ' },
+          ...(isKh ? [{ key: 'kind', label: 'Nhóm khách' }, { key: 'price_tier', label: 'Mức giá', get: (c) => pn[c.price_tier - 1] }] : []), { key: 'credit_days', label: 'Số ngày được nợ' },
           ...(isKh ? [{ key: 'credit_limit', label: 'Hạn mức nợ' }] : []), { key: 'note', label: 'Ghi chú' },
           { key: 'opening', label: 'Nợ đầu kỳ' }, { key: debtKey, label: isKh ? 'Còn phải thu' : 'Còn phải trả' }, { key: 'prepaid', label: 'Trả trước' }, { key: 'overdue', label: 'Quá hạn' }, { key: 'max_overdue_days', label: 'Số ngày quá hạn' },
           { key: 'overdue_since', label: 'Quá hạn từ ngày', get: (c) => (overdueSince(c) ? dmy(overdueSince(c)) : '') },
@@ -134,7 +135,7 @@ export function PartiesPage({ type }) {
 }
 
 export function PartyForm({ type, id, name, onClose, onSaved }) {
-  const { settings, rpc } = useApp();
+  const { settings, rpc, loadBooks } = useApp();
   const { run, busy } = useAction();
   const isKh = type === 'kh';
   const [f, setF] = useState({ code: '', name: name || '', phone: '', address: '', contact: '', kind: '', price_tier: 1, credit_days: 0, credit_limit: 0, note: '', active: true, stage: 'moi', extra: {} });
@@ -144,7 +145,11 @@ export function PartyForm({ type, id, name, onClose, onSaved }) {
     <Modal title={id ? `Sửa ${f.name}` : isKh ? 'Thêm khách hàng' : 'Thêm nhà cung cấp'} onClose={onClose} size={isKh ? 'xl' : 'md'}
       footer={<><Btn onClick={onClose}>Thôi</Btn><Btn kind="primary" busy={busy} onClick={async () => {
         const r = await run('save_party', { ...f, type, id: id || null, price_tier: Number(f.price_tier) }, (x) => 'Đã lưu ' + (x.code || f.name));
-        if (r) { onSaved?.(r); onClose(); }
+        if (r) {
+          // Nhóm khách mới gõ ở hồ sơ khách được máy chủ thêm vào danh sách nhóm: nạp lại thiết lập sổ
+          if (isKh && f.kind?.trim() && !(settings.customer_groups || []).includes(f.kind.trim())) loadBooks();
+          onSaved?.(r); onClose();
+        }
       }}>Lưu</Btn></>}>
       {isKh ? <CustomerFields f={f} set={set} id={id} /> : <div className="grid">
         <Field label="Tên" required wide><Input value={f.name} onChange={(v) => set('name', v)} autoFocus /></Field>

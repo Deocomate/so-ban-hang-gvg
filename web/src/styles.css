@@ -615,7 +615,7 @@ code { font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-r
 .pos-qty button { width: 30px; height: 34px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); border-radius: 8px; font-size: 18px; cursor: pointer; line-height: 1; }
 .pos-qty .inp { width: 82px; text-align: center; }
 .pos-unit { color: var(--muted); font-size: 13px; min-width: 30px; }
-.pos-price, .pos-ck, .pos-due { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pos-price, .pos-ck, .pos-due, .pos-cust-group { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .pos-line-total { text-align: right; font-weight: 600; font-size: 16px; font-variant-numeric: tabular-nums; }
 .pos-ordernote { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 0 16px; height: 52px; color: var(--muted); }
 .pos-ordernote input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; font: inherit; font-size: 15px; color: var(--ink); }

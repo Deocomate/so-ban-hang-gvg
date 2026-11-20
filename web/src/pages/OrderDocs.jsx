@@ -107,7 +107,7 @@ export function OrderDocsPage() {
           { value: 'cty', label: 'Công ty', count: all.filter((r) => r.company).length }, { value: 'le', label: 'Khách lẻ', count: all.filter((r) => !r.company).length }]} /></FilterBox>
       </>}
       search={<Search value={search} onChange={setSearch} placeholder="Tìm mã đơn, khách, số hợp đồng…" />}>
-      {track === 'on' ? <Note>Mặc định chỉ theo dõi đơn của khách công ty (loại khách "Công ty" hoặc có mã số thuế). Không phải đơn nào cũng cần đủ 4 loại: bấm nút sửa ở cột "Còn thiếu" để chọn giấy tờ cần có cho từng đơn, hoặc đặt mặc định cho khách ở hồ sơ khách (thẻ Thông tin xuất hóa đơn).</Note>
+      {track === 'on' ? <Note>Mặc định chỉ theo dõi đơn của khách công ty (thuộc nhóm công ty hoặc có mã số thuế). Không phải đơn nào cũng cần đủ 4 loại: bấm nút sửa ở cột "Còn thiếu" để chọn giấy tờ cần có cho từng đơn, hoặc đặt mặc định cho khách ở hồ sơ khách (thẻ Thông tin xuất hóa đơn).</Note>
         : <Note>Các đơn dưới đây không cần theo dõi giấy tờ. Bấm "Bật theo dõi" nếu đơn này cần đủ hồ sơ.</Note>}
       {track === 'on' && <Legend />}
       {b.loading && !b.data ? <Loading /> : <DocsBoardTable rows={rows} error={b.error} onTrack={track === 'off' ? turnOn : null} />}

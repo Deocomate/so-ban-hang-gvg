@@ -11,7 +11,7 @@ import { addAnamtileBook, defaultDocs, VARIANTS } from '../domain/books.js';
 import { DEFAULT_ROLES } from '../lib/labels.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const SCHEMA_VERSION = 13;
+const SCHEMA_VERSION = 14;
 
 // Bảng ghi nhật ký chỉnh sửa; cột bỏ qua khi so sánh UPDATE (do hệ thống tự cập nhật)
 const AUDIT_TABLES = {
@@ -286,9 +286,25 @@ function migrate(db, from) {
   if (from > 0 && from < 8) upgradeAccounts(db);
   if (from < 8) seedRoles(db);
   if (from > 0 && from < 11) keepSourceValues(db);
+  if (from > 0 && from < 14) mergeCustomerType(db);
   db.exec(`create unique index if not exists products_barcode_uq on products (book_id, barcode) where barcode is not null and barcode <> ''`);
   db.exec(`create unique index if not exists expenses_recur_uq on expenses (recur_id, recur_month) where recur_id is not null;
     create index if not exists expenses_split_of_idx on expenses (split_of) where split_of is not null;`);
+}
+
+// Gộp "Loại khách" (extra.customer_type) vào "Nhóm khách": mỗi sổ có nhóm "Công ty" đánh dấu nhóm công ty;
+// khách loại Công ty chưa có nhóm vào nhóm "Công ty"; bỏ trường loại khách cũ.
+function mergeCustomerType(db) {
+  for (const b of db.prepare(`select id, settings from books`).all()) {
+    const s = JSON.parse(b.settings || '{}');
+    const groups = s.customer_groups || [];
+    const info = s.customer_group_info || {};
+    const next = { ...s, customer_groups: groups.includes('Công ty') ? groups : [...groups, 'Công ty'],
+      customer_group_info: { ...info, 'Công ty': { ...(info['Công ty'] || {}), company: true } } };
+    db.prepare(`update books set settings = ? where id = ?`).run(JSON.stringify(next), b.id);
+  }
+  db.exec(`update customers set kind = 'Công ty' where json_extract(extra, '$.customer_type') = 'Công ty' and trim(coalesce(kind, '')) = '';
+    update customers set extra = json_remove(extra, '$.customer_type') where json_extract(extra, '$.customer_type') is not null;`);
 }
 
 // Giữ giá trị gốc của các dòng nhập có giá trước khi có phương pháp giá vốn cố định (sổ cũ luôn tính bình quân)

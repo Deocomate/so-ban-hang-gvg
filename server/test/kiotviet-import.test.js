@@ -131,7 +131,7 @@ const del = await api.one('products', TH, [['sku', 'eq', 'GACH01{DEL}']]);
 C('Hàng đã xóa: giữ mã, ngừng kinh doanh, tồn về 0', [del.active, del.on_hand], [false, 0]);
 const c1 = await api.one('customers', TH, [['code', 'eq', 'KH000001']]);
 const c2 = await api.one('customers', TH, [['code', 'eq', 'KH000002']]);
-C('Khách: nhóm, mức giá theo nhóm, loại khách, mã số thuế', [c1.kind, c1.price_tier, c2.extra.customer_type, c2.extra.tax_code], ['Công trình', 3, 'Công ty', '0101']);
+C('Khách: nhóm, mức giá theo nhóm, khách công ty vào nhóm Công ty, mã số thuế', [c1.kind, c1.price_tier, c2.kind, c2.extra.tax_code], ['Công trình', 3, 'Công ty', '0101']);
 const kb = (id) => Math.round((custBalances(TH, d).find((x) => x.party_id === id) || {}).balance || 0);
 C('Công nợ từng khách khớp KiotViet (gồm phiếu điều chỉnh CB)', [kb(c1.id), kb(c2.id)], [117000, 82000]);
 const ncc = await api.one('suppliers', TH, [['code', 'eq', 'NCC11']]);

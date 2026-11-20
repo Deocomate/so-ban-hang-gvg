@@ -4,8 +4,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useAction, useQ } from '../lib/store.jsx';
 import { money, qty as fq, todayVN, match } from '../lib/format.js';
-import { useProducts, useCustomers, useFunds, productSub, priceOf, unitsOf, findUnit, usePriceBooks, booksFor, autoBookFor } from '../lib/lookups.js';
-import { packing, weightOf, fmtKg } from '../lib/docs/model.js';
+import { useProducts, useCustomers, useFunds, productSub, priceOf, unitsOf, findUnit, usePriceBooks, booksFor, autoBookFor, groupNames } from '../lib/lookups.js';
+import { packing, weightOf, fmtKg, groupLabel } from '../lib/docs/model.js';
 import { Btn, Icon, Input, Select, DateInput, NumInput, Loading, Picker, Modal } from '../components/ui.jsx';
 import { ChargesDialog } from './Charges.jsx';
 import { ChannelSelect } from '../components/ChannelSelect.jsx';
@@ -410,6 +410,10 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
           {myBooks.length > 0 && <Select value={f.price_book_id} onChange={(v) => set('price_book_id', v)} aria-label="Bảng giá"
             options={[{ value: '', label: 'Bảng giá chung' + (cust ? ` (${priceNames[tier - 1]})` : '') }, ...myBooks.map((b) => ({ value: b.id, label: 'Bảng giá: ' + b.name }))]} />}
           {cust && cust.code !== 'KL' && <div className="small muted pos-cust-info">{cust.phone || 'Chưa có SĐT'} · {priceNames[tier - 1]}{cust.receivable > 0 ? <> · <span className="bad">đang nợ {money(cust.receivable)}</span></> : ''}{cust.prepaid > 0 ? ` · trả trước ${money(cust.prepaid)}` : ''}</div>}
+          {cust && cust.code !== 'KL' && <label className="pos-cust-group"><span className="muted small">Nhóm khách</span>
+            <Select value={cust.kind || ''} disabled={!can('danh_muc') || busy} aria-label="Nhóm khách"
+              onChange={(v) => run('set_customer_group', { customer_ids: [cust.id], name: v || null }, v ? `Đã chuyển ${cust.name} vào nhóm ${v}` : `Đã bỏ nhóm của ${cust.name}`)}
+              options={[{ value: '', label: 'Chưa có nhóm' }, ...groupNames(settings, [cust]).map((g) => ({ value: g, label: groupLabel(settings, g) }))]} /></label>}
           <div className="pos-grid2">
             <ChannelSelect value={f.channel} onChange={(v) => set('channel', v)} aria-label="Kênh bán" />
             <label className="pos-due"><span className="muted small">Hẹn giao</span><DateInput value={f.due_date} onChange={(v) => set('due_date', v)} /></label>

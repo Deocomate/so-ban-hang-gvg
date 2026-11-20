@@ -1,5 +1,6 @@
 // Nhóm khách hàng: tên nhóm nằm ở customers.kind và danh sách settings.customer_groups; thông tin thêm của nhóm
-// (giảm giá, ghi chú, điều kiện tự thêm / tự bỏ khách) nằm ở settings.customer_group_info[tên nhóm].
+// (nhóm công ty, giảm giá, ghi chú, điều kiện tự thêm / tự bỏ khách) nằm ở settings.customer_group_info[tên nhóm].
+// Nhóm khách cũng là loại khách: nhóm có company = true là khách công ty (xuất VAT, hợp đồng kinh tế, theo dõi giấy tờ).
 import { fail, allN, run, num, int, trimNz, rnd, today, addDays } from '../lib/context.js';
 import { requirePerm, bookSettings } from './access.js';
 
@@ -56,12 +57,12 @@ function cleanInfo(p) {
   if (days < 0 || days > 3650) fail('Khoảng thời gian không hợp lệ');
   // Theo dõi giấy tờ đơn hàng của khách trong nhóm: 'on' | 'off' | '' (tự động theo nhu cầu xuất VAT)
   const docs_track = ['on', 'off'].includes(p.docs_track) ? p.docs_track : '';
-  return { discount, discount_type: type, note: trimNz(p.note), conds, days, auto_add: !!p.auto_add, auto_remove: !!p.auto_remove, docs_track };
+  return { discount, discount_type: type, note: trimNz(p.note), conds, days, auto_add: !!p.auto_add, auto_remove: !!p.auto_remove, docs_track, company: !!p.company };
 }
 
 const saveSettings = (b, s) => run(`update books set settings = ? where id = ?`, s, b);
 
-// p = {old_name?, name, discount, discount_type, note, conds, days, auto_add, auto_remove}
+// p = {old_name?, name, company, discount, discount_type, note, conds, days, auto_add, auto_remove, docs_track}
 export function save_customer_group(p) {
   const b = p.book_id;
   requirePerm(b, 'danh_muc');

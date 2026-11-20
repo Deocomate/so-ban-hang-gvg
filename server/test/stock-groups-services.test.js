@@ -103,8 +103,8 @@ await E('Trùng tên nhóm bị chặn', () => api.call('save_customer_group', {
 await E('Giảm giá quá 100% bị chặn', () => api.call('save_customer_group', { book_id: TH, name: 'X', discount: 120, discount_type: 'pct' }), 'Giảm giá');
 await api.call('save_customer_group', { book_id: TH, old_name: 'Khách chi tiêu cao', name: 'VIP', conds: [{ field: 'area', value: 'hưng yên' }], auto_add: false, auto_remove: true });
 C('Đổi tên nhóm: khách đi theo, bỏ khách hết thỏa', [await grp(kA) ?? null], [null]);
-await api.call('set_customer_group', { book_id: TH, customer_ids: [kA, kB], name: 'Công trình' });
-C('Gán nhóm hàng loạt', [await grp(kA), await grp(kB)], ['Công trình', 'Công trình']);
+await api.call('set_customer_group', { book_id: TH, customer_ids: [kA, kB], name: 'Khách lẻ TM' });
+C('Gán nhóm hàng loạt', [await grp(kA), await grp(kB)], ['Khách lẻ TM', 'Khách lẻ TM']);
 await api.call('save_customer_group', { book_id: TH, old_name: 'VIP', name: 'VIP', conds: [{ field: 'area', value: 'hưng yên' }], auto_add: true });
 await api.call('set_customer_group', { book_id: TH, customer_ids: [kB], name: null });
 C('Cập nhật theo điều kiện thêm khách chưa có nhóm', [(await api.call('refresh_customer_groups', { book_id: TH })).added, await grp(kB)], [1, 'VIP']);

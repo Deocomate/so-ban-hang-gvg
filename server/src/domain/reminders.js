@@ -7,8 +7,10 @@ import { scope } from './query.js';
 // Chênh lệch nhỏ hơn mức này coi như đã xuất đủ (làm tròn tiền thuế, đơn giá lẻ)
 const TOLERANCE = 1000;
 
-// Khách là công ty: chọn loại khách "Công ty" hoặc đã khai mã số thuế ở thẻ Thông tin xuất hóa đơn
-export const COMPANY_SQL = `(json_extract(c.extra, '$.customer_type') = 'Công ty' or trim(coalesce(json_extract(c.extra, '$.tax_code'), '')) <> '')`;
+// Khách là công ty: thuộc nhóm khách đánh dấu "Nhóm công ty" (settings.customer_group_info[nhóm].company) hoặc đã khai mã số thuế
+export const COMPANY_SQL = `(exists (select 1 from books cb, json_each(cb.settings, '$.customer_group_info') cg
+    where cb.id = c.book_id and cg.key = c.kind and json_extract(cg.value, '$.company') = 1)
+  or trim(coalesce(json_extract(c.extra, '$.tax_code'), '')) <> '')`;
 
 // p = {book_id, order_id?, customer_id?} → đơn của khách công ty đã giao mà hóa đơn VAT ghi nhận còn thiếu so với hàng đã giao (trước thuế).
 // Đơn đánh dấu "không cần xuất hóa đơn" (doc_info.vat_skip) được bỏ qua.

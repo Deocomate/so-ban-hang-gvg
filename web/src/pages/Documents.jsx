@@ -241,7 +241,7 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
   useEffect(() => { setEdit({}); }, [type, src.kind, src.id]);
 
   // Đề nghị thanh toán chỉ lập sau khi đã hoàn tất đối chiếu
-  const company = !!data?.o && isCompany(data.cust);
+  const company = !!data?.o && isCompany(data.cust, settings);
   // Bảng đối chiếu chỉ lập khi đơn đã có ít nhất một đợt giao
   const delivered = (data?.dels || []).length > 0;
   const tabTypes = types.filter((t) => (t !== 'de_nghi_tt' || data?.k?.reconciled_at) && (t !== 'yeu_cau_vat' || company) && (!RECONCILE.includes(t) || data?.kind === 'contract' || delivered));

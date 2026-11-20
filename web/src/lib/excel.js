@@ -215,7 +215,7 @@ export function partyRules(type) {
     ['phone', (k) => k.startsWith('dien thoai') || k.startsWith('so dien thoai') || k === 'sdt' || k === 'dt'],
     ['address', starts('dia chi')],
     ['contact', starts('nguoi lien he', 'lien he')],
-    ['kind', (k) => type === 'kh' && (k === 'loai khach' || k === 'loai kh' || k === 'loai')],
+    ['kind', (k) => type === 'kh' && (k === 'nhom khach' || k === 'nhom kh' || k === 'nhom' || k === 'loai khach' || k === 'loai kh' || k === 'loai')],
     ['price_tier', starts('muc gia', 'bang gia')],
     ['credit_days', starts('so ngay duoc no', 'so ngay no', 'han no', 'dieu khoan')],
     ['credit_limit', starts('han muc')],
@@ -244,7 +244,7 @@ export function importFields(kind, pn = [], settings) {
   const kh = kind === 'kh';
   return [
     ['code', kh ? 'Mã KH' : 'Mã NCC'], ['name', kh ? 'Tên khách hàng' : 'Tên nhà cung cấp'], ['phone', 'Điện thoại'], ['address', 'Địa chỉ'], ['contact', 'Người liên hệ'],
-    ...(kh ? [['kind', 'Loại khách'], ['price_tier', 'Mức giá', 'tier']] : []), ['credit_days', 'Số ngày được nợ', 'num'],
+    ...(kh ? [['kind', 'Nhóm khách'], ['price_tier', 'Mức giá', 'tier']] : []), ['credit_days', 'Số ngày được nợ', 'num'],
     ...(kh ? [['credit_limit', 'Hạn mức nợ', 'num']] : []), ['opening_debt', 'Nợ đầu kỳ', 'num'], ['due_date', 'Hạn trả nợ đầu kỳ', 'date'], ['note', 'Ghi chú'],
   ].map(([key, label, type = 'text']) => ({ key, label, type }));
 }
@@ -547,7 +547,7 @@ export function productTemplate(settings = {}) {
 export function partyTemplate(type, priceNames) {
   const isKh = type === 'kh';
   const cols = isKh
-    ? ['Mã KH (để trống = tự cấp)', 'Tên khách hàng *', 'Điện thoại', 'Địa chỉ', 'Người liên hệ', 'Loại khách', 'Mức giá', 'Số ngày được nợ', 'Hạn mức nợ', 'Nợ đầu kỳ', 'Hạn trả nợ đầu kỳ', 'Ghi chú']
+    ? ['Mã KH (để trống = tự cấp)', 'Tên khách hàng *', 'Điện thoại', 'Địa chỉ', 'Người liên hệ', 'Nhóm khách', 'Mức giá', 'Số ngày được nợ', 'Hạn mức nợ', 'Nợ đầu kỳ', 'Hạn trả nợ đầu kỳ', 'Ghi chú']
     : ['Mã NCC (để trống = tự cấp)', 'Tên nhà cung cấp / xưởng *', 'Điện thoại', 'Địa chỉ', 'Người liên hệ', 'Số ngày được nợ', 'Nợ đầu kỳ', 'Hạn trả nợ đầu kỳ', 'Ghi chú'];
   const ex = isKh
     ? [['', 'Đại lý Minh Phát', '0912000001', 'Bắc Ninh', 'Anh Phát', 'Đại lý', priceNames[1], 30, 200000000, 15000000, '15/11/2026', '']]
