@@ -8,6 +8,9 @@ import { Icon } from './ui.jsx';
 const OPEN_DELAY = 220;
 const CLOSE_DELAY = 200;
 let active = null; // { id, close, pinned }
+let quietUntil = 0;
+// Sau khi lưu, dòng bảng có thể biến mất làm dòng khác trượt vào dưới con trỏ: tạm không tự mở khung khi rê chuột
+export const hushHoverCards = (ms = 1200) => { quietUntil = Date.now() + ms; };
 
 export function HoverCard({ trigger, children, width = 300, label }) {
   const anchor = useRef(null);
@@ -28,7 +31,7 @@ export function HoverCard({ trigger, children, width = 300, label }) {
     setOpen(true);
   };
   const enter = (e) => {
-    if (e.pointerType !== 'mouse') return;
+    if (e.pointerType !== 'mouse' || Date.now() < quietUntil) return;
     clear();
     if (!open) timer.current = setTimeout(() => show(false), OPEN_DELAY);
   };

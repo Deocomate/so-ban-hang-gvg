@@ -10,6 +10,8 @@ import { FactoryReport } from './Tax.jsx';
 import { StaffReport } from './Staff.jsx';
 import { BreakEvenReport, BrandsReport } from './BreakEven.jsx';
 import { PnlReport } from './PnlReport.jsx';
+import { HoverCard } from '../components/HoverCard.jsx';
+import { DebtQuickPay, overdueDays, agingText } from './DebtQuickPay.jsx';
 
 export function ReportsPage(nav) {
   const { can } = useApp();
@@ -176,7 +178,7 @@ function GroupReport() {
 }
 
 function DebtReport() {
-  const { open } = useApp();
+  const { open, can } = useApp();
   const [type, setType] = useState('kh');
   const isKh = type === 'kh';
   const q = useQ('open_docs', [['party_type', 'eq', type]], 'due_date', 2000);
@@ -187,6 +189,10 @@ function DebtReport() {
   const sum = (k) => rows.reduce((s, x) => s + Number(x[k] || 0), 0);
   const t = todayVN();
   const bucket = (d) => { if (!d.due_date || d.due_date >= t) return 'Chưa đến hạn'; const n = Math.round((new Date(t) - new Date(d.due_date)) / 864e5); return n <= 30 ? 'Quá hạn 1–30 ngày' : n <= 60 ? 'Quá hạn 31–60 ngày' : 'Quá hạn trên 60 ngày'; };
+  // Người có quyền thu chi: rê chuột vào ô Còn nợ / Tuổi nợ để thu (trả) nhanh ngay trên dòng
+  const quick = (d, trigger) => (can('thu_chi')
+    ? <HoverCard label={`${isKh ? 'Thu nợ' : 'Trả nợ'} ${d.code}`} trigger={trigger} width={360}>{({ close }) => <DebtQuickPay doc={d} isKh={isKh} close={close} />}</HoverCard>
+    : trigger);
   const buckets = ['Chưa đến hạn', 'Quá hạn 1–30 ngày', 'Quá hạn 31–60 ngày', 'Quá hạn trên 60 ngày'].map((b) => ({ b, v: rows.filter((d) => bucket(d) === b).reduce((s, d) => s + d.remaining_due, 0) }));
   return (
     <div className="stack">
@@ -206,9 +212,10 @@ function DebtReport() {
           { key: 'c', label: 'Chứng từ', render: (d) => <>{d.code}<div className="cell-sub">{dmy(d.doc_date)}</div></> },
           { key: 't', label: 'Đã giao/nhận', align: 'right', render: (d) => money(d.due_now) },
           { key: 'pd', label: 'Đã trả', align: 'right', render: (d) => money(d.paid_net) },
-          { key: 'r', label: 'Còn nợ', align: 'right', render: (d) => <b>{money(d.remaining_due)}</b> },
+          { key: 'r', label: 'Còn nợ', align: 'right', render: (d) => quick(d, <b className="dq-amt">{money(d.remaining_due)}</b>) },
           { key: 'h', label: 'Hạn trả', render: (d) => (d.due_date ? dmy(d.due_date) : '—') },
-          { key: 'a', label: 'Tuổi nợ', render: (d) => { const b = bucket(d); return <Pill tone={b === 'Chưa đến hạn' ? 'neutral' : 'bad'}>{b}</Pill>; } },
+          { key: 'a', label: 'Tuổi nợ', render: (d) => { const b = bucket(d); const n = overdueDays(d, t);
+            return quick(d, <span title={agingText(d)}><Pill tone={!(n > 0) ? 'neutral' : n > 30 ? 'bad' : 'warn'}>{n > 0 ? `Quá hạn ${n} ngày` : b}</Pill></span>); } },
         ]} />
     </div>
   );

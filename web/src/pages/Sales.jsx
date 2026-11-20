@@ -94,8 +94,8 @@ export function SalesPage() {
 
 // ---------- Sửa nhanh ngay trên danh sách hóa đơn ----------
 // Thu tiền / hoàn tiền: chọn thu đủ hoặc gõ số thu một phần, chọn quỹ (nhớ quỹ dùng lần trước) rồi lưu một phiếu gắn vào đơn.
-const QUICK_FUND_KEY = 'gomsu.quick_fund';
-const readFund = () => { try { return localStorage.getItem(QUICK_FUND_KEY) || ''; } catch (e) { return ''; } };
+export const QUICK_FUND_KEY = 'gomsu.quick_fund';
+export const readFund = () => { try { return localStorage.getItem(QUICK_FUND_KEY) || ''; } catch (e) { return ''; } };
 function QuickPayment({ order: o, close }) {
   const { open, bookId } = useApp();
   const funds = useFunds();
