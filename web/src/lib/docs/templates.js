@@ -24,9 +24,10 @@ export function pageSize(tpl) {
 export const marginOf = (tpl) => ({ ...(PAPERS[tpl.paper]?.roll ? ROLL_MARGIN : DEFAULT_MARGIN), ...(tpl.margin || {}) });
 
 // CSS chung cho nội dung mẫu: dùng ở bản xem trước, trình soạn và khi in — nên ba nơi giống nhau
-export const FONT_CSS = { Arimo: 'Arimo, Arial, "Helvetica Neue", sans-serif', Tinos: 'Tinos, "Times New Roman", Times, serif' };
+// Times New Roman của máy (Windows) dùng trước khi xem / in; Tinos cùng số đo chữ nên xuống dòng giống hệt bản PDF
+export const FONT_CSS = { Arimo: 'Arimo, Arial, "Helvetica Neue", sans-serif', Tinos: '"Times New Roman", Tinos, Times, serif' };
 export const TPL_CSS = `
-.tpl { color: #000; line-height: 1.2; font-size: 10pt; overflow-wrap: anywhere; }
+.tpl { color: #000; line-height: 1.2; font-size: var(--tpl-base, 10pt); overflow-wrap: anywhere; }
 .tpl p { margin: 0; min-height: 1.2em; }
 .tpl table { width: 100% !important; border-collapse: collapse; table-layout: fixed; margin: 0; }
 .tpl td, .tpl th { vertical-align: top; padding: 1pt 2pt; position: relative; }
@@ -329,7 +330,7 @@ export function suggestedTemplates(type) { return (SUGGESTED[type] || []).map((t
 // Mẫu mặc định (id 'default') của một loại chứng từ
 export function defaultTemplate(type, ds) {
   const cfg = ds?.types?.[type] || {};
-  return { id: 'default', name: `Mẫu ${DOC_TYPES[type].label.toLowerCase()}`, html: BUILDERS[type](ds), paper: 'A4', orient: 'portrait', margin: { ...DEFAULT_MARGIN }, sep: cfg.sep || DOC_TYPES[type].sep, builtin: true };
+  return { id: 'default', name: `Mẫu ${DOC_TYPES[type].label.toLowerCase()}`, html: withBaseSize(BUILDERS[type](ds), ds?.base ?? 0), paper: 'A4', orient: 'portrait', margin: { ...DEFAULT_MARGIN }, sep: cfg.sep || DOC_TYPES[type].sep, builtin: true };
 }
 // Danh sách mẫu của một loại: mẫu riêng đã lưu, chưa có thì mẫu mặc định
 export function templatesFor(ds, type) {

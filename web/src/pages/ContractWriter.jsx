@@ -14,7 +14,7 @@ import { packView } from '../lib/book-profile.js';
 import { todayVN } from '../lib/format.js';
 import { saveFile } from '../lib/excel.js';
 import { docSettings, loadDocData } from '../lib/docs/model.js';
-import { FONT_CSS, sanitizeHtml } from '../lib/docs/templates.js';
+import { FONT_CSS, sanitizeHtml, withBaseSize } from '../lib/docs/templates.js';
 import { useDocFonts } from '../lib/docs/fonts.js';
 import { StyleAttr, TableX, HrX, PageBreak, TokenNode, toEditorHtml, fromEditorHtml } from '../lib/docs/editor-ext.js';
 import { CONTRACT_KINDS, fieldsFor, contractDefaults, contractHtml, buildContractDoc, suggestKind } from '../lib/docs/contract-templates.js';
@@ -150,8 +150,8 @@ export default function ContractWriter({ id: id0, order_id, onClose }) {
           </div>
           <div className="doc-main"><DocPreview doc={doc} /></div>
         </div>}
-        {mode === 'edit' && <DirectEditor key={kind} html={body ?? contractHtml(kind, f, data)} readOnly={!edit}
-          onChange={(h) => { setBody(h); setDirty(true); }} edited={!!body} onReset={() => { setBody(null); setDirty(true); return contractHtml(kind, f, data); }} />}
+        {mode === 'edit' && <DirectEditor key={kind} html={withBaseSize(body ?? contractHtml(kind, f, data), ds.base)} base={ds.base} readOnly={!edit}
+          onChange={(h) => { setBody(h); setDirty(true); }} edited={!!body} onReset={() => { setBody(null); setDirty(true); return withBaseSize(contractHtml(kind, f, data), ds.base); }} />}
         {mode === 'gdoc' && <GoogleDocTab url={gdoc} edit={edit} onChange={(v) => { setGdoc(v); setDirty(true); }} />}
       </div>}
     </Modal>
@@ -159,7 +159,7 @@ export default function ContractWriter({ id: id0, order_id, onClose }) {
 }
 
 // Trình soạn văn bản chuẩn (TipTap) trên trang A4: sửa tự do mọi chữ, bảng, định dạng của hợp đồng
-function DirectEditor({ html, onChange, readOnly, edited, onReset }) {
+function DirectEditor({ html, base, onChange, readOnly, edited, onReset }) {
   const { toast } = useApp();
   const [grid, setGrid] = useState(true);
   const [, repaint] = useReducer((x) => x + 1, 0);
@@ -184,7 +184,7 @@ function DirectEditor({ html, onChange, readOnly, edited, onReset }) {
       {!readOnly && <RichToolbar editor={editor} toast={toast} grid={grid} onGrid={setGrid}
         tail1={<><span className="grow" />{edited && <button type="button" className="link-btn small" onClick={() => { if (window.confirm('Bỏ mọi chỗ đã sửa trực tiếp và dựng lại từ mẫu?')) { const h = onReset(); editor.commands.setContent(toEditorHtml(sanitizeHtml(h)), { emitUpdate: false }); } }}>Dựng lại từ mẫu</button>}</>} />}
       <div className={`te-canvas cw-canvas${grid ? ' grid' : ''}`}>
-        <div className="te-paper te-shadow" style={{ width: '210mm', minHeight: '297mm', padding: '15mm 15mm 15mm 20mm', fontFamily: FONT_CSS.Tinos }}><EditorContent editor={editor} /></div>
+        <div className="te-paper te-shadow" style={{ width: '210mm', minHeight: '297mm', padding: '15mm 15mm 15mm 20mm', fontFamily: FONT_CSS.Tinos, ...(base ? { '--tpl-base': `${base}pt` } : {}) }}><EditorContent editor={editor} /></div>
       </div>
     </div>
   );

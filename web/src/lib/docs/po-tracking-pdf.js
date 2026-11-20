@@ -3,6 +3,16 @@
 import { qty, dmy } from '../format.js';
 import { trackOf, pctText, TRACK_RANK, SOON_DAYS } from '../po-tracking.js';
 import { pdfFromDef } from './pdf.js';
+import { DEFAULT_BASE } from './model.js';
+
+// Nâng mọi cỡ chữ nhỏ hơn `base` lên bằng `base` trong định nghĩa pdfmake
+function floorSizes(node, base) {
+  if (Array.isArray(node)) return node.map((n) => floorSizes(n, base));
+  if (!node || typeof node !== 'object' || node.canvas) return node;
+  const out = {};
+  for (const [k, v] of Object.entries(node)) out[k] = k === 'fontSize' ? Math.max(v, base) : typeof v === 'object' && k !== 'layout' ? floorSizes(v, base) : v;
+  return out;
+}
 
 // Màu theo trạng thái hạn giao: nền nhóm dòng · thanh tiến độ (chữ để đen; chỉ cột Còn SX và ngày đặt / giao màu đỏ)
 const C = {
@@ -97,7 +107,7 @@ export async function poTrackingPdf({ supplier, orders, lines, receipts = [], to
   // → đơn không bị cắt đôi khi sang trang, tiêu đề cột lặp lại mỗi trang. Bảng chính không có lề trong; bảng con lề PAD
   // nên độ rộng bảng con = độ rộng cột chính − 2·PAD, các cột thẳng hàng với dòng tiêu đề.
   // Cột "Đã giao" của bảng con chia đều thành từng ngày giao của đơn đó, dòng đầu bảng con ghi các ngày.
-  const PAD = 4; const WIDTHS = [110, '*', 52, 32, 180, 50, 66, 110];
+  const PAD = 4; const WIDTHS = [110, '*', 56, 46, 170, 50, 66, 110];
   const inner = (w) => (w === '*' ? '*' : w - 2 * PAD);
   const hd = (text, color) => ({ text, bold: true, alignment: 'center', color, fillColor: '#f2f2f2', fontSize: 10.5, margin: [PAD, 3.5, PAD, 3.5] });
   const body = [[hd('Tên KH'), hd('Tên sản phẩm'), hd('Số lượng đặt'), hd('ĐVT'), hd('Đã giao'), hd('Còn SX', RED), hd('Tiến độ'), hd('Ngày trả dự kiến')]];
@@ -140,10 +150,12 @@ export async function poTrackingPdf({ supplier, orders, lines, receipts = [], to
     layout: { hLineWidth: () => 0.6, vLineWidth: () => 0.6, hLineColor: () => LINE, vLineColor: () => LINE, paddingLeft: () => 0, paddingRight: () => 0, paddingTop: () => 0, paddingBottom: () => 0 },
   });
 
+  // Cùng chuẩn giấy tờ: Times New Roman, chữ không nhỏ hơn cỡ cơ bản 13
+  const base = DEFAULT_BASE;
   return pdfFromDef({
-    pageSize: 'A4', pageOrientation: 'landscape', pageMargins: [24, 24, 24, 30], content,
+    pageSize: 'A4', pageOrientation: 'landscape', pageMargins: [24, 24, 24, 30], content: floorSizes(content, base),
     info: { title: `Đơn đặt hàng xưởng – ${supplier.name}`, creator: 'Sổ bán hàng gốm sứ' },
-    defaultStyle: { font: 'Tinos', fontSize: 10, lineHeight: 1.05 },
-    footer: (page, pages) => ({ columns: [{ text: `${supplier.name} · ${list.length} đơn · xuất ngày ${dmy(today)}`, fontSize: 8, color: '#777777' }, { text: `Trang ${page}/${pages}`, alignment: 'right', fontSize: 8, color: '#777777' }], margin: [24, 8, 24, 0] }),
+    defaultStyle: { font: 'Tinos', fontSize: base, lineHeight: 1.05 },
+    footer: (page, pages) => ({ columns: [{ text: `${supplier.name} · ${list.length} đơn · xuất ngày ${dmy(today)}`, fontSize: base, color: '#777777' }, { text: `Trang ${page}/${pages}`, alignment: 'right', fontSize: base, color: '#777777' }], margin: [24, 8, 24, 0] }),
   });
 }

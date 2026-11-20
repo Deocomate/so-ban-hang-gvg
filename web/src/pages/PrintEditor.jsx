@@ -95,7 +95,7 @@ function TemplateEditor({ type, tplId }) {
     const def = defaultTemplate(type, ds);
     if (tplId === 'new') return { ...def, id: newId(), name: `Mẫu ${DOC_TYPES[type].label.toLowerCase()} ${saved.length + 1}`, builtin: false, is_default: !saved.length, isNew: true };
     const t = saved.find((x) => x.id === tplId) || (tplId ? null : saved.find((x) => x.is_default) || saved[0]);
-    if (t) return { ...t, margin: marginOf(t) };
+    if (t) return { ...t, margin: marginOf(t), html: withBaseSize(t.html, baseFor(ds, t)) };
     return { ...def, is_default: true, isNew: true };
   }, []);
   const [meta, setMeta] = useState(() => ({ id: start.id, name: start.name, paper: start.paper || 'A4', orient: start.orient || 'portrait', margin: { ...start.margin }, sep: start.sep || ',', is_default: !!start.is_default }));
@@ -190,7 +190,7 @@ function TemplateEditor({ type, tplId }) {
 
   // ---------- Khổ giấy, thu phóng ----------
   const size = pageSize(meta); const mg = meta.margin;
-  const paperStyle = { width: `${size.w}mm`, minHeight: size.h ? `${size.h}mm` : '60mm', padding: `${mg.top}mm ${mg.right}mm ${mg.bottom}mm ${mg.left}mm`, fontFamily: FONT_CSS[ds.font] };
+  const paperStyle = { width: `${size.w}mm`, minHeight: size.h ? `${size.h}mm` : '60mm', padding: `${mg.top}mm ${mg.right}mm ${mg.bottom}mm ${mg.left}mm`, fontFamily: FONT_CSS[ds.font], ...(baseFor(ds, meta) ? { '--tpl-base': `${baseFor(ds, meta)}pt` } : {}) };
   const pvRef = useRef(null); const [fit, setFit] = useState(1); const [zoom, setZoom] = useState(null);
   useEffect(() => {
     const el = pvRef.current; if (!el || typeof ResizeObserver === 'undefined') return undefined;

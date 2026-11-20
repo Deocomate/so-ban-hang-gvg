@@ -393,8 +393,9 @@ span.cal-title { cursor: default; }
 .toast.err { background: var(--bad); color: #fff; }
 
 /* ---------- Phiếu in ---------- */
-.slip { background: #fff; color: #111; padding: 24px; font-size: 13px; border: 1px solid var(--line); }
-.slip h2 { font: 600 18px 'Times New Roman', serif; text-align: center; margin: 8px 0; }
+/* Phiếu in nhanh: cùng phông Times New Roman, cỡ chữ cơ bản 13 như mọi giấy tờ */
+.slip { background: #fff; color: #111; padding: 24px; font-family: "Times New Roman", Tinos, Times, serif; font-size: 13pt; border: 1px solid var(--line); }
+.slip h2 { font: 700 18pt "Times New Roman", Tinos, Times, serif; text-align: center; margin: 8px 0; }
 .slip table { width: 100%; border-collapse: collapse; margin-top: 10px; }
 .slip th, .slip td { border: 1px solid #999; padding: 5px 6px; }
 .slip .sign { display: grid; grid-template-columns: 1fr 1fr 1fr; text-align: center; margin-top: 24px; gap: 8px; }
@@ -1046,7 +1047,7 @@ body {
 .mono { font-family: ui-monospace, Consolas, monospace; }
 
 /* ---------- Mẫu in: thẻ thông tin (biến) ---------- */
-.tk { display: inline-flex; align-items: center; gap: 2px; padding: 0 5px; margin: 0 1px; border-radius: 4px; background: #e3eefc; color: #1557b0; font-weight: 500; line-height: 1.35; white-space: nowrap; vertical-align: baseline; font-size: .92em; cursor: default; user-select: none; }
+.tk { display: inline-flex; align-items: center; gap: 2px; padding: 0 5px; margin: 0 1px; border-radius: 4px; background: #e3eefc; color: #1557b0; font-weight: 500; line-height: 1.35; white-space: nowrap; vertical-align: baseline; font-size: 1em; cursor: default; user-select: none; }
 .tk.tk-item { background: #e6f4ea; color: #137333; }
 .tk.tk-bad { background: #fce8e6; color: #b3261e; }
 .tk .tk-x { border: 0; background: none; color: inherit; opacity: .6; cursor: pointer; padding: 0 0 0 2px; font: inherit; line-height: 1; }

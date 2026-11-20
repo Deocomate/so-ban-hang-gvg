@@ -82,7 +82,7 @@ export function RichToolbar({ editor, off = false, toast, grid, onGrid, lead = n
   const ts = editor.getAttributes('textStyle');
   // Cỡ chữ hiện tại: lấy theo định dạng chữ, không có thì đo chữ trên trang
   let curSize = ts.fontSize ? parseFloat(ts.fontSize) * (/px$/.test(ts.fontSize) ? 0.75 : 1) : null;
-  if (!curSize) { try { const dom = editor.view.domAtPos(editor.state.selection.from).node; const el = dom.nodeType === 3 ? dom.parentElement : dom; curSize = Math.round(parseFloat(getComputedStyle(el).fontSize) * 0.75 * 2) / 2; } catch (e) { curSize = 10; } }
+  if (!curSize) { try { const dom = editor.view.domAtPos(editor.state.selection.from).node; const el = dom.nodeType === 3 ? dom.parentElement : dom; curSize = Math.round(parseFloat(getComputedStyle(el).fontSize) * 0.75 * 2) / 2; } catch (e) { curSize = null; } }
   if (!Number.isFinite(curSize) || curSize <= 0) curSize = 10;
   const curFont = /tinos|times/i.test(ts.fontFamily || '') ? 'Tinos' : /arimo|arial/i.test(ts.fontFamily || '') ? 'Arimo' : '';
   const ch = () => editor.chain().focus();
