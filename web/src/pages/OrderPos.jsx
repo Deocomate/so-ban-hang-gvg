@@ -8,6 +8,7 @@ import { useProducts, useCustomers, useFunds, productSub, priceOf, unitsOf, find
 import { packing, weightOf, fmtKg } from '../lib/docs/model.js';
 import { Btn, Icon, Input, Select, DateInput, NumInput, Loading, Picker, Modal } from '../components/ui.jsx';
 import { ChargesDialog } from './Charges.jsx';
+import { ChannelSelect } from '../components/ChannelSelect.jsx';
 import { packView } from '../lib/book-profile.js';
 import { SourceFields, sourcePoPayload, sourceReady, kindLabel } from './OrderSource.jsx';
 import { PromoDialog, usePromoQuote, loyaltyOn } from './PosPromos.jsx';
@@ -400,7 +401,7 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
             options={[{ value: '', label: 'Bảng giá chung' + (cust ? ` (${priceNames[tier - 1]})` : '') }, ...myBooks.map((b) => ({ value: b.id, label: 'Bảng giá: ' + b.name }))]} />}
           {cust && cust.code !== 'KL' && <div className="small muted pos-cust-info">{cust.phone || 'Chưa có SĐT'} · {priceNames[tier - 1]}{cust.receivable > 0 ? <> · <span className="bad">đang nợ {money(cust.receivable)}</span></> : ''}{cust.prepaid > 0 ? ` · trả trước ${money(cust.prepaid)}` : ''}</div>}
           <div className="pos-grid2">
-            <Select value={f.channel} onChange={(v) => set('channel', v)} options={settings.channels || []} placeholder="Kênh bán" aria-label="Kênh bán" />
+            <ChannelSelect value={f.channel} onChange={(v) => set('channel', v)} aria-label="Kênh bán" />
             <label className="pos-due"><span className="muted small">Hẹn giao</span><DateInput value={f.due_date} onChange={(v) => set('due_date', v)} /></label>
           </div>
           {isDat && can('nhap_hang') && (

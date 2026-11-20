@@ -27,12 +27,13 @@ const LEGAL_ENTITIES = [
 export const defaultDocs = (variant) => ({ profiles: LEGAL_ENTITIES, types: variant === 'TH' ? { hoa_don: { profile: 'mai_hieu' } } : {} });
 
 // Hồ sơ sổ theo ngành hàng. packaging: hàng đóng hộp/thùng (in quy cách, tính số hộp). hide_fields: trường hàng hóa sổ không dùng.
+export const DEFAULT_CHANNELS = ['Google Ads', 'SEO', 'TikTok', 'Facebook', 'Bán tại cửa hàng'];
 export const VARIANTS = {
-  TH: { price_names: ['Giá lẻ', 'Giá đại lý I', 'Giá công trình', 'Giá đại lý II', 'Giá công trình lẻ'], channels: ['Bán tại cửa hàng'], packaging: true, hide_fields: [],
+  TH: { price_names: ['Giá lẻ', 'Giá đại lý I', 'Giá công trình', 'Giá đại lý II', 'Giá công trình lẻ'], channels: DEFAULT_CHANNELS, packaging: true, hide_fields: [],
     categories: ['Ngói', 'Gạch thông gió', 'Lan can - con tiện', 'Đèn vườn', 'Linh vật - phong thủy', 'Phụ kiện mái', 'Khác'] },
-  VG: { price_names: ['Giá lẻ', 'Giá sỉ', 'Giá CTV', 'Giá CH'], channels: ['Facebook', 'TikTok'], packaging: false, hide_fields: ['brand', 'material', 'norm_m2', 'norm_m'],
+  VG: { price_names: ['Giá lẻ', 'Giá sỉ', 'Giá CTV', 'Giá CH'], channels: DEFAULT_CHANNELS, packaging: false, hide_fields: ['brand', 'material', 'norm_m2', 'norm_m'],
     categories: ['Đồ thờ', 'Bình hút lộc', 'Ấm chén', 'Lọ hoa', 'Mosaic', 'Khác'] },
-  AN: { price_names: ['Giá lẻ', 'Giá đại lý', 'Giá công trình'], channels: ['Bán tại cửa hàng'], packaging: true, hide_fields: [], categories: ['Tranh mosaic', 'Khác'] },
+  AN: { price_names: ['Giá lẻ', 'Giá đại lý', 'Giá công trình'], channels: DEFAULT_CHANNELS, packaging: true, hide_fields: [], categories: ['Tranh mosaic', 'Khác'] },
 };
 
 export function defaultSettings(variant) {

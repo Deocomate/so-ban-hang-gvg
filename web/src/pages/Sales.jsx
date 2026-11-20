@@ -12,6 +12,7 @@ import { packView } from '../lib/book-profile.js';
 import { useTimeFilter, TimeFilter, useStatusFilter, StatusFilter } from '../components/DocFilters.jsx';
 import { HoverCard } from '../components/HoverCard.jsx';
 import { QuickSource } from './OrderSource.jsx';
+import { ChannelSelect, channelOptions } from '../components/ChannelSelect.jsx';
 import { reserveTab } from './Documents.jsx';
 import {
   Btn, Icon, Pill, StatusPill, DELIVERY, PAYMENT, Field, Input, TextArea, Select, DateInput, NumInput, Check, Tabs, Search, Loading,
@@ -44,6 +45,8 @@ export function SalesPage() {
   const [channel, setChannel] = useState('');
   const { data, error } = useQ('sales_orders', [], 'created_at desc', 5000);
   const invoices = useMemo(() => (data || []).filter((o) => o.kind !== 'dat_hang' || o.delivery_count > 0), [data]);
+  // Lọc được cả kênh đã bỏ khỏi Cài đặt nhưng còn gắn trên hóa đơn cũ
+  const channelList = useMemo(() => channelOptions(settings, invoices.map((o) => o.channel)), [settings.channels, invoices]);
   const inTime = useMemo(() => invoices.filter((o) => time.inRange(invoiceDate(o))
     && (!channel || o.channel === channel) && match(`${o.code} ${o.customer_name} ${o.customer_code || ''} ${o.customer_phone || ''} ${o.note || ''}`, search)), [invoices, time.time, channel, search]);
   const rows = useMemo(() => inTime.filter((o) => status.pass(o) && (!pay || PAY_FILTER[pay](o))), [inTime, status.sel, pay]);
@@ -74,7 +77,7 @@ export function SalesPage() {
             { value: 'refund', label: 'Cần hoàn tiền', count: count(PAY_FILTER.refund) },
           ]} />
         </FilterBox>
-        {(settings.channels || []).length > 0 && <FilterBox title="Kênh bán"><Select value={channel} onChange={setChannel} options={settings.channels || []} placeholder="Mọi kênh bán" aria-label="Kênh bán" /></FilterBox>}
+        {channelList.length > 0 && <FilterBox title="Kênh bán"><Select value={channel} onChange={setChannel} options={channelList} placeholder="Mọi kênh bán" aria-label="Kênh bán" /></FilterBox>}
       </>}
       search={<Search value={search} onChange={setSearch} placeholder="Tìm mã đơn, khách, SĐT…" />}
       actions={<>
@@ -458,7 +461,7 @@ export function OrderDetail({ id, onClose }) {
         <KV items={[
           ['Khách hàng', <a href="#" onClick={(e) => { e.preventDefault(); open('party-detail', { type: 'kh', id: d.customer_id }); }}>{d.customer_name}</a>],
           ['Điện thoại', d.customer_phone || '—'], ['Địa chỉ', d.customer_address || '—'],
-          ['Kênh bán', editable ? <Select value={cur.channel} onChange={(v) => setCur('channel', v || '')} options={[...new Set([...(settings.channels || []), d.channel].filter(Boolean))]} placeholder="Chọn kênh bán" aria-label="Kênh bán" /> : d.channel || '—'],
+          ['Kênh bán', editable ? <ChannelSelect value={cur.channel} onChange={(v) => setCur('channel', v || '')} extra={[d.channel]} placeholder="Chọn kênh bán" aria-label="Kênh bán" /> : d.channel || '—'],
           ['Hẹn giao', d.due_date ? dmy(d.due_date) + (d.is_late ? ` (trễ ${-d.days_to_due} ngày)` : '') : '—'],
           ['Người bán', editable ? <><Input value={cur.staff} onChange={(v) => setCur('staff', v)} placeholder="Người bán" list="od-staff-list" aria-label="Người bán" />
             <datalist id="od-staff-list">{[...new Set([...(employees.data || []).map((e) => e.name), ...(settings.staff_names || [])].filter(Boolean))].map((x) => <option key={x} value={x} />)}</datalist></> : d.staff || '—'],
