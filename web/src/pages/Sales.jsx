@@ -4,7 +4,7 @@ import { orderTransferContent } from '../lib/vietqr.js';
 import { CARRIERS, carrier as carrierInfo, lastCarrier, rememberCarrier } from '../lib/carriers.js';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp, useQ, useAction } from '../lib/store.jsx';
-import { money, moneyD, qty as fq, dmy, todayVN, match, pct } from '../lib/format.js';
+import { money, moneyD, qty as fq, dmy, dmyhm, todayVN, match, pct } from '../lib/format.js';
 import { useProducts, useCustomers, useFunds, tierPrice, productLabel, productSub, KIND_LABEL, usePriceBooks } from '../lib/lookups.js';
 import { exportXlsx } from '../lib/excel.js';
 import { packing, weightOf, fmtKg } from '../lib/docs/model.js';
@@ -16,7 +16,7 @@ import { ChannelSelect, channelOptions } from '../components/ChannelSelect.jsx';
 import { reserveTab } from './Documents.jsx';
 import {
   Btn, Icon, Pill, StatusPill, DELIVERY, PAYMENT, Field, Input, TextArea, Select, DateInput, NumInput, Check, Tabs, Search, Loading,
-  ErrorBox, Note, Table, Modal, ConfirmBtn, Picker, KV, Section, Empty, ListPage, FilterBox, RadioList,
+  ErrorBox, Note, Table, Modal, ConfirmBtn, Picker, KV, Section, Empty, ListPage, FilterBox, RadioList, InlineDetail,
 } from '../components/ui.jsx';
 import { VatReminder } from '../components/VatReminder.jsx';
 import { OrderDocsPanel } from './OrderDocs.jsx';
@@ -43,6 +43,7 @@ export function SalesPage() {
   const [pay, setPay] = useState('');
   const [search, setSearch] = useState('');
   const [channel, setChannel] = useState('');
+  const [openId, setOpenId] = useState(null); // hóa đơn đang xổ chi tiết ngay trong bảng (như KiotViet)
   const { data, error } = useQ('sales_orders', [], 'created_at desc', 5000);
   const invoices = useMemo(() => (data || []).filter((o) => o.kind !== 'dat_hang' || o.delivery_count > 0), [data]);
   // Lọc được cả kênh đã bỏ khỏi Cài đặt nhưng còn gắn trên hóa đơn cũ
@@ -52,11 +53,14 @@ export function SalesPage() {
   const rows = useMemo(() => inTime.filter((o) => status.pass(o) && (!pay || PAY_FILTER[pay](o))), [inTime, status.sel, pay]);
   const count = (f) => inTime.filter((o) => status.pass(o) && f(o)).length;
   const cols = [
-    { key: 'code', label: 'Ngày / Mã đơn', render: (o) => <div><div className="cell-main">{dmy(invoiceDate(o))}</div><div className="cell-sub">{o.code}{o.kind === 'dat_hang' ? ' · từ đặt hàng' : ''}</div></div> },
-    { key: 'customer', label: 'Khách hàng', render: (o) => <div><div>{o.customer_name}</div><div className="cell-sub">{o.channel || ''}</div></div> },
-    { key: 'total', label: 'Tổng đơn', align: 'right', render: (o) => money(o.order_total) },
-    { key: 'paid', label: 'Đã thu', align: 'right', render: (o) => money(o.paid_net) },
-    { key: 'due', label: 'Khách còn nợ', align: 'right', render: (o) => o.receivable > 0 ? <span className={o.overdue_days > 0 ? 'bad strong' : 'strong'}>{money(o.receivable)}</span> : o.prepaid > 0 ? <span className="muted small">cọc {money(o.prepaid)}</span> : '—' },
+    { key: 'code', label: 'Mã hóa đơn', render: (o) => <span className="strong">{o.code}</span> },
+    { key: 'time', label: 'Thời gian', render: (o) => (o.kind === 'dat_hang' ? dmy(invoiceDate(o)) : dmyhm(o.created_at)) },
+    { key: 'kh', label: 'Mã KH', render: (o) => o.customer_code || '' },
+    { key: 'customer', label: 'Khách hàng', className: 'col-clip', render: (o) => <span title={o.customer_name}>{o.customer_name}</span> },
+    { key: 'disc', label: 'Giảm giá', align: 'right', render: (o) => money(o.discount || 0) },
+    { key: 'total', label: 'Khách cần trả', align: 'right', render: (o) => money(o.order_total) },
+    { key: 'paid', label: 'Khách đã trả', align: 'right', render: (o) => money(o.paid_net) },
+    { key: 'due', label: 'Còn nợ', align: 'right', render: (o) => (o.receivable > 0 ? <span className={o.overdue_days > 0 ? 'bad strong' : 'strong'}>{money(o.receivable)}</span> : o.prepaid > 0 ? <span className="muted small">cọc {money(o.prepaid)}</span> : '') },
     { key: 'ps', label: 'Thanh toán', render: (o) => {
       const pill = <StatusPill map={PAYMENT} value={o.payment_status} />;
       const editable = can('thu_chi') && o.status !== 'nhap' && (o.status !== 'huy' || o.payment_status === 'thua_tien');
@@ -88,8 +92,9 @@ export function SalesPage() {
         {can('ban_hang') && <Btn kind="primary" icon="plus" onClick={() => open('order-form', {})}>Tạo hóa đơn</Btn>}
       </>}>
       <ErrorBox error={error} />
-      <Table columns={cols} rows={data ? rows : null} onRow={(o) => open('order', { id: o.id })} rowClass={(o) => (o.is_late || o.overdue_days > 0 ? 'row-late' : '')}
-        foot={rows.length ? { code: `${rows.length} đơn`, total: money(sum('order_total')), paid: money(sum('paid_net')), due: money(sum('receivable')) } : null}
+      <Table columns={cols} rows={data ? rows : null} onRow={(o) => setOpenId((x) => (x === o.id ? null : o.id))} rowClass={(o) => (o.is_late || o.overdue_days > 0 ? 'row-late' : '')}
+        expandKey={openId} expand={(o) => <InlineDetail><OrderDetail id={o.id} onClose={() => setOpenId(null)} /></InlineDetail>}
+        foot={rows.length ? { code: `${rows.length} đơn`, disc: money(sum('discount')), total: money(sum('order_total')), paid: money(sum('paid_net')), due: money(sum('receivable')) } : null}
         empty={time.from ? 'Không có hóa đơn nào trong khoảng thời gian này. Chọn "Toàn thời gian" ở bộ lọc Thời gian để xem các tháng khác.' : 'Không có hóa đơn phù hợp'} />
     </ListPage>
   );
@@ -606,12 +611,18 @@ export function OrderDetail({ id, onClose }) {
       <Section title={`Lịch sử đơn hàng${history.data?.length ? ` (${history.data.length})` : ''}`}>
         {!history.data ? <Loading /> : !history.data.length ? <div className="muted small">Chưa có thao tác nào được ghi (đơn lập trước khi có lịch sử).</div> : (
           <div className="order-history">
-            {history.data.map((e) => (
-              <div className="oh-item" key={e.id}>
-                <div className="oh-when">{new Date(e.at).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' })}<div>{e.user_name || 'Hệ thống'}</div></div>
-                <div className="oh-what"><b>{e.summary}</b>{Array.isArray(e.detail) && e.detail.length > 0 && <ul>{e.detail.map((x, i) => <li key={i}>{x}</li>)}</ul>}</div>
-              </div>
-            ))}
+            {history.data.map((e) => {
+              const detail = Array.isArray(e.detail) ? e.detail : [];
+              const head = <>
+                <span className="oh-when">{new Date(e.at).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</span>
+                <span className="oh-what">{e.summary}</span>
+                <span className="oh-who">{e.user_name || 'Hệ thống'}</span>
+                {detail.length > 0 ? <Icon name="down" size={14} className="oh-chev" /> : <span className="oh-chev" />}
+              </>;
+              return detail.length > 0
+                ? <details className="oh-item" key={e.id}><summary>{head}</summary><ul>{detail.map((x, i) => <li key={i}>{x}</li>)}</ul></details>
+                : <div className="oh-item" key={e.id}><div className="oh-row">{head}</div></div>;
+            })}
           </div>
         )}
       </Section>
