@@ -6,7 +6,7 @@ import { saveFile } from '../lib/excel.js';
 import { Btn, Loading, ErrorBox, Note, Modal, Field, Input, TextArea, Select, DateInput, NumInput, Check, Section, Tabs, ConfirmBtn } from '../components/ui.jsx';
 import { DOC_TYPES, DEFAULT_TEXTS, docSettings, loadDocData, defaults, currentInfo, editableFields, infoRef, profileFor, profileFromBook, PER_DELIVERY, RECONCILE, isCompany, HEADER_FIELDS, headerKey, BASE_SIZES, DEFAULT_BASE } from '../lib/docs/model.js';
 import { VatReminder, VatReminderPopup } from '../components/VatReminder.jsx';
-import { buildPrintDoc, templatesFor, pageSize, PAPERS, FONT_CSS, withBaseSize } from '../lib/docs/templates.js';
+import { buildPrintDoc, templatesFor, pageSize, PAPERS, FONT_CSS, withBaseSize, applyExportOpts, EXPORT_SCALES } from '../lib/docs/templates.js';
 import { openTemplateEditor } from '../lib/docs/editor-link.js';
 import { sampleData } from '../lib/docs/tokens.js';
 
@@ -30,6 +30,28 @@ export function DocPreview({ doc }) {
       <div className="doc-page" style={{ fontFamily: FONT_CSS[doc.font], zoom, width: `${size.w}mm`, minHeight: size.h ? `${size.h}mm` : 'auto', padding: `${m.top}mm ${m.right}mm ${m.bottom}mm ${m.left}mm` }}>
         <div className="tpl" style={doc.base ? { fontSize: `${doc.base}pt` } : undefined} dangerouslySetInnerHTML={{ __html: withBaseSize(doc.html, doc.base) }} />
       </div>
+    </div>
+  );
+}
+
+// ---------- Tùy chọn xuất: hướng giấy + cỡ chữ tổng thể (nhớ trên máy này, áp cho xem trước, In, Tải PDF / ảnh) ----------
+const OPTS_KEY = 'gomsu.export_opts';
+export function useExportOpts() {
+  const [opts, setOpts] = useState(() => { try { const v = JSON.parse(localStorage.getItem(OPTS_KEY) || 'null'); return { orient: v?.orient || '', scale: EXPORT_SCALES.includes(v?.scale) ? v.scale : 1 }; } catch (e) { return { orient: '', scale: 1 }; } });
+  const set = (k, v) => setOpts((s) => { const n = { ...s, [k]: v }; try { localStorage.setItem(OPTS_KEY, JSON.stringify(n)); } catch (e) { /* bỏ qua */ } return n; });
+  return [opts, set];
+}
+export function ExportOpts({ opts, set, roll }) {
+  return (
+    <div className="stack-s">
+      <Field label="Hướng giấy khi xuất">
+        <Select value={roll ? '' : opts.orient} disabled={roll} onChange={(v) => set('orient', v)}
+          options={[{ value: '', label: roll ? 'Giấy cuộn (theo mẫu)' : 'Theo mẫu in' }, { value: 'portrait', label: 'Khổ dọc' }, { value: 'landscape', label: 'Khổ ngang' }]} />
+      </Field>
+      <Field label="Cỡ chữ tổng thể">
+        <Select value={String(opts.scale)} onChange={(v) => set('scale', Number(v))}
+          options={EXPORT_SCALES.map((k) => ({ value: String(k), label: k === 1 ? '100% (theo mẫu)' : `${Math.round(k * 100)}%` }))} />
+      </Field>
     </div>
   );
 }
@@ -82,7 +104,7 @@ export function DocStandalone({ link }) {
 const BATCH_TYPES = [['hd_van_chuyen', 'Hợp đồng vận chuyển'], ['hoa_don', 'Hóa đơn bán hàng'], ['bien_ban', 'Biên bản giao hàng']];
 const BATCH_KEY = 'gomsu.doc_batch';
 function readBatch() { try { const v = JSON.parse(localStorage.getItem(BATCH_KEY) || 'null'); return v && typeof v === 'object' ? v : null; } catch (e) { return null; } }
-function BatchExport({ deliveryId, pay, ds, beforeExport, company, onDone }) {
+function BatchExport({ deliveryId, pay, ds, beforeExport, company, onDone, xopts }) {
   const { q, rpc, settings, toast, can } = useApp();
   const opts = [...BATCH_TYPES, ...(company ? [['yeu_cau_vat', 'Phiếu yêu cầu xuất hóa đơn VAT']] : []), ...(pay ? [['phieu_thu', 'Phiếu thu']] : [])];
   const saved = readBatch();
@@ -98,7 +120,7 @@ function BatchExport({ deliveryId, pay, ds, beforeExport, company, onDone }) {
     try {
       if (beforeExport && !(await beforeExport())) return;
       const [dd, pd] = await Promise.all([load({ kind: 'delivery', id: deliveryId }), pay && chosen.includes('phieu_thu') ? load({ kind: 'payment', id: pay }) : null]);
-      const docs = chosen.map((t) => { const data = t === 'phieu_thu' ? pd : dd; return buildPrintDoc(t, data, ds, { ...defaults(t, data, ds), ...(currentInfo(t, data) || {}) }); });
+      const docs = chosen.map((t) => { const data = t === 'phieu_thu' ? pd : dd; return applyExportOpts(buildPrintDoc(t, data, ds, { ...defaults(t, data, ds), ...(currentInfo(t, data) || {}) }), xopts); });
       const { pdfBlob, printDocs } = await import('../lib/docs/pdf.js');
       if (asImage === 'print') { await printDocs(docs); onDone?.(chosen); return; }
       const { pdfToImageBlob } = asImage ? await import('../lib/docs/image.js') : {};
@@ -136,7 +158,7 @@ function BatchExport({ deliveryId, pay, ds, beforeExport, company, onDone }) {
 // Giống tệp gửi khách: bảng đối chiếu công nợ, bảng đối chiếu số lượng, rồi biên bản bàn giao của từng đợt (theo ngày giao).
 // Chọn phần cần in, gộp một tệp PDF hoặc tải từng tệp. Dùng thông tin đã lưu của từng chứng từ.
 const PACK_KEY = 'gomsu.reconcile_pack';
-function ReconcilePack({ src, dels, ds, beforeExport }) {
+function ReconcilePack({ src, dels, ds, beforeExport, xopts }) {
   const { q, rpc, settings, toast } = useApp();
   const list = [...dels].sort((a, b) => String(a.delivery_date).localeCompare(String(b.delivery_date)) || String(a.code).localeCompare(String(b.code)));
   const saved = (() => { try { return JSON.parse(localStorage.getItem(PACK_KEY) || 'null') || {}; } catch (e) { return {}; } })();
@@ -146,7 +168,7 @@ function ReconcilePack({ src, dels, ds, beforeExport }) {
   const opts = [['doi_chieu_tt', 'Bảng đối chiếu công nợ'], ['doi_chieu_sl', 'Bảng đối chiếu số lượng giao hàng'], ['bien_ban', `Biên bản bàn giao (${list.length} đợt)`]];
   const count = (pick.doi_chieu_tt ? 1 : 0) + (pick.doi_chieu_sl ? 1 : 0) + (pick.bien_ban ? list.length : 0);
   const load = async (s) => { const d = await loadDocData(q, rpc, s); return { ...d, prods: Object.fromEntries(Object.entries(d.prods || {}).map(([k, p]) => [k, packView(p, settings)])) }; };
-  const build = (t, d) => buildPrintDoc(t, d, ds, { ...defaults(t, d, ds), ...(currentInfo(t, d) || {}) });
+  const build = (t, d) => applyExportOpts(buildPrintDoc(t, d, ds, { ...defaults(t, d, ds), ...(currentInfo(t, d) || {}) }), xopts);
   const run = async (print) => {
     if (!count) return;
     try { localStorage.setItem(PACK_KEY, JSON.stringify({ ...pick, merge })); } catch (e) { /* bỏ qua */ }
@@ -223,6 +245,7 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
   // Mẫu in chọn cho từng loại chứng từ (nhớ lần chọn trước trên máy này)
   const [tplPick, setTplPick] = useState(() => { try { return JSON.parse(localStorage.getItem('gomsu.tpl_pick') || '{}') || {}; } catch (e) { return {}; } });
   const pickTpl = (t, v) => setTplPick((s) => { const n = { ...s, [t]: v }; try { localStorage.setItem('gomsu.tpl_pick', JSON.stringify(n)); } catch (e) { /* bỏ qua */ } return n; });
+  const [opts, setOpt] = useExportOpts();
   const srcKey = `${src.kind}:${src.id}`;
   useEffect(() => {
     let alive = true; setErr(null);
@@ -253,7 +276,7 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
   const fields = ready ? editableFields(type, data) : [];
   const saved = ready ? currentInfo(type, data) || {} : {};
   const info = ready ? { ...defaults(type, data, ds), ...saved, ...edit } : null;
-  const doc = useMemo(() => { if (!ready) return null; try { return buildPrintDoc(type, data, ds, info, tplPick[type]); } catch (e) { return { error: e.message }; } }, [ready, type, data, ds, JSON.stringify(info), tplPick[type]]);
+  const doc = useMemo(() => { if (!ready) return null; try { return applyExportOpts(buildPrintDoc(type, data, ds, info, tplPick[type]), opts); } catch (e) { return { error: e.message }; } }, [ready, type, data, ds, JSON.stringify(info), tplPick[type], opts]);
   const tpls = templatesFor(ds, type);
   const dirty = Object.keys(edit).length > 0;
   const canSave = data?.kind === 'payment' ? can('thu_chi') : can('ban_hang');
@@ -301,7 +324,7 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
   const title = withPay ? 'Phiếu thu & chứng từ giao hàng' : 'In / xuất chứng từ';
   const sub = subtitle ?? (data?.o ? `Đơn ${data.o.code} · ${data.o.customer_name || ''}` : '');
   const footer = <>
-    <span className="muted small grow">{dirty ? 'Có thay đổi chưa lưu — bấm In / Tải PDF sẽ tự lưu.' : `${PAPERS[doc?.paper]?.label || 'Khổ A4'} · chữ trong PDF chọn và sao chép được.`}</span>
+    <span className="muted small grow">{dirty ? 'Có thay đổi chưa lưu — bấm In / Tải PDF sẽ tự lưu.' : `${PAPERS[doc?.paper]?.label || 'Khổ A4'}${PAPERS[doc?.paper]?.roll ? '' : doc?.orient === 'landscape' ? ' ngang' : ' dọc'}${opts.scale !== 1 ? ` · chữ ${Math.round(opts.scale * 100)}%` : ''} · chữ trong PDF chọn và sao chép được.`}</span>
     <Btn onClick={onClose}>Đóng</Btn>
     {canSave && <Btn disabled={!dirty} onClick={async () => { if (await save()) toast('Đã lưu thông tin chứng từ'); }}>Lưu thông tin</Btn>}
     {can('owner') && <Btn icon="dl" busy={busy} disabled={!doc || !!doc?.error} onClick={downloadImage}>Tải ảnh</Btn>}
@@ -317,8 +340,8 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
       {!data ? !err && <Loading /> : (
         <div className="doc-wrap">
           <div className="doc-side">
-            {kind === 'delivery' && <BatchExport deliveryId={id} pay={withPay ? pay : null} ds={ds} beforeExport={save} company={company} onDone={afterExport} />}
-            {RECONCILE.includes(type) && delivered && (kind === 'order' || kind === 'contract') && <ReconcilePack src={{ kind, id }} dels={data.dels} ds={ds} beforeExport={save} />}
+            {kind === 'delivery' && <BatchExport deliveryId={id} pay={withPay ? pay : null} ds={ds} beforeExport={save} company={company} onDone={afterExport} xopts={opts} />}
+            {RECONCILE.includes(type) && delivered && (kind === 'order' || kind === 'contract') && <ReconcilePack src={{ kind, id }} dels={data.dels} ds={ds} beforeExport={save} xopts={opts} />}
             {RECONCILE.includes(type) && kind === 'order' && !data?.k && <div className="muted small">Đơn chưa có hợp đồng: bảng ghi "Theo đơn hàng số {data?.o?.code}".</div>}
             {perDelivery && !['payment', 'contract', 'quote'].includes(data.kind) && (
               <Field label="Lập theo">
@@ -332,6 +355,7 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
                 {can('owner') && <button className="link-btn small" onClick={() => openTemplateEditor({ book: book.id, type, tpl: (ds.templates[type] || []).length ? doc?.tplId : '' })}>Sửa mẫu in này (mở tab mới)</button>}
               </Field>
             )}
+            {ready && <ExportOpts opts={opts} set={setOpt} roll={!!PAPERS[doc?.paper]?.roll} />}
             {ready && <HeaderEditor type={type} prof={profileFor(ds, type, { ...info, ...Object.fromEntries(HEADER_FIELDS.map(([k]) => [headerKey(type, k), ''])), [headerKey(type, 'logo')]: '' })} info={info} setEdit={setEdit} />}
             <button className="link-btn small" onClick={() => setShowForm((x) => !x)}>{showForm ? '▾' : '▸'} Thông tin trên chứng từ</button>
             {showForm && ready && <div className="stack-s">

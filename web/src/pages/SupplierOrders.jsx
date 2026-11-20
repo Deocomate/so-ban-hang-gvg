@@ -6,6 +6,7 @@ import { money, dmy, qty, todayVN } from '../lib/format.js';
 import { saveFile } from '../lib/excel.js';
 import { trackOf, pctText, TRACK_RANK, SOON_DAYS } from '../lib/po-tracking.js';
 import { Btn, Icon, Pill, StatusPill, RECEIVE, Loading, ErrorBox, Modal } from '../components/ui.jsx';
+import { ExportOpts, useExportOpts } from './Documents.jsx';
 
 const TONE = { late: 'bad', soon: 'warn', ok: 'info', nodate: 'neutral', done: 'good', nhap: 'neutral', huy: 'mute' };
 const FILTERS = [
@@ -27,29 +28,35 @@ function Progress({ t }) {
   );
 }
 
-// Xem trước tệp PDF trước khi tải về: vẽ từng trang bằng pdf.js nên điện thoại cũng xem được
-function PdfPreview({ blob, name, count, onClose, onSave }) {
-  const box = useRef(null);
+// Xem trước tệp PDF trước khi tải về: vẽ từng trang bằng pdf.js nên điện thoại cũng xem được.
+// make(opts) dựng lại tệp khi đổi hướng giấy / cỡ chữ; Tải về lưu đúng bản đang xem.
+function PdfPreview({ make, name, count, onClose, onSave }) {
+  const box = useRef(null); const blobRef = useRef(null);
   const [state, setState] = useState({ ready: false, error: null, pages: 0 });
   const [saving, setSaving] = useState(false);
+  const [opts, setOpt] = useExportOpts();
   useEffect(() => {
-    let alive = true;
+    let alive = true; setState((s) => ({ ...s, ready: false, error: null }));
     (async () => {
       try {
+        const blob = await make(opts);
         const { pdfPages } = await import('../lib/docs/image.js');
         const pages = await pdfPages(blob, () => 2);
         if (!alive || !box.current) return;
         pages.forEach((c, i) => { c.className = 'pdf-page'; c.setAttribute('aria-label', `Trang ${i + 1}`); });
-        box.current.replaceChildren(...pages);
+        box.current.replaceChildren(...pages); blobRef.current = blob;
         setState({ ready: true, error: null, pages: pages.length });
       } catch (e) { if (alive) setState({ ready: false, error: e.message, pages: 0 }); }
     })();
     return () => { alive = false; };
-  }, [blob]);
+  }, [make, opts]);
   return createPortal(
     <Modal title="Xem trước PDF" subtitle={`${name} · ${count} đơn${state.pages ? ` · ${state.pages} trang` : ''}`} size="xl" onClose={onClose}
       footer={<><Btn onClick={onClose}>Đóng</Btn><span className="grow" /><Btn kind="primary" icon="dl" busy={saving} disabled={!state.ready}
-        onClick={async () => { setSaving(true); try { await onSave(); } finally { setSaving(false); } }}>Tải PDF về</Btn></>}>
+        onClick={async () => { setSaving(true); try { await onSave(blobRef.current); } finally { setSaving(false); } }}>Tải PDF về</Btn></>}>
+      <div className="row gap" style={{ flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div style={{ minWidth: 200 }}><ExportOpts opts={{ ...opts, orient: opts.orient || 'landscape' }} set={setOpt} /></div>
+      </div>
       {!state.ready && !state.error && <Loading />}
       {state.error && <ErrorBox error={'Không xem trước được: ' + state.error} />}
       <div ref={box} className="pdf-preview" hidden={!state.ready} />
@@ -97,13 +104,13 @@ export function SupplierOrdersTab({ supplier, orders }) {
         q('receipts', [['po_id', 'in', ids], ['cancelled_at', 'is_null']], 'receipt_date', 10000), // số đã giao theo từng ngày
       ]);
       const { poTrackingPdf } = await import('../lib/docs/po-tracking-pdf.js');
-      const blob = await poTrackingPdf({ supplier, orders: list, lines, receipts, today });
-      setPreview({ blob, name: `theo-doi-don-dat_${supplier.code || 'ncc'}_${today}.pdf`, count: list.length });
+      const make = (opts) => poTrackingPdf({ supplier, orders: list, lines, receipts, today, opts });
+      setPreview({ make, name: `theo-doi-don-dat_${supplier.code || 'ncc'}_${today}.pdf`, count: list.length });
     } catch (e) { toast('Không tạo được PDF: ' + e.message, 'err'); } finally { setBusy(null); }
   };
   const [preview, setPreview] = useState(null);
-  const savePreview = async () => {
-    const { blob, name, count } = preview;
+  const savePreview = async (blob) => {
+    const { name, count } = preview;
     if (await saveFile(name, blob)) { toast(`Đã tải ${name} (${count} đơn)`); setPreview(null); }
   };
 

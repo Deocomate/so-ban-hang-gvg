@@ -47,6 +47,26 @@ export function withBaseSize(html, base) {
 // Cỡ chữ cơ bản của một chứng từ: giấy cuộn (K80/K58) giữ cỡ nhỏ của mẫu
 export const baseFor = (ds, tpl) => (PAPERS[tpl?.paper]?.roll ? 0 : ds?.base ?? 0);
 
+// ---------- Tùy chọn lúc xuất (không đổi mẫu) ----------
+// orient: '' = theo mẫu | 'portrait' | 'landscape' (giấy cuộn bỏ qua); scale: hệ số phóng to / thu nhỏ toàn bộ chữ (1 = giữ nguyên)
+export const EXPORT_SCALES = [0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.5];
+export function applyExportOpts(doc, opts) {
+  if (!doc || doc.error || !opts) return doc;
+  let out = doc;
+  const orient = opts.orient && !PAPERS[doc.paper]?.roll ? opts.orient : '';
+  if (orient && orient !== (doc.orient || 'portrait')) out = { ...out, orient };
+  const k = Number(opts.scale) || 1;
+  // Cột cố định giãn theo cỡ chữ (chữ to không bị xuống dòng vụn); chỗ dư của khổ ngang dành cho cột co giãn; vượt chỗ trống thì co lại
+  if (out !== doc || k !== 1) out = { ...out, html: fitTables(out.html, contentWidthPx(out), k) };
+  if (k !== 1) {
+    // Nâng cỡ chữ cơ bản vào nội dung trước, rồi nhân mọi cỡ chữ với hệ số; chữ không ghi cỡ theo khối bọc ngoài
+    const r = (n) => Math.round(n * k * 10) / 10;
+    const html = withBaseSize(out.html, out.base).replace(/font-size:\s*([\d.]+)\s*(pt|px)/gi, (m, n, u) => `font-size:${r(u.toLowerCase() === 'px' ? Number(n) * 0.75 : Number(n))}pt`);
+    out = { ...out, base: 0, html: `<div style="font-size:${r(out.base || 10)}pt">${html}</div>` };
+  }
+  return out;
+}
+
 // ---------- Mẫu mặc định ----------
 const P = (inner, st = '') => `<p${st ? ` style="${st}"` : ''}>${inner}</p>`;
 const B = (s) => `<strong>${s}</strong>`;
@@ -346,18 +366,23 @@ export function pickTemplate(ds, type, id) {
 // Độ rộng nội dung trang (px, 96 dpi)
 export function contentWidthPx(tpl) { const m = marginOf(tpl); return (pageSize(tpl).w - m.left - m.right) * 96 / 25.4; }
 // Bảng có tổng độ rộng cột cố định lớn hơn chỗ trống (mẫu A4 in trên giấy K80…): thu nhỏ các cột theo tỷ lệ
-export function fitTables(html, widthPx) {
+// grow: nhân độ rộng cột cố định trước khi co (tùy chọn xuất: khổ ngang / chữ to)
+export function fitTables(html, widthPx, grow = 1) {
   const d = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
   let changed = false;
+  const setW = (c, w) => c.setAttribute('style', String(c.getAttribute('style') || '').replace(/width:\s*[\d.]+px/, `width: ${w}px`));
   for (const tbl of d.body.querySelectorAll('table')) {
     const cols = [...tbl.querySelectorAll(':scope > colgroup > col')];
-    const ws = cols.map((c) => { const m = String(c.getAttribute('style') || '').match(/(?:^|;)\s*width:\s*([\d.]+)px/); return m ? Number(m[1]) : 0; });
+    const ws = cols.map((c) => { const m = String(c.getAttribute('style') || '').match(/(?:^|;)\s*width:\s*([\d.]+)px/); return m ? Number(m[1]) * grow : 0; });
+    if (grow !== 1 && ws.some(Boolean)) { cols.forEach((c, i) => { if (ws[i]) setW(c, Math.floor(ws[i])); }); changed = true; }
     const flex = ws.filter((w) => !w).length; const fixed = ws.reduce((a, b) => a + b, 0);
     // Bảng lồng trong ô: chỗ trống là ô chứa nó, ước lượng theo bảng ngoài đã co
     const room = tbl.parentElement?.closest('td,th') ? widthPx / 2 : widthPx;
-    if (!fixed || fixed + flex * 24 <= room) continue;
-    const k = (room - flex * 24) / fixed;
-    cols.forEach((c, i) => { if (ws[i]) c.setAttribute('style', String(c.getAttribute('style') || '').replace(/width:\s*[\d.]+px/, `width: ${Math.max(14, Math.floor(ws[i] * k))}px`)); });
+    // Khi giãn cột: cột co giãn (tên hàng…) giữ ít nhất 70% chỗ nó có trước khi giãn
+    const reserve = Math.max(flex * 24, flex && grow !== 1 ? 0.7 * (room - fixed / grow) : 0);
+    if (!fixed || fixed + reserve <= room) continue;
+    const k = (room - reserve) / fixed;
+    cols.forEach((c, i) => { if (ws[i]) setW(c, Math.max(14, Math.floor(ws[i] * k))); });
     changed = true;
   }
   return changed ? d.body.innerHTML : html;

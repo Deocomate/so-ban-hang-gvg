@@ -317,7 +317,10 @@ function payTable(data, N) {
 function quoteTable(q, N) {
   const b = q.body || { groups: [] }; const mosaic = q.template === 'mosaic'; const showNorm = !mosaic && b.show_norm;
   const head = ['STT', 'Tên sản phẩm', 'Quy cách', 'Hình ảnh', 'Khối lượng', ...(showNorm ? ['Định mức'] : []), ...(mosaic ? [] : ['Số lượng']), 'ĐVT', mosaic ? 'Giá bán' : 'Đơn giá', 'Thành tiền'];
-  const widths = [22, '*', 78, 44, 46, ...(showNorm ? [36] : []), ...(mosaic ? [] : [44]), 26, 52, 62];
+  const widths = [22, '*', 78, 44, 46, ...(showNorm ? [54] : []), ...(mosaic ? [] : [44]), 26, 52, 62];
+  // m2 → m², m3 → m³; định mức ghi kèm đơn vị (vd. 42 viên/m²) để người đọc hiểu là bao nhiêu cái trên một đơn vị khối lượng
+  const mu = (u) => String(u || '').replace(/^m2$/i, 'm²').replace(/^m3$/i, 'm³');
+  const normText = (l) => (l.norm ? `${N(l.norm)}${l.unit ? ` ${l.unit}` : ''}${l.measure_unit ? `/${mu(l.measure_unit)}` : ''}` : '');
   const n = head.length; const multi = b.groups.filter((g) => g.lines.length).length > 1 || b.groups[0]?.name;
   const roman = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X']; const rows = [];
   b.groups.forEach((g, gi) => {
@@ -327,7 +330,7 @@ function quoteTable(q, N) {
     }
     g.lines.forEach((l, i) => rows.push([{ text: String(i + 1), align: 'center' }, { text: l.name, sub: l.note || undefined }, { text: l.spec || '' },
       l.image && /^data:image\//.test(l.image) ? { h: `<img src="${l.image}" style="width:50px">`, align: 'center' } : { text: '' },
-      { text: l.measure ? `${N(l.measure)} ${l.measure_unit || ''}` : (mosaic ? N(l.qty) : ''), align: 'center' }, ...(showNorm ? [{ text: l.norm ? N(l.norm) : '', align: 'center' }] : []),
+      { text: l.measure ? `${N(l.measure)} ${mu(l.measure_unit)}` : (mosaic ? N(l.qty) : ''), align: 'center' }, ...(showNorm ? [{ text: normText(l), align: 'center' }] : []),
       ...(mosaic ? [] : [{ text: N(l.qty), align: 'right' }]), { text: l.unit || '', align: 'center' }, { text: N(l.price), align: 'right' }, { text: N(l.amount), align: 'right' }]));
   });
   const total = (label, val, bold) => [{ text: label, colSpan: n - 1, align: 'right', b: bold }, { text: N(val), align: 'right', b: bold }];

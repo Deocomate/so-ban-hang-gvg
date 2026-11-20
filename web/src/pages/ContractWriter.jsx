@@ -14,12 +14,12 @@ import { packView } from '../lib/book-profile.js';
 import { todayVN } from '../lib/format.js';
 import { saveFile } from '../lib/excel.js';
 import { docSettings, loadDocData } from '../lib/docs/model.js';
-import { FONT_CSS, sanitizeHtml, withBaseSize } from '../lib/docs/templates.js';
+import { FONT_CSS, sanitizeHtml, withBaseSize, applyExportOpts } from '../lib/docs/templates.js';
 import { useDocFonts } from '../lib/docs/fonts.js';
 import { StyleAttr, TableX, HrX, PageBreak, TokenNode, toEditorHtml, fromEditorHtml } from '../lib/docs/editor-ext.js';
 import { CONTRACT_KINDS, fieldsFor, contractDefaults, contractHtml, buildContractDoc, suggestKind } from '../lib/docs/contract-templates.js';
 import { RichToolbar } from '../components/RichToolbar.jsx';
-import { DocPreview } from './Documents.jsx';
+import { DocPreview, ExportOpts, useExportOpts } from './Documents.jsx';
 import { googlePreview } from './OrderDocs.jsx';
 import { Btn, Field, Input, TextArea, DateInput, ErrorBox, Loading, Note, Modal, Tabs } from '../components/ui.jsx';
 
@@ -69,7 +69,8 @@ export default function ContractWriter({ id: id0, order_id, onClose }) {
 
   const defs = useMemo(() => (data && kind ? contractDefaults(kind, data, ds) : {}), [data, kind, ds]);
   const f = { ...defs, ...fields };
-  const doc = useMemo(() => (data && kind ? buildContractDoc(kind, fields, data, ds, body) : null), [data, kind, fields, ds, body]);
+  const [opts, setOpt] = useExportOpts();
+  const doc = useMemo(() => (data && kind ? applyExportOpts(buildContractDoc(kind, fields, data, ds, body), opts) : null), [data, kind, fields, ds, body, opts]);
   const setField = (k, v) => { setFields((s) => ({ ...s, [k]: v })); setDirty(true); };
   const changeKind = (k) => {
     if (k === kind) return;
@@ -130,6 +131,7 @@ export default function ContractWriter({ id: id0, order_id, onClose }) {
         <Tabs value={mode} onChange={setMode} tabs={MODES} />
         {mode === 'form' && <div className="doc-wrap cw-wrap">
           <div className="doc-side cw-side">
+            <ExportOpts opts={opts} set={setOpt} />
             {body && <Note tone="warn">Hợp đồng đã được sửa trực tiếp nên các trường dưới đây không còn áp vào nội dung.
               {edit && <> <button className="link-btn" onClick={() => { if (window.confirm('Bỏ phần đã sửa trực tiếp và dựng lại từ mẫu theo các trường?')) { setBody(null); setDirty(true); } }}>Dựng lại từ mẫu</button></>}</Note>}
             {fieldsFor(kind).map((g) => (

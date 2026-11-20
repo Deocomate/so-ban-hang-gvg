@@ -13,6 +13,15 @@ function floorSizes(node, base) {
   for (const [k, v] of Object.entries(node)) out[k] = k === 'fontSize' ? Math.max(v, base) : typeof v === 'object' && k !== 'layout' ? floorSizes(v, base) : v;
   return out;
 }
+// Nhân mọi cỡ chữ với hệ số k (tùy chọn "Cỡ chữ tổng thể" lúc xuất)
+function scaleSizes(node, k) {
+  if (k === 1) return node;
+  if (Array.isArray(node)) return node.map((n) => scaleSizes(n, k));
+  if (!node || typeof node !== 'object' || node.canvas) return node;
+  const out = {};
+  for (const [key, v] of Object.entries(node)) out[key] = key === 'fontSize' ? Math.round(v * k * 10) / 10 : typeof v === 'object' && key !== 'layout' ? scaleSizes(v, k) : v;
+  return out;
+}
 
 // Màu theo trạng thái hạn giao: nền nhóm dòng · thanh tiến độ (chữ để đen; chỉ cột Còn SX và ngày đặt / giao màu đỏ)
 const C = {
@@ -71,7 +80,10 @@ function deliveriesOf(receipts) {
   return { cols, val: (lineId, c) => c.dates.reduce((s, d) => s + (by[d][lineId] || 0), 0) };
 }
 
-export async function poTrackingPdf({ supplier, orders, lines, receipts = [], today }) {
+// opts: { orient: '' | 'portrait' | 'landscape' (mặc định ngang), scale: hệ số cỡ chữ }
+export async function poTrackingPdf({ supplier, orders, lines, receipts = [], today, opts = {} }) {
+  const orient = opts.orient === 'portrait' ? 'portrait' : 'landscape';
+  const scale = Number(opts.scale) || 1;
   const list = orders.map((o) => ({ ...o, t: o.t || trackOf(o, today) }))
     .sort((a, b) => TRACK_RANK[a.t.key] - TRACK_RANK[b.t.key] || String(a.expected_date || '9').localeCompare(String(b.expected_date || '9')));
   const byPo = {}; const rcByPo = {};
@@ -107,7 +119,10 @@ export async function poTrackingPdf({ supplier, orders, lines, receipts = [], to
   // → đơn không bị cắt đôi khi sang trang, tiêu đề cột lặp lại mỗi trang. Bảng chính không có lề trong; bảng con lề PAD
   // nên độ rộng bảng con = độ rộng cột chính − 2·PAD, các cột thẳng hàng với dòng tiêu đề.
   // Cột "Đã giao" của bảng con chia đều thành từng ngày giao của đơn đó, dòng đầu bảng con ghi các ngày.
-  const PAD = 4; const WIDTHS = [110, '*', 56, 46, 170, 50, 66, 110];
+  // Khổ dọc hẹp hơn: thu các cột cố định theo tỷ lệ, chừa ~110pt cho cột Tên sản phẩm
+  const PAD = 4; const avail = (orient === 'portrait' ? 595.28 : 841.89) - 48;
+  const WK = Math.min(1, (avail - 110) / 608);
+  const WIDTHS = [110, '*', 56, 46, 170, 50, 66, 110].map((w) => (w === '*' ? w : Math.round(w * WK)));
   const inner = (w) => (w === '*' ? '*' : w - 2 * PAD);
   const hd = (text, color) => ({ text, bold: true, alignment: 'center', color, fillColor: '#f2f2f2', fontSize: 10.5, margin: [PAD, 3.5, PAD, 3.5] });
   const body = [[hd('Tên KH'), hd('Tên sản phẩm'), hd('Số lượng đặt'), hd('ĐVT'), hd('Đã giao'), hd('Còn SX', RED), hd('Tiến độ'), hd('Ngày trả dự kiến')]];
@@ -139,7 +154,7 @@ export async function poTrackingPdf({ supplier, orders, lines, receipts = [], to
         { text: unitOf(l), alignment: 'center', fillColor: fill },
         ...(head ? dv.cols.map((c) => { const v = dv.val(l.id, c); return { text: v ? qty(v) : '', alignment: 'center', fillColor: fill }; }) : [{ text: '', fillColor: fill }]),
         { text: qty(left), alignment: 'center', bold: true, color: RED, fillColor: left > 0 ? fill : C.done.fill },
-        { ...barWithPct(p, 32, (left <= 0 ? C.done : col).bar), fillColor: fill, margin: [0, 3, 0, 0] },
+        { ...barWithPct(p, Math.round(32 * WK), (left <= 0 ? C.done : col).bar), fillColor: fill, margin: [0, 3, 0, 0] },
         first ? dueCell(o, t, rs) : {},
       ]);
     });
@@ -151,9 +166,9 @@ export async function poTrackingPdf({ supplier, orders, lines, receipts = [], to
   });
 
   // Cùng chuẩn giấy tờ: Times New Roman, chữ không nhỏ hơn cỡ cơ bản 13
-  const base = DEFAULT_BASE;
+  const base = Math.round(DEFAULT_BASE * scale * 10) / 10;
   return pdfFromDef({
-    pageSize: 'A4', pageOrientation: 'landscape', pageMargins: [24, 24, 24, 30], content: floorSizes(content, base),
+    pageSize: 'A4', pageOrientation: orient, pageMargins: [24, 24, 24, 30], content: scaleSizes(floorSizes(content, DEFAULT_BASE), scale),
     info: { title: `Đơn đặt hàng xưởng – ${supplier.name}`, creator: 'Sổ bán hàng gốm sứ' },
     defaultStyle: { font: 'Tinos', fontSize: base, lineHeight: 1.05 },
     footer: (page, pages) => ({ columns: [{ text: `${supplier.name} · ${list.length} đơn · xuất ngày ${dmy(today)}`, fontSize: base, color: '#777777' }, { text: `Trang ${page}/${pages}`, alignment: 'right', fontSize: base, color: '#777777' }], margin: [24, 8, 24, 0] }),
