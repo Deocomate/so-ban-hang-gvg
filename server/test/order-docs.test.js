@@ -52,7 +52,8 @@ await api.call('save_tax_invoice', { book_id: TH, direction: 'ra', inv_no: '0000
 d = await api.call('order_docs', { book_id: TH, order_id: o1 });
 C('Tải lên / bản giấy / link / số hóa đơn', [d.slots.bien_ban.sides.doi_tac.state, d.slots.cn_xuat_xuong.sides.minh.state, d.slots.hop_dong.sides.doi_tac.state, d.slots.hoa_don_vat.sides.minh.auto],
   ['tai_len', 'ban_giay', 'tai_len', 'HĐ số 00000081']);
-C('Còn thiếu hợp đồng bên mình', d.missing, 1);
+C('Tệp / link tải lên dùng chung cho mọi bên: hợp đồng có link → bên mình cũng đã có, hết thiếu', [d.slots.hop_dong.sides.minh.state, d.missing], ['tai_len', 0]);
+C('Biên bản: tệp tải lên ở bên đối tác cũng tính cho bên mình', [d.slots.bien_ban.sides.minh.state, d.slots.bien_ban.sides.doi_tac.state], ['tai_len', 'tai_len']);
 C('Tải lại đúng nội dung tệp', Buffer.from((await api.call('get_order_doc', { book_id: TH, id: f1 })).base64, 'base64').toString(), '%PDF-1.4 x');
 await E('CN xuất xưởng không có bản đối tác', () => api.call('mark_order_doc_paper', { book_id: TH, order_id: o1, doc_key: 'cn_xuat_xuong', side: 'doi_tac' }), 'bên đã chọn');
 await E('Không đánh dấu bản giấy hai lần', () => api.call('mark_order_doc_paper', { book_id: TH, order_id: o1, doc_key: 'cn_xuat_xuong', side: 'minh' }), 'Đã đánh dấu');

@@ -153,7 +153,7 @@ export function OrderDocsPanel({ orderId, order }) {
       </div>
       {!d.track.on && <Note>Đơn này không bắt buộc đủ giấy tờ. Vẫn có thể tải lên để lưu trữ; chọn "Luôn theo dõi" nếu cần kiểm tra thiếu đủ.</Note>}
       <div className="odocs">
-        <div className="odoc-cols"><span>Giấy tờ</span>{Object.keys(SIDE_LABEL).map((s) => <span key={s} title={SIDE_HINT[s]}>{SIDE_LABEL[s]}</span>)}</div>
+        <div className="odoc-cols"><span>Giấy tờ</span>{Object.keys(SIDE_LABEL).map((s) => <span key={s} title={SIDE_HINT[s]}>Bản giấy · {SIDE_LABEL[s]}</span>)}</div>
         {DOC_KEYS.map((k) => <DocRow key={k} k={k} slot={d.slots[k]} d={d} orderId={orderId} order={order} edit={edit} busy={busy} run={run} open={open} />)}
       </div>
     </div>
@@ -161,8 +161,10 @@ export function OrderDocsPanel({ orderId, order }) {
 }
 
 function DocRow({ k, slot, d, orderId, order, edit, busy, run, open }) {
+  const { rpc, toast, refresh } = useApp();
   const k0 = d.contract;
-  const ico = (icon, title, onClick) => <Btn small icon={icon} className="btn-ico" title={title} aria-label={title} onClick={onClick} />;
+  const input = useRef(null); const [up, setUp] = useState(false); const [linkOpen, setLinkOpen] = useState(false); const [link, setLink] = useState({ name: '', url: '' });
+  const ico = (icon, title, onClick, extra = {}) => <Btn small icon={icon} className="btn-ico" title={title} aria-label={title} onClick={onClick} {...extra} />;
   const make = {
     hop_dong: k0 ? ico('contract', k0.gdoc_url && !k0.has_body ? 'Mở hợp đồng' : 'Soạn / sửa hợp đồng', () => open('contract-writer', { id: k0.id }))
       : edit && ico('contract', 'Soạn hợp đồng', () => open('contract-writer', { order_id: orderId })),
@@ -171,27 +173,9 @@ function DocRow({ k, slot, d, orderId, order, edit, busy, run, open }) {
     hoa_don_vat: <>{edit && ico('invoice', 'Ghi số hóa đơn', () => open('tax-invoice', { direction: 'ra', preset: { order_id: orderId, order_code: d.code, party_name: order?.customer_name || '' } }))}
       {ico('quote', 'Phiếu yêu cầu xuất hóa đơn', () => open('doc', { kind: 'order', id: orderId, type: 'yeu_cau_vat' }))}</>,
   }[k];
-  return (
-    <div className={`odoc${slot.skip ? ' skip' : ''}`}>
-      <div className="odoc-head">
-        <div className="odoc-name">
-          <b>{DOC_LABEL[k]}</b>
-          {k === 'hop_dong' && k0 && <span className="small muted">{CONTRACT_KINDS[k0.kind]?.label} · số {k0.code}</span>}
-        </div>
-        {slot.skip ? <span className="small muted">Không cần</span> : <span className="row gap-xs">{make}</span>}
-      </div>
-      {!slot.skip && Object.entries(slot.sides).map(([side, s]) => <SideCell key={side} side={side} s={s} k={k} orderId={orderId} edit={edit} run={run} open={open} />)}
-    </div>
-  );
-}
-
-function SideCell({ side, s, k, orderId, edit, run, open }) {
-  const { rpc, toast, refresh } = useApp();
-  const input = useRef(null); const [up, setUp] = useState(false); const [linkOpen, setLinkOpen] = useState(false); const [link, setLink] = useState({ name: '', url: '' });
-  const [label, tone] = STATE[s.state];
-  const paper = s.files.find((f) => f.kind === 'paper');
-  const files = s.files.filter((f) => f.kind !== 'paper');
-  const base = { order_id: orderId, doc_key: k, side };
+  // Một bộ tệp / link cho cả giấy tờ (lưu ở ô bên mình, tính cho mọi bên); khi khách ký thì tải bản đã ký lên thay bản cũ
+  const base = { order_id: orderId, doc_key: k, side: 'minh' };
+  const files = Object.values(slot.sides).flatMap((s) => s.files).filter((f) => f.kind !== 'paper');
   const upload = async (list) => {
     setUp(true);
     try {
@@ -201,31 +185,55 @@ function SideCell({ side, s, k, orderId, edit, run, open }) {
   };
   const saveLink = async () => { if (await run('add_order_doc_link', { ...base, url: link.url, name: link.name }, 'Đã gắn link')) { setLinkOpen(false); setLink({ name: '', url: '' }); } };
   return (
-    <div className="odoc-side"
-      onDragOver={(e) => { if (edit) e.preventDefault(); }} onDrop={(e) => { if (!edit) return; e.preventDefault(); const l = [...(e.dataTransfer.files || [])]; if (l.length) upload(l); }}>
-      <span className="odoc-side-label small strong" title={SIDE_HINT[side]}>{SIDE_LABEL[side]}</span>
+    <div className={`odoc${slot.skip ? ' skip' : ''}`}
+      onDragOver={(e) => { if (edit && !slot.skip) e.preventDefault(); }} onDrop={(e) => { if (!edit || slot.skip) return; e.preventDefault(); const l = [...(e.dataTransfer.files || [])]; if (l.length) upload(l); }}>
+      <div className="odoc-main">
+        <div className="odoc-head">
+          <div className="odoc-name">
+            <b>{DOC_LABEL[k]}</b>
+            {k === 'hop_dong' && k0 && <span className="small muted">{CONTRACT_KINDS[k0.kind]?.label} · số {k0.code}</span>}
+          </div>
+          {slot.skip ? <span className="small muted">Không cần</span> : <span className="row gap-xs">
+            {make}
+            {edit && <>
+              <input ref={input} type="file" hidden multiple accept=".pdf,image/*,.doc,.docx,.xls,.xlsx" onChange={(e) => { const l = [...(e.target.files || [])]; e.target.value = ''; if (l.length) upload(l); }} />
+              {ico('up', 'Tải tệp lên (bản đã ký thì tải lên thay bản cũ)', () => input.current?.click(), { busy: up })}
+              {ico('link', 'Gắn link', () => setLinkOpen((x) => !x))}
+            </>}
+          </span>}
+        </div>
+        {!slot.skip && files.length > 0 && <div className="odoc-files">{files.map((f) => (
+          <span key={f.id} className="odoc-chip">
+            <Icon name={f.kind === 'link' ? 'link' : /^image\//.test(f.mime || '') ? 'image' : 'file'} size={14} />
+            <a href="#" className="ellipsis" onClick={(e) => { e.preventDefault(); open('doc-file', { file: f }); }} title={`Xem trước: ${f.name}`}>{f.name}</a>
+            {edit && !f.legacy && <ConfirmBtn small icon="x" className="btn-ico btn-ico-xs" title="Xóa" confirmText="Xóa?" onConfirm={() => run('delete_order_doc', { id: f.id }, 'Đã xóa')} />}
+          </span>))}</div>}
+        {!slot.skip && linkOpen && <div className="row gap-xs odoc-link">
+          <Input value={link.url} onChange={(v) => setLink((x) => ({ ...x, url: v }))} placeholder="Link Google Drive / Docs…" />
+          {ico('check', 'Lưu link', saveLink, { kind: 'primary' })}
+        </div>}
+      </div>
+      {!slot.skip && Object.entries(slot.sides).map(([side, s]) => <PaperTick key={side} side={side} s={s} k={k} orderId={orderId} edit={edit} run={run} />)}
+      {slot.skip && <><span /><span /></>}
+    </div>
+  );
+}
+
+// Ô tích "đã có bản giấy" của từng bên, kèm chấm trạng thái
+function PaperTick({ side, s, k, orderId, edit, run }) {
+  const [label, tone] = STATE[s.state];
+  const paper = s.files.find((f) => f.kind === 'paper');
+  const base = { order_id: orderId, doc_key: k, side };
+  return (
+    <div className="odoc-side">
+      <span className="odoc-side-label small strong" title={SIDE_HINT[side]}>Bản giấy · {SIDE_LABEL[side]}</span>
       <div className="odoc-line">
         <span className={`sdot ds-${tone}`} title={`${label}${s.auto ? ` (${s.auto})` : ''}`} />
-        <span title={paper ? `Có bản giấy từ ${dmy(paper.created_at?.slice(0, 10))}` : 'Đánh dấu đã có bản giấy'}>
+        <span title={paper ? `Có bản giấy ${SIDE_LABEL[side].toLowerCase()} từ ${dmy(paper.created_at?.slice(0, 10))}` : `Đánh dấu đã có bản giấy ${SIDE_LABEL[side].toLowerCase()}`}>
           <Check checked={!!paper} disabled={!edit}
-            onChange={(v) => (v ? run('mark_order_doc_paper', base, 'Đã đánh dấu có bản giấy') : run('delete_order_doc', { id: paper.id }, 'Đã bỏ đánh dấu'))}>Bản giấy</Check>
+            onChange={(v) => (v ? run('mark_order_doc_paper', base, 'Đã đánh dấu có bản giấy') : run('delete_order_doc', { id: paper.id }, 'Đã bỏ đánh dấu'))}>{null}</Check>
         </span>
-        {edit && <>
-          <input ref={input} type="file" hidden multiple accept=".pdf,image/*,.doc,.docx,.xls,.xlsx" onChange={(e) => { const l = [...(e.target.files || [])]; e.target.value = ''; if (l.length) upload(l); }} />
-          <Btn small icon="up" busy={up} className="btn-ico" title="Tải tệp lên" aria-label="Tải tệp lên" onClick={() => input.current?.click()} />
-          <Btn small icon="link" className="btn-ico" title="Gắn link" aria-label="Gắn link" onClick={() => setLinkOpen((x) => !x)} />
-        </>}
       </div>
-      {files.length > 0 && <div className="odoc-files">{files.map((f) => (
-        <span key={f.id} className="odoc-chip">
-          <Icon name={f.kind === 'link' ? 'link' : /^image\//.test(f.mime || '') ? 'image' : 'file'} size={14} />
-          <a href="#" className="ellipsis" onClick={(e) => { e.preventDefault(); open('doc-file', { file: f }); }} title={`Xem trước: ${f.name}`}>{f.name}</a>
-          {edit && !f.legacy && <ConfirmBtn small icon="x" className="btn-ico btn-ico-xs" title="Xóa" confirmText="Xóa?" onConfirm={() => run('delete_order_doc', { id: f.id }, 'Đã xóa')} />}
-        </span>))}</div>}
-      {linkOpen && <div className="row gap-xs odoc-link">
-        <Input value={link.url} onChange={(v) => setLink((x) => ({ ...x, url: v }))} placeholder="Link Google Drive / Docs…" />
-        <Btn small kind="primary" icon="check" className="btn-ico" title="Lưu link" aria-label="Lưu link" onClick={saveLink} />
-      </div>}
     </div>
   );
 }

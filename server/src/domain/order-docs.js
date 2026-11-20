@@ -86,7 +86,8 @@ function summarize(r, files, info) {
   for (const d of DOCS) {
     const sk = !need.keys.includes(d.key); const sides = {};
     for (const s of d.sides) {
-      const fs = files.filter((f) => f.doc_key === d.key && f.side === s);
+      // Tệp / link tải lên là một bản dùng chung cho mọi bên (khi khách ký thì tải bản đã ký lên thay); chỉ dấu bản giấy tính riêng từng bên
+      const fs = files.filter((f) => f.doc_key === d.key && (f.kind !== 'paper' || f.side === s));
       const auto = s === 'minh' ? autoOf(d.key, r) : null;
       const state = slotState(fs, auto, sk);
       sides[s] = { state, auto, count: fs.filter((f) => f.kind !== 'paper').length };

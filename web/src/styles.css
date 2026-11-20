@@ -1439,10 +1439,11 @@ i.f-self { background: var(--accent-2); color: var(--accent); }
 .odoc-need { padding: 2px 0; }
 .odoc-need .check { font-size: 13px; }
 .odocs { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); overflow: hidden; }
-.odoc-cols, .odoc { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(0, 1.4fr) minmax(0, 1.4fr); gap: 12px; align-items: start; padding: 8px 12px; }
+.odoc-cols, .odoc { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(90px, .8fr) minmax(90px, .8fr); gap: 12px; align-items: start; padding: 8px 12px; }
 .odoc-cols { background: var(--surface-2); font-size: 12px; font-weight: 600; color: var(--muted); padding-top: 6px; padding-bottom: 6px; }
 .odoc + .odoc { border-top: 1px solid var(--line); }
 .odoc.skip { opacity: .6; }
+.odoc-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .odoc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 30px; }
 .odoc-name { display: flex; flex-direction: column; min-width: 0; }
 .odoc-side { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
