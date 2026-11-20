@@ -37,10 +37,6 @@ C('Sửa giá sau khi giao: doanh thu đã giao thành 12.000', (await order(o1)
 C('Khách còn nợ phần chênh 2.000', (await order(o1)).receivable, 2000);
 await edit(o1, [{ id: ls[0].id, product_id: P, qty: 10, unit_price: 1200 }, { product_id: Q, qty: 5, unit_price: 400 }]);
 C('Thêm hàng vào đơn đã giao: còn phải giao 5', (await order(o1)).remaining_qty, 5);
-await E('Không bỏ được dòng đã giao', () => edit(o1, [{ product_id: Q, qty: 5, unit_price: 400 }]), 'không bỏ dòng');
-await E('Không giảm dưới số đã giao', () => edit(o1, [{ id: ls[0].id, product_id: P, qty: 8, unit_price: 1200 }]), 'thấp hơn số đã giao');
-await E('Không đổi sang hàng khác ở dòng đã giao', () => edit(o1, [{ id: ls[0].id, product_id: Q, qty: 10, unit_price: 1200 }]), 'đổi sang hàng khác');
-await E('Đã có phiếu thu thì không đổi khách', () => edit(o1, [{ id: ls[0].id, product_id: P, qty: 10, unit_price: 1200 }], { customer_id: B }), 'khách cũ');
 
 G('2. Hủy đợt giao bấm nhầm: hàng về kho, đơn quay lại chờ giao');
 const before = await stock(P);
@@ -91,5 +87,60 @@ C('Đơn bán ngay: tạo, giao, sửa, trả hàng, sửa', ev2.map((e) => e.ac
 const pay = (await api.q('payments', TH, [['party_id', 'eq', A]]))[0];
 await api.call('void_payment', { book_id: TH, id: pay.id, reason: 'Thu nhầm' });
 C('Hủy phiếu thu được ghi vào lịch sử đơn', (await events(o1)).at(-1).action, 'huy_phieu');
+
+G('6. Tự động xử lý thay vì bắt làm từng bước (như KiotViet)');
+const sale = async (cust, ls, extra = {}) => (await api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: cust, kind: 'ban_san', order_date: D(0), deliver_now: true, lines: ls, ...extra })).id;
+const resave = async (o, cust, ls, extra = {}) => api.call('save_sales_order', { book_id: TH, request_id: rid(), id: o, customer_id: cust, kind: 'ban_san', status: 'xac_nhan', order_date: D(0), lines: ls, ...extra });
+const payOf = async (code) => api.one('payments', TH, [['code', 'eq', code]]);
+// a) Đổi khách khi đơn đã giao, đã thu: phiếu thu tự chuyển sang khách mới
+const o3 = await sale(A, [{ product_id: P, qty: 1, unit_price: 1000 }], { deposit: { amount: 1000, fund_id: TM } });
+const pc3 = (await api.q('doc_payments', TH, [['doc_id', 'eq', o3]]))[0].code;
+const l3 = await lines(o3);
+const r3 = await resave(o3, B, l3.map((l) => ({ id: l.id, product_id: l.product_id, qty: l.qty, unit_price: l.unit_price })));
+C('Đổi khách thành công', (await order(o3)).customer_id, B);
+C('Phiếu thu chuyển sang khách mới', (await payOf(pc3)).party_id, B);
+C('Đơn vẫn đã thu đủ', (await order(o3)).receivable, 0);
+C('Báo cho người dùng biết đã tự chuyển', r3.notices.some((x) => x.includes(pc3)), true);
+// b) Phiếu thu chung cho hai đơn: tách phần của đơn đổi khách ra phiếu mới
+const o4 = await sale(A, [{ product_id: Q, qty: 1, unit_price: 400 }]);
+const o5 = await sale(A, [{ product_id: Q, qty: 1, unit_price: 600 }]);
+const pr = await api.call('create_payment', { book_id: TH, request_id: rid(), kind: 'thu_khach', date: D(0), fund_id: TM, party_id: A, amount: 1000,
+  allocations: [{ doc_type: 'don_ban', doc_id: o4, amount: 400 }, { doc_type: 'don_ban', doc_id: o5, amount: 600 }] });
+const l4 = await lines(o4);
+await resave(o4, B, l4.map((l) => ({ id: l.id, product_id: l.product_id, qty: l.qty, unit_price: l.unit_price })));
+C('Phiếu chung còn phần của đơn kia', (await payOf(pr.code)).amount, 600);
+const split = (await api.q('doc_payments', TH, [['doc_id', 'eq', o4]]))[0];
+C('Phần của đơn đổi khách thành phiếu mới của khách mới', [(await payOf(split.code)).party_id, (await payOf(split.code)).amount], [B, 400]);
+C('Cả hai đơn vẫn đã thu đủ', [(await order(o4)).receivable, (await order(o5)).receivable], [0, 0]);
+// c) Hóa đơn đã giao: bỏ một dòng, giảm số lượng → tự hủy phiếu giao cũ và giao lại
+const o6 = await sale(A, [{ product_id: P, qty: 3, unit_price: 1000 }, { product_id: Q, qty: 2, unit_price: 400 }]);
+const sP = await stock(P); const sQ = await stock(Q);
+const l6 = await lines(o6);
+const g6 = (await api.q('deliveries', TH, [['order_id', 'eq', o6]]))[0].code;
+const r6 = await resave(o6, A, [{ id: l6[0].id, product_id: P, qty: 1, unit_price: 1000 }]);
+const v6 = await order(o6);
+C('Giao lại đủ theo đơn mới', [v6.delivery_count, v6.remaining_qty, v6.delivered_value], [1, 0, 1000]);
+C('Hàng bỏ / giảm đã về kho', [await stock(P), await stock(Q)], [sP + 2, sQ + 2]);
+C('Báo phiếu giao cũ đã tự hủy', r6.notices.some((x) => x.includes(g6)), true);
+// d) Đơn đặt giao một phần: giảm dưới số đã giao → giao lại đúng số mới, phần còn lại vẫn chờ giao
+const o7 = (await api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: A, kind: 'dat_hang', status: 'xac_nhan', order_date: D(0), lines: [{ product_id: Q, qty: 10, unit_price: 400 }] })).id;
+let l7 = await lines(o7);
+await api.call('deliver', { book_id: TH, request_id: rid(), order_id: o7, date: D(0), lines: [{ order_line_id: l7[0].id, qty: 4 }] });
+await edit(o7, [{ id: l7[0].id, product_id: Q, qty: 3, unit_price: 400 }]);
+l7 = await lines(o7);
+C('Đơn đặt: giao lại 3, không còn phải giao', [l7[0].delivered_qty, (await order(o7)).remaining_qty], [3, 0]);
+// e) Hủy hóa đơn đã giao: tự hủy phiếu giao, hàng về kho, tiền đã thu thành tiền cần hoàn
+const o8 = await sale(A, [{ product_id: P, qty: 2, unit_price: 1000 }], { deposit: { amount: 2000, fund_id: TM } });
+const s8 = await stock(P);
+const c8 = await api.call('cancel_sales_order', { book_id: TH, id: o8, reason: 'Khách đổi ý' });
+const v8 = await order(o8);
+C('Đơn đã hủy, không còn phiếu giao', [v8.status, v8.delivery_count], ['huy', 0]);
+C('Hàng về kho', await stock(P), s8 + 2);
+C('Báo số tiền cần hoàn', c8.paid, 2000);
+await E('Đơn đã có phiếu trả hàng thì không hủy được', () => api.call('cancel_sales_order', { book_id: TH, id: o2, reason: 'x' }), 'trả hàng');
+// f) Nút Lưu trong chi tiết: sửa nhanh ghi chú, người bán
+await api.call('update_order_info', { book_id: TH, id: o6, note: 'Giao buổi chiều', staff: 'Mai', channel: null });
+C('Lưu nhanh ghi chú và người bán', [(await order(o6)).note, (await order(o6)).staff], ['Giao buổi chiều', 'Mai']);
+C('Lưu nhanh có ghi lịch sử', (await events(o6)).at(-1).summary, 'Sửa thông tin hóa đơn');
 
 finish('Sửa đơn đã giao · hủy đợt giao · lịch sử đơn');

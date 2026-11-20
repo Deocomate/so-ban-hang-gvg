@@ -210,7 +210,7 @@ await E('Hoàn quá số đã cọc bị chặn', () => api.call('create_payment
 await api.call('create_payment', { book_id: TH, request_id: rid(), kind: 'hoan_khach', date: D(3), fund_id: TM, party_id: A, amount: 1000000,
   allocations: [{ doc_type: 'don_ban', doc_id: s8b.id, amount: 1000000 }] });
 C('Sau hoàn cọc, nợ khách A trở lại 9,55tr', (await cust(A)).balance, 9550000);
-await E('Hủy đơn đã giao bị chặn (phải dùng trả hàng)', () => api.call('cancel_sales_order', { id: s2.id, reason: 'x' }), 'đã giao hàng');
+await E('Hủy đơn đã có hàng trả lại bị chặn (phải dùng trả hàng)', () => api.call('cancel_sales_order', { id: s2.id, reason: 'x' }), 'phiếu trả hàng');
 const s8d = await api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: A, order_date: D(3), status: 'xac_nhan', lines: [{ product_id: P2, qty: 200 }] });
 const l8d = (await lines(s8d.id))[0].id;
 await api.call('deliver', { order_id: s8d.id, request_id: rid(), date: D(3), lines: [{ order_line_id: l8d, qty: 120 }] });

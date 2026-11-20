@@ -391,35 +391,79 @@ export function OrderDetail({ id, onClose }) {
   const [reason, setReason] = useState('');
   const [undo, setUndo] = useState(null); // đợt giao đang chờ xác nhận hủy
   const [undoReason, setUndoReason] = useState('');
+  const [askCancel, setAskCancel] = useState(false);
+  const [info, setInfo] = useState(null); // ghi chú / người bán / kênh bán đang sửa ngay trong chi tiết (nút Lưu)
+  const employees = useQ('employees', [['active', 'eq', 'true']], 'name', 500, can('ban_hang'));
   const d = o.data?.[0];
   if (!d) return <Modal title="Đơn hàng" onClose={onClose} size="lg">{o.error ? <ErrorBox error={o.error} /> : <Loading />}</Modal>;
   const canSell = can('ban_hang');
   const unlinked = (lines.data || []).filter((l) => !l.po_line_id && l.remaining_qty > 0 && !l.is_kit);
   const payKind = d.payment_status === 'thua_tien' ? 'hoan_khach' : 'thu_khach';
+  // Các nút như KiotViet: Hủy · Sao chép · Xuất file … Chỉnh sửa · Lưu · Trả hàng · In
+  const editable = canSell && d.status !== 'huy';
+  const cur = info || { note: d.note || '', staff: d.staff || '', channel: d.channel || '' };
+  const dirty = !!info && (cur.note !== (d.note || '') || cur.staff !== (d.staff || '') || cur.channel !== (d.channel || ''));
+  const setCur = (k, v) => setInfo({ ...cur, [k]: v });
+  const saveInfo = async () => { if (await run('update_order_info', { id, ...cur }, 'Đã lưu thông tin hóa đơn')) setInfo(null); };
+  const exportOrder = () => exportXlsx(`${d.code}.xlsx`, [{ name: d.code, rows: lines.data || [], columns: [
+    { key: 'sku', label: 'Mã hàng' }, { key: 'product_name', label: 'Tên hàng' }, { key: 'unit', label: 'ĐVT' }, { key: 'eff_qty', label: 'Số lượng' },
+    { key: 'unit_price', label: 'Đơn giá' }, { key: 'discount_pct', label: 'Chiết khấu %' }, { key: 'line_total', label: 'Thành tiền' },
+    { key: 'delivered_qty', label: 'Đã giao' }, { key: 'returned_qty', label: 'Đã trả' }] }]);
+  const doCancel = async () => {
+    if (!reason.trim()) return;
+    const r = await run('cancel_sales_order', { id, reason: reason.trim() }, (x) => `Đã hủy hóa đơn ${d.code}`
+      + (x.deliveries?.length ? ` · tự hủy phiếu giao ${x.deliveries.join(', ')}, hàng đã nhập lại kho` : '') + (x.paid > 0 ? ` · cần hoàn khách ${money(x.paid)} đ` : ''));
+    if (r) { setAskCancel(false); setReason(''); }
+  };
   return (
     <Modal title={`Đơn ${d.code}`} onClose={onClose} size="xl"
       subtitle={<span className="row gap-s">{KIND_LABEL[d.kind]} · {dmy(d.order_date)} · <StatusPill map={DELIVERY} value={d.delivery_status} /> <StatusPill map={PAYMENT} value={d.payment_status} /> {d.kind === 'dat_hang' && <Pill tone="accent">{d.progress}</Pill>} {d.is_late && <Pill tone="bad">trễ hẹn giao</Pill>}</span>}
       footer={<>
-        <Btn icon="dl" onClick={() => open('doc', { kind: 'order', id })}>Xuất PDF</Btn>
+        {editable && <Btn icon="trash" onClick={() => { setReason(''); setAskCancel(true); }}>Hủy</Btn>}
+        {canSell && <Btn icon="copy" onClick={() => { onClose(); open('order-form', { copy_id: id }); }}>Sao chép</Btn>}
+        <Btn icon="dl" onClick={exportOrder}>Xuất file</Btn>
         {contract.data?.[0] ? <Btn icon="receipt" onClick={() => open('contract', { id: contract.data[0].id })}>Hợp đồng {contract.data[0].code}</Btn>
           : canSell && d.status !== 'huy' && d.status !== 'nhap' && <Btn icon="receipt" onClick={() => open('contract-writer', { order_id: id })}>Soạn hợp đồng</Btn>}
         <span className="grow" />
-        {canSell && d.status !== 'huy' && <Btn onClick={() => { onClose(); open('order-form', { id }); }} icon="edit">Sửa</Btn>}
         {canSell && d.status === 'nhap' && <Btn kind="soft" busy={busy} onClick={() => run('confirm_sales_order', { id }, (r) => (r.warnings?.length ? 'Đã xác nhận. Lưu ý: ' + r.warnings.join('; ') : 'Đã xác nhận đơn – hàng đã được giữ'))}>Xác nhận đơn</Btn>}
         {can('thu_chi') && d.status !== 'nhap' && (d.remaining_to_pay > 0 || d.payment_status === 'thua_tien') && (
           <Btn kind="soft" icon={payKind === 'thu_khach' ? 'in' : 'out'} onClick={() => open('payment', { kind: payKind, party_id: d.customer_id,
             alloc: { doc_type: 'don_ban', doc_id: d.id, code: d.code, amount: payKind === 'thu_khach' ? d.remaining_to_pay : d.paid_net - d.delivered_value } })}>
             {payKind === 'thu_khach' ? (d.delivered_value === 0 ? 'Nhận cọc / thu tiền' : 'Thu tiền') : 'Hoàn tiền cho khách'}</Btn>
         )}
+        {canSell && d.status === 'xac_nhan' && d.remaining_qty > 0 && <Btn kind="soft" icon="truck" onClick={() => open('deliver', { order: d })}>Giao hàng</Btn>}
+        {editable && <Btn kind="primary" icon="edit" onClick={() => { onClose(); open('order-form', { id }); }}>Chỉnh sửa</Btn>}
+        {editable && <Btn icon="check" busy={busy} disabled={!dirty} onClick={saveInfo} title="Lưu ghi chú, người bán, kênh bán vừa sửa">Lưu</Btn>}
         {canSell && d.delivered_value > 0 && <Btn icon="return" onClick={() => open('return', { order: d })}>Trả hàng</Btn>}
-        {canSell && d.status === 'xac_nhan' && d.remaining_qty > 0 && <Btn kind="primary" icon="truck" onClick={() => open('deliver', { order: d })}>Giao hàng</Btn>}
+        <Btn icon="print" onClick={() => open('doc', { kind: 'order', id, type: d.kind === 'dat_hang' && !d.delivery_count ? 'don_dat_hang' : 'hoa_don' })}>In</Btn>
       </>}>
+      {askCancel && (
+        <Modal title="Hủy hóa đơn" size="sm" onClose={() => setAskCancel(false)}
+          footer={<><Btn onClick={() => setAskCancel(false)}>Bỏ qua</Btn><Btn kind="danger" busy={busy} disabled={!reason.trim() || d.returned_value > 0} onClick={doCancel}>Đồng ý</Btn></>}>
+          <div className="stack-s">
+            {d.returned_value > 0 ? <Note tone="warn">Đơn {d.code} đã có phiếu trả hàng nên không hủy được. Phần khách còn giữ: dùng "Trả hàng".</Note> : <>
+              <div>Khi hủy hóa đơn <b>{d.code}</b>, hệ thống sẽ tự động:</div>
+              <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
+                {d.delivery_count > 0 && <li>Hủy {d.delivery_count} phiếu giao của đơn: hàng nhập lại kho, bỏ doanh thu và điểm tích lũy của đơn</li>}
+                {d.remaining_qty > 0 && <li>Nhả hàng đang giữ cho đơn</li>}
+                {d.paid_net > 0 && <li>Số tiền đã thu {money(d.paid_net)} đ chuyển thành tiền cần hoàn cho khách (bấm "Hoàn tiền cho khách" khi trả lại)</li>}
+                <li>Ghi toàn bộ vào Lịch sử đơn</li>
+              </ul>
+              <Input value={reason} onChange={setReason} placeholder="Lý do hủy (bắt buộc)" autoFocus />
+            </>}
+          </div>
+        </Modal>
+      )}
       <div className="grid-2">
         <KV items={[
           ['Khách hàng', <a href="#" onClick={(e) => { e.preventDefault(); open('party-detail', { type: 'kh', id: d.customer_id }); }}>{d.customer_name}</a>],
-          ['Điện thoại', d.customer_phone || '—'], ['Địa chỉ', d.customer_address || '—'], ['Kênh bán', d.channel || '—'],
-          ['Hẹn giao', d.due_date ? dmy(d.due_date) + (d.is_late ? ` (trễ ${-d.days_to_due} ngày)` : '') : '—'], ['Phụ trách', d.staff || '—'],
-          d.note && ['Ghi chú', <span style={{ whiteSpace: 'pre-wrap' }}>{d.note}</span>], d.cancel_reason && ['Lý do hủy', d.cancel_reason],
+          ['Điện thoại', d.customer_phone || '—'], ['Địa chỉ', d.customer_address || '—'],
+          ['Kênh bán', editable ? <Select value={cur.channel} onChange={(v) => setCur('channel', v || '')} options={[...new Set([...(settings.channels || []), d.channel].filter(Boolean))]} placeholder="Chọn kênh bán" aria-label="Kênh bán" /> : d.channel || '—'],
+          ['Hẹn giao', d.due_date ? dmy(d.due_date) + (d.is_late ? ` (trễ ${-d.days_to_due} ngày)` : '') : '—'],
+          ['Người bán', editable ? <><Input value={cur.staff} onChange={(v) => setCur('staff', v)} placeholder="Người bán" list="od-staff-list" aria-label="Người bán" />
+            <datalist id="od-staff-list">{[...new Set([...(employees.data || []).map((e) => e.name), ...(settings.staff_names || [])].filter(Boolean))].map((x) => <option key={x} value={x} />)}</datalist></> : d.staff || '—'],
+          editable ? ['Ghi chú', <TextArea value={cur.note} onChange={(v) => setCur('note', v)} placeholder="Ghi chú…" aria-label="Ghi chú" />]
+            : d.note && ['Ghi chú', <span style={{ whiteSpace: 'pre-wrap' }}>{d.note}</span>], d.cancel_reason && ['Lý do hủy', d.cancel_reason],
         ]} />
         <div className="card"><div className="totals">
           <span>Tổng đơn</span><span className="r strong">{money(d.order_total)}</span>
@@ -510,21 +554,19 @@ export function OrderDetail({ id, onClose }) {
           ]} />
         </Section>
       </div>
-      {canSell && d.status !== 'huy' && (
-        <Section title="Hủy">
+      {canSell && d.status === 'xac_nhan' && d.delivery_count > 0 && d.remaining_qty > 0 && (
+        <Section title="Hủy phần chưa giao">
           {!cancelMode ? (
             <div className="row gap">
-              {d.delivery_count === 0 && <Btn onClick={() => setCancelMode('all')}>Hủy đơn</Btn>}
-              {d.status === 'xac_nhan' && d.delivery_count > 0 && d.remaining_qty > 0 && <Btn onClick={() => setCancelMode('rest')}>Hủy phần chưa giao</Btn>}
-              <span className="muted small">{d.delivery_count > 0 ? 'Đơn đã giao không hủy được. Giao nhầm thì bấm "Hủy đợt giao" ở từng đợt; khách trả lại hàng thì dùng "Trả hàng".' : 'Hủy đơn chưa giao sẽ nhả hàng đang giữ. Tiền cọc (nếu có) chuyển thành tiền cần hoàn cho khách.'}</span>
+              <Btn onClick={() => { setReason(''); setCancelMode('rest'); }}>Hủy phần chưa giao</Btn>
+              <span className="muted small">Giữ phần đã giao, bỏ phần khách không lấy nữa. Muốn hủy cả hóa đơn thì bấm "Hủy" ở cuối.</span>
             </div>
           ) : (
             <div className="row gap">
               <Input value={reason} onChange={setReason} placeholder="Lý do (bắt buộc)" style={{ maxWidth: 360 }} />
               <ConfirmBtn kind="danger" busy={busy} onConfirm={async () => {
-                const r = await run(cancelMode === 'all' ? 'cancel_sales_order' : 'cancel_remaining', { id, reason }, cancelMode === 'all' ? 'Đã hủy đơn' : 'Đã hủy phần chưa giao');
-                if (r) { setCancelMode(null); setReason(''); }
-              }}>{cancelMode === 'all' ? 'Xác nhận hủy đơn' : 'Xác nhận hủy phần chưa giao'}</ConfirmBtn>
+                if (await run('cancel_remaining', { id, reason }, 'Đã hủy phần chưa giao')) { setCancelMode(null); setReason(''); }
+              }}>Xác nhận hủy phần chưa giao</ConfirmBtn>
               <Btn onClick={() => setCancelMode(null)}>Thôi</Btn>
             </div>
           )}

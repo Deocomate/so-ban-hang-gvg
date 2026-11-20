@@ -70,7 +70,7 @@ export function ProductSearch({ products, tier, book, onPick, inputRef }) {
   );
 }
 
-export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_contract, onClose }) {
+export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_id, then_contract, onClose }) {
   const { settings, open, can, rpc, toast, book, session } = useApp();
   const products = useProducts();
   const priceBooks = usePriceBooks();
@@ -79,7 +79,8 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
   const funds = useFunds(can('thu_chi'));
   const { run, busy } = useAction();
   const searchRef = useRef(null); const rootRef = useRef(null); const lastAdded = useRef(null);
-  const [loaded, setLoaded] = useState(!id && !quote_id);
+  const [loaded, setLoaded] = useState(!id && !quote_id && !copy_id);
+  const [upd, setUpd] = useState(null); // hộp "Cập nhật hóa đơn": báo trước những gì phần mềm sẽ tự làm khi lưu
   const [armClose, setArmClose] = useState(false);
   const [showCharges, setShowCharges] = useState(false);
   const [promos, setPromos] = useState([]); const [showPromo, setShowPromo] = useState(false); const [ask, setAsk] = useState(null);
@@ -93,6 +94,21 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
   const setPay = (k, v) => setF((s) => ({ ...s, pay: { ...s.pay, [k]: v } }));
 
+  // Sao chép hóa đơn: lấy khách, hàng, giá, ghi chú của đơn cũ thành một đơn mới ngày hôm nay
+  useEffect(() => {
+    if (!copy_id) return;
+    (async () => {
+      const [o] = await rpc('q', { view: 'sales_orders', filters: [['id', 'eq', copy_id]] });
+      const ls = await rpc('q', { view: 'sales_order_lines', filters: [['order_id', 'eq', copy_id]], order: 'line_no' });
+      setF((s) => ({ ...s, kind: o.kind, customer_id: o.customer_id, channel: o.channel || '', staff: o.staff || s.staff, note: o.note || '',
+        shipping_fee: o.shipping_fee, vat_rate: o.vat_rate || 0, price_book_id: o.price_book_id || '',
+        lines: ls.filter((l) => l.qty - (l.cancelled_qty || 0) > 0).map((l) => { const c = l.unit_conv || 1; return { key: ++seq, product_id: l.product_id,
+          qty: (l.qty - (l.cancelled_qty || 0)) / c, unit_price: l.unit_price * c, unit: l.unit_name || l.unit, conv: c, discount_pct: l.discount_pct, note: l.note || '', manual: true }; }) }));
+      setLoaded(true);
+      toast(`Đã sao chép từ đơn ${o.code} — kiểm tra lại rồi lưu thành đơn mới`);
+    })().catch((e) => toast(e.message, 'err'));
+  }, [copy_id]);
+
   useEffect(() => {
     if (!id) return;
     (async () => {
@@ -103,7 +119,8 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
       setPromos(op.map((x) => (x.kind === 'promo' ? { kind: 'promo', id: x.ref_id } : x.kind === 'points' ? { kind: 'points', points: x.points } : { kind: x.kind, code: x.code })));
       const promoSum = op.reduce((t, x) => t + x.amount, 0);
       setF((s) => ({ ...s, kind: o.kind, customer_id: o.customer_id, channel: o.channel || '', order_date: o.order_date, due_date: o.due_date || '', staff: o.staff || '',
-        note: o.note || '', discount: Math.max(0, (o.discount || 0) - promoSum), shipping_fee: o.shipping_fee, vat_rate: o.vat_rate || 0, price_book_id: o.price_book_id || '', transport: trip ? { driver_id: trip.driver_id, amount: trip.amount, payer: trip.payer, collect: trip.collect, note: trip.note || '' } : null, status0: o.status, code: o.code, delivery_count: o.delivery_count || 0, paid_net: o.paid_net || 0,
+        note: o.note || '', discount: Math.max(0, (o.discount || 0) - promoSum), shipping_fee: o.shipping_fee, vat_rate: o.vat_rate || 0, price_book_id: o.price_book_id || '', transport: trip ? { driver_id: trip.driver_id, amount: trip.amount, payer: trip.payer, collect: trip.collect, note: trip.note || '' } : null, status0: o.status, code: o.code, delivery_count: o.delivery_count || 0, paid_net: o.paid_net || 0, customer0: o.customer_id,
+        delivered0: ls.filter((l) => l.delivered_qty > 0).map((l) => ({ id: l.id, sku: l.sku, product_id: l.product_id, delivered: l.delivered_qty })),
         lines: ls.filter((l) => l.qty - (l.cancelled_qty || 0) > 0 || l.delivered_qty > 0).map((l) => { const c = l.unit_conv || 1; return { key: ++seq, id: l.id, product_id: l.product_id,
           qty: (l.qty - (l.cancelled_qty || 0)) / c, unit_price: l.unit_price * c, unit: l.unit_name || l.unit, conv: c, delivered: l.delivered_qty || 0,
           discount_pct: l.discount_pct, po_line_id: l.po_line_id, note: l.note || '', manual: true }; }) }));
@@ -178,7 +195,7 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
     lastAdded.current = null;
   }, [f.lines]);
   const setLine = (key, patch) => setF((s) => ({ ...s, lines: s.lines.map((l) => (l.key === key ? { ...l, ...patch } : l)) }));
-  const delLine = (key) => setF((s) => ({ ...s, lines: s.lines.filter((l) => l.key !== key || l.delivered > 0) }));
+  const delLine = (key) => setF((s) => ({ ...s, lines: s.lines.filter((l) => l.key !== key) }));
 
   const lineTotal = (l) => Math.round((Number(l.qty) || 0) * (Number(l.unit_price) || 0) * (1 - (Number(l.discount_pct) || 0) / 100));
   const gross = f.lines.reduce((s, l) => s + lineTotal(l), 0);
@@ -217,10 +234,18 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
   useEffect(() => { if (!armClose) return undefined; const t = setTimeout(() => setArmClose(false), 4000); return () => clearTimeout(t); }, [armClose]);
   const tryClose = () => { if (f.lines.length && !armClose) { setArmClose(true); return; } onClose(); };
 
-  const submit = async (mode, print, confirmed) => {
+  const submit = async (mode, print, confirmed, agreed) => {
     const lines = f.lines.filter((l) => l.product_id && Number(l.qty) > 0);
     if (!lines.length) { toast('Đơn hàng chưa có sản phẩm — gõ tên hàng vào ô tìm kiếm', 'err'); searchRef.current?.focus(); return; }
     if (promos.length && quote.error) { toast(quote.error, 'err'); return; }
+    // Như KiotViet "Cập nhật hóa đơn": sửa đơn đã giao / đã thu mà phải đổi chứng từ cũ thì báo trước, người dùng chỉ cần bấm Đồng ý
+    if (editing && !agreed) {
+      const items = [];
+      if (f.customer0 && f.customer_id !== f.customer0 && f.paid_net > 0) items.push(`Các phiếu thu của đơn (${money(f.paid_net)} đ) tự chuyển sang khách mới; phiếu thu chung với đơn khác sẽ được tách riêng phần của đơn này`);
+      const changed = (f.delivered0 || []).filter((x) => { const l = lines.find((y) => y.id === x.id); return !l || l.product_id !== x.product_id || baseQty(l) < x.delivered - 1e-9; });
+      if (changed.length) items.push(`Hàng đã giao bị bỏ / đổi / giảm (${changed.map((x) => x.sku).join(', ')}): tự hủy ${f.delivery_count} phiếu giao cũ, hàng nhập lại kho, rồi giao lại theo đơn mới`);
+      if (items.length) { setUpd({ mode, print, confirmed, items }); return; }
+    }
     // Thiết lập "Hiển thị xác nhận trước khi hoàn thành đơn hàng": thu ngân xem lại tiền trước khi hoàn thành
     if (settings.confirm_complete && mode === 'deliver' && !confirmed) { setAsk({ print }); return; }
     const placeSource = isDat && can('nhap_hang') && mode !== 'draft' && !!source.kind;
@@ -249,6 +274,7 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
     }
     if (r) {
       onClose();
+      if (r.notices?.length) toast(`Đã tự động xử lý đơn ${r.code}: ${r.notices.join('; ')}`);
       if (r.warnings?.length) toast('Lưu ý tồn kho: ' + r.warnings.join('; '), 'err');
       if (then_contract) open('contract-form', { order_id: r.id });
       else if (print) open('doc', { kind: 'order', id: r.id, type: isDat ? 'don_dat_hang' : 'hoa_don' });
@@ -278,8 +304,16 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
       {showCharges && <ChargesDialog goods={goods} vatRate={f.vat_rate} shippingFee={f.shipping_fee} transport={f.transport} onClose={() => setShowCharges(false)}
         onApply={(r) => setF((s) => ({ ...s, vat_rate: r.vat_rate, shipping_fee: r.shipping_fee, transport: r.transport }))} />}
       {showPromo && <PromoDialog promos={promos} setPromos={setPromos} quote={quote} date={f.order_date} customer={cust} onClose={() => setShowPromo(false)} />}
+      {upd && <Modal title="Cập nhật hóa đơn" size="sm" onClose={() => setUpd(null)}
+        footer={<><Btn onClick={() => setUpd(null)}>Bỏ qua</Btn><Btn kind="primary" busy={busy} onClick={() => { const u = upd; setUpd(null); submit(u.mode, u.print, u.confirmed, true); }}>Đồng ý</Btn></>}>
+        <div className="stack-s">
+          <div>Khi lưu thay đổi trên hóa đơn <b>{f.code}</b>, phần mềm sẽ tự động:</div>
+          <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>{upd.items.map((x) => <li key={x}>{x}</li>)}<li>Ghi toàn bộ vào Lịch sử đơn</li></ul>
+          <div>Bạn có muốn tiếp tục?</div>
+        </div>
+      </Modal>}
       {ask && <Modal title="Xác nhận hoàn thành đơn" size="sm" onClose={() => setAsk(null)}
-        footer={<><Btn onClick={() => setAsk(null)}>Quay lại</Btn><Btn kind="primary" busy={busy} onClick={() => { const a = ask; setAsk(null); submit('deliver', a.print, true); }}>Hoàn thành</Btn></>}>
+        footer={<><Btn onClick={() => setAsk(null)}>Quay lại</Btn><Btn kind="primary" busy={busy} onClick={() => { const a = ask; setAsk(null); submit('deliver', a.print, true, true); }}>Hoàn thành</Btn></>}>
         <div className="pos-sum">
           <span>Khách hàng</span><b className="r">{cust?.name}</b>
           <span>Khách cần trả</span><b className="r">{money(total)}</b>
@@ -294,8 +328,8 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
               <div className="pos-edit-note">
                 <Icon name="alert" size={16} />
                 <span>{f.delivery_count > 0 ? `Đơn đã giao ${f.delivery_count} đợt. ` : ''}{f.paid_net > 0 ? `Đã thu ${money(f.paid_net)} đ. ` : ''}
-                  Sửa giá, thêm hàng, ghi chú được; tiền hàng đã giao tự tính lại theo giá mới. Dòng đã giao không bỏ được và không giảm dưới số đã giao —
-                  muốn làm vậy hãy bấm "Hủy đợt giao" trong chi tiết đơn trước. Mọi thay đổi được ghi vào Lịch sử đơn.</span>
+                  Sửa thoải mái như đơn mới: đổi khách, sửa giá, thêm / bỏ hàng, giảm số lượng. Phần mềm tự chuyển phiếu thu sang khách mới,
+                  tự hủy phiếu giao cũ và giao lại khi cần, rồi báo lại cho bạn. Mọi thay đổi được ghi vào Lịch sử đơn.</span>
               </div>
             )}
             {f.lines.length === 0 && (
@@ -313,11 +347,11 @@ export function OrderPos({ id, kind: kind0, customer_id: cust0, quote_id, then_c
               return (
                 <div className="pos-line" key={l.key} data-line={l.key}>
                   <div className="pos-line-no">{i + 1}</div>
-                  <button className="pos-line-del" onClick={() => delLine(l.key)} disabled={l.delivered > 0} aria-label="Xóa dòng"
-                    title={l.delivered > 0 ? 'Dòng đã giao — muốn bỏ hãy hủy đợt giao trong chi tiết đơn' : 'Xóa dòng'}><Icon name="x" size={16} /></button>
+                  <button className="pos-line-del" onClick={() => delLine(l.key)} aria-label="Xóa dòng"
+                    title={l.delivered > 0 ? 'Dòng đã giao — khi lưu, phiếu giao cũ tự hủy và giao lại theo đơn mới' : 'Xóa dòng'}><Icon name="x" size={16} /></button>
                   <div className="pos-line-info">
                     <div className="pos-line-name"><span className="muted">{p.sku}</span> <b>{p.name || '…'}</b>{p.is_kit ? ' (bộ)' : p.is_service ? ' (dịch vụ)' : ''}</div>
-                    {l.delivered > 0 && <div className="small warn">Đã giao {fq(l.delivered)} {p.unit} — số lượng không được thấp hơn</div>}
+                    {l.delivered > 0 && <div className="small warn">Đã giao {fq(l.delivered)} {p.unit}{baseQty(l) < l.delivered ? ' — khi lưu sẽ tự hủy phiếu giao cũ và giao lại' : ''}</div>}
                     {(productSub(p) || (l.conv || 1) !== 1) && <div className="small muted">
                       {productSub(p)}{(l.conv || 1) !== 1 ? `${productSub(p) ? ' · ' : ''}= ${fq(baseQty(l))} ${p.unit}` : ''}
                     </div>}
