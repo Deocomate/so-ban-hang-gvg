@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useQ, useAction } from '../lib/store.jsx';
 import { money, qty as fq, dmy, match, norm, todayVN, searchRank } from '../lib/format.js';
 import { ProductSearch } from './OrderPos.jsx';
-import { useProducts, useCustomers, priceOf, usePriceBooks, booksFor, autoBookFor } from '../lib/lookups.js';
+import { useProducts, useCustomers, priceOf, usePriceBooks, booksFor, autoBookFor, priceSourceOptions, parsePriceSource, priceSourceValue, levelTier } from '../lib/lookups.js';
 import { docSettings, DEFAULT_TEXTS, weightOf } from '../lib/docs/model.js';
 import { exportXlsx } from '../lib/excel.js';
 import { Btn, Icon, Pill, Input, TextArea, Select, DateInput, NumInput, Check, Search, ErrorBox, Loading, Note, Table, Modal, Picker, KV, ListPage, FilterBox, RadioList } from '../components/ui.jsx';
@@ -151,7 +151,7 @@ function QuoteLine({ l, i, mosaic, showNorm, onChange, onDel, pmap, products, on
 }
 
 export function QuoteForm({ id, onClose, onSaved }) {
-  const { rpc, book, settings, toast, open, session } = useApp();
+  const { rpc, book, settings, toast, open, session, can } = useApp();
   const products = useProducts(); const customers = useCustomers(); const priceBooks = usePriceBooks();
   const { run, busy } = useAction();
   const searchRef = useRef(null); const rootRef = useRef(null);
@@ -178,11 +178,15 @@ export function QuoteForm({ id, onClose, onSaved }) {
   const cust = customers.data?.find((c) => c.id === f.customer_id);
   const myBooks = booksFor(priceBooks.data, cust, session?.user?.id);
   const pbook = myBooks.find((b) => b.id === f.price_book_id) || null;
+  const custTier = cust?.price_tier || 1;
+  const tier = levelTier(f.price_level, custTier);
+  const priceNames = settings.price_names || ['Giá 1', 'Giá 2', 'Giá 3'];
   // Chọn khách: tự chọn bảng giá của nhóm khách (báo giá đang sửa giữ bảng đã lưu)
   useEffect(() => {
     if (id || !priceBooks.data || !cust) return;
     const own = autoBookFor(myBooks, cust);
-    setF((s) => ({ ...s, price_book_id: own ? own.id : myBooks.some((b) => b.id === s.price_book_id) ? s.price_book_id : '' }));
+    setF((s) => ({ ...s, price_level: s.customer_id === s.level_cust ? s.price_level : '', level_cust: s.customer_id,
+      price_book_id: own ? own.id : myBooks.some((b) => b.id === s.price_book_id) ? s.price_book_id : '' }));
   }, [cust?.id, cust?.kind, priceBooks.data]);
   // Mọi thay đổi dòng hàng đi qua đây để số lượng diềm / trừ diềm / ngói luôn tính lại theo cả nhóm
   const setLines = (gkey, fn) => setF((s) => ({ ...s, groups: s.groups.map((g) => (g.key === gkey ? { ...g, lines: recalcLines(fn(g.lines), s.template === 'mosaic') } : g)) }));
@@ -192,7 +196,7 @@ export function QuoteForm({ id, onClose, onSaved }) {
     if (pbook && pbook.items[p.id] == null && !pbook.allow_others) { toast(`“${p.name}” không có trong bảng giá ${pbook.name}`, 'err'); return null; }
     const byM = isEdge(p.name) || (!p.norm_m2 && !!p.norm_m);
     return { product_id: p.id, name: mosaic ? 'Tranh mosaic khảm trai' : p.name, spec: specOf(p), image: p.image_url || '', measure_unit: byM ? 'm' : 'm2', norm: (byM ? p.norm_m : p.norm_m2) || null,
-      unit: String(p.unit || 'viên').toLowerCase(), price: priceOf(p, { tier: cust?.price_tier || 1, book: pbook }) };
+      unit: String(p.unit || 'viên').toLowerCase(), price: priceOf(p, { tier, book: pbook }) };
   };
   const groupKey = f.groups.some((g) => g.key === active) ? active : f.groups[f.groups.length - 1].key;
   const addProduct = (p) => {
@@ -222,7 +226,7 @@ export function QuoteForm({ id, onClose, onSaved }) {
   const save = async (print) => {
     if (!lineCount) { toast('Báo giá chưa có sản phẩm — gõ tên hàng vào ô tìm kiếm', 'err'); searchRef.current?.focus(); return; }
     const r = await run('save_quote', { id: id || null, template: f.template, customer_id: f.customer_id || null, customer_name: f.customer_name || cust?.name, address: f.address, site: f.site, quote_date: f.quote_date, profile_id: f.profile_id,
-      body: { groups: f.groups, vat_mode: f.vat_mode, vat_rate: f.vat_rate, ship: f.ship, terms: f.terms, show_norm: f.show_norm, price_book_id: f.price_book_id || null } }, (x) => `Đã lưu báo giá ${x.code}`);
+      body: { groups: f.groups, vat_mode: f.vat_mode, vat_rate: f.vat_rate, ship: f.ship, terms: f.terms, show_norm: f.show_norm, price_book_id: f.price_book_id || null, price_level: f.price_level || null } }, (x) => `Đã lưu báo giá ${x.code}`);
     if (!r) return;
     onSaved?.(r); onClose();
     if (print) open('doc', { kind: 'quote', id: r.id }); else if (!id) open('quote', { id: r.id });
@@ -233,7 +237,7 @@ export function QuoteForm({ id, onClose, onSaved }) {
   return (
     <div className="pos-overlay" ref={rootRef} role="dialog" aria-modal="true" aria-label="Báo giá">
       <div className="pos-top">
-        <ProductSearch products={products.data} tier={cust?.price_tier || 1} book={pbook} onPick={addProduct} inputRef={searchRef} />
+        <ProductSearch products={products.data} tier={tier} book={pbook} onPick={addProduct} inputRef={searchRef} />
         <div className="pos-tab"><Icon name="quote" size={17} /><b>{id ? `Sửa báo giá ${f.code || ''}` : 'Báo giá mới'}</b></div>
         <span className="grow" />
         <div className="seg pos-kind">
@@ -285,8 +289,8 @@ export function QuoteForm({ id, onClose, onSaved }) {
           <input className="pos-staff" value={f.customer_name} onChange={(e) => set('customer_name', e.target.value)} placeholder="Kính gửi (có thể gõ tên khách chưa có trong danh sách)" aria-label="Kính gửi" />
           <input className="pos-staff" value={f.address} onChange={(e) => set('address', e.target.value)} placeholder="Địa chỉ" aria-label="Địa chỉ" />
           <input className="pos-staff" value={f.site} onChange={(e) => set('site', e.target.value)} placeholder="Địa điểm công trình" aria-label="Địa điểm công trình" />
-          {myBooks.length > 0 && <Select value={f.price_book_id || ''} onChange={(v) => set('price_book_id', v)} aria-label="Bảng giá"
-            options={[{ value: '', label: 'Bảng giá chung (mức giá của khách)' }, ...myBooks.map((b) => ({ value: b.id, label: 'Bảng giá: ' + b.name }))]} />}
+          <Select value={priceSourceValue(f, custTier)} onChange={(v) => setF((s) => ({ ...s, ...parsePriceSource(v, custTier) }))} aria-label="Bảng giá"
+            options={priceSourceOptions(priceNames, myBooks, can('xem_gia_von'), cust ? custTier : null)} />
 
           <div className="pos-sum">
             <span>Tiền hàng <span className="pos-count">{lineCount} dòng</span></span><b className="r">{money(goods)}</b>

@@ -10,7 +10,8 @@ export const useFunds = (enabled = true) => useQ('funds', [['active', 'eq', 'tru
 export const isCashFund = (f) => /mặt|két/i.test(f?.name || '');
 
 export const KIND_LABEL = { ban_san: 'Bán sẵn', dat_hang: 'Đặt hàng riêng', mua_san: 'Mua hàng sẵn', dat_sx: 'Đặt xưởng sản xuất' };
-export const tierPrice = (p, tier) => p[`price${tier}`] ?? p.price1;
+// tier: 1…5 = mức giá bán, 'cost' = giá vốn bình quân (chỉ có khi được xem giá vốn)
+export const tierPrice = (p, tier) => (tier === 'cost' ? p.avg_cost ?? 0 : p[`price${tier}`] ?? p.price1);
 export const productLabel = (p) => `${p.sku} · ${p.name}`;
 export const productSub = (p) => [p.size, p.color, p.pattern].filter(Boolean).join(' · ');
 
@@ -28,7 +29,7 @@ export function priceOf(p, { tier = 1, book = null, unit = null } = {}) {
   const u = unit && unit.conv !== 1 ? unit : null;
   const bp = book?.items?.[p.id];
   if (bp != null) return bp * (u ? u.conv : 1);
-  if (u) { const own = u.prices?.[tier - 1]; return own != null ? own : tierPrice(p, tier) * u.conv; }
+  if (u) { const own = tier === 'cost' ? null : u.prices?.[tier - 1]; return own != null ? own : tierPrice(p, tier) * u.conv; }
   return tierPrice(p, tier);
 }
 // Bảng giá đang hiệu lực kèm giá từng hàng: [{...book, items: {product_id: price}}]
@@ -39,6 +40,18 @@ export function usePriceBooks(enabled = true) {
   const data = useMemo(() => (books.data ? books.data.map((b) => ({ ...b, items: Object.fromEntries((items.data || []).filter((i) => i.price_book_id === b.id).map((i) => [i.product_id, i.price])) })) : null), [books.data, items.data]);
   return { data, loading: books.loading || items.loading };
 }
+// Ô chọn bảng giá trên đơn / báo giá: từng mức giá bán (+ giá vốn nếu được xem) rồi các bảng giá có tên.
+// Giá trị: 'lv:1'…'lv:5', 'lv:cost' hoặc id bảng giá có tên.
+export function priceSourceOptions(priceNames, books, canCost, custTier) {
+  return [...(canCost ? [{ value: 'lv:cost', label: 'Giá vốn' }] : []),
+    ...priceNames.map((n, i) => ({ value: `lv:${i + 1}`, label: n + (i + 1 === custTier ? ' (mức của khách)' : '') })),
+    ...(books || []).map((b) => ({ value: b.id, label: 'Bảng giá: ' + b.name }))];
+}
+// Đọc lại giá trị ô chọn: { price_book_id, price_level } (price_level '' = theo mức giá của khách)
+export const parsePriceSource = (v, custTier) => (String(v).startsWith('lv:')
+  ? { price_book_id: '', price_level: v.slice(3) === String(custTier) ? '' : v.slice(3) } : { price_book_id: v || '', price_level: '' });
+export const priceSourceValue = (f, custTier) => f.price_book_id || `lv:${f.price_level || custTier}`;
+export const levelTier = (level, custTier) => (level === 'cost' ? 'cost' : Number(level) || custTier);
 // Bảng giá được dùng cho khách (theo nhóm khách) và người đang đăng nhập
 // Danh sách nhóm khách của sổ (kể cả nhóm cũ còn khách đang dùng mà chưa có trong danh sách)
 export const groupNames = (settings, customers) => [...new Set([...(settings?.customer_groups || []), ...(customers || []).map((c) => c.kind).filter(Boolean)])];

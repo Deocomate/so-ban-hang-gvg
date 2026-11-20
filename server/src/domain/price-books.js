@@ -1,6 +1,6 @@
 // Bảng giá có tên (ngoài các mức giá chung theo khách): hiệu lực, công thức tính từ giá khác, phạm vi nhóm khách / người tạo giao dịch.
 import { ctx, fail, one, all, run, insert, uuid, nowIso, num, bool, nz, trimNz, rnd, asDate } from '../lib/context.js';
-import { requirePerm } from './access.js';
+import { requirePerm, can } from './access.js';
 
 const BASES = ['cost', 'last_in', 'tier1', 'tier2', 'tier3', 'tier4', 'tier5'];
 const list = (v) => (v == null ? null : (Array.isArray(v) ? v : []).map((x) => trimNz(x)).filter(Boolean));
@@ -135,6 +135,16 @@ export function apply_price_formula(p) {
   }
   run(`update price_books set updated_at = ? where id = ?`, nowIso(), pb.id);
   return { updated: n, skipped };
+}
+
+// Mức giá người bán chọn trên đơn (null = theo mức giá của khách): '1'…số mức giá của sổ, hoặc 'cost' khi được xem giá vốn
+export function priceLevel(b, v) {
+  const lv = nz(v);
+  if (lv == null) return null;
+  if (lv === 'cost') { if (!can(b, 'xem_gia_von')) fail('Bạn không được bán theo giá vốn'); return lv; }
+  const n = JSON.parse(one(`select settings from books where id = ?`, b)?.settings || '{}').price_names?.length || 3;
+  if (!/^[1-5]$/.test(String(lv)) || Number(lv) > n) fail('Mức giá không hợp lệ');
+  return String(lv);
 }
 
 // Kiểm tra bảng giá chọn trên đơn: đang hiệu lực, đúng nhóm khách và người tạo; bảng không cho thêm hàng ngoài thì chặn

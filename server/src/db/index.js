@@ -117,6 +117,7 @@ const ADDED_COLUMNS = [
   ['products', 'sell_direct', 'integer not null default 1'],
   ['products', 'images', "text not null default '[]'"],
   ['sales_orders', 'price_book_id', 'text'],
+  ['sales_orders', 'price_level', 'text'],
   ['sales_order_lines', 'unit_name', 'text'],
   ['sales_order_lines', 'unit_conv', 'real not null default 1'],
   ['purchase_order_lines', 'unit_name', 'text'],

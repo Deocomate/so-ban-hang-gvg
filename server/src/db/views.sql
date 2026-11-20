@@ -215,7 +215,7 @@ create view v_sales_orders as
 select o.id, o.book_id, o.code, o.kind, o.status, o.customer_id, c.code as customer_code, c.name as customer_name,
   c.phone as customer_phone, c.address as customer_address, c.price_tier,
   o.channel, o.order_date, o.due_date, o.staff, o.discount, o.shipping_fee, o.note, o.cancel_reason,
-  o.created_at, o.confirmed_at, o.cancelled_at, o.vat_rate, o.price_book_id, v.vat_total, v.vat_net, v.deposit_used,
+  o.created_at, o.confirmed_at, o.cancelled_at, o.vat_rate, o.price_book_id, o.price_level, v.vat_total, v.vat_net, v.deposit_used,
   v.goods_gross, v.goods_total, v.order_total, v.eff_qty, v.delivered_qty, v.returned_qty, v.remaining_qty, v.line_count,
   v.delivered_value, v.returned_value, v.ship_billed, v.paid_net, v.last_pay_date, v.last_delivery_date, v.first_delivery_date, v.delivery_count,
   v.order_total - v.returned_value as net_total,

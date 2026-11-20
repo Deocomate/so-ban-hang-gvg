@@ -2,7 +2,7 @@
 import { ctx, fail, one, all, run, insert, uuid, nowIso, num, bool, nz, trimNz, rnd, asDate, today, vnd } from '../lib/context.js';
 import { requirePerm, isOwner, checkDate, nextCode, once, bookSettings } from './access.js';
 import { postMove, doAdjust, lineUnit } from './stock.js';
-import { checkPriceBook } from './price-books.js';
+import { checkPriceBook, priceLevel } from './price-books.js';
 import { doPayment, moveDocPayments } from './cash.js';
 import { notifyOrderConfirmed } from './notify.js';
 import { saveOrderTrip } from './drivers.js';
@@ -163,7 +163,7 @@ export function save_sales_order(p) {
     const st = deliverNow || p.status === 'xac_nhan' ? 'xac_nhan' : 'nhap';
     const head = { customer_id: cust.id, channel: p.channel ?? null, order_date: d, due_date: asDate(p.due_date), staff: p.staff ?? null,
       discount: rnd(num(p.discount) ?? 0), shipping_fee: rnd(num(p.shipping_fee) ?? 0), note: p.note ?? null, vat_rate: vat,
-      price_book_id: checkPriceBook(b, nz(p.price_book_id), cust, d, (p.lines || []).map((l) => l.product_id)) };
+      price_book_id: checkPriceBook(b, nz(p.price_book_id), cust, d, (p.lines || []).map((l) => l.product_id)), price_level: priceLevel(b, p.price_level) };
     let o; let wasConfirmed = false; let delivered = false; let before = null; let redo = null; const notices = [];
     if (!nz(p.id)) {
       const id = uuid();

@@ -104,6 +104,12 @@ await E('Bảng không cho bán hàng ngoài bảng', () => api.call('save_sales
   lines: [{ product_id: men.id, qty: 1, unit_price: 1 }] }), 'chỉ cho bán hàng có trong bảng');
 const o3 = await api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: KL, order_date: d, price_book_id: pb.id, lines: [{ product_id: ngoi.id, qty: 1, unit_price: 14400 }] });
 C('Đơn ghi bảng giá đã dùng', (await api.one('sales_orders', TH, [['id', 'eq', o3.id]])).price_book_id, pb.id);
+const o4 = await api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: KL, order_date: d, price_level: '3', lines: [{ product_id: ngoi.id, qty: 1, unit_price: 16000 }] });
+C('Đơn ghi mức giá người bán chọn', (await api.one('sales_orders', TH, [['id', 'eq', o4.id]])).price_level, '3');
+const o5 = await api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: KL, order_date: d, price_level: 'cost', lines: [{ product_id: ngoi.id, qty: 1, unit_price: 9000 }] });
+C('Chủ sổ được bán theo giá vốn', (await api.one('sales_orders', TH, [['id', 'eq', o5.id]])).price_level, 'cost');
+await E('Mức giá ngoài số mức của sổ bị chặn', () => api.call('save_sales_order', { book_id: TH, customer_id: KL, order_date: d, price_level: '9',
+  lines: [{ product_id: ngoi.id, qty: 1, unit_price: 1 }] }), 'Mức giá không hợp lệ');
 await E('Ngoài hiệu lực bị chặn', () => api.call('save_sales_order', { book_id: TH, customer_id: KL, order_date: daysAgo(5), price_book_id: pb.id,
   lines: [{ product_id: ngoi.id, qty: 1, unit_price: 1 }] }), 'không có hiệu lực');
 await api.call('save_price_book', { book_id: TH, id: pb.id, name: 'Giá công trình Q4', valid_from: daysAgo(1), allow_others: true, cust_groups: ['Đại lý'] });

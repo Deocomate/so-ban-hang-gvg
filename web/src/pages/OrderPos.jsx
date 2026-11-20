@@ -4,7 +4,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useAction, useQ } from '../lib/store.jsx';
 import { money, qty as fq, todayVN, match, searchRank } from '../lib/format.js';
-import { useProducts, useCustomers, useFunds, productSub, priceOf, unitsOf, findUnit, usePriceBooks, booksFor, autoBookFor, groupNames } from '../lib/lookups.js';
+import { useProducts, useCustomers, useFunds, productSub, priceOf, unitsOf, findUnit, usePriceBooks, booksFor, autoBookFor, groupNames, priceSourceOptions, parsePriceSource, priceSourceValue, levelTier } from '../lib/lookups.js';
 import { packing, weightOf, fmtKg, groupLabel } from '../lib/docs/model.js';
 import { Btn, Icon, Input, Select, DateInput, NumInput, Loading, Picker, Modal } from '../components/ui.jsx';
 import { ChargesDialog } from './Charges.jsx';
@@ -91,7 +91,7 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
   const [source, setSource] = useState({ kind: '', supplier_id: '', expected_date: '' });
   const [f, setF] = useState({
     kind: kind0 || 'ban_san', customer_id: cust0 || '', channel: (settings.channels || [])[0] || '', order_date: todayVN(), due_date: '',
-    staff: lsGet('gomsu.staff'), note: '', discount: 0, shipping_fee: 0, vat_rate: 0, transport: null, lines: [], price_book_id: '',
+    staff: lsGet('gomsu.staff'), note: '', discount: 0, shipping_fee: 0, vat_rate: 0, transport: null, lines: [], price_book_id: '', price_level: '',
     pay: { amount: null, fund_id: '', method: 'Tiền mặt', fee: null },
   });
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
@@ -104,7 +104,7 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
       const [o] = await rpc('q', { view: 'sales_orders', filters: [['id', 'eq', copy_id]] });
       const ls = await rpc('q', { view: 'sales_order_lines', filters: [['order_id', 'eq', copy_id]], order: 'line_no' });
       setF((s) => ({ ...s, kind: o.kind, customer_id: o.customer_id, channel: o.channel || '', staff: o.staff || s.staff, note: o.note || '',
-        shipping_fee: o.shipping_fee, vat_rate: o.vat_rate || 0, price_book_id: o.price_book_id || '',
+        shipping_fee: o.shipping_fee, vat_rate: o.vat_rate || 0, price_book_id: o.price_book_id || '', price_level: o.price_level || '', level_cust: o.customer_id,
         lines: ls.filter((l) => l.qty - (l.cancelled_qty || 0) > 0).map((l) => { const c = l.unit_conv || 1; return { key: ++seq, product_id: l.product_id,
           qty: (l.qty - (l.cancelled_qty || 0)) / c, unit_price: l.unit_price * c, unit: l.unit_name || l.unit, conv: c, discount_pct: l.discount_pct, note: l.note || '', manual: true }; }) }));
       setLoaded(true);
@@ -122,7 +122,7 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
       setPromos(op.map((x) => (x.kind === 'promo' ? { kind: 'promo', id: x.ref_id } : x.kind === 'points' ? { kind: 'points', points: x.points } : { kind: x.kind, code: x.code })));
       const promoSum = op.reduce((t, x) => t + x.amount, 0);
       setF((s) => ({ ...s, kind: o.kind, customer_id: o.customer_id, channel: o.channel || '', order_date: o.order_date, due_date: o.due_date || '', staff: o.staff || '',
-        note: o.note || '', discount: Math.max(0, (o.discount || 0) - promoSum), shipping_fee: o.shipping_fee, vat_rate: o.vat_rate || 0, price_book_id: o.price_book_id || '', transport: trip ? { driver_id: trip.driver_id, amount: trip.amount, payer: trip.payer, collect: trip.collect, note: trip.note || '' } : null, status0: o.status, code: o.code, delivery_count: o.delivery_count || 0, paid_net: o.paid_net || 0, customer0: o.customer_id,
+        note: o.note || '', discount: Math.max(0, (o.discount || 0) - promoSum), shipping_fee: o.shipping_fee, vat_rate: o.vat_rate || 0, price_book_id: o.price_book_id || '', price_level: o.price_level || '', transport: trip ? { driver_id: trip.driver_id, amount: trip.amount, payer: trip.payer, collect: trip.collect, note: trip.note || '' } : null, status0: o.status, code: o.code, delivery_count: o.delivery_count || 0, paid_net: o.paid_net || 0, customer0: o.customer_id,
         delivered0: ls.filter((l) => l.delivered_qty > 0).map((l) => ({ id: l.id, sku: l.sku, product_id: l.product_id, delivered: l.delivered_qty })),
         lines: ls.filter((l) => l.qty - (l.cancelled_qty || 0) > 0 || l.delivered_qty > 0).map((l) => { const c = l.unit_conv || 1; return { key: ++seq, id: l.id, product_id: l.product_id,
           qty: (l.qty - (l.cancelled_qty || 0)) / c, unit_price: l.unit_price * c, unit: l.unit_name || l.unit, conv: c, delivered: l.delivered_qty || 0,
@@ -136,7 +136,7 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
     if (!quote_id) return;
     rpc('q', { view: 'quotes', filters: [['id', 'eq', quote_id]] }).then(([q]) => {
       const b = q.body; const ls = b.groups.flatMap((g) => g.lines).filter((l) => l.product_id);
-      setF((s) => ({ ...s, customer_id: q.customer_id || s.customer_id, note: `Theo báo giá ${q.code}${q.site ? ' · ' + q.site : ''}`, vat_rate: b.vat_mode === 'them' ? b.vat_rate : 0, shipping_fee: b.ship?.amount || 0, price_book_id: b.price_book_id || '',
+      setF((s) => ({ ...s, customer_id: q.customer_id || s.customer_id, note: `Theo báo giá ${q.code}${q.site ? ' · ' + q.site : ''}`, vat_rate: b.vat_mode === 'them' ? b.vat_rate : 0, shipping_fee: b.ship?.amount || 0, price_book_id: b.price_book_id || '', price_level: b.price_level || '',
         lines: ls.map((l) => ({ key: ++seq, product_id: l.product_id, qty: l.qty, unit_price: l.price, conv: 1, discount_pct: 0, note: l.note || '', manual: true })) }));
       setLoaded(true);
     }).catch((e) => toast(e.message, 'err'));
@@ -148,7 +148,9 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
   }, [customers.data, funds.data]);
 
   const cust = customers.data?.find((c) => c.id === f.customer_id);
-  const tier = cust?.price_tier || 1;
+  const custTier = cust?.price_tier || 1;
+  // Mức giá đang áp dụng: người bán chọn trong ô bảng giá, mặc định theo mức giá của khách
+  const tier = levelTier(f.price_level, custTier);
   // Giảm giá theo nhóm khách (Khách hàng → Nhóm khách hàng): % vào chiết khấu từng dòng mới, VND vào giảm giá cả đơn
   const grpInfo = cust?.kind ? settings.customer_group_info?.[cust.kind] : null;
   const grpPct = grpInfo?.discount_type === 'pct' ? Number(grpInfo.discount) || 0 : 0;
@@ -165,7 +167,8 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
   useEffect(() => {
     if (id || quote_id || !priceBooks.data || !cust) return;
     const own = autoBookFor(myBooks, cust);
-    setF((s) => ({ ...s, price_book_id: own ? own.id : myBooks.some((b) => b.id === s.price_book_id) ? s.price_book_id : '' }));
+    setF((s) => ({ ...s, price_level: s.customer_id === s.level_cust ? s.price_level : '', level_cust: s.customer_id,
+      price_book_id: own ? own.id : myBooks.some((b) => b.id === s.price_book_id) ? s.price_book_id : '' }));
   }, [cust?.id, cust?.kind, priceBooks.data]);
   const linePrice = (p, l) => priceOf(p, { tier, book: pbook, unit: findUnit(p, l.unit) });
   // Đổi khách / bảng giá → giá các dòng chưa sửa tay theo mức giá của khách hoặc bảng giá
@@ -264,7 +267,7 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
     const p = {
       id: id || null, kind: f.kind, customer_id: f.customer_id, channel: f.channel, order_date: f.order_date, due_date: f.due_date || null, staff: f.staff,
       note: f.note, discount: Number(f.discount) || 0, ...(promoOn ? { promos } : {}), shipping_fee: Number(f.shipping_fee) || 0, vat_rate: Number(f.vat_rate) || 0, transport: f.transport, quote_id: quote_id || null,
-      price_book_id: f.price_book_id || null,
+      price_book_id: f.price_book_id || null, price_level: f.price_level || null,
       status: mode === 'draft' ? 'nhap' : 'xac_nhan', deliver_now: mode === 'deliver',
       lines: lines.map((l) => ({ id: l.id || null, product_id: l.product_id, qty: baseQty(l), unit_price: (Number(l.unit_price) || 0) / (l.conv || 1),
         unit_name: (l.conv || 1) !== 1 ? l.unit : null, discount_pct: Number(l.discount_pct) || 0,
@@ -407,9 +410,9 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
               onCreate={(name) => open('party', { type: 'kh', name, onSaved: (r) => set('customer_id', r.id) })} createLabel="Thêm khách mới" />
             <button className="pos-cust-add" title="Thêm khách mới" onClick={() => open('party', { type: 'kh', onSaved: (r) => set('customer_id', r.id) })}><Icon name="plus" size={18} /></button>
           </div>
-          {myBooks.length > 0 && <Select value={f.price_book_id} onChange={(v) => set('price_book_id', v)} aria-label="Bảng giá"
-            options={[{ value: '', label: 'Bảng giá chung' + (cust ? ` (${priceNames[tier - 1]})` : '') }, ...myBooks.map((b) => ({ value: b.id, label: 'Bảng giá: ' + b.name }))]} />}
-          {cust && cust.code !== 'KL' && <div className="small muted pos-cust-info">{cust.phone || 'Chưa có SĐT'} · {priceNames[tier - 1]}{cust.receivable > 0 ? <> · <span className="bad">đang nợ {money(cust.receivable)}</span></> : ''}{cust.prepaid > 0 ? ` · trả trước ${money(cust.prepaid)}` : ''}</div>}
+          <Select value={priceSourceValue(f, custTier)} onChange={(v) => setF((s) => ({ ...s, ...parsePriceSource(v, custTier) }))} aria-label="Bảng giá"
+            options={priceSourceOptions(priceNames, myBooks, can('xem_gia_von'), cust ? custTier : null)} />
+          {cust && cust.code !== 'KL' && <div className="small muted pos-cust-info">{cust.phone || 'Chưa có SĐT'} · {priceNames[custTier - 1]}{cust.receivable > 0 ? <> · <span className="bad">đang nợ {money(cust.receivable)}</span></> : ''}{cust.prepaid > 0 ? ` · trả trước ${money(cust.prepaid)}` : ''}</div>}
           {cust && cust.code !== 'KL' && <label className="pos-cust-group"><span className="muted small">Nhóm khách</span>
             <Select value={cust.kind || ''} disabled={!can('danh_muc') || busy} aria-label="Nhóm khách"
               onChange={(v) => run('set_customer_group', { customer_ids: [cust.id], name: v || null }, v ? `Đã chuyển ${cust.name} vào nhóm ${v}` : `Đã bỏ nhóm của ${cust.name}`)}

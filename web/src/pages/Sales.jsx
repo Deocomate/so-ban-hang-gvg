@@ -480,7 +480,7 @@ export function OrderDetail({ id, onClose }) {
             <datalist id="od-staff-list">{[...new Set([...(employees.data || []).map((e) => e.name), ...(settings.staff_names || [])].filter(Boolean))].map((x) => <option key={x} value={x} />)}</datalist></> : <b>{d.staff || '—'}</b>}</label>
           <label><span>Ngày bán</span><b>{dmy(invoiceDate(d))}</b></label>
           <label><span>Kênh bán</span>{editable ? <ChannelSelect value={cur.channel} onChange={(v) => setCur('channel', v || '')} extra={[d.channel]} placeholder="Chọn kênh bán" aria-label="Kênh bán" /> : <b>{d.channel || '—'}</b>}</label>
-          <label><span>Bảng giá</span><b>{(priceBooks.data || []).find((b) => b.id === d.price_book_id)?.name || 'Bảng giá chung'}</b></label>
+          <label><span>Bảng giá</span><b>{(priceBooks.data || []).find((b) => b.id === d.price_book_id)?.name || (d.price_level === 'cost' ? 'Giá vốn' : (settings.price_names || [])[(Number(d.price_level) || d.price_tier || 1) - 1] || 'Bảng giá chung')}</b></label>
           <label><span>Khách hàng</span><a href="#" onClick={(e) => { e.preventDefault(); open('party-detail', { type: 'kh', id: d.customer_id }); }}>{d.customer_name}{d.customer_code ? ` (${d.customer_code})` : ''}</a></label>
           {d.customer_phone && <label><span>Điện thoại</span><b>{d.customer_phone}</b></label>}
           {d.due_date && <label><span>Hẹn giao</span><b className={d.is_late ? 'bad' : ''}>{dmy(d.due_date)}{d.is_late ? ` (trễ ${-d.days_to_due} ngày)` : ''}</b></label>}
