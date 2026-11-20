@@ -37,12 +37,12 @@ export function Attachments({ refType, refId }) {
         <div className="row gap-s" key={a.id}>
           <Icon name="receipt" size={16} /><a href="#" className="grow" onClick={(e) => { e.preventDefault(); download(a); }}>{a.name}</a>
           <span className="muted small">{Math.max(1, Math.round(a.size / 1024))} KB · {dmy(a.created_at?.slice(0, 10))}</span>
-          {can('ban_hang') && <ConfirmBtn small icon="x" busy={busy} onConfirm={() => run('delete_attachment', { id: a.id }, 'Đã xóa tệp')}>Xóa</ConfirmBtn>}
+          {can('ban_hang') && <ConfirmBtn small icon="x" className="btn-ico" title="Xóa tệp" confirmText="Xóa?" busy={busy} onConfirm={() => run('delete_attachment', { id: a.id }, 'Đã xóa tệp')} />}
         </div>
       ))}
       {q.data?.length === 0 && <div className="muted small">Chưa có tệp đính kèm</div>}
       {can('ban_hang') && <div><input ref={input} type="file" hidden accept=".pdf,image/*,.doc,.docx,.xls,.xlsx" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) upload(f); }} />
-        <Btn small icon="up" busy={up} onClick={() => input.current?.click()}>Tải tài liệu (scan / PDF, tối đa 15 MB)</Btn></div>}
+        <Btn small icon="up" busy={up} className="btn-ico" title="Tải tài liệu (scan / PDF, tối đa 15 MB)" aria-label="Tải tài liệu" onClick={() => input.current?.click()} /></div>}
     </div>
   );
 }
@@ -136,9 +136,9 @@ export function ContractDetail({ id, onClose }) {
       footer={<>
         <Btn onClick={() => open('order', { id: k.order_id })} icon="order">Mở đơn {k.order_code}</Btn>
         <span className="grow" />
-        <Btn icon="contract" onClick={() => open('contract-writer', { id })}>Văn bản hợp đồng</Btn>
-        <Btn icon="file" onClick={() => open('order-docs', { order_id: k.order_id })}>Giấy tờ đơn</Btn>
-        {can('ban_hang') && <Btn icon="edit" onClick={() => open('contract-form', { id })}>Sửa tạm ứng, vận chuyển</Btn>}
+        <Btn icon="contract" className="btn-ico" title="Văn bản hợp đồng" aria-label="Văn bản hợp đồng" onClick={() => open('contract-writer', { id })} />
+        <Btn icon="file" className="btn-ico" title="Giấy tờ đơn" aria-label="Giấy tờ đơn" onClick={() => open('order-docs', { order_id: k.order_id })} />
+        {can('ban_hang') && <Btn icon="edit" className="btn-ico" title="Sửa tạm ứng, vận chuyển" aria-label="Sửa tạm ứng, vận chuyển" onClick={() => open('contract-form', { id })} />}
         {can('ban_hang') && k.delivery_count > 0 && <Btn kind={ready ? 'ghost' : 'soft'} busy={busy} onClick={() => run('set_contract_reconciled', { id, done: !ready }, ready ? 'Đã mở lại đối chiếu' : 'Đã hoàn tất đối chiếu')}>{ready ? 'Mở lại đối chiếu' : 'Hoàn tất đối chiếu'}</Btn>}
         {can('ban_hang') && k.remaining_qty > 0 && k.order_status === 'xac_nhan' && <OrderDeliverBtn orderId={k.order_id} />}
       </>}>
@@ -159,12 +159,12 @@ export function ContractDetail({ id, onClose }) {
           <button key={type} className="step" disabled={!ok} onClick={() => doc(type)}><b>{label}</b><span className="small muted">{sub}</span></button>
         ))}</div>
       </Section>
-      <Section title="Các đợt giao hàng" actions={k.delivery_count > 0 && <Btn small icon="dl" onClick={() => doc('doi_chieu_tt')}>Bộ hồ sơ đối chiếu & giao hàng</Btn>}>
+      <Section title="Các đợt giao hàng" actions={k.delivery_count > 0 && <Btn small icon="dl" className="btn-ico" title="Bộ hồ sơ đối chiếu & giao hàng" aria-label="Bộ hồ sơ đối chiếu và giao hàng" onClick={() => doc('doi_chieu_tt')} />}>
         <Table dense rows={dels.data} empty="Chưa có đợt giao" columns={[
           { key: 'n', label: 'Đợt', render: (r) => <b>Đợt {dels.data.indexOf(r) + 1}</b> },
           { key: 'd', label: 'Ngày giao', render: (r) => dmy(r.delivery_date) }, { key: 'c', label: 'Phiếu', render: (r) => r.code },
           { key: 'v', label: 'Tiền đợt này', align: 'right', render: (r) => money(r.total) }, { key: 'k', label: 'Khấu trừ cọc', align: 'right', render: (r) => money(r.deposit_used) },
-          { key: 'x', label: 'Chứng từ', render: (r) => <div className="row gap-s">{[['hoa_don', 'Hóa đơn'], ['bien_ban', 'Biên bản'], ['hd_van_chuyen', 'HĐ vận chuyển']].map(([t, l]) => <Btn small key={t} onClick={() => open('doc', { kind: 'delivery', id: r.id, type: t })}>{l}</Btn>)}</div> },
+          { key: 'x', label: 'Chứng từ', render: (r) => <div className="row gap-s">{[['hoa_don', 'Hóa đơn', 'invoice'], ['bien_ban', 'Biên bản', 'print'], ['hd_van_chuyen', 'HĐ vận chuyển', 'truck']].map(([t, l, ic]) => <Btn small key={t} icon={ic} className="btn-ico" title={l} aria-label={l} onClick={() => open('doc', { kind: 'delivery', id: r.id, type: t })} />)}</div> },
         ]} />
       </Section>
       <div className="grid-2">

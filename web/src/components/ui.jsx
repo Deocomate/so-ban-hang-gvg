@@ -295,10 +295,10 @@ export function Modal({ title, onClose, children, footer, size = 'md', subtitle 
 }
 
 // Xác nhận 2 bước ngay trên nút (trình xem không cho dùng hộp thoại confirm)
-export function ConfirmBtn({ children, confirmText = 'Bấm lần nữa để xác nhận', onConfirm, kind = 'ghost', icon, busy, small }) {
+export function ConfirmBtn({ children, confirmText = 'Bấm lần nữa để xác nhận', onConfirm, kind = 'ghost', icon, busy, small, className, title }) {
   const [arm, setArm] = useState(false);
   useEffect(() => { if (!arm) return; const t = setTimeout(() => setArm(false), 4000); return () => clearTimeout(t); }, [arm]);
-  return <Btn kind={arm ? 'danger' : kind} icon={icon} busy={busy} small={small} onClick={() => (arm ? (setArm(false), onConfirm()) : setArm(true))}>{arm ? confirmText : children}</Btn>;
+  return <Btn kind={arm ? 'danger' : kind} icon={icon} busy={busy} small={small} className={className} title={title} aria-label={title} onClick={() => (arm ? (setArm(false), onConfirm()) : setArm(true))}>{arm ? confirmText : children}</Btn>;
 }
 
 // Ô chọn có tìm kiếm (khách hàng, sản phẩm…)

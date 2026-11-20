@@ -135,11 +135,11 @@ export function CustomerFiles({ customerId, customerName }) {
         <Icon name="drive" size={20} />
         {drive ? <>
           <div className="grow"><div className="strong">Google Drive của khách</div><a className="small cf-url" href={drive} target="_blank" rel="noopener noreferrer">{drive}</a></div>
-          <Btn small kind="soft" icon="ext" onClick={() => window.open(drive, '_blank', 'noopener')}>Mở Drive</Btn>
-          {canEdit && <Btn small icon="edit" onClick={() => setDialog({ kind: 'drive' })}>Đổi link</Btn>}
+          <Btn small kind="soft" icon="ext" className="btn-ico" title="Mở Drive" aria-label="Mở Drive" onClick={() => window.open(drive, '_blank', 'noopener')} />
+          {canEdit && <Btn small icon="edit" className="btn-ico" title="Đổi link" aria-label="Đổi link" onClick={() => setDialog({ kind: 'drive' })} />}
         </> : <>
           <div className="grow muted small">Chưa gắn thư mục Google Drive riêng cho khách này.</div>
-          {canEdit && <Btn small icon="link" onClick={() => setDialog({ kind: 'drive' })}>Gắn link Google Drive</Btn>}
+          {canEdit && <Btn small icon="link" className="btn-ico" title="Gắn link Google Drive" aria-label="Gắn link Google Drive" onClick={() => setDialog({ kind: 'drive' })} />}
         </>}
       </div>
 
@@ -152,9 +152,9 @@ export function CustomerFiles({ customerId, customerName }) {
         </nav>
         <span className="grow" />
         {canEdit && <>
-          <Btn small icon="folder-plus" onClick={() => setDialog({ kind: 'folder' })}>Thư mục mới</Btn>
-          <Btn small icon="link" onClick={() => setDialog({ kind: 'link' })}>Thêm link</Btn>
-          <Btn small kind="primary" icon="up" busy={!!uploading} onClick={() => fileInput.current?.click()}>Tải tệp lên</Btn>
+          <Btn small icon="folder-plus" className="btn-ico" title="Thư mục mới" aria-label="Thư mục mới" onClick={() => setDialog({ kind: 'folder' })} />
+          <Btn small icon="link" className="btn-ico" title="Thêm link" aria-label="Thêm link" onClick={() => setDialog({ kind: 'link' })} />
+          <Btn small kind="primary" icon="up" busy={!!uploading} className="btn-ico" title="Tải tệp lên" aria-label="Tải tệp lên" onClick={() => fileInput.current?.click()} />
           <input ref={fileInput} type="file" multiple hidden onChange={(e) => { const fs = [...(e.target.files || [])]; e.target.value = ''; uploadTree(fs.map((file) => ({ file })), folder); }} />
         </>}
       </div>
@@ -162,9 +162,9 @@ export function CustomerFiles({ customerId, customerName }) {
       {selected.length > 0 && canEdit && (
         <div className="cf-selbar">
           <b>Đã chọn {selected.length}</b>
-          <Btn small icon="folder-move" onClick={() => setDialog({ kind: 'move' })}>Di chuyển tới…</Btn>
-          <ConfirmBtn small icon="trash" busy={busy} confirmText={selected.some((x) => x.kind === 'folder') ? 'Xóa cả nội dung trong thư mục? Bấm lần nữa' : 'Bấm lần nữa để xóa'}
-            onConfirm={async () => { if (await run('delete_customer_items', { ids: selected.map((x) => x.id) }, `Đã xóa ${selected.length} mục`)) setSel(new Set()); }}>Xóa</ConfirmBtn>
+          <Btn small icon="folder-move" className="btn-ico" title="Di chuyển tới…" aria-label="Di chuyển tới" onClick={() => setDialog({ kind: 'move' })} />
+          <ConfirmBtn small icon="trash" className="btn-ico" title="Xóa các mục đã chọn" busy={busy} confirmText={selected.some((x) => x.kind === 'folder') ? 'Xóa cả nội dung trong thư mục? Bấm lần nữa' : 'Bấm lần nữa để xóa'}
+            onConfirm={async () => { if (await run('delete_customer_items', { ids: selected.map((x) => x.id) }, `Đã xóa ${selected.length} mục`)) setSel(new Set()); }} />
           <span className="grow" />
           <button type="button" className="link-btn small" onClick={() => setSel(new Set())}>Bỏ chọn</button>
         </div>
