@@ -66,6 +66,7 @@ export function auditTriggers(db) {
 
 // CSDL tạo từ bản cũ: thêm các cột mới (dữ liệu cũ giữ nguyên, cột mới để trống)
 const ADDED_COLUMNS = [
+  ['shipments', 'driver_id', 'text references drivers(id)'],
   ['products', 'fixed_cost', 'real check (fixed_cost is null or fixed_cost >= 0)'],
   ['stock_moves', 'src_value', 'real'],
   ['stock_moves', 'anchor_id', 'real'],

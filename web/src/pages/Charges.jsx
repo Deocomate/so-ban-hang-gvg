@@ -1,12 +1,12 @@
 // Hộp thoại "Các khoản thu khác" trên màn bán hàng: VAT và tiền vận chuyển kèm thông tin lái xe.
 import React, { useState } from 'react';
-import { useApp, useQ } from '../lib/store.jsx';
+import { useApp } from '../lib/store.jsx';
 import { money } from '../lib/format.js';
 import { Btn, Field, Input, Select, NumInput, Check, Modal, Note, Table } from '../components/ui.jsx';
+import { DriverSelect } from '../components/DriverSelect.jsx';
 
 export function ChargesDialog({ goods, vatRate, shippingFee, transport, onApply, onClose }) {
-  const { open, settings } = useApp();
-  const drivers = useQ('drivers', [['active', 'eq', 'true']], 'name');
+  const { settings } = useApp();
   const [vatOn, setVatOn] = useState(Number(vatRate) > 0);
   const [rate, setRate] = useState(Number(vatRate) || settings.default_vat || 8);
   const [shipOn, setShipOn] = useState(!!transport || Number(shippingFee) > 0);
@@ -33,8 +33,7 @@ export function ChargesDialog({ goods, vatRate, shippingFee, transport, onApply,
         <div className="ship-box stack">
           <b>Chi tiết vận chuyển</b>
           <div className="grid">
-            <Field label="Lái xe"><div className="row gap-s"><div className="grow"><Select value={t.driver_id} onChange={(v) => set('driver_id', v)} options={(drivers.data || []).map((d) => ({ value: d.id, label: `${d.name}${d.phone ? ' · ' + d.phone : ''}` }))} placeholder="Chọn lái xe" /></div>
-              <Btn small icon="plus" aria-label="Thêm lái xe" onClick={() => open('driver', { onSaved: (r) => set('driver_id', r.id) })} /></div></Field>
+            <Field label="Lái xe"><DriverSelect value={t.driver_id} onChange={(v) => set('driver_id', v)} /></Field>
             <Field label="Tiền vận chuyển"><NumInput value={amount} onChange={setAmount} /></Field>
             <Field label="Bên chịu phí"><Select value={t.payer} onChange={(v) => set('payer', v)} options={[{ value: 'khach', label: 'Khách thanh toán' }, { value: 'cua_hang', label: 'Cửa hàng thanh toán' }]} /></Field>
             {t.payer === 'khach' && <Field label="Cách thanh toán"><Select value={t.collect} onChange={(v) => set('collect', v)} options={[{ value: 'hoa_don', label: 'Thu cùng hóa đơn' }, { value: 'truc_tiep', label: 'Khách trả trực tiếp lái xe' }]} /></Field>}

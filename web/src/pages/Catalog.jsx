@@ -7,6 +7,7 @@ import { exportXlsx, loadSheets, readPriceBookFile } from '../lib/excel.js';
 import { Btn, Icon, Pill, Field, Input, TextArea, Select, DateInput, NumInput, Check, Search, ErrorBox, Note, Table, Modal, ConfirmBtn, ListPage, FilterBox, RadioList, Section, Loading } from '../components/ui.jsx';
 import { useTimeFilter, TimeFilter } from '../components/DocFilters.jsx';
 import { OrderDetail } from './Sales.jsx';
+import { DriverSelect } from '../components/DriverSelect.jsx';
 
 // ===================== BẢNG GIÁ =====================
 // "Bảng giá chung" = các mức giá theo khách (sửa nhanh ở đây). Bảng giá có tên: hiệu lực, công thức, phạm vi nhóm khách / người tạo.
@@ -223,8 +224,6 @@ const WHO = { khach: 'Khách thanh toán', cua_hang: 'Cửa hàng thanh toán' }
 const HOW = { hoa_don: 'Thu cùng hóa đơn', truc_tiep: 'Khách trả trực tiếp lái xe' };
 
 export function TripForm({ order_id, delivery_id, onClose }) {
-  const { open } = useApp();
-  const drivers = useQ('drivers', [['active', 'eq', 'true']], 'name');
   const { run, busy } = useAction();
   const [f, setF] = useState({ driver_id: '', amount: null, payer: 'khach', collect: 'hoa_don', date: todayVN(), note: '' });
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
@@ -232,14 +231,13 @@ export function TripForm({ order_id, delivery_id, onClose }) {
     <Modal title="Ghi chuyến vận chuyển" onClose={onClose}
       footer={<><Btn onClick={onClose}>Thôi</Btn><Btn kind="primary" busy={busy} onClick={async () => { if (await run('save_trip', { ...f, order_id, delivery_id }, (r) => `Đã ghi chuyến ${r.code}`)) onClose(); }}>Lưu</Btn></>}>
       <div className="grid">
-        <Field label="Lái xe" required><Select value={f.driver_id} onChange={(v) => set('driver_id', v)} options={(drivers.data || []).map((d) => ({ value: d.id, label: `${d.name}${d.phone ? ' · ' + d.phone : ''}` }))} placeholder="Chọn lái xe" /></Field>
+        <Field label="Lái xe" required><DriverSelect value={f.driver_id} onChange={(v) => set('driver_id', v)} /></Field>
         <Field label="Tiền vận chuyển"><NumInput value={f.amount} onChange={(v) => set('amount', v)} /></Field>
         <Field label="Bên chịu phí"><Select value={f.payer} onChange={(v) => set('payer', v)} options={Object.entries(WHO).map(([value, label]) => ({ value, label }))} /></Field>
         {f.payer === 'khach' && <Field label="Cách thanh toán"><Select value={f.collect} onChange={(v) => set('collect', v)} options={Object.entries(HOW).map(([value, label]) => ({ value, label }))} /></Field>}
         <Field label="Ngày"><DateInput value={f.date} onChange={(v) => set('date', v)} max={todayVN()} /></Field>
         <Field label="Ghi chú" wide><Input value={f.note} onChange={(v) => set('note', v)} /></Field>
       </div>
-      <Btn small icon="plus" onClick={() => open('driver', { onSaved: (r) => set('driver_id', r.id) })}>Thêm lái xe mới</Btn>
     </Modal>
   );
 }

@@ -3,7 +3,8 @@ import { useApp, useQ, useAction } from '../lib/store.jsx';
 import { money, dmy, dmyhm, todayVN, match, norm, short } from '../lib/format.js';
 import { useFunds } from '../lib/lookups.js';
 import { exportXlsx, readWorkbook } from '../lib/excel.js';
-import { CARRIERS, carrier, lastCarrier, rememberCarrier } from '../lib/carriers.js';
+import { CARRIERS, carrier, lastCarrier, rememberCarrier, shipLabel } from '../lib/carriers.js';
+import { DriverSelect } from '../components/DriverSelect.jsx';
 import { Btn, Icon, Pill, Field, Input, Select, DateInput, NumInput, Check, Tabs, Search, Loading, ErrorBox, Note, Table, Modal, KV, Section, ListPage, FilterBox, RadioList } from '../components/ui.jsx';
 import { useTimeFilter, TimeFilter } from '../components/DocFilters.jsx';
 
@@ -59,7 +60,7 @@ export function ShippingPage() {
   const time = useTimeFilter('all');
   const rows = (q.data || []).filter((s) => (!cr || s.carrier === cr) && time.inRange(s.created_at));
   const t = TABS.find((x) => x.value === tab);
-  const list = useMemo(() => rows.filter(t.f).filter((s) => match(`${s.tracking_no} ${s.code} ${s.order_code} ${s.customer_name || ''} ${s.receiver_phone || ''}`, search)), [q.data, cr, time.time, tab, search]);
+  const list = useMemo(() => rows.filter(t.f).filter((s) => match(`${s.tracking_no} ${s.code} ${s.order_code} ${s.customer_name || ''} ${s.receiver_phone || ''} ${s.driver_name || ''} ${s.driver_plate || ''}`, search)), [q.data, cr, time.time, tab, search]);
   const codHeld = rows.filter((s) => s.cod_status === 'spx_dang_giu');
   const sum = (a, k) => a.reduce((x, s) => x + Number(s[k] || 0), 0);
   return (
@@ -69,10 +70,10 @@ export function ShippingPage() {
         <FilterBox title="Trạng thái"><RadioList value={tab} onChange={setTab} options={TABS.map((x) => ({ value: x.value, label: x.label, count: rows.filter(x.f).length }))} /></FilterBox>
         <FilterBox title="Đơn vị vận chuyển"><RadioList value={cr} onChange={setCr} options={[{ value: '', label: 'Tất cả hãng' }, ...CARRIERS.map((c) => ({ value: c.code, label: c.name }))]} /></FilterBox>
       </>}
-      search={<Search value={search} onChange={setSearch} placeholder="Tìm mã vận đơn, mã đơn, khách, SĐT…" />}
+      search={<Search value={search} onChange={setSearch} placeholder="Tìm mã vận đơn, mã đơn, khách, SĐT, lái xe…" />}
       actions={<>
         <Btn icon="dl" onClick={() => exportXlsx('van-don.xlsx', [{ name: 'Vận đơn', rows: list, columns: [
-          { key: 'carrier_name', label: 'Đơn vị vận chuyển' }, { key: 'tracking_no', label: 'Mã vận đơn' }, { key: 'order_code', label: 'Đơn' }, { key: 'customer_name', label: 'Khách' }, { key: 'receiver_phone', label: 'SĐT nhận' },
+          { key: 'carrier_name', label: 'Đơn vị vận chuyển' }, { key: 'tracking_no', label: 'Mã vận đơn' }, { key: 'driver_name', label: 'Lái xe' }, { key: 'driver_plate', label: 'Biển số' }, { key: 'order_code', label: 'Đơn' }, { key: 'customer_name', label: 'Khách' }, { key: 'receiver_phone', label: 'SĐT nhận' },
           { key: 'status_label', label: 'Trạng thái' }, { key: 'status_at', label: 'Cập nhật', get: (s) => dmyhm(s.status_at) }, { key: 'cod_amount', label: 'COD' },
           { key: 'cod_status_label', label: 'Tiền COD' }, { key: 'ship_fee', label: 'Cước' }] }])}>Xuất Excel</Btn>
         {can('ban_hang') && <Btn icon="up" onClick={() => open('ship-import', {})}>Cập nhật từ file Excel</Btn>}
@@ -87,7 +88,7 @@ export function ShippingPage() {
       <ErrorBox error={q.error} />
       <Table rows={q.data ? list : null} expand={(s, close) => <ShipmentDetail id={s.id} onClose={close} />} rowClass={(s) => (['giao_that_bai', 'dang_hoan', 'su_co'].includes(s.status) ? 'row-late' : '')}
         empty={<span>Chưa có vận đơn. Mở một đơn bán → <b>Tạo vận đơn</b>, hoặc nhập mã vận đơn khi giao hàng.</span>} columns={[
-          { key: 't', label: 'Vận đơn', render: (s) => <><div className="row gap-s"><CarrierPill c={s.carrier} /><b>{s.tracking_no}</b></div><div className="cell-sub">{s.code} · đơn {s.order_code}</div></> },
+          { key: 't', label: 'Vận đơn', render: (s) => <><div className="row gap-s"><CarrierPill c={s.carrier} /><b>{shipLabel(s)}</b></div><div className="cell-sub">{s.code} · đơn {s.order_code}{s.driver_phone ? ' · ' + s.driver_phone : ''}</div></> },
           { key: 'c', label: 'Người nhận', render: (s) => <>{s.receiver_name || s.customer_name}<div className="cell-sub">{s.receiver_phone || s.channel || ''}</div></> },
           { key: 's', label: 'Trạng thái', render: (s) => <><SP s={s.status} /><div className="cell-sub">{dmyhm(s.status_at)}{s.days_in_status > 2 && !s.is_final ? ` · ${s.days_in_status} ngày chưa đổi` : ''}</div></> },
           { key: 'd', label: 'Chi tiết mới nhất', render: (s) => <span className="small">{s.status_detail || '—'}</span> },
@@ -106,23 +107,27 @@ export function ShipmentForm({ order_id, delivery_id, cod, onClose }) {
   const d = o.data?.[0];
   const [f, setF] = useState(null);
   useEffect(() => {
-    if (d && !f) setF({ carrier: lastCarrier(), tracking_no: '', cod_amount: cod ?? Math.max(0, d.remaining_to_pay), ship_fee: null, delivery_id: delivery_id || '',
+    if (d && !f) setF({ carrier: lastCarrier(), tracking_no: '', driver_id: '', cod_amount: cod ?? Math.max(0, d.remaining_to_pay), ship_fee: null, delivery_id: delivery_id || '',
       receiver_name: d.customer_name, receiver_phone: d.customer_phone || '', receiver_address: d.customer_address || '', note: '' });
   }, [d]);
   useEffect(() => { if (f && !f.delivery_id && dels.data?.length) setF((s) => ({ ...s, delivery_id: dels.data[0].id })); }, [dels.data, f]);
   if (!d || !f) return <Modal title="Tạo vận đơn" onClose={onClose}><Loading /></Modal>;
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const own = carrier(f.carrier).own;
   return (
     <Modal title={`Tạo vận đơn – đơn ${d.code}`} subtitle={d.customer_name} onClose={onClose} size="md"
       footer={<><Btn onClick={onClose}>Thôi</Btn><Btn kind="primary" busy={busy} onClick={async () => {
-        const r = await run('create_shipment', { order_id, ...f, delivery_id: f.delivery_id || null }, (x) => `Đã tạo vận đơn ${carrier(f.carrier).short} ${x.tracking_no}`);
+        const r = await run('create_shipment', { order_id, ...f, tracking_no: own ? null : f.tracking_no, driver_id: own ? f.driver_id : null, delivery_id: f.delivery_id || null },
+          (x) => (own ? `Đã tạo vận đơn ${x.code} · lái xe ${x.driver_name}` : `Đã tạo vận đơn ${carrier(f.carrier).short} ${x.tracking_no}`));
         if (r) { rememberCarrier(f.carrier); onClose(); }
       }}>Lưu vận đơn</Btn></>}>
-      <Note>Tạo đơn gửi trên app / trang quản lý của hãng như bình thường, rồi dán <b>mã vận đơn</b> vào đây. Từ đó trạng thái giao, tiền COD và thông báo đều gắn với đơn này.</Note>
+      {own ? <Note>Đơn vị khác không có mã vận đơn: chọn <b>lái xe</b> chở hàng (tên, SĐT, biển số lấy từ danh sách lái xe). Chưa có thì bấm <b>+</b> để thêm nhanh. Trạng thái giao và tiền lái xe thu hộ (COD) vẫn theo dõi ở mục Vận chuyển.</Note>
+        : <Note>Tạo đơn gửi trên app / trang quản lý của hãng như bình thường, rồi dán <b>mã vận đơn</b> vào đây. Từ đó trạng thái giao, tiền COD và thông báo đều gắn với đơn này.</Note>}
       <div className="seg">{CARRIERS.map((c) => <button key={c.code} className={f.carrier === c.code ? 'on' : ''} onClick={() => set('carrier', c.code)}>{c.name}</button>)}</div>
       <div className="grid">
-        <Field label={`Mã vận đơn ${carrier(f.carrier).short}`} required wide><Input value={f.tracking_no} onChange={(v) => set('tracking_no', v.toUpperCase())} placeholder={carrier(f.carrier).hint} autoFocus /></Field>
-        <Field label="Tiền thu hộ (COD)" hint={`Đơn còn phải trả ${money(d.remaining_to_pay)}. Để 0 nếu khách đã chuyển khoản.`}><NumInput value={f.cod_amount} onChange={(v) => set('cod_amount', v || 0)} /></Field>
+        {own ? <Field label="Lái xe" required wide><DriverSelect value={f.driver_id} onChange={(v) => set('driver_id', v)} /></Field>
+          : <Field label={`Mã vận đơn ${carrier(f.carrier).short}`} required wide><Input value={f.tracking_no} onChange={(v) => set('tracking_no', v.toUpperCase())} placeholder={carrier(f.carrier).hint} autoFocus /></Field>}
+        <Field label={own ? 'Lái xe thu hộ (COD)' : 'Tiền thu hộ (COD)'} hint={`Đơn còn phải trả ${money(d.remaining_to_pay)}. Để 0 nếu khách đã chuyển khoản.`}><NumInput value={f.cod_amount} onChange={(v) => set('cod_amount', v || 0)} /></Field>
         <Field label="Cước vận chuyển (dự kiến)"><NumInput value={f.ship_fee} onChange={(v) => set('ship_fee', v)} /></Field>
         <Field label="Gắn với phiếu giao"><Select value={f.delivery_id} onChange={(v) => set('delivery_id', v)} placeholder="(chưa giao trong sổ)" options={(dels.data || []).map((x) => ({ value: x.id, label: `${x.code} · ${dmy(x.delivery_date)}` }))} /></Field>
         <Field label="Người nhận"><Input value={f.receiver_name} onChange={(v) => set('receiver_name', v)} /></Field>
@@ -145,7 +150,7 @@ export function ShipmentDetail({ id, onClose }) {
   const cinfo = carrier(s.carrier);
   const copy = async () => { try { await navigator.clipboard.writeText(s.tracking_no); toast('Đã chép mã ' + s.tracking_no); } catch (e) { toast('Mã vận đơn: ' + s.tracking_no); } };
   return (
-    <Modal title={`Vận đơn ${cinfo.short} ${s.tracking_no}`} subtitle={<span className="row gap-s"><SP s={s.status} /> {s.cod_amount > 0 && <CP s={s.cod_status} />} · đơn {s.order_code} · {s.customer_name}</span>} onClose={onClose} size="lg"
+    <Modal title={cinfo.own ? `Vận đơn ${s.code} · ${shipLabel(s)}` : `Vận đơn ${cinfo.short} ${s.tracking_no}`} subtitle={<span className="row gap-s"><SP s={s.status} /> {s.cod_amount > 0 && <CP s={s.cod_status} />} · đơn {s.order_code} · {s.customer_name}</span>} onClose={onClose} size="lg"
       footer={<>
         <Btn icon="copy" onClick={copy}>Chép mã</Btn>
         {cinfo.track && <a className="btn btn-ghost" href={cinfo.track} target="_blank" rel="noreferrer"><Icon name="link" size={17} /><span>Tra trên trang {cinfo.short}</span></a>}
@@ -157,21 +162,22 @@ export function ShipmentDetail({ id, onClose }) {
         }}>Nhận hàng hoàn → nhập lại kho</Btn>}
       </>}>
       <div className="grid-2">
-        <KV items={[['Đơn vị vận chuyển', cinfo.name], ['Người nhận', `${s.receiver_name || '—'}${s.receiver_phone ? ' · ' + s.receiver_phone : ''}`], ['Địa chỉ', s.receiver_address || '—'],
+        <KV items={[['Đơn vị vận chuyển', cinfo.name], cinfo.own && ['Lái xe', s.driver_name ? [s.driver_name, s.driver_phone, s.driver_plate].filter(Boolean).join(' · ') : 'Chưa chọn'], ['Người nhận', `${s.receiver_name || '—'}${s.receiver_phone ? ' · ' + s.receiver_phone : ''}`], ['Địa chỉ', s.receiver_address || '—'],
           ['Tiền thu hộ (COD)', s.cod_amount > 0 ? `${money(s.cod_amount)} đ` : 'Không'], ['Cước vận chuyển', s.ship_fee ? money(s.ship_fee) + ' đ' : '—'],
           s.cod_payment_codes?.length > 0 && ['Phiếu thu COD', s.cod_payment_codes.join(', ')], ['Phiếu giao', s.delivery_code || 'chưa gắn'],
           ['Theo dõi tự động', s.tracking_registered_at ? `Đã bật · lần cập nhật ${dmyhm(s.last_sync_at)}` : (s.last_sync_at ? `Có · lần nhận gần nhất ${dmyhm(s.last_sync_at)}` : 'Chưa (cập nhật tay hoặc nhập file Excel)')], s.note && ['Ghi chú', s.note]]} />
         {can('ban_hang') && !s.order_cancelled && (
           <Section title="Cập nhật trạng thái">
-            <div className="muted small">Xem trạng thái trên app {cinfo.short} rồi chọn ở đây. Mỗi lần đổi được lưu vào lịch sử và gửi thông báo.</div>
+            <div className="muted small">{cinfo.own ? 'Hỏi lái xe' : `Xem trạng thái trên app ${cinfo.short}`} rồi chọn ở đây. Mỗi lần đổi được lưu vào lịch sử và gửi thông báo.</div>
             <Select value={st} onChange={setSt} placeholder="Chọn trạng thái mới…" options={Object.entries(SHIP_STATUS).map(([value, [label]]) => ({ value, label, disabled: value === s.status }))} />
             <Input value={note} onChange={setNote} placeholder="Ghi chú (vd. khách hẹn giao lại thứ 7)" />
             <div><Btn kind="soft" busy={busy} disabled={!st} onClick={async () => { if (await run('update_shipment_status', { id, status: st, note }, 'Đã cập nhật trạng thái')) { setSt(''); setNote(''); } }}>Lưu trạng thái</Btn>
-              {' '}<Btn small onClick={() => setEdit({ cod_amount: s.cod_amount, ship_fee: s.ship_fee, receiver_phone: s.receiver_phone, receiver_address: s.receiver_address, note: s.note || '' })}>Sửa COD / thông tin</Btn></div>
+              {' '}<Btn small onClick={() => setEdit({ ...(cinfo.own ? { driver_id: s.driver_id || '' } : {}), cod_amount: s.cod_amount, ship_fee: s.ship_fee, receiver_phone: s.receiver_phone, receiver_address: s.receiver_address, note: s.note || '' })}>Sửa COD / thông tin</Btn></div>
           </Section>
         )}
       </div>
       {edit && <div className="section"><div className="grid">
+        {cinfo.own && <Field label="Lái xe" wide><DriverSelect value={edit.driver_id} onChange={(v) => setEdit((x) => ({ ...x, driver_id: v }))} /></Field>}
         <Field label="COD"><NumInput value={edit.cod_amount} onChange={(v) => setEdit((x) => ({ ...x, cod_amount: v || 0 }))} /></Field>
         <Field label="Cước vận chuyển"><NumInput value={edit.ship_fee} onChange={(v) => setEdit((x) => ({ ...x, ship_fee: v || 0 }))} /></Field>
         <Field label="SĐT nhận"><Input value={edit.receiver_phone} onChange={(v) => setEdit((x) => ({ ...x, receiver_phone: v }))} /></Field>
@@ -295,7 +301,7 @@ export function OrderShipments({ order }) {
   return (
     <Section title="Vận chuyển" actions={can('ban_hang') && order.status === 'xac_nhan' && <Btn small kind="soft" icon="route" onClick={() => open('ship-form', { order_id: order.id })}>Tạo vận đơn</Btn>}>
       <Table dense rows={q.data} empty="Chưa gửi qua đơn vị vận chuyển" onRow={(s) => open('ship', { id: s.id })} columns={[
-        { key: 't', label: 'Vận đơn', render: (s) => <div className="row gap-s"><CarrierPill c={s.carrier} /><b>{s.tracking_no}</b></div> },
+        { key: 't', label: 'Vận đơn', render: (s) => <div className="row gap-s"><CarrierPill c={s.carrier} /><b>{shipLabel(s)}</b></div> },
         { key: 's', label: 'Trạng thái', render: (s) => <><SP s={s.status} /><div className="cell-sub">{dmyhm(s.status_at)}</div></> },
         { key: 'c', label: 'COD', align: 'right', render: (s) => (s.cod_amount > 0 ? <>{money(s.cod_amount)}<div><CP s={s.cod_status} /></div></> : '—') },
       ]} />

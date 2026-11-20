@@ -2,6 +2,7 @@ import { OrderShipments } from './Shipping.jsx';
 import { QrBox } from './SettingsExtra.jsx';
 import { orderTransferContent } from '../lib/vietqr.js';
 import { CARRIERS, carrier as carrierInfo, lastCarrier, rememberCarrier } from '../lib/carriers.js';
+import { DriverSelect } from '../components/DriverSelect.jsx';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp, useQ, useAction } from '../lib/store.jsx';
 import { money, moneyD, qty as fq, dmy, dmyhm, todayVN, match, pct } from '../lib/format.js';
@@ -626,7 +627,8 @@ export function DeliverDialog({ order, onClose }) {
   const depositLeft = Math.max(order.paid_net - (order.deposit_used || 0), 0);
   const [collect, setCollect] = useState(false);
   const [fund, setFund] = useState('');
-  const [viaSpx, setViaSpx] = useState(false); const [tracking, setTracking] = useState(''); const [cod, setCod] = useState(null); const [cr, setCr] = useState(lastCarrier());
+  const [viaSpx, setViaSpx] = useState(false); const [tracking, setTracking] = useState(''); const [cod, setCod] = useState(null); const [cr, setCr] = useState(lastCarrier()); const [driverId, setDriverId] = useState('');
+  const ownCr = carrierInfo(cr).own;
   const pmap = useMemo(() => Object.fromEntries((products.data || []).map((p) => [p.id, p])), [products.data]);
   useEffect(() => { if (lines.data) setQtys(Object.fromEntries(lines.data.filter((l) => l.remaining_qty > 0).map((l) => [l.id, l.remaining_qty]))); }, [lines.data]);
   useEffect(() => { if (!fund && funds.data?.length) setFund(funds.data[0].id); }, [funds.data]);
@@ -642,13 +644,13 @@ export function DeliverDialog({ order, onClose }) {
         refresh();
       } catch (e) { toast('Đã giao nhưng chưa thu được tiền: ' + e.message, 'err'); }
     }
-    if (viaSpx && tracking.trim()) {
+    if (viaSpx && (ownCr ? driverId : tracking.trim())) {
       try {
         let codAmt = cod;
         if (codAmt === null || codAmt === undefined || codAmt === '') { const [o3] = await rpc('q', { view: 'sales_orders', filters: [['id', 'eq', order.id]] }); codAmt = Math.max(0, o3?.receivable || 0); }
-        const sh = await rpc('create_shipment', { request_id: crypto.randomUUID?.() || String(Date.now()), order_id: order.id, delivery_id: r.id, carrier: cr, tracking_no: tracking, cod_amount: codAmt });
+        const sh = await rpc('create_shipment', { request_id: crypto.randomUUID?.() || String(Date.now()), order_id: order.id, delivery_id: r.id, carrier: cr, tracking_no: ownCr ? null : tracking, driver_id: ownCr ? driverId : null, cod_amount: codAmt });
         rememberCarrier(cr);
-        toast(`Đã gắn vận đơn ${carrierInfo(cr).short} ${sh.tracking_no}${codAmt > 0 ? ' · COD ' + money(codAmt) + ' đ' : ''}`); refresh();
+        toast(`Đã gắn vận đơn ${ownCr ? sh.code + ' · lái xe ' + sh.driver_name : carrierInfo(cr).short + ' ' + sh.tracking_no}${codAmt > 0 ? ' · COD ' + money(codAmt) + ' đ' : ''}`); refresh();
       } catch (e) { toast('Đã giao nhưng chưa tạo được vận đơn: ' + e.message, 'err'); }
     }
     // Có thu tiền thì mở luôn phiếu thu theo mẫu (cùng hộp thoại với biên bản, hóa đơn của đợt giao) để sửa và xuất PDF
@@ -673,9 +675,10 @@ export function DeliverDialog({ order, onClose }) {
       </div>
       <div className="row gap"><Check checked={viaSpx} onChange={(v) => { setViaSpx(v); if (v) setCollect(false); }}>Gửi qua đơn vị vận chuyển</Check>
         {viaSpx && <Select value={cr} onChange={setCr} options={CARRIERS.map((c) => ({ value: c.code, label: c.name }))} style={{ maxWidth: 170 }} aria-label="Đơn vị vận chuyển" />}
-        {viaSpx && <><Input value={tracking} onChange={(v) => setTracking(v.toUpperCase())} placeholder={`Mã vận đơn ${carrierInfo(cr).short === 'Khác' ? '' : carrierInfo(cr).short}`.trim() + '…'} style={{ maxWidth: 220 }} />
+        {viaSpx && <>{ownCr ? <DriverSelect value={driverId} onChange={setDriverId} style={{ minWidth: 240 }} />
+          : <Input value={tracking} onChange={(v) => setTracking(v.toUpperCase())} placeholder={`Mã vận đơn ${carrierInfo(cr).short}…`} style={{ maxWidth: 220 }} />}
           <NumInput value={cod} onChange={setCod} placeholder="COD: tự tính = khách còn nợ" style={{ maxWidth: 230 }} aria-label="Tiền thu hộ COD" /></>}</div>
-      {viaSpx && <div className="muted small">COD để trống = số khách còn nợ sau lần giao này; nhập 0 nếu khách đã chuyển khoản. Tiền COD được theo dõi ở mục Vận chuyển cho tới khi hãng chuyển về tài khoản.</div>}
+      {viaSpx && <div className="muted small">{ownCr ? 'Đơn vị khác không có mã vận đơn: chọn lái xe chở hàng, chưa có thì bấm + để thêm nhanh. ' : ''}COD để trống = số khách còn nợ sau lần giao này; nhập 0 nếu khách đã chuyển khoản. Tiền COD được theo dõi ở mục Vận chuyển cho tới khi hãng chuyển về tài khoản.</div>}
       {can('thu_chi') && !viaSpx && <div className="row gap"><Check checked={collect} onChange={setCollect}>Thu luôn số khách còn nợ sau lần giao này</Check>
         {collect && <Select value={fund} onChange={setFund} options={(funds.data || []).map((x) => ({ value: x.id, label: x.name }))} style={{ maxWidth: 220 }} />}</div>}
       {settings.allow_oversell && <div className="muted small">Sổ đang cho bán khi tồn không đủ: giao vượt thì tồn kho thành số âm.</div>}

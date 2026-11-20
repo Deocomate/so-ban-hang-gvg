@@ -644,6 +644,7 @@ left join book_members m on m.user_id = e.user_id and m.book_id = e.book_id;
 create view v_shipments as
 select s.id, s.book_id, s.code, s.order_id, o.code as order_code, o.customer_id, c.name as customer_name, c.phone as customer_phone,
   o.channel, s.delivery_id, d.code as delivery_code, s.carrier, carrier_name(s.carrier) as carrier_name, s.tracking_no, s.status,
+  s.driver_id, dr.code as driver_code, dr.name as driver_name, dr.phone as driver_phone, dr.plate as driver_plate,
   ship_status_label(s.status) as status_label,
   s.status_at, s.status_detail, s.cod_amount, s.ship_fee, s.cod_status, cod_status_label(s.cod_status) as cod_status_label,
   s.cod_settled_at, s.receiver_name, s.receiver_phone, s.receiver_address, s.note, s.tracking_registered_at, s.last_sync_at,
@@ -658,7 +659,7 @@ select s.id, s.book_id, s.code, s.order_id, o.code as order_code, o.customer_id,
   (select coalesce(json_group_array(p.code), '[]') from payments p where p.id in (select value from json_each(s.cod_payment_ids))) as cod_payment_codes,
   o.status = 'huy' as order_cancelled
 from shipments s join sales_orders o on o.id = s.order_id
-left join customers c on c.id = o.customer_id left join deliveries d on d.id = s.delivery_id;
+left join customers c on c.id = o.customer_id left join deliveries d on d.id = s.delivery_id left join drivers dr on dr.id = s.driver_id;
 
 create view v_bank_txns as
 select b.id as book_id, t.id, t.provider, t.ext_id, t.account_no, t.amount, t.direction, t.content, t.txn_at, t.ref, t.counter_name,

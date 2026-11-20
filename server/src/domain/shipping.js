@@ -1,4 +1,4 @@
-// Vận chuyển (Shopee Express, BEST Express, đơn vị khác): vận đơn, trạng thái (tay / tự động / file Excel), đối soát COD.
+// Vận chuyển (Shopee Express, BEST Express, đơn vị khác = lái xe của mình): vận đơn, trạng thái (tay / tự động / file Excel), đối soát COD.
 import crypto from 'node:crypto';
 import { ctx, fail, one, all, run, insert, uuid, nowIso, num, nz, rnd, asDate, asTs, today, json, vnd, outRows } from '../lib/context.js';
 import { requirePerm, nextCode, once } from './access.js';
@@ -8,6 +8,19 @@ import { notify } from './notify.js';
 
 const normTracking = (t) => String(t ?? '').replace(/\s/g, '').toUpperCase();
 const minuteKey = (ts) => (ts ? ts.slice(0, 16).replace(/[-T:]/g, '') : '');
+
+// Đơn vị khác không có mã vận đơn của hãng: đi bằng lái xe trong danh sách lái xe
+const isOwnCarrier = (c) => c === 'KHAC';
+function bookDriver(b, id) {
+  const d = nz(id) && one(`select id, name, phone, plate from drivers where id = ? and book_id = ?`, id, b);
+  if (!d) fail('Chọn lái xe cho đơn vị khác (hoặc thêm lái xe mới)');
+  return d;
+}
+// Tên ngắn của vận đơn trong thông báo: "SPX SPXVN0…" hoặc "xe Anh Đức"
+function shipRef(s) {
+  if (!isOwnCarrier(s.carrier) || !s.driver_id) return `${carrierShort(s.carrier)} ${s.tracking_no}`;
+  return `xe ${one(`select name from drivers where id = ?`, s.driver_id)?.name ?? ''} (${s.code})`;
+}
 
 // Thêm 1 dòng lịch sử (không trùng); trả về true nếu là dòng mới
 export function addShipEvent(shipId, at, status, detail, location, source) {
@@ -35,8 +48,8 @@ export function setShipStatus(shipId, status, at, detail) {
   const o = one(`select so.code, c.name as cname from sales_orders so left join customers c on c.id = so.customer_id where so.id = ?`, s.order_id);
   const lvl = { giao_thanh_cong: 'good', giao_that_bai: 'warn', dang_hoan: 'bad', da_hoan: 'bad', su_co: 'bad', da_huy: 'warn' }[status] || 'info';
   if (['da_lay_hang', 'dang_giao', 'giao_thanh_cong', 'giao_that_bai', 'dang_hoan', 'da_hoan', 'su_co', 'da_huy'].includes(status)) {
-    const cs = carrierShort(s.carrier);
-    const body = `${o.cname ?? ''} · ${cs} ${s.tracking_no}`
+    const cs = isOwnCarrier(s.carrier) ? 'lái xe' : carrierShort(s.carrier);
+    const body = `${o.cname ?? ''} · ${shipRef(s)}`
       + (detail ? ' · ' + detail : '')
       + (status === 'giao_thanh_cong' && s.cod_amount > 0 ? ` · ${cs} đang giữ COD ${vnd(s.cod_amount)}, chờ đối soát về tài khoản` : '')
       + (['dang_hoan', 'da_hoan'].includes(status) ? ' · Khi nhận lại hàng, mở đơn → Trả hàng để nhập lại kho' : '');
@@ -52,10 +65,14 @@ export function create_shipment(p) {
     const o = one(`select * from v_sales_orders where id = ? and book_id = ?`, p.order_id, b);
     if (!o) fail('Không tìm thấy đơn hàng');
     if (o.status !== 'xac_nhan') fail(`Chỉ tạo vận đơn cho đơn đã xác nhận (đơn ${o.code} đang ${o.status === 'nhap' ? 'là nháp' : 'đã hủy'})`);
-    const tn = normTracking(p.tracking_no);
-    if (!tn) fail('Nhập mã vận đơn (vd. SPXVN0… của Shopee Express, hoặc mã vận đơn BEST)');
     const carrier = nz(p.carrier) || 'SPX';
     if (!CARRIERS.includes(carrier)) fail('Đơn vị vận chuyển không hợp lệ');
+    const own = isOwnCarrier(carrier);
+    const drv = own ? bookDriver(b, p.driver_id) : null;
+    const code = nextCode(b, 'VD');
+    // Đơn vị khác: không có mã của hãng, dùng luôn mã vận đơn trong sổ để tra cứu
+    const tn = own ? code : normTracking(p.tracking_no);
+    if (!tn) fail('Nhập mã vận đơn (vd. SPXVN0… của Shopee Express, hoặc mã vận đơn BEST)');
     if (tn.length < 6) fail('Mã vận đơn quá ngắn');
     const ex = one(`select s.code, so.code as ocode from shipments s join sales_orders so on so.id = s.order_id
       where s.book_id = ? and upper(s.tracking_no) = ? and s.carrier = ?`, b, tn, carrier);
@@ -64,13 +81,13 @@ export function create_shipment(p) {
     if (cod < 0) fail('Tiền thu hộ không được âm');
     const did = nz(p.delivery_id);
     if (did && !one(`select 1 from deliveries where id = ? and order_id = ?`, did, o.id)) fail('Phiếu giao không thuộc đơn này');
-    const id = uuid(); const code = nextCode(b, 'VD'); const now = nowIso();
-    insert('shipments', { id, book_id: b, code, order_id: o.id, delivery_id: did, carrier, tracking_no: tn, status_at: now, cod_amount: cod,
+    const id = uuid(); const now = nowIso();
+    insert('shipments', { id, book_id: b, code, order_id: o.id, delivery_id: did, carrier, tracking_no: tn, driver_id: drv?.id ?? null, status_at: now, cod_amount: cod,
       ship_fee: rnd(num(p.ship_fee)) ?? 0, cod_status: cod > 0 ? 'chua_thu' : 'khong_cod',
       receiver_name: nz(p.receiver_name) || o.customer_name, receiver_phone: nz(p.receiver_phone) || o.customer_phone,
       receiver_address: nz(p.receiver_address) || o.customer_address, note: p.note ?? null, created_by: ctx.uid, created_at: now });
-    addShipEvent(id, now, 'cho_lay_hang', 'Tạo vận đơn trong sổ', null, 'he_thong');
-    return { id, code, tracking_no: tn };
+    addShipEvent(id, now, 'cho_lay_hang', drv ? `Tạo vận đơn trong sổ · lái xe ${drv.name}${drv.plate ? ' · ' + drv.plate : ''}` : 'Tạo vận đơn trong sổ', null, 'he_thong');
+    return { id, code, tracking_no: tn, driver_name: drv?.name ?? null };
   });
 }
 
@@ -83,12 +100,13 @@ export function update_shipment(p) {
   }
   const cod = rnd(num(p.cod_amount)) ?? s.cod_amount;
   if (cod < 0) fail('Tiền thu hộ không được âm');
+  const driverId = isOwnCarrier(s.carrier) && 'driver_id' in p ? bookDriver(s.book_id, p.driver_id).id : s.driver_id;
   const codStatus = ['khong_cod', 'chua_thu'].includes(s.cod_status) ? (cod > 0 ? 'chua_thu' : 'khong_cod')
     : s.cod_status === 'spx_dang_giu' && cod === 0 ? 'khong_cod' : s.cod_status;
-  run(`update shipments set cod_amount = ?, cod_status = ?, ship_fee = coalesce(?, ship_fee), note = coalesce(?, note),
+  run(`update shipments set driver_id = ?, cod_amount = ?, cod_status = ?, ship_fee = coalesce(?, ship_fee), note = coalesce(?, note),
       receiver_name = coalesce(?, receiver_name), receiver_phone = coalesce(?, receiver_phone), receiver_address = coalesce(?, receiver_address),
       updated_at = ? where id = ?`,
-  cod, codStatus, rnd(num(p.ship_fee)), p.note ?? null, p.receiver_name ?? null, p.receiver_phone ?? null, p.receiver_address ?? null, nowIso(), s.id);
+  driverId, cod, codStatus, rnd(num(p.ship_fee)), p.note ?? null, p.receiver_name ?? null, p.receiver_phone ?? null, p.receiver_address ?? null, nowIso(), s.id);
   return { ok: true };
 }
 

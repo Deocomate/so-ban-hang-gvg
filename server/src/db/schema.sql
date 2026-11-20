@@ -600,6 +600,7 @@ create table if not exists shipments (
   delivery_id text references deliveries(id),
   carrier text not null default 'SPX' check (carrier in ('SPX','BEST','KHAC')),
   tracking_no text not null,
+  driver_id text references drivers(id),   -- Đơn vị khác: xe / lái xe của mình, không có mã vận đơn của hãng
   status text not null default 'cho_lay_hang' check (status in ('cho_lay_hang','da_lay_hang','dang_trung_chuyen','dang_giao',
     'giao_thanh_cong','giao_that_bai','dang_hoan','da_hoan','da_huy','su_co')),
   status_at text not null,
