@@ -139,23 +139,38 @@ function LedgerTab({ id }) {
   );
 }
 
-// Lịch sử bán / trả hàng (như KiotViet): hóa đơn và phiếu trả hàng của khách theo ngày bán / ngày trả, mới nhất trước.
-// Đơn đã hủy không hiện.
-// Bấm một dòng là chi tiết hóa đơn xổ ra ngay dưới dòng.
+// Lịch sử bán / trả hàng (như KiotViet): chỉ hóa đơn HD và phiếu trả hàng của khách, theo ngày bán / ngày trả, mới nhất trước.
+// Đơn đặt hàng (DH) không phải hóa đơn nên không hiện; mỗi đợt giao của đơn đặt là một hóa đơn HD riêng (như trang Hóa đơn).
+// Tiền đã thu và còn nợ của đơn đặt theo dõi trên cả đơn, nên ghi ở hóa đơn mới nhất của đơn đó.
+// Đơn đã hủy không hiện. Bấm một dòng là chi tiết đơn xổ ra ngay dưới dòng.
 function OrdersTab({ id, usablePrepaid }) {
   const { can } = useApp();
   const { run, busy } = useAction();
   const [only, setOnly] = useState('');
   const q = useQ('sales_orders', [['customer_id', 'eq', id]], 'order_date desc', 5000);
+  const dq = useQ('deliveries', [['customer_id', 'eq', id], ['order_kind', 'eq', 'dat_hang']], 'delivery_date desc', 5000);
   const rq = useQ('sales_returns', [['customer_id', 'eq', id]], 'return_date desc', 2000);
-  const all = (q.data || []).filter((o) => o.status !== 'huy');
+  const all = useMemo(() => {
+    if (!q.data || !dq.data) return [];
+    const orders = Object.fromEntries(q.data.map((o) => [o.id, o]));
+    const direct = q.data.filter((o) => o.kind !== 'dat_hang' && o.status !== 'huy')
+      .map((o) => ({ ...o, key: o.id, type: 'ban', day: o.order_date, at: o.created_at, order_id: o.id }));
+    const seen = new Set(); // dq xếp mới nhất trước: dòng đầu tiên của mỗi đơn đặt mang số đã thu / còn nợ của đơn
+    const fromOrders = dq.data.filter((d) => d.order_status !== 'huy').map((d) => {
+      const o = orders[d.order_id] || {};
+      const last = !seen.has(d.order_id); seen.add(d.order_id);
+      return { key: 'dl-' + d.id, type: 'ban', from_order: true, code: d.code, order_code: d.order_code, order_id: d.order_id, day: d.delivery_date, at: d.created_at,
+        staff: d.staff, net_total: d.total, paid_net: last ? o.paid_net : 0, receivable: last ? o.receivable : 0, overdue_days: last ? o.overdue_days : 0,
+        status: 'xac_nhan', delivery_status: 'da_giao_du', delivered_value: last ? o.delivered_value : 0 };
+    });
+    return [...direct, ...fromOrders];
+  }, [q.data, dq.data]);
   const owing = all.filter((o) => o.receivable > 0);
   const rows = useMemo(() => {
-    if (!q.data || !rq.data) return null;
-    const sales = (only === 'debt' ? owing : all).map((o) => ({ ...o, key: o.id, type: 'ban', day: o.order_date, at: o.created_at, order_id: o.id }));
-    const rets = only === 'debt' ? [] : rq.data.map((r) => ({ key: r.id, type: 'tra', code: r.code, day: r.return_date, at: r.created_at, order_id: r.order_id, order_code: r.order_code, revenue: r.revenue, status: 'xac_nhan' }));
-    return [...sales, ...rets].sort((a, b) => String(b.day).localeCompare(String(a.day)) || String(b.at).localeCompare(String(a.at)));
-  }, [q.data, rq.data, only]);
+    if (!q.data || !dq.data || !rq.data) return null;
+    const rets = only === 'debt' ? [] : rq.data.map((r) => ({ key: r.id, type: 'tra', code: r.code, day: r.return_date, at: r.created_at, order_id: r.order_id, order_code: r.invoice_code || r.order_code, revenue: r.revenue, status: 'xac_nhan' }));
+    return [...(only === 'debt' ? owing : all), ...rets].sort((a, b) => String(b.day).localeCompare(String(a.day)) || String(b.at).localeCompare(String(a.at)));
+  }, [all, rq.data, only]);
   const tot = (k) => (rows || []).reduce((s, o) => s + (o.type !== 'ban' ? 0 : o[k] || 0), 0);
   return (
     <div className="stack">
@@ -169,15 +184,15 @@ function OrdersTab({ id, usablePrepaid }) {
           <Btn kind="soft" busy={busy} onClick={() => run('apply_prepaid', { customer_id: id }, (r) => `Đã trừ ${money(r.used)} đ tiền khách trả trước vào ${r.docs.join(', ')}`)}>
             Trừ {money(usablePrepaid)} đ khách trả trước vào đơn còn nợ</Btn>)}
       </div>
-      <ErrorBox error={q.error || rq.error} />
+      <ErrorBox error={q.error || dq.error || rq.error} />
       <Table rows={rows} rowKey="key" expand={(o, close) => <OrderDetail id={o.order_id} onClose={close} />}
         rowClass={(o) => (o.overdue_days > 0 ? 'row-late' : '')}
         empty={only ? 'Không có đơn nào còn nợ' : 'Khách chưa mua hàng'}
         foot={rows?.length ? { c: `${rows.length} chứng từ`, t: money(tot('net_total')), p: money(tot('paid_net')), d: money(tot('receivable')) } : null}
         columns={[
-          { key: 'c', label: 'Mã chứng từ', render: (o) => <><b>{o.code}</b>{o.type === 'tra' && <span className="muted small"> · trả từ {o.order_code}</span>}</> },
+          { key: 'c', label: 'Mã chứng từ', render: (o) => <><b>{o.code}</b>{o.type === 'tra' ? <span className="muted small"> · trả từ {o.order_code}</span> : o.from_order && <div className="cell-sub">từ đặt hàng {o.order_code}</div>}</> },
           { key: 'dt', label: 'Thời gian', className: 'nowrap', render: (o) => dayTime(o.day, o.at) },
-          { key: 'k', label: 'Loại', render: (o) => (o.type === 'tra' ? <Pill tone="warn">Trả hàng</Pill> : o.kind === 'dat_hang' ? 'Đặt hàng' : 'Hóa đơn') },
+          { key: 'k', label: 'Loại', render: (o) => (o.type === 'tra' ? <Pill tone="warn">Trả hàng</Pill> : 'Hóa đơn') },
           { key: 'st', label: 'Người bán', render: (o) => o.staff || '' },
           { key: 't', label: 'Tổng cộng', align: 'right', render: (o) => (o.type === 'tra' ? <span className="bad">−{money(o.revenue)}</span> : money(o.net_total)) },
           { key: 'p', label: 'Đã thu', align: 'right', render: (o) => (o.type === 'ban' && o.paid_net ? money(o.paid_net) : '') },

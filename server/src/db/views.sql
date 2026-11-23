@@ -295,7 +295,10 @@ from delivery_lines x join deliveries d on d.id = x.delivery_id join products p 
 create view v_sales_returns as
 select r.id, r.book_id, r.code, r.order_id, o.code as order_code, o.customer_id, c.name as customer_name, r.return_date, r.reason, r.note,
   r.created_at, coalesce(x.revenue, 0) as revenue,
-  case when can_cost(r.book_id) then x.cogs end as cogs, x.lines
+  case when can_cost(r.book_id) then x.cogs end as cogs, x.lines,
+  -- Hóa đơn bị trả: đơn đặt hàng thì là hóa đơn HD lập khi giao (phiếu giao), đơn bán ngay thì chính mã đơn
+  case when o.kind = 'dat_hang' then (select d.code from sales_return_lines l join delivery_lines dl on dl.id = l.delivery_line_id
+    join deliveries d on d.id = dl.delivery_id where l.return_id = r.id order by d.delivery_date desc limit 1) end as invoice_code
 from sales_returns r join sales_orders o on o.id = r.order_id left join customers c on c.id = o.customer_id
 left join (select l.return_id, sum(l.revenue) as revenue, sum(l.cogs) as cogs,
    json_group_array(json_object('sku', p.sku, 'name', p.name, 'qty', l.qty, 'revenue', l.revenue,
