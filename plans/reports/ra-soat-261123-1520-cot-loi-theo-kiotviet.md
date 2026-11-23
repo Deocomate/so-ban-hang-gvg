@@ -130,10 +130,7 @@ So bản sao sổ thật sau khi sửa với dữ liệu xuất KiotViet (09/11,
 
 ### Khác cách làm với KiotViet (chưa sửa, cần quyết)
 
-1. **Hủy hoặc sửa hóa đơn làm tồn kho trong quá khứ khác KiotViet.**
-   - Sổ mới trả hàng về kho vào **ngày hủy**. Ví dụ HD001233.01 bán ngày 07/11, hủy ngày 20/11: tồn từ 07/11 đến 20/11 bị trừ hai lần cùng với bản .03.
-   - KiotViet thì coi hóa đơn đã hủy như chưa từng có, nên thẻ kho và tồn tại mọi ngày trong quá khứ không tính nó.
-   - Tồn hiện tại vẫn đúng; chỉ báo cáo xuất nhập tồn theo kỳ cũ và giá vốn trong khoảng đó bị lệch.
+1. Đã sửa (23/11, commit `4857a72`, deploy 16:22). Hủy phiếu giao (hóa đơn), phiếu nhập hoặc phiếu trả hàng nhập giờ bỏ hẳn các dòng sổ kho của chứng từ, rồi tính lại giá vốn từ ngày chứng từ, như KiotViet. Lệnh `scripts/drop-cancelled-stock-moves.js` đã dọn 13 chứng từ hủy trước đó (124 dòng sổ kho), tồn hiện tại không đổi. Sao lưu trước khi dọn: `backups/20261123-162211-truoc-don-so-kho-huy/`. Sau khi dọn, tồn ngày 09/11 chỉ còn lệch KiotViet ở các mã của hóa đơn chủ cửa hàng giữ hủy, các phiếu lập lùi ngày trên sổ mới và các mã được ghép.
 2. **Phí trả hàng.** Sổ mới trừ doanh thu theo giá trị trả đã trừ phí (phí vẫn tính là doanh thu). KiotViet trừ đủ giá trị trả, còn phí ghi riêng. Công nợ khách như nhau.
 
 ### Đã quyết
