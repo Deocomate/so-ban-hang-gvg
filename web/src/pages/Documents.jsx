@@ -337,6 +337,18 @@ function HeaderEditor({ type, prof, info, setEdit }) {
 // ---------- Hộp thoại xuất chứng từ ----------
 // pay: phiếu thu lập cùng lúc với đợt giao (giao + thu) → thêm thẻ "Phiếu thu" vào cùng hộp thoại.
 // page: hiện toàn trang (tab mới) thay cho hộp thoại.
+// Chọn lái xe có sẵn (tự điền SĐT, biển số, CCCD); vẫn gõ tay được nếu người vận chuyển chưa có trong danh sách
+function DriverPick({ value, drivers, onPick, onText }) {
+  const hit = drivers.find((d) => d.name === value);
+  return (
+    <div className="stack" style={{ gap: 6 }}>
+      {drivers.length > 0 && <Select value={hit ? hit.id : ''} onChange={(id) => { const d = drivers.find((x) => x.id === id); if (d) onPick(d); }}
+        options={[{ value: '', label: '— Chọn lái xe —' }, ...drivers.map((d) => ({ value: d.id, label: `${d.name}${d.plate ? ` · ${d.plate}` : ''}` }))]} />}
+      <Input value={value} onChange={onText} maxLength={500} placeholder="Hoặc gõ tên" />
+    </div>
+  );
+}
+
 export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
   const { q, rpc, book, settings, can, toast } = useApp();
   const ds = useMemo(() => docSettings(book, settings), [book, settings]);
@@ -347,6 +359,8 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
   const [data, setData] = useState(null); const [err, setErr] = useState(null);
   const [edit, setEdit] = useState({}); const [busy, setBusy] = useState(false); const [reload, setReload] = useState(0);
   const [showForm, setShowForm] = useState(true);
+  const [drivers, setDrivers] = useState([]);   // lái xe khai ở module vận chuyển, để chọn thay vì gõ tay
+  useEffect(() => { q('drivers', [], 'name').then((r) => setDrivers((r || []).filter((x) => x.active !== 0 && x.active !== false))).catch(() => {}); }, []);
   const [remindVat, setRemindVat] = useState(false);   // hộp nhắc xuất hóa đơn VAT sau khi in biên bản giao hàng
   // Mẫu in chọn cho từng loại chứng từ (nhớ lần chọn trước trên máy này)
   const [tplPick, setTplPick] = useState(() => { try { return JSON.parse(localStorage.getItem('gomsu.tpl_pick') || '{}') || {}; } catch (e) { return {}; } });
@@ -476,7 +490,8 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
                 const set = (x) => setEdit((s) => ({ ...s, [f.key]: x }));
                 return (
                   <Field key={f.key} label={f.label}>
-                    {f.kind === 'date' ? <DateInput value={v || ''} onChange={set} />
+                    {f.kind === 'driver' ? <DriverPick value={v || ''} drivers={drivers} onPick={(d) => setEdit((s) => ({ ...s, driver_name: d.name, driver_phone: d.phone || '', vehicle: d.plate || '', id_no: d.id_no || '' }))} onText={set} />
+                      : f.kind === 'date' ? <DateInput value={v || ''} onChange={set} />
                       : f.kind === 'money' ? <NumInput value={v === '' || v === undefined ? null : Number(v)} onChange={(x) => set(x === null ? '0' : String(x))} />
                       : f.kind === 'num' ? <Input value={v} onChange={(x) => set(x.replace(/[^\d]/g, ''))} inputMode="numeric" />
                       : <Input value={v} onChange={set} maxLength={500} />}

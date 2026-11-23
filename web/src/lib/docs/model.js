@@ -252,13 +252,13 @@ export function editableFields(type, data) {
   if (type === 'hoa_don') return [D, { key: 'recv_phone', label: 'SĐT nhận hàng' }, { key: 'recv_address', label: 'Địa chỉ nhận hàng', wide: true },
     { key: 'box_total', label: 'Tổng số hộp', kind: 'num' }, { key: 'old_debt', label: 'Nợ cũ', kind: 'money' }];
   if (type === 'hd_van_chuyen') return [D, { key: 'handover_rep', label: 'Đại diện bên giao' }, { key: 'carrier_party', label: 'Bên B (đơn vị / chủ xe)' }, { key: 'carrier_address', label: 'Địa chỉ bên B', wide: true },
-    { key: 'driver_name', label: 'Lái xe' }, { key: 'driver_phone', label: 'SĐT lái xe' }, { key: 'id_no', label: 'CCCD lái xe' }, { key: 'vehicle', label: 'Biển số xe' }, { key: 'recv_address', label: 'Địa chỉ giao hàng', wide: true },
+    { key: 'driver_name', label: 'Lái xe', kind: 'driver' }, { key: 'driver_phone', label: 'SĐT lái xe' }, { key: 'id_no', label: 'CCCD lái xe' }, { key: 'vehicle', label: 'Biển số xe' }, { key: 'recv_address', label: 'Địa chỉ giao hàng', wide: true },
     { key: 'recv_name', label: 'Người nhận' }, { key: 'recv_phone', label: 'SĐT nhận hàng' }, { key: 'box_total', label: 'Tổng số hộp', kind: 'num' }, { key: 'transit_days', label: 'Số ngày vận chuyển tối đa' },
     { key: 'freight_note', label: 'Cân nặng và giá cước', wide: true }, { key: 'pay_at', label: 'Thanh toán cước phí tại' }];
   if (data.kind === 'contract' || type === 'bao_gia' || RECONCILE.includes(type)) return type === 'bao_gia' ? [] : [D];
   if (type === 'don_dat_hang') return [D, { key: 'recv_phone', label: 'SĐT nhận hàng' }, { key: 'recv_address', label: 'Địa chỉ nhận hàng', wide: true }, { key: 'note', label: 'Ghi chú', wide: true }];
   if (type === 'bien_ban') return [D, { key: 'place', label: 'Nơi lập biên bản', wide: true }, { key: 'handover_rep', label: 'Đại diện bên giao' },
-    { key: 'driver_name', label: 'Bên vận chuyển / lái xe' }, { key: 'driver_phone', label: 'SĐT lái xe' }, { key: 'recv_party', label: 'Bên nhận hàng', wide: true },
+    { key: 'driver_name', label: 'Bên vận chuyển / lái xe', kind: 'driver' }, { key: 'driver_phone', label: 'SĐT lái xe' }, { key: 'recv_party', label: 'Bên nhận hàng', wide: true },
     { key: 'recv_address', label: 'Địa chỉ giao hàng', wide: true }, { key: 'recv_phone', label: 'SĐT nhận hàng' }, { key: 'recv_name', label: 'Người nhận hàng' },
     { key: 'goods_condition', label: 'Tình trạng hàng hóa', wide: true }, { key: 'box_total', label: 'Tổng số hộp', kind: 'num' }];
   if (type === 'yeu_cau_vat') return [D, { key: 'vat_unit', label: 'Tên đơn vị mua hàng', wide: true }, { key: 'vat_tax_code', label: 'Mã số thuế' },
