@@ -166,6 +166,20 @@ export function recost(b, method, from) {
       unit_cost = (select coalesce(-sum(m.value), 0) from stock_moves m where m.doc_type = 'tra_ncc' and m.qty < 0 and m.line_id = supplier_return_lines.id) / qty
     where id in (select line_id from stock_moves where book_id = ? and doc_type = 'tra_ncc' and qty < 0 and move_date >= ?)`, ...o);
 }
+// Chứng từ kho bị hủy (phiếu giao / hóa đơn, phiếu nhập, phiếu trả hàng nhập): bỏ hẳn các dòng sổ kho của nó như KiotViet
+// (chứng từ đã hủy không còn trên thẻ kho, tồn kho ở mọi ngày trước đây như chưa từng có nó), rồi tính lại giá vốn từ ngày chứng từ.
+export function dropDocMoves(b, docType, docIds, from) {
+  const ids = JSON.stringify(docIds);
+  const gone = all(`select product_id, sum(qty) as qty from stock_moves where book_id = ? and doc_type = ? and doc_id in (select value from json_each(?))
+    group by product_id`, b, docType, ids);
+  if (!gone.length) return;
+  run(`delete from stock_moves where book_id = ? and doc_type = ? and doc_id in (select value from json_each(?))`, b, docType, ids);
+  for (const g of gone) run(`update products set on_hand = round(on_hand - ?, 6), updated_at = ? where id = ?`, g.qty, nowIso(), g.product_id);
+  recost(b, costMethod(b), from);
+  // Mã không còn dòng sổ kho nào: tồn và giá trị về 0
+  for (const g of gone) run(`update products set stock_value = 0 where id = ? and not exists (select 1 from stock_moves where product_id = ?)`, g.product_id, g.product_id);
+}
+
 const dlCache = new Map();
 function deliveryLineOf(returnLineId) {
   if (!dlCache.has(returnLineId)) dlCache.set(returnLineId, one(`select delivery_line_id from sales_return_lines where id = ?`, returnLineId)?.delivery_line_id ?? null);

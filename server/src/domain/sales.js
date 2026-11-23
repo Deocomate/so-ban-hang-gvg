@@ -2,6 +2,7 @@
 import { ctx, fail, one, all, run, insert, uuid, nowIso, num, bool, nz, trimNz, rnd, asDate, today, vnd } from '../lib/context.js';
 import { requirePerm, isOwner, checkDate, nextCode, salesOrderCode, once, bookSettings } from './access.js';
 import { postMove, doAdjust, lineUnit } from './stock.js';
+import { dropDocMoves } from './costing.js';
 import { checkPriceBook, priceLevel } from './price-books.js';
 import { doPayment, moveDocPayments } from './cash.js';
 import { notifyOrderConfirmed } from './notify.js';
@@ -399,11 +400,10 @@ function undoDelivery(d, reason) {
   if (one(`select 1 from delivery_lines where delivery_id = ? and returned_qty > 0`, d.id)) fail(`Phiếu giao ${d.code} đã có hàng khách trả lại — không hủy được`);
   const text = deliveryLinesText(d.id);
   for (const x of all(`select * from delivery_lines where delivery_id = ?`, d.id)) {
-    for (const m of all(`select product_id, sum(qty) as qty, sum(value) as value from stock_moves where doc_type = 'giao' and line_id = ? group by product_id order by product_id`, x.id)) {
-      if (m.qty < 0) postMove(d.book_id, m.product_id, today(), -m.qty, null, 'giao', d.id, d.code, x.id, `Hủy phiếu giao ${d.code}`, -m.value);
-    }
     run(`update sales_order_lines set delivered_qty = delivered_qty - ? where id = ?`, x.qty, x.order_line_id);
   }
+  // Như KiotViet: hóa đơn / phiếu giao đã hủy không còn trên thẻ kho, hàng coi như chưa từng xuất (kể cả tồn ở các ngày trước)
+  dropDocMoves(d.book_id, 'giao', [d.id], d.delivery_date);
   const shipments = all(`select id from shipments where delivery_id = ?`, d.id).map((r) => r.id);
   const trips = all(`select id from driver_trips where delivery_id = ?`, d.id).map((r) => r.id);
   run(`update shipments set delivery_id = null where delivery_id = ?`, d.id);

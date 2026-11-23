@@ -4,6 +4,7 @@ import { ctx, fail, one, all, run, val, insert, uuid, nowIso, num, bool, nz, tri
 import { checkTxnDate } from './order-rules.js';
 import { requirePerm, checkDate, nextCode, once, setting, bookSettings } from './access.js';
 import { postMove, lineUnit, avgCost } from './stock.js';
+import { dropDocMoves } from './costing.js';
 import { doPayment, moveDocPayments } from './cash.js';
 
 // Chi phí nhập hàng (phí vận chuyển, bốc xếp, lưu kho…): [{name, amount, payer: 'ncc' | 'khac'}].
@@ -199,15 +200,16 @@ const hasSupplierReturn = (poId) => !!one(`select 1 from supplier_return_lines l
   join goods_receipt_lines x on x.id = l.receipt_line_id join goods_receipts g on g.id = x.receipt_id where g.po_id = ? and r.cancelled_at is null`, poId);
 
 function doCancelReceipt(g, reason, redo = false) {
-  checkDate(g.book_id, today());
+  checkDate(g.book_id, g.receipt_date);
   if (one(`select 1 from supplier_return_lines l join supplier_returns r on r.id = l.return_id join goods_receipt_lines x on x.id = l.receipt_line_id
       where x.receipt_id = ? and r.cancelled_at is null`, g.id)) fail(`Phiếu ${g.code} đã có phiếu trả hàng nhập — hãy hủy phiếu trả trước`);
   for (const l of all(`select * from goods_receipt_lines where receipt_id = ?`, g.id)) {
     const pr = one(`select sku, on_hand from products where id = ?`, l.product_id);
     if (!redo && pr.on_hand < l.qty) fail(`Tồn kho của ${pr.sku} chỉ còn ${pr.on_hand}, không đủ để hủy phiếu nhập ${g.code} (đã nhập ${l.qty})`);
-    postMove(g.book_id, l.product_id, today(), -l.qty, null, 'nhap', g.id, g.code, l.id, 'Hủy phiếu nhập ' + g.code, rnd(l.qty * l.unit_cost) + l.extra_cost);
     run(`update purchase_order_lines set received_qty = received_qty - ? where id = ?`, l.qty, l.po_line_id);
   }
+  // Như KiotViet: phiếu nhập đã hủy không còn trên thẻ kho (tồn ở các ngày trước như chưa từng nhập)
+  dropDocMoves(g.book_id, 'nhap', [g.id], g.receipt_date);
   run(`update goods_receipts set cancelled_at = ?, cancel_reason = ? where id = ?`, nowIso(), trimNz(reason), g.id);
 }
 
@@ -350,9 +352,10 @@ export function cancel_supplier_return(p) {
   if (r.cancelled_at) fail(`Phiếu ${r.code} đã hủy`);
   const pay = r.refund_payment_id ? one(`select code, voided from payments where id = ?`, r.refund_payment_id) : null;
   if (pay && !pay.voided) fail(`Hãy hủy phiếu thu ${pay.code} (NCC hoàn tiền) trước`);
-  checkDate(r.book_id, today());
+  checkDate(r.book_id, r.return_date);
+  // Như KiotViet: phiếu trả hàng nhập đã hủy không còn trên thẻ kho
+  dropDocMoves(r.book_id, 'tra_ncc', [r.id], r.return_date);
   for (const l of all(`select * from supplier_return_lines where return_id = ?`, r.id)) {
-    postMove(r.book_id, l.product_id, today(), l.qty, null, 'tra_ncc', r.id, r.code, l.id, 'Hủy phiếu trả ' + r.code, l.cost_value);
     if (l.receipt_line_id) {
       const gl = one(`select po_line_id from goods_receipt_lines where id = ?`, l.receipt_line_id);
       run(`update goods_receipt_lines set returned_qty = returned_qty - ? where id = ?`, l.qty, l.receipt_line_id);
