@@ -202,7 +202,7 @@ C('Hủy đơn nháp', (await ord(s8a.id)).delivery_status, 'da_huy');
 const s8b = await api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: A, order_date: D(3), status: 'xac_nhan', lines: [{ product_id: P3, qty: 1 }],
   deposit: { amount: 1000000, fund_id: TM } });
 C('Đơn xác nhận giữ hàng', (await prod(P3)).reserved, 1);
-await api.call('cancel_sales_order', { id: s8b.id, reason: 'Khách đổi mẫu' });
+await api.call('cancel_sales_order', { id: s8b.id });
 C('Hủy đơn nhả hàng giữ', (await prod(P3)).reserved, 0);
 C('Tiền cọc của đơn hủy thành tiền cần hoàn', (await ord(s8b.id)).payment_status, 'thua_tien');
 await E('Hoàn quá số đã cọc bị chặn', () => api.call('create_payment', { book_id: TH, request_id: rid(), kind: 'hoan_khach', date: D(3), fund_id: TM, party_id: A, amount: 1200000,

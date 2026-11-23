@@ -215,14 +215,14 @@ export function PaysheetsPage() {
   const [st, setSt] = useState('');
   const q = useQ('paysheets', [], 'created_at desc', 500);
   const all = q.data || [];
-  const rows = all.filter((s) => !st || s.status === st);
+  const rows = all.filter((s) => (st ? s.status === st : s.status !== 'huy'));
   return (
     <ListPage title="Bảng lương"
-      filters={<FilterBox title="Trạng thái"><RadioList value={st} onChange={setSt} options={[{ value: '', label: 'Tất cả', count: all.length },
+      filters={<FilterBox title="Trạng thái"><RadioList value={st} onChange={setSt} options={[{ value: '', label: 'Tất cả', count: all.filter((s) => s.status !== 'huy').length },
         ...[['tam', 'Tạm tính'], ['chot', 'Đã chốt'], ['huy', 'Đã hủy']].map(([v, l]) => ({ value: v, label: l, count: all.filter((s) => s.status === v).length }))]} /></FilterBox>}
       actions={<Btn kind="primary" icon="plus" onClick={() => open('paysheet-new', {})}>Bảng tính lương</Btn>}>
       <ErrorBox error={q.error} />
-      <Table rows={q.data ? rows : null} empty="Chưa có bảng lương" expand={(s, close) => <PaysheetDetail id={s.id} onClose={close} />} rowClass={(s) => (s.status === 'huy' ? 'row-void' : '')} columns={[
+      <Table rows={q.data ? rows : null} empty="Chưa có bảng lương" expand={(s, close) => <PaysheetDetail id={s.id} onClose={close} />} columns={[
         { key: 'c', label: 'Mã', render: (s) => <><div className="cell-main">{s.code}</div><div className="cell-sub">{s.name}</div></> },
         { key: 'k', label: 'Kỳ làm việc', render: (s) => `${dmy(s.period_from)} – ${dmy(s.period_to)}` },
         { key: 'n', label: 'Nhân viên', align: 'right', render: (s) => s.employees },

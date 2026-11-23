@@ -131,11 +131,10 @@ export function void_payment(p) {
   if (!pay) fail('Không tìm thấy phiếu');
   requirePerm(pay.book_id, 'owner');
   if (pay.voided) return { ok: true };
-  if (!trimNz(p.reason)) fail('Hãy ghi lý do hủy phiếu');
   checkDate(pay.book_id, pay.pay_date);
-  run(`update payments set voided = 1, void_reason = ?, voided_at = ? where id = ?`, p.reason, nowIso(), pay.id);
+  run(`update payments set voided = 1, void_reason = ?, voided_at = ? where id = ?`, trimNz(p.reason), nowIso(), pay.id);
   for (const a of all(`select doc_id, amount from payment_allocations where payment_id = ? and doc_type = 'don_ban'`, pay.id)) {
-    logOrder(a.doc_id, 'huy_phieu', `Hủy phiếu ${pay.code} (${vnd(a.amount)})`, [`Lý do: ${p.reason}`]);
+    logOrder(a.doc_id, 'huy_phieu', `Hủy phiếu ${pay.code} (${vnd(a.amount)})`, trimNz(p.reason) ? [`Lý do: ${p.reason}`] : []);
   }
   run(`update expenses set voided = 1, void_reason = ? where settled_payment_id = ?`, 'Hủy theo phiếu ' + pay.code, pay.id);
   // Giao dịch ngân hàng: khi mọi phiếu thu sinh ra từ nó đều đã hủy → chờ ghi lại
@@ -255,9 +254,8 @@ export function void_expense(p) {
   if (e.split_of) fail('Khoản này là phần chia từ thương hiệu khác — hãy hủy ở khoản gốc');
   if (e.settled_payment_id) fail('Phí sàn này gắn với phiếu thu — hãy hủy phiếu thu');
   if (one(`select 1 from v_alloc_signed where doc_id = ?`, e.id)) fail('Chi phí đã thanh toán — hãy hủy phiếu chi trước');
-  if (!trimNz(p.reason)) fail('Hãy ghi lý do hủy');
   checkDate(e.book_id, e.exp_date);
-  run(`update expenses set voided = 1, void_reason = ? where id = ? or split_of = ?`, p.reason, e.id, e.id);
+  run(`update expenses set voided = 1, void_reason = ? where id = ? or split_of = ?`, trimNz(p.reason), e.id, e.id);
   return { ok: true };
 }
 

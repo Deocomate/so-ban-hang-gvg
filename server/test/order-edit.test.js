@@ -40,7 +40,6 @@ C('Thêm hàng vào đơn đã giao: còn phải giao 5', (await order(o1)).rema
 
 G('2. Hủy đợt giao bấm nhầm: hàng về kho, đơn quay lại chờ giao');
 const before = await stock(P);
-await E('Phải ghi lý do', () => api.call('cancel_delivery', { book_id: TH, request_id: rid(), id: g1.id, reason: '' }), 'lý do');
 await api.call('cancel_delivery', { book_id: TH, request_id: rid(), id: g1.id, reason: 'Bấm nhầm giao đủ' });
 C('Tồn kho trả lại 10', await stock(P), before + 10);
 const v1 = await order(o1);

@@ -5,7 +5,7 @@ import { CARRIERS, carrier as carrierInfo, lastCarrier, rememberCarrier } from '
 import { DriverSelect } from '../components/DriverSelect.jsx';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp, useQ, useAction } from '../lib/store.jsx';
-import { money, moneyD, qty as fq, dmy, dmyhm, todayVN, match, pct } from '../lib/format.js';
+import { money, moneyD, qty as fq, dmy, dayTime, todayVN, match, pct } from '../lib/format.js';
 import { useProducts, useCustomers, useFunds, tierPrice, productLabel, productSub, KIND_LABEL, usePriceBooks } from '../lib/lookups.js';
 import { exportXlsx } from '../lib/excel.js';
 import { packing, weightOf, fmtKg } from '../lib/docs/model.js';
@@ -51,11 +51,13 @@ export function SalesPage() {
   const channelList = useMemo(() => channelOptions(settings, invoices.map((o) => o.channel)), [settings.channels, invoices]);
   const inTime = useMemo(() => invoices.filter((o) => time.inRange(invoiceDate(o))
     && (!channel || o.channel === channel) && match(`${o.code} ${o.customer_name} ${o.customer_code || ''} ${o.customer_phone || ''} ${o.note || ''}`, search)), [invoices, time.time, channel, search]);
-  const rows = useMemo(() => inTime.filter((o) => status.pass(o) && (!pay || PAY_FILTER[pay](o))), [inTime, status.sel, pay]);
+  // Xếp theo ngày bán (mới nhất trước), cùng ngày thì theo giờ lập
+  const rows = useMemo(() => inTime.filter((o) => status.pass(o) && (!pay || PAY_FILTER[pay](o)))
+    .sort((a, b) => invoiceDate(b).localeCompare(invoiceDate(a)) || String(b.created_at).localeCompare(String(a.created_at))), [inTime, status.sel, pay]);
   const count = (f) => inTime.filter((o) => status.pass(o) && f(o)).length;
   const cols = [
     { key: 'code', label: 'Mã hóa đơn', render: (o) => <span className="strong">{o.code}</span> },
-    { key: 'time', label: 'Thời gian', className: 'nowrap', render: (o) => (o.kind === 'dat_hang' ? dmy(invoiceDate(o)) : dmyhm(o.created_at)) },
+    { key: 'time', label: 'Thời gian', className: 'nowrap', render: (o) => (o.kind === 'dat_hang' ? dmy(invoiceDate(o)) : dayTime(o.order_date, o.created_at)) },
     { key: 'kh', label: 'Mã KH', render: (o) => o.customer_code || '' },
     { key: 'customer', label: 'Khách hàng', className: 'col-clip', render: (o) => <span title={o.customer_name}>{o.customer_name}</span> },
     { key: 'disc', label: 'Giảm giá', align: 'right', render: (o) => money(o.discount || 0) },
@@ -292,7 +294,7 @@ export function SpecialPage() {
   const [search, setSearch] = useState('');
   const inTime = useMemo(() => (data || []).filter((o) => time.inRange(o.order_date)
     && match(`${o.code} ${o.customer_name} ${o.customer_code || ''} ${o.customer_phone || ''} ${o.note || ''}`, search)), [data, time.time, search]);
-  const rows = useMemo(() => inTime.filter(status.pass), [inTime, status.sel]);
+  const rows = useMemo(() => inTime.filter(status.pass).sort((a, b) => b.order_date.localeCompare(a.order_date) || String(b.created_at).localeCompare(String(a.created_at))), [inTime, status.sel]);
   const sum = (k) => rows.reduce((t, o) => t + (o[k] || 0), 0);
   const viewSwitch = <Tabs value={view} onChange={setView} tabs={[{ value: 'list', label: 'Danh sách' }, { value: 'board', label: 'Bảng tiến độ' }]} />;
   // Báo giá là bước đầu tiên trước khi khách chốt; khách đã chốt thì tạo đơn thẳng
@@ -303,7 +305,7 @@ export function SpecialPage() {
   if (view === 'list') {
     const cols = [
       { key: 'code', label: 'Mã đặt hàng', render: (o) => <span className="strong">{o.code}</span> },
-      { key: 'time', label: 'Thời gian', className: 'nowrap', render: (o) => dmyhm(o.created_at) },
+      { key: 'time', label: 'Thời gian', className: 'nowrap', render: (o) => dayTime(o.order_date, o.created_at) },
       { key: 'kh', label: 'Mã KH', render: (o) => o.customer_code || '' },
       { key: 'customer', label: 'Khách hàng', className: 'col-clip', render: (o) => <span title={o.customer_name}>{o.customer_name}</span> },
       { key: 'due', label: 'Hẹn giao', className: 'nowrap', render: (o) => (o.due_date ? <span className={o.is_late ? 'bad strong' : ''}>{dmy(o.due_date)}</span> : '') },
@@ -399,9 +401,7 @@ export function OrderDetail({ id, onClose }) {
   const contract = useQ('contracts', [['order_id', 'eq', id]]);
   const { run, busy } = useAction();
   const [cancelMode, setCancelMode] = useState(null);
-  const [reason, setReason] = useState('');
   const [undo, setUndo] = useState(null); // đợt giao đang chờ xác nhận hủy
-  const [undoReason, setUndoReason] = useState('');
   const [askCancel, setAskCancel] = useState(false);
   const [info, setInfo] = useState(null); // ghi chú / người bán / kênh bán đang sửa ngay trong chi tiết (nút Lưu)
   const employees = useQ('employees', [['active', 'eq', 'true']], 'name', 500, can('ban_hang'));
@@ -423,16 +423,15 @@ export function OrderDetail({ id, onClose }) {
     { key: 'unit_price', label: 'Đơn giá' }, { key: 'discount_pct', label: 'Chiết khấu %' }, { key: 'line_total', label: 'Thành tiền' },
     { key: 'delivered_qty', label: 'Đã giao' }, { key: 'returned_qty', label: 'Đã trả' }] }]);
   const doCancel = async () => {
-    if (!reason.trim()) return;
-    const r = await run('cancel_sales_order', { id, reason: reason.trim() }, (x) => `Đã hủy hóa đơn ${d.code}`
+    const r = await run('cancel_sales_order', { id }, (x) => `Đã hủy hóa đơn ${d.code}`
       + (x.deliveries?.length ? ` · tự hủy phiếu giao ${x.deliveries.join(', ')}, hàng đã nhập lại kho` : '') + (x.paid > 0 ? ` · cần hoàn khách ${money(x.paid)} đ` : ''));
-    if (r) { setAskCancel(false); setReason(''); }
+    if (r) setAskCancel(false);
   };
   return (
     <Modal title={d.customer_name} onClose={onClose} size="xl"
       subtitle={<span className="row gap-s">{d.code} · {KIND_LABEL[d.kind]} · <StatusPill map={DELIVERY} value={d.delivery_status} /> <StatusPill map={PAYMENT} value={d.payment_status} /> {d.kind === 'dat_hang' && <Pill tone="accent">{d.progress}</Pill>} {d.is_late && <Pill tone="bad">trễ hẹn giao</Pill>}</span>}
       footer={<>
-        {editable && <Btn icon="trash" onClick={() => { setReason(''); setAskCancel(true); }}>Hủy</Btn>}
+        {editable && <Btn icon="trash" onClick={() => setAskCancel(true)}>Hủy</Btn>}
         {canSell && <Btn icon="copy" onClick={() => { onClose(); open('order-form', { copy_id: id }); }}>Sao chép</Btn>}
         <Btn icon="dl" onClick={exportOrder}>Xuất file</Btn>
         {contract.data?.[0] ? <Btn icon="receipt" onClick={() => open('contract', { id: contract.data[0].id })}>Hợp đồng {contract.data[0].code}</Btn>
@@ -452,7 +451,7 @@ export function OrderDetail({ id, onClose }) {
       </>}>
       {askCancel && (
         <Modal title="Hủy hóa đơn" size="sm" onClose={() => setAskCancel(false)}
-          footer={<><Btn onClick={() => setAskCancel(false)}>Bỏ qua</Btn><Btn kind="danger" busy={busy} disabled={!reason.trim() || d.returned_value > 0} onClick={doCancel}>Đồng ý</Btn></>}>
+          footer={<><Btn onClick={() => setAskCancel(false)}>Bỏ qua</Btn><Btn kind="danger" busy={busy} disabled={d.returned_value > 0} onClick={doCancel}>Đồng ý</Btn></>}>
           <div className="stack-s">
             {d.returned_value > 0 ? <Note tone="warn">Đơn {d.code} đã có phiếu trả hàng nên không hủy được. Phần khách còn giữ: dùng "Trả hàng".</Note> : <>
               <div>Khi hủy hóa đơn <b>{d.code}</b>, hệ thống sẽ tự động:</div>
@@ -461,7 +460,6 @@ export function OrderDetail({ id, onClose }) {
                 {d.remaining_qty > 0 && <li>Nhả hàng đang giữ cho đơn</li>}
                 {d.paid_net > 0 && <li>Số tiền đã thu {money(d.paid_net)} đ chuyển thành tiền cần hoàn cho khách (bấm "Hoàn tiền cho khách" khi trả lại)</li>}
               </ul>
-              <Input value={reason} onChange={setReason} placeholder="Lý do hủy (bắt buộc)" autoFocus />
             </>}
           </div>
         </Modal>
@@ -550,17 +548,15 @@ export function OrderDetail({ id, onClose }) {
             { key: 'v', label: 'Tiền đợt này', align: 'right', render: (r) => money(r.total) },
             { key: 'g', label: 'Giá vốn', align: 'right', render: (r) => (r.cogs === null || r.cogs === undefined ? '—' : money(r.cogs)) },
             { key: 'p', label: 'Chứng từ', render: (r) => <div className="row gap-s">{[['hoa_don', 'Hóa đơn'], ['bien_ban', 'Biên bản'], ['hd_van_chuyen', 'HĐVC']].map(([t, l]) => <Btn small key={t} onClick={() => open('doc', { kind: 'delivery', id: r.id, type: t })}>{l}</Btn>)}{canSell && <Btn small onClick={() => open('trip', { order_id: id, delivery_id: r.id })}>Lái xe</Btn>}
-              {canSell && <Btn small kind="ghost" onClick={() => { setUndo(r); setUndoReason(''); }}>Hủy đợt giao</Btn>}</div> },
+              {canSell && <Btn small kind="ghost" onClick={() => setUndo(r)}>Hủy đợt giao</Btn>}</div> },
           ]} />
           {undo && (
             <div className="card stack-s">
               <b>Hủy phiếu giao {undo.code} ({dmy(undo.delivery_date)})?</b>
               <div className="small muted">Hàng của đợt này nhập lại kho, doanh thu đợt này bỏ đi, đơn quay lại chờ giao. Tiền đã thu vẫn giữ (thành tiền khách trả trước).</div>
               <div className="row gap">
-                <Input value={undoReason} onChange={setUndoReason} placeholder="Lý do (bắt buộc), vd. bấm nhầm giao đủ" style={{ maxWidth: 360 }} autoFocus />
                 <ConfirmBtn kind="danger" busy={busy} onConfirm={async () => {
-                  if (!undoReason.trim()) return;
-                  if (await run('cancel_delivery', { id: undo.id, reason: undoReason.trim() }, `Đã hủy phiếu giao ${undo.code}`)) setUndo(null);
+                  if (await run('cancel_delivery', { id: undo.id }, `Đã hủy phiếu giao ${undo.code}`)) setUndo(null);
                 }}>Xác nhận hủy đợt giao</ConfirmBtn>
                 <Btn onClick={() => setUndo(null)}>Thôi</Btn>
               </div>
@@ -576,14 +572,13 @@ export function OrderDetail({ id, onClose }) {
         <Section title="Hủy phần chưa giao">
           {!cancelMode ? (
             <div className="row gap">
-              <Btn onClick={() => { setReason(''); setCancelMode('rest'); }}>Hủy phần chưa giao</Btn>
+              <Btn onClick={() => setCancelMode('rest')}>Hủy phần chưa giao</Btn>
               <span className="muted small">Giữ phần đã giao, bỏ phần khách không lấy nữa. Muốn hủy cả hóa đơn thì bấm "Hủy" ở cuối.</span>
             </div>
           ) : (
             <div className="row gap">
-              <Input value={reason} onChange={setReason} placeholder="Lý do (bắt buộc)" style={{ maxWidth: 360 }} />
               <ConfirmBtn kind="danger" busy={busy} onConfirm={async () => {
-                if (await run('cancel_remaining', { id, reason }, 'Đã hủy phần chưa giao')) { setCancelMode(null); setReason(''); }
+                if (await run('cancel_remaining', { id }, 'Đã hủy phần chưa giao')) setCancelMode(null);
               }}>Xác nhận hủy phần chưa giao</ConfirmBtn>
               <Btn onClick={() => setCancelMode(null)}>Thôi</Btn>
             </div>

@@ -208,7 +208,7 @@ function doCancelReceipt(g, reason, redo = false) {
     postMove(g.book_id, l.product_id, today(), -l.qty, null, 'nhap', g.id, g.code, l.id, 'Hủy phiếu nhập ' + g.code, rnd(l.qty * l.unit_cost) + l.extra_cost);
     run(`update purchase_order_lines set received_qty = received_qty - ? where id = ?`, l.qty, l.po_line_id);
   }
-  run(`update goods_receipts set cancelled_at = ?, cancel_reason = ? where id = ?`, nowIso(), reason, g.id);
+  run(`update goods_receipts set cancelled_at = ?, cancel_reason = ? where id = ?`, nowIso(), trimNz(reason), g.id);
 }
 
 // Nút "Lưu" trong chi tiết phiếu nhập: sửa nhanh ghi chú, số hóa đơn đầu vào mà không mở lại phiếu
@@ -224,12 +224,11 @@ export function cancel_purchase_order(p) {
   const po = getPo(p.id);
   requirePerm(po.book_id, 'nhap_hang');
   if (po.status === 'huy') fail('Đơn đã hủy');
-  if (!trimNz(p.reason)) fail('Hãy ghi lý do hủy');
   // Như KiotViet: hủy phiếu đã nhập kho thì tự hủy các lần nhập (xuất lại kho); tiền đã trả NCC thành tiền NCC cần hoàn lại
   if (hasSupplierReturn(po.id)) fail(`Phiếu ${po.code} đã có phiếu trả hàng nhập nên không hủy được. Hàng còn lại muốn trả: dùng "Trả hàng nhập".`);
   const recs = all(`select * from goods_receipts where po_id = ? and cancelled_at is null order by created_at desc`, po.id);
   for (const g of recs) doCancelReceipt(g, p.reason);
-  run(`update purchase_orders set status = 'huy', cancel_reason = ?, cancelled_at = ? where id = ?`, p.reason, nowIso(), po.id);
+  run(`update purchase_orders set status = 'huy', cancel_reason = ?, cancelled_at = ? where id = ?`, trimNz(p.reason), nowIso(), po.id);
   run(`update sales_order_lines set po_line_id = null where po_line_id in (select id from purchase_order_lines where po_id = ?)`, po.id);
   const paid = val(`select paid_net from v_purchase_orders where id = ?`, po.id) || 0;
   return { ok: true, paid, receipts: recs.map((g) => g.code) };
@@ -243,7 +242,6 @@ export function cancel_receipt(p) {
   if (po.mode === 'nhap') return cancel_purchase_order({ id: po.id, reason: p.reason });
   requirePerm(g.book_id, 'nhap_hang');
   if (g.cancelled_at) fail(`Phiếu ${g.code} đã hủy`);
-  if (!trimNz(p.reason)) fail('Hãy ghi lý do hủy');
   doCancelReceipt(g, p.reason);
   return { ok: true };
 }
@@ -253,7 +251,7 @@ export function cancel_po_remaining(p) {
   requirePerm(po.book_id, 'nhap_hang');
   const n = run(`update purchase_order_lines set cancelled_qty = qty - received_qty where po_id = ? and qty - cancelled_qty - received_qty > 0`, po.id).changes;
   if (!n) fail('Không còn phần nào chưa nhận');
-  run(`update purchase_orders set note = ? where id = ?`, [po.note, 'Hủy phần chưa nhận: ' + (p.reason ?? '')].filter((x) => x != null).join('\n'), po.id);
+  run(`update purchase_orders set note = ? where id = ?`, [po.note, (trimNz(p.reason) ? 'Hủy phần chưa nhận: ' + p.reason : 'Hủy phần chưa nhận')].filter((x) => x != null).join('\n'), po.id);
   return { ok: true };
 }
 
@@ -350,7 +348,6 @@ export function cancel_supplier_return(p) {
   if (!r) fail('Không tìm thấy phiếu trả hàng nhập');
   requirePerm(r.book_id, 'nhap_hang');
   if (r.cancelled_at) fail(`Phiếu ${r.code} đã hủy`);
-  if (!trimNz(p.reason)) fail('Hãy ghi lý do hủy');
   const pay = r.refund_payment_id ? one(`select code, voided from payments where id = ?`, r.refund_payment_id) : null;
   if (pay && !pay.voided) fail(`Hãy hủy phiếu thu ${pay.code} (NCC hoàn tiền) trước`);
   checkDate(r.book_id, today());
@@ -362,6 +359,6 @@ export function cancel_supplier_return(p) {
       run(`update purchase_order_lines set returned_qty = returned_qty - ? where id = ?`, l.qty, gl.po_line_id);
     }
   }
-  run(`update supplier_returns set cancelled_at = ?, cancel_reason = ? where id = ?`, nowIso(), p.reason, r.id);
+  run(`update supplier_returns set cancelled_at = ?, cancel_reason = ? where id = ?`, nowIso(), trimNz(p.reason), r.id);
   return { ok: true };
 }

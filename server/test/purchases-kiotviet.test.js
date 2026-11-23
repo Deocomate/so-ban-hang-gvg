@@ -41,8 +41,7 @@ C('Phiếu nhận hàng hiện ở danh sách nhập hàng', [rc.po_mode, rc.sta
 G('Hủy phiếu nhập');
 const pn2 = await api.call('save_purchase_order', { book_id: TH, request_id: rid(), mode: 'nhap', supplier_id: X, order_date: d, receive_now: true,
   deposit: { amount: 50000, fund_id: fund }, lines: [{ product_id: A, qty: 10, unit_price: 9000 }] });
-await E('Hủy phải có lý do', () => api.call('cancel_purchase_order', { id: pn2.id }), 'lý do');
-const c2 = await api.call('cancel_purchase_order', { id: pn2.id, reason: 'Nhập nhầm' });
+const c2 = await api.call('cancel_purchase_order', { id: pn2.id });
 C('Đã trả NCC vẫn hủy được: tự hủy lần nhập, tiền đã trả thành NCC cần hoàn', [c2.paid, c2.receipts.length], [50000, 1]);
 C('NCC đang nợ lại mình 50.000', (await supp(X)).payable, 1000000 - 50000);
 const pay = (await api.q('payments', TH)).find((x) => x.code === pn2.payment_code);

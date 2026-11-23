@@ -329,17 +329,16 @@ export function cancel_sales_order(p) {
   requirePerm(o.book_id, 'ban_hang');
   if (o.status === 'huy') return { ok: true };
   checkEinvoiceLock(o);
-  if (!trimNz(p.reason)) fail('Hãy ghi lý do hủy đơn');
   // Như KiotViet: hủy hóa đơn đã giao thì tự hủy các phiếu giao (hàng nhập lại kho, bỏ doanh thu) rồi hủy đơn.
   // Đơn đã có phiếu trả hàng thì phải giữ lịch sử trả nên không hủy được.
   const dels = all(`select * from deliveries where order_id = ? order by created_at desc`, o.id);
   if (dels.length && one(`select 1 from sales_returns where order_id = ?`, o.id)) {
     fail(`Đơn ${o.code} đã có phiếu trả hàng nên không hủy được. Phần khách còn giữ: dùng "Trả hàng".`);
   }
-  for (const d of dels) undoDelivery(d, `Hủy đơn: ${p.reason}`);
-  run(`update sales_orders set status = 'huy', cancel_reason = ?, cancelled_at = ? where id = ?`, p.reason, nowIso(), o.id);
+  for (const d of dels) undoDelivery(d, trimNz(p.reason) ? `Hủy đơn: ${p.reason}` : 'Hủy đơn');
+  run(`update sales_orders set status = 'huy', cancel_reason = ?, cancelled_at = ? where id = ?`, trimNz(p.reason), nowIso(), o.id);
   revertPromos(o.id);
-  logOrder(o.id, 'huy', 'Hủy đơn', [`Lý do: ${p.reason}`]);
+  logOrder(o.id, 'huy', 'Hủy đơn', trimNz(p.reason) ? [`Lý do: ${p.reason}`] : []);
   run(`update sales_order_lines set po_line_id = null where order_id = ?`, o.id);
   run(`update purchase_order_lines set sales_order_line_id = null where sales_order_line_id in (select id from sales_order_lines where order_id = ?)`, o.id);
   const paid = one(`select paid_net from v_doc_paid where doc_id = ?`, o.id);
@@ -368,7 +367,7 @@ export function cancel_remaining(p) {
   }
   if (!n) fail('Không còn phần nào chưa giao để hủy');
   logOrder(o.id, 'huy_con_lai', 'Hủy phần chưa giao', p.reason ? [`Lý do: ${p.reason}`] : []);
-  run(`update sales_orders set note = ? where id = ?`, [o.note, 'Hủy phần chưa giao: ' + (p.reason ?? '')].filter((x) => x != null).join('\n'), o.id);
+  run(`update sales_orders set note = ? where id = ?`, [o.note, (trimNz(p.reason) ? 'Hủy phần chưa giao: ' + p.reason : 'Hủy phần chưa giao')].filter((x) => x != null).join('\n'), o.id);
   return { ok: true, lines: n };
 }
 
@@ -386,7 +385,6 @@ export function cancel_delivery(p) {
   if (!d) fail('Không tìm thấy phiếu giao');
   requirePerm(d.book_id, 'ban_hang');
   return once(p, d.book_id, 'cancel_delivery', () => {
-    if (!trimNz(p.reason)) fail('Hãy ghi lý do hủy đợt giao');
     checkEinvoiceLock(one(`select * from sales_orders where id = ?`, d.order_id));
     undoDelivery(d, p.reason);
     return { ok: true, code: d.code };
@@ -413,7 +411,7 @@ function undoDelivery(d, reason) {
   cancelPoints(d.id, today());
   run(`delete from deliveries where id = ?`, d.id);
   logOrder(d.order_id, 'huy_giao', `Hủy phiếu giao ${d.code} (giao ngày ${d.delivery_date.split('-').reverse().join('/')})`,
-    [`Lý do: ${reason}`, ...text, 'Hàng đã nhập lại kho, doanh thu đợt này đã bỏ']);
+    [...(trimNz(reason) ? [`Lý do: ${reason}`] : []), ...text, 'Hàng đã nhập lại kho, doanh thu đợt này đã bỏ']);
   return { shipments, trips };
 }
 
