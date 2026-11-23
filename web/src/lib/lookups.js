@@ -52,6 +52,17 @@ export const parsePriceSource = (v, custTier) => (String(v).startsWith('lv:')
   ? { price_book_id: '', price_level: v.slice(3) === String(custTier) ? '' : v.slice(3) } : { price_book_id: v || '', price_level: '' });
 export const priceSourceValue = (f, custTier) => f.price_book_id || `lv:${f.price_level || custTier}`;
 export const levelTier = (level, custTier) => (level === 'cost' ? 'cost' : Number(level) || custTier);
+// Giá một hàng ở từng mức giá / bảng giá trong ô chọn bảng giá, để chọn giá riêng cho một dòng. Mức giá chưa đặt giá (0) và bảng giá có tên không có hàng này thì bỏ qua.
+export function priceChoices(p, { priceNames, books, canCost, custTier, unit = null }) {
+  if (!p?.id) return [];
+  return priceSourceOptions(priceNames, books, canCost, custTier).flatMap((o) => {
+    const s = parsePriceSource(o.value, custTier);
+    const book = s.price_book_id ? (books || []).find((b) => b.id === s.price_book_id) : null;
+    if (book && book.items?.[p.id] == null) return [];
+    const price = priceOf(p, { tier: levelTier(s.price_level, custTier), book, unit });
+    return price > 0 ? [{ value: o.value, label: o.label, price }] : [];
+  });
+}
 // Bảng giá được dùng cho khách (theo nhóm khách) và người đang đăng nhập
 // Danh sách nhóm khách của sổ (kể cả nhóm cũ còn khách đang dùng mà chưa có trong danh sách)
 export const groupNames = (settings, customers) => [...new Set([...(settings?.customer_groups || []), ...(customers || []).map((c) => c.kind).filter(Boolean)])];

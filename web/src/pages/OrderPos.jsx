@@ -4,7 +4,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useAction, useQ } from '../lib/store.jsx';
 import { money, qty as fq, todayVN, match, searchRank } from '../lib/format.js';
-import { useProducts, useCustomers, useFunds, productSub, priceOf, unitsOf, findUnit, usePriceBooks, booksFor, autoBookFor, groupNames, priceSourceOptions, parsePriceSource, priceSourceValue, levelTier } from '../lib/lookups.js';
+import { useProducts, useCustomers, useFunds, productSub, priceOf, unitsOf, findUnit, usePriceBooks, booksFor, autoBookFor, groupNames, priceSourceOptions, parsePriceSource, priceSourceValue, levelTier, priceChoices } from '../lib/lookups.js';
+import { DealPriceButton } from '../components/DealPrice.jsx';
 import { packing, weightOf, fmtKg, groupLabel } from '../lib/docs/model.js';
 import { Btn, Icon, Input, Select, DateInput, NumInput, Loading, Picker, Modal } from '../components/ui.jsx';
 import { ChargesDialog } from './Charges.jsx';
@@ -209,11 +210,10 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
     const p = pmap[l.product_id]; const u = findUnit(p, name);
     setLine(l.key, { unit: u.name, conv: u.conv, unit_price: l.manual ? (Number(l.unit_price) || 0) / (l.conv || 1) * u.conv : linePrice(p, { unit: u.name }) });
   };
-  // Giá riêng: khách deal lại giá một mặt hàng → khóa đơn giá dòng đó, đổi bảng giá không ghi đè; bấm lần nữa để lấy lại giá theo bảng giá
+  // Giá riêng: khách deal lại giá một mặt hàng → khóa đơn giá dòng đó (lấy giá ở bảng giá khác hoặc tự nhập), đổi bảng giá của đơn không ghi đè
   const setPrice = (l, v) => { if (Number(v) !== Number(l.unit_price)) setLine(l.key, { unit_price: v, manual: true, deal: true }); };
-  const toggleDeal = (l) => {
-    const p = pmap[l.product_id];
-    if (l.deal) { setLine(l.key, { deal: false, manual: false, ...(p ? { unit_price: linePrice(p, l) } : {}) }); return; }
+  const resetDeal = (l) => { const p = pmap[l.product_id]; setLine(l.key, { deal: false, manual: false, ...(p ? { unit_price: linePrice(p, l) } : {}) }); };
+  const customDeal = (l) => {
     setLine(l.key, { deal: true, manual: true });
     const inp = rootRef.current?.querySelector(`[data-line="${l.key}"] .pos-price input`); inp?.focus(); inp?.select();
   };
@@ -402,9 +402,9 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
                   </div>
                   <div className={`pos-price${l.deal ? ' deal' : ''}`}>
                     <span className="pos-price-head"><span className="muted small">{l.deal ? 'Giá riêng' : 'Đơn giá'}</span>
-                      <button type="button" className={`pos-deal-btn${l.deal ? ' on' : ''}`} onClick={() => toggleDeal(l)} aria-pressed={!!l.deal}
-                        title={l.deal ? 'Bỏ giá riêng, lấy lại giá theo bảng giá' : 'Đặt giá riêng cho mặt hàng này (khách deal giá) — đổi bảng giá không ghi đè'}>
-                        <Icon name={l.deal ? 'refresh' : 'tag'} size={13} />{l.deal ? 'Bảng giá' : 'Giá riêng'}</button></span>
+                      {p.id && <DealPriceButton deal={l.deal} price={l.unit_price} onCustom={() => customDeal(l)} onReset={() => resetDeal(l)}
+                        onPick={(v) => setLine(l.key, { unit_price: v, manual: true, deal: true })}
+                        choices={priceChoices(p, { priceNames, books: myBooks, canCost: can('xem_gia_von'), custTier: cust ? custTier : null, unit: findUnit(p, l.unit) })} />}</span>
                     <NumInput suffix={false} value={l.unit_price} onChange={(v) => setPrice(l, v)} aria-label={l.deal ? 'Giá riêng' : 'Đơn giá'} />
                     {l.deal && p.id && linePrice(p, l) !== Number(l.unit_price) && <span className="pos-deal-list small muted">Bảng giá {money(linePrice(p, l))}</span>}
                   </div>

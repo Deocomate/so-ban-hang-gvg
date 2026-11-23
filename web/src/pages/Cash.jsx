@@ -166,7 +166,6 @@ export function PaymentDetail({ id, onClose }) {
   const { can, open } = useApp();
   const q = useQ('payments', [['id', 'eq', id]]);
   const { run, busy } = useAction();
-  const [reason, setReason] = useState('');
   const p = q.data?.[0];
   if (!p) return <Modal title="Phiếu" onClose={onClose}>{q.error ? <ErrorBox error={q.error} /> : <Loading />}</Modal>;
   return (
@@ -189,8 +188,7 @@ export function PaymentDetail({ id, onClose }) {
       {can('owner') && !p.voided && (
         <Section title="Hủy phiếu">
           <div className="muted small">Phiếu hủy vẫn giữ trong lịch sử, chỉ không còn tính vào quỹ và công nợ. Ghi nhầm thì hủy rồi lập phiếu mới.</div>
-          <div className="row gap"><Input value={reason} onChange={setReason} placeholder="Lý do hủy (bắt buộc)" style={{ maxWidth: 320 }} />
-            <ConfirmBtn kind="danger" busy={busy} onConfirm={async () => { if (await run('void_payment', { id, reason }, 'Đã hủy phiếu ' + p.code)) onClose(); }}>Hủy phiếu</ConfirmBtn></div>
+          <div className="row gap"><ConfirmBtn kind="danger" busy={busy} onConfirm={async () => { if (await run('void_payment', { id }, 'Đã hủy phiếu ' + p.code)) onClose(); }}>Hủy phiếu</ConfirmBtn></div>
         </Section>
       )}
     </Modal>
@@ -233,7 +231,7 @@ export function CashPage() {
       </div>
       <div className="lp-sum"><span>Tổng thu <b className="good">{money(sum('thu'))}</b></span><span>Tổng chi <b className="bad">{money(sum('chi'))}</b></span><span>Chênh lệch <b>{money(sum('thu') - sum('chi'))}</b></span></div>
       <ErrorBox error={pays.error} />
-      <Table rows={pays.data ? rows : null} expand={(p, close) => <PaymentDetail id={p.id} onClose={close} />} rowClass={(p) => (p.voided ? 'row-void' : '')} columns={[
+      <Table rows={pays.data ? rows : null} expand={(p, close) => <PaymentDetail id={p.id} onClose={close} />} columns={[
         { key: 'c', label: 'Phiếu', render: (p) => <><div className="cell-main">{p.code}</div><div className="cell-sub">{dmy(p.pay_date)}</div></> },
         { key: 'k', label: 'Loại', render: (p) => <>{p.kind_label}<div className="cell-sub">{p.fund_name}{p.to_fund_name ? ' → ' + p.to_fund_name : ''}</div></> },
         { key: 'p', label: 'Đối tượng / nội dung', render: (p) => <>{p.party_name || '—'}<div className="cell-sub">{p.note}</div></> },
@@ -315,14 +313,14 @@ export function ServicePurchasesPage() {
   const [st, setSt] = useState(''); const [search, setSearch] = useState('');
   const q = useQ('expenses', [['supplier_id', 'not_null'], ...dateFilters('exp_date', time)], 'exp_date desc', 20000);
   const live = (q.data || []).filter((e) => !e.voided);
-  const rows = (q.data || []).filter((e) => (!st || (st === 'no' ? !e.voided && e.unpaid > 0 : st === 'du' ? !e.voided && e.unpaid <= 0 : e.voided))
+  const rows = (q.data || []).filter((e) => (!st ? !e.voided : (st === 'no' ? !e.voided && e.unpaid > 0 : st === 'du' ? !e.voided && e.unpaid <= 0 : e.voided))
     && match(`${e.code} ${e.category} ${e.description || ''} ${e.supplier_name || ''} ${e.invoice_no || ''}`, search));
   const sum = (k) => rows.filter((e) => !e.voided).reduce((s, e) => s + (e[k] || 0), 0);
   return (
     <ListPage title="Mua dịch vụ"
       filters={<>
         <TimeFilter filter={time} />
-        <FilterBox title="Trạng thái"><RadioList value={st} onChange={setSt} options={[{ value: '', label: 'Tất cả', count: (q.data || []).length },
+        <FilterBox title="Trạng thái"><RadioList value={st} onChange={setSt} options={[{ value: '', label: 'Tất cả', count: live.length },
           { value: 'no', label: 'Còn phải trả', count: live.filter((e) => e.unpaid > 0).length }, { value: 'du', label: 'Đã trả đủ', count: live.filter((e) => e.unpaid <= 0).length },
           { value: 'huy', label: 'Đã hủy', count: (q.data || []).filter((e) => e.voided).length }]} /></FilterBox>
       </>}
@@ -334,7 +332,7 @@ export function ServicePurchasesPage() {
         {can('chi_phi') && <Btn kind="primary" icon="plus" onClick={() => open('expense', { service: true })}>Tạo phiếu mua</Btn>}
       </>}>
       <ErrorBox error={q.error} />
-      <Table rows={q.data ? rows : null} rowClass={(e) => (e.voided ? 'row-void' : '')} foot={{ a: money(sum('amount')), p: money(sum('paid')), u: money(sum('unpaid')) }}
+      <Table rows={q.data ? rows : null} foot={{ a: money(sum('amount')), p: money(sum('paid')), u: money(sum('unpaid')) }}
         empty="Chưa có phiếu mua dịch vụ trong kỳ" columns={[
           { key: 'c', label: 'Mã phiếu', render: (e) => <><div className="cell-main">{e.code}</div><div className="cell-sub">{dmy(e.exp_date)}</div></> },
           { key: 'g', label: 'Loại chi', render: (e) => <><div className="cell-main">{e.category}</div><div className="cell-sub">{e.description}</div></> },
@@ -358,13 +356,12 @@ export function ExpensesPage(nav) {
   const [grp, setGrp] = useState(''); const [search, setSearch] = useState('');
   const q = useQ('expenses', dateFilters('exp_date', time), 'exp_date desc', 20000);
   const { run, busy } = useAction();
-  const [voidId, setVoidId] = useState(null); const [reason, setReason] = useState('');
   const tree = cats(settings);
   const live = (q.data || []).filter((e) => !e.voided);
   const byGrp = {}; for (const e of live) { const g = e.expense_group || 'Quản lý & khác'; byGrp[g] = (byGrp[g] || 0) + e.pl_amount; }
   const order = [...tree.map((g) => g.group), ...Object.keys(byGrp).filter((g) => !tree.some((t) => t.group === g))];
-  const rows = (q.data || []).filter((e) => (!grp || (e.expense_group || 'Quản lý & khác') === grp) && match(`${e.code} ${e.category} ${e.description || ''} ${e.supplier_name || ''}`, search));
-  const total = rows.filter((e) => !e.voided).reduce((s, e) => s + e.amount, 0);
+  const rows = live.filter((e) => (!grp || (e.expense_group || 'Quản lý & khác') === grp) && match(`${e.code} ${e.category} ${e.description || ''} ${e.supplier_name || ''}`, search));
+  const total = rows.reduce((s, e) => s + e.amount, 0);
   const all = live.reduce((s, e) => s + e.pl_amount, 0);
   return (
     <ListPage title="Chi phí vận hành"
@@ -389,7 +386,7 @@ export function ExpensesPage(nav) {
       </div>
       <div className="muted small">Số trên thẻ là tiền các khoản ghi trong kỳ (theo ngày phát sinh); khoản chia cho nhiều thương hiệu chỉ tính phần của sổ này. Số tính vào lãi lỗ từng tháng (đã chia phân bổ) xem ở Báo cáo → Chi phí.</div>
       <ErrorBox error={q.error} />
-      <Table rows={q.data ? rows : null} rowClass={(e) => (e.voided ? 'row-void' : '')} foot={{ a: money(total) }} empty="Chưa có chi phí trong kỳ" columns={[
+      <Table rows={q.data ? rows : null} foot={{ a: money(total) }} empty="Chưa có chi phí trong kỳ" columns={[
         { key: 'c', label: 'Mã', render: (e) => <><div className="cell-main">{e.code}</div><div className="cell-sub">{dmy(e.exp_date)}</div></> },
         { key: 'g', label: 'Nhóm · khoản mục', render: (e) => <><div className="cell-main">{e.category}</div><div className="cell-sub">{e.expense_group}</div></> },
         { key: 'd', label: 'Diễn giải', render: (e) => <>{e.description}{e.alloc_months > 1 && <div><Pill tone="info">Phân bổ {e.alloc_months} tháng · đến {e.alloc_end ? `${e.alloc_end.slice(5, 7)}/${e.alloc_end.slice(0, 4)}` : ''}</Pill></div>}
@@ -397,14 +394,12 @@ export function ExpensesPage(nav) {
             {e.split?.length > 0 && <><Pill tone="info">Chia {e.split.length} thương hiệu</Pill><SplitMini split={e.split} /></>}</div>}
           {e.split_of && <div className="cell-sub">Phần chia từ {e.split_of_book_name || e.split_of_book} · {e.split_of_code}</div>}
           {e.settled_payment_code && <div className="cell-sub">trừ vào phiếu thu {e.settled_payment_code}</div>}{e.supplier_name && <div className="cell-sub">nợ {e.supplier_name}</div>}</> },
-        { key: 's', label: 'Trạng thái', render: (e) => (e.voided ? <Pill tone="mute">Đã hủy</Pill> : e.split_of ? <Pill tone="info">{e.split_of_book} trả tiền</Pill> : e.unpaid > 0 ? <Pill tone="warn">Chưa trả {money(e.unpaid)}</Pill> : <Pill tone="good">Đã trả</Pill>) },
+        { key: 's', label: 'Trạng thái', render: (e) => (e.split_of ? <Pill tone="info">{e.split_of_book} trả tiền</Pill> : e.unpaid > 0 ? <Pill tone="warn">Chưa trả {money(e.unpaid)}</Pill> : <Pill tone="good">Đã trả</Pill>) },
         { key: 'a', label: 'Số tiền', align: 'right', render: (e) => <>{money(e.amount)}{e.pl_amount !== e.amount && <div className="cell-sub">sổ này chịu {money(e.pl_amount)}</div>}{e.alloc_months > 1 && <div className="cell-sub">≈ {money(Math.round(e.amount / e.alloc_months))}/tháng</div>}</> },
         { key: 'x', label: '', render: (e) => !e.voided && <div className="row gap-s" onClick={(ev) => ev.stopPropagation()}>
           {e.unpaid > 0 && can('thu_chi') && <Btn small onClick={() => open('payment', { kind: e.supplier_id ? 'tra_ncc' : 'chi_phi', party_id: e.supplier_id, alloc: { doc_type: 'chi_phi', doc_id: e.id, code: e.code, amount: e.unpaid } })}>Trả</Btn>}
           {e.paid === 0 && !e.settled_payment_id && can('chi_phi') && <Btn small onClick={() => open('expense', { id: e.id })}>Sửa</Btn>}
-          {can('owner') && e.paid === 0 && !e.settled_payment_id && (voidId === e.id
-            ? <><Input value={reason} onChange={setReason} placeholder="Lý do" style={{ width: 140 }} /><ConfirmBtn small kind="danger" busy={busy} onConfirm={async () => { if (await run('void_expense', { id: e.id, reason }, 'Đã hủy chi phí')) setVoidId(null); }}>Hủy</ConfirmBtn></>
-            : <Btn small onClick={() => { setVoidId(e.id); setReason(''); }}>Hủy</Btn>)}
+          {can('owner') && e.paid === 0 && !e.settled_payment_id && <ConfirmBtn small busy={busy} confirmText="Hủy khoản này?" onConfirm={() => run('void_expense', { id: e.id }, 'Đã hủy chi phí')}>Hủy</ConfirmBtn>}
         </div> },
       ]} />
       </>}

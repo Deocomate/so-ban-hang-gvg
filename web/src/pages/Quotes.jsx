@@ -4,7 +4,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useQ, useAction } from '../lib/store.jsx';
 import { money, qty as fq, dmy, match, norm, todayVN, searchRank } from '../lib/format.js';
 import { ProductSearch } from './OrderPos.jsx';
-import { useProducts, useCustomers, priceOf, usePriceBooks, booksFor, autoBookFor, priceSourceOptions, parsePriceSource, priceSourceValue, levelTier } from '../lib/lookups.js';
+import { useProducts, useCustomers, priceOf, usePriceBooks, booksFor, autoBookFor, priceSourceOptions, parsePriceSource, priceSourceValue, levelTier, priceChoices } from '../lib/lookups.js';
+import { DealPriceButton } from '../components/DealPrice.jsx';
 import { docSettings, DEFAULT_TEXTS, weightOf } from '../lib/docs/model.js';
 import { exportXlsx } from '../lib/excel.js';
 import { Btn, Icon, Pill, Input, TextArea, Select, DateInput, NumInput, Check, Search, ErrorBox, Loading, Note, Table, Modal, Picker, KV, ListPage, FilterBox, RadioList } from '../components/ui.jsx';
@@ -114,7 +115,7 @@ function markManual(lines, mosaic) {
 }
 
 // Một dòng hàng của báo giá, cùng kiểu dòng hàng ở màn tạo hóa đơn
-function QuoteLine({ l, i, mosaic, showNorm, onChange, onDel, pmap, products, onPick, listPrice }) {
+function QuoteLine({ l, i, mosaic, showNorm, onChange, onDel, pmap, products, onPick, listPrice, choices }) {
   const p = pmap[l.product_id];
   const set = (patch) => {
     const n = { ...l, ...patch };
@@ -122,13 +123,10 @@ function QuoteLine({ l, i, mosaic, showNorm, onChange, onDel, pmap, products, on
     if ('measure' in patch || 'norm' in patch || 'measure_unit' in patch) n.qty_manual = false;
     onChange(n);
   };
-  // Giá riêng (khách deal): giữ nguyên khi đổi bảng giá; bấm lần nữa để lấy lại giá theo bảng giá
+  // Giá riêng (khách deal): lấy giá ở bảng giá khác hoặc tự nhập; giữ nguyên khi đổi bảng giá của báo giá
+  const priceBox = useRef(null);
   const setPrice = (v) => { if (Number(v) !== Number(l.price)) set({ price: v, deal: !!p }); };
-  const toggleDeal = (e) => {
-    if (l.deal) { set({ deal: false, price: listPrice(p) }); return; }
-    set({ deal: true });
-    const inp = e.currentTarget.closest('.qline-price')?.querySelector('input'); inp?.focus(); inp?.select();
-  };
+  const customDeal = () => { set({ deal: true }); const inp = priceBox.current?.querySelector('input'); inp?.focus(); inp?.select(); };
   const amount = (Number(l.qty) || 0) * (Number(l.price) || 0);
   const auto = !mosaic && isTile(l.name) && sideOf(l.name);
   return (
@@ -151,11 +149,10 @@ function QuoteLine({ l, i, mosaic, showNorm, onChange, onDel, pmap, products, on
             title={auto ? 'Tự lấy số lượng diềm cùng loại trong nhóm; xóa số đã gõ để tính lại' : 'Số lượng trừ đi'} /></label>}
         <label className="q-mini"><span>Số lượng{l.qty_manual && l.measure ? ' (tay)' : ''}</span><NumInput money={false} min={0} value={l.qty} onChange={(v) => set({ qty: v, qty_manual: v != null })} aria-label="Số lượng" /></label>
         <label className="q-mini q-unit"><span>ĐVT</span><Input value={l.unit} onChange={(v) => set({ unit: v })} aria-label="Đơn vị tính" /></label>
-        <div className={`q-mini qline-price${l.deal ? ' deal' : ''}`}>
+        <div ref={priceBox} className={`q-mini qline-price${l.deal ? ' deal' : ''}`}>
           <span className="pos-price-head"><span className="muted">{l.deal ? 'Giá riêng' : 'Đơn giá'}</span>
-            {p && <button type="button" className={`pos-deal-btn${l.deal ? ' on' : ''}`} onClick={toggleDeal} aria-pressed={!!l.deal}
-              title={l.deal ? 'Bỏ giá riêng, lấy lại giá theo bảng giá' : 'Đặt giá riêng cho mặt hàng này (khách deal giá) — đổi bảng giá không ghi đè'}>
-              <Icon name={l.deal ? 'refresh' : 'tag'} size={13} />{l.deal ? 'Bảng giá' : 'Giá riêng'}</button>}</span>
+            {p && <DealPriceButton deal={l.deal} price={l.price} choices={choices(p)} onPick={(v) => set({ price: v, deal: true })}
+              onCustom={customDeal} onReset={() => set({ deal: false, price: listPrice(p) })} />}</span>
           <NumInput suffix={false} min={0} value={l.price} onChange={setPrice} aria-label={l.deal ? 'Giá riêng' : 'Đơn giá'} />
           {l.deal && p && listPrice(p) !== Number(l.price) && <span className="pos-deal-list small muted">Bảng giá {money(listPrice(p))}</span>}
         </div>
@@ -287,7 +284,7 @@ export function QuoteForm({ id, onClose, onSaved }) {
                 </div>
                 {g.lines.length === 0 && <div className="muted small qgroup-empty">Gõ tên hoặc mã hàng ở ô tìm kiếm phía trên để thêm vào nhóm này, hoặc thêm dòng tự nhập.</div>}
                 {g.lines.map((l, i) => <QuoteLine key={l.key} l={l} i={i} mosaic={mosaic} showNorm={f.show_norm} pmap={pmap} products={products.data}
-                  listPrice={(p) => priceOf(p, { tier, book: pbook })} onPick={(p) => pickInto(g.key, l, p)} onChange={(n) => setLines(g.key, (ls) => ls.map((x) => (x.key === l.key ? n : x)))} onDel={() => setLines(g.key, (ls) => ls.filter((x) => x.key !== l.key))} />)}
+                  listPrice={(p) => priceOf(p, { tier, book: pbook })} choices={(p) => priceChoices(p, { priceNames, books: myBooks, canCost: can('xem_gia_von'), custTier: cust ? custTier : null })} onPick={(p) => pickInto(g.key, l, p)} onChange={(n) => setLines(g.key, (ls) => ls.map((x) => (x.key === l.key ? n : x)))} onDel={() => setLines(g.key, (ls) => ls.filter((x) => x.key !== l.key))} />)}
                 <div className="row gap-s"><button className="link-btn small" onClick={() => { setActive(g.key); setLines(g.key, (ls) => [...ls, newLine()]); }}>+ Thêm dòng tự nhập</button></div>
               </div>
             ))}
