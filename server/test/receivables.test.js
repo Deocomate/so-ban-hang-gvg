@@ -138,5 +138,13 @@ C('Đơn đặt hàng mang mã DH', dat.code.slice(0, 2), 'DH');
 await api.sql(`update sales_orders set code = 'HD009999' where code = ?`, [taken]);
 await api.sql(`delete from doc_counters where book_id = ? and kind = 'HD'`, [TH]);
 C('Đếm tiếp sau mã KiotViet lớn nhất', await codeOf(await sell(A, 1, 1000)), 'HD10000');
+// Xử lý đơn đặt hàng tạo hóa đơn HD chung dãy với hóa đơn bán ngay, bỏ qua mã hóa đơn đã có (kể cả mã KiotViet dạng .01)
+await api.call('confirm_sales_order', { book_id: TH, request_id: rid(), id: dat.id });
+const datLine = (await api.q('sales_order_lines', TH, [['order_id', 'eq', dat.id]]))[0];
+await api.sql(`update deliveries set code = 'HD010001.01' where code = (select code from deliveries limit 1)`);
+await api.sql(`delete from doc_counters where book_id = ? and kind = 'HD'`, [TH]);
+const inv = await api.call('deliver', { book_id: TH, request_id: rid(), order_id: dat.id, lines: [{ order_line_id: datLine.id, qty: 1 }] });
+C('Hóa đơn từ đặt hàng mang mã HD, đếm sau mã hóa đơn lớn nhất', inv.code, 'HD10002');
+C('Hóa đơn bán ngay tiếp theo không trùng', await codeOf(await sell(A, 1, 1000)), 'HD10003');
 
 finish('Sổ công nợ khách hàng');

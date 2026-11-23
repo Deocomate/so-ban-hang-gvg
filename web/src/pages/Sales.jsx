@@ -23,7 +23,8 @@ import { VatReminder } from '../components/VatReminder.jsx';
 import { OrderDocsPanel } from './OrderDocs.jsx';
 
 // ===================== DANH SÁCH ĐƠN BÁN =====================
-// Hóa đơn chỉ gồm đơn bán ngay; đơn đặt hàng (kể cả đã giao) xem riêng ở trang Đặt hàng.
+// Như KiotViet: Hóa đơn gồm hóa đơn bán ngay và các hóa đơn lập khi xử lý đơn đặt hàng (mỗi đợt giao một hóa đơn HD…);
+// bản thân đơn đặt hàng xem riêng ở trang Đặt hàng.
 // Lọc theo thời gian (mặc định Tháng này) và trạng thái (mặc định bỏ Đã hủy).
 const INVOICE_STATUS = [
   { value: 'nhap', label: 'Phiếu tạm', test: (o) => o.status === 'nhap' },
@@ -36,7 +37,10 @@ const PAY_FILTER = {
   paid: (o) => o.status !== 'huy' && !(o.receivable > 0) && o.payment_status !== 'thua_tien',
   refund: (o) => o.payment_status === 'thua_tien' && (o.status === 'huy' || o.remaining_qty === 0),
 };
-const invoiceDate = (o) => (o.kind === 'dat_hang' ? o.last_delivery_date || o.order_date : o.order_date);
+const invoiceDate = (o) => o.order_date;
+// Hóa đơn lập từ đơn đặt hàng (phiếu giao) đưa về cùng dạng dòng với hóa đơn bán ngay; tiền đã trả theo dõi trên đơn đặt
+const orderInvoiceRow = (x) => ({ ...x, row_id: 'dl-' + x.id, from_order: true, order_date: x.delivery_date, status: x.order_status === 'huy' ? 'huy' : 'xac_nhan',
+  remaining_qty: 0, discount: 0, order_total: x.total, paid_net: 0 });
 export function SalesPage() {
   const { open, can, settings } = useApp();
   const time = useTimeFilter('month');
@@ -46,7 +50,8 @@ export function SalesPage() {
   const [channel, setChannel] = useState('');
   const [openId, setOpenId] = useState(null); // hóa đơn đang xổ chi tiết ngay trong bảng (như KiotViet)
   const { data, error } = useQ('sales_orders', [['kind', 'neq', 'dat_hang']], 'created_at desc', 5000);
-  const invoices = useMemo(() => (data || []).filter((o) => o.kind !== 'dat_hang'), [data]);
+  const fromOrders = useQ('deliveries', [['order_kind', 'eq', 'dat_hang']], 'created_at desc', 5000);
+  const invoices = useMemo(() => [...(data || []).filter((o) => o.kind !== 'dat_hang').map((o) => ({ ...o, row_id: o.id })), ...(fromOrders.data || []).map(orderInvoiceRow)], [data, fromOrders.data]);
   // Lọc được cả kênh đã bỏ khỏi Cài đặt nhưng còn gắn trên hóa đơn cũ
   const channelList = useMemo(() => channelOptions(settings, invoices.map((o) => o.channel)), [settings.channels, invoices]);
   const inTime = useMemo(() => invoices.filter((o) => time.inRange(invoiceDate(o))
@@ -56,15 +61,16 @@ export function SalesPage() {
     .sort((a, b) => invoiceDate(b).localeCompare(invoiceDate(a)) || String(b.created_at).localeCompare(String(a.created_at))), [inTime, status.sel, pay]);
   const count = (f) => inTime.filter((o) => status.pass(o) && f(o)).length;
   const cols = [
-    { key: 'code', label: 'Mã hóa đơn', render: (o) => <span className="strong">{o.code}</span> },
-    { key: 'time', label: 'Thời gian', className: 'nowrap', render: (o) => (o.kind === 'dat_hang' ? dmy(invoiceDate(o)) : dayTime(o.order_date, o.created_at)) },
+    { key: 'code', label: 'Mã hóa đơn', render: (o) => <><span className="strong">{o.code}</span>{o.from_order && <div className="cell-sub">từ {o.order_code}</div>}</> },
+    { key: 'time', label: 'Thời gian', className: 'nowrap', render: (o) => dayTime(o.order_date, o.created_at) },
     { key: 'kh', label: 'Mã KH', render: (o) => o.customer_code || '' },
     { key: 'customer', label: 'Khách hàng', className: 'col-clip', render: (o) => <span title={o.customer_name}>{o.customer_name}</span> },
     { key: 'disc', label: 'Giảm giá', align: 'right', render: (o) => money(o.discount || 0) },
     { key: 'total', label: 'Khách cần trả', align: 'right', render: (o) => money(o.order_total) },
-    { key: 'paid', label: 'Khách đã trả', align: 'right', render: (o) => money(o.paid_net) },
+    { key: 'paid', label: 'Khách đã trả', align: 'right', render: (o) => (o.from_order ? (o.deposit_used > 0 ? <span className="muted small">trừ cọc {money(o.deposit_used)}</span> : '') : money(o.paid_net)) },
     { key: 'due', label: 'Còn nợ', align: 'right', render: (o) => (o.receivable > 0 ? <span className={o.overdue_days > 0 ? 'bad strong' : 'strong'}>{money(o.receivable)}</span> : o.prepaid > 0 ? <span className="muted small">cọc {money(o.prepaid)}</span> : '') },
     { key: 'ps', label: 'Thanh toán', render: (o) => {
+      if (o.from_order) return <span className="muted small">theo đơn {o.order_code}</span>;
       const pill = <StatusPill map={PAYMENT} value={o.payment_status} />;
       const editable = can('thu_chi') && o.status !== 'nhap' && (o.status !== 'huy' || o.payment_status === 'thua_tien');
       return editable ? <HoverCard label={`Thanh toán đơn ${o.code}`} trigger={pill}>{({ close }) => <QuickPayment order={o} close={close} />}</HoverCard> : pill;
@@ -94,9 +100,9 @@ export function SalesPage() {
           { key: 'prepaid', label: 'Trả trước' }, { key: 'delivery_status', label: 'Giao hàng', get: (o) => DELIVERY[o.delivery_status]?.[0] }, { key: 'payment_status', label: 'Thanh toán', get: (o) => PAYMENT[o.payment_status]?.[0] }] }])}>Xuất Excel</Btn>
         {can('ban_hang') && <Btn kind="primary" icon="plus" onClick={() => open('order-form', {})}>Tạo hóa đơn</Btn>}
       </>}>
-      <ErrorBox error={error} />
-      <Table columns={cols} rows={data ? rows : null} onRow={(o) => setOpenId((x) => (x === o.id ? null : o.id))} rowClass={(o) => (o.is_late || o.overdue_days > 0 ? 'row-late' : '')}
-        expandKey={openId} expand={(o) => <InlineDetail><OrderDetail id={o.id} onClose={() => setOpenId(null)} /></InlineDetail>}
+      <ErrorBox error={error || fromOrders.error} />
+      <Table columns={cols} rows={data && fromOrders.data ? rows : null} rowKey="row_id" onRow={(o) => setOpenId((x) => (x === o.row_id ? null : o.row_id))} rowClass={(o) => (o.is_late || o.overdue_days > 0 ? 'row-late' : '')}
+        expandKey={openId} expand={(o) => <InlineDetail><OrderDetail id={o.from_order ? o.order_id : o.id} onClose={() => setOpenId(null)} /></InlineDetail>}
         foot={rows.length ? { code: `${rows.length} đơn`, disc: money(sum('discount')), total: money(sum('order_total')), paid: money(sum('paid_net')), due: money(sum('receivable')) } : null}
         empty={time.from ? 'Không có hóa đơn nào trong khoảng thời gian này. Chọn "Toàn thời gian" ở bộ lọc Thời gian để xem các tháng khác.' : 'Không có hóa đơn phù hợp'} />
     </ListPage>

@@ -317,7 +317,7 @@ try {
     applyDeposits();
     // Số chứng từ tiếp theo không trùng mã KiotViet cùng tiền tố (vd. DH000068.01 → bộ đếm DH ít nhất 68)
     for (const pre of ['DH', 'HD']) {
-      const max = Math.max(0, ...db.prepare(`select code from sales_orders where book_id = ? and code like ?`).all(B, pre + '%').map((x) => Number(new RegExp(`^${pre}(\\d+)`).exec(x.code)?.[1] || 0)));
+      const max = Math.max(0, ...db.prepare(`select code from sales_orders where book_id = ? and code like ? union all select code from deliveries where book_id = ? and code like ?`).all(B, pre + '%', B, pre + '%').map((x) => Number(new RegExp(`^${pre}(\\d+)`).exec(x.code)?.[1] || 0)));
       sql(`insert into doc_counters (book_id, kind, last_no) values (?, ?, ?) on conflict (book_id, kind) do update set last_no = max(last_no, excluded.last_no)`, B, pre, max);
     }
     // Đối chiếu công nợ với KiotViet: phiếu thu lập trên sổ mới (mã không phải "TT…") KiotViet không có, nên trừ ra trước khi so

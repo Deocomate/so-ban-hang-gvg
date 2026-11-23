@@ -78,16 +78,21 @@ export function nextCode(book, kind) {
   return kind + String(n).padStart(5, '0');
 }
 
-// Mã đơn bán như KiotViet: hóa đơn bán ngay HD…, đơn đặt hàng DH…. Lần đầu dùng một tiền tố trong sổ thì đếm tiếp
-// sau số lớn nhất đã có (mã chuyển từ KiotViet), và luôn bỏ qua mã đã có.
+// Mã đơn bán như KiotViet: hóa đơn HD…, đơn đặt hàng DH…. Hóa đơn bán ngay và hóa đơn lập từ đơn đặt hàng (phiếu giao)
+// dùng chung một dãy HD. Lần đầu dùng một tiền tố trong sổ thì đếm tiếp sau số lớn nhất đã có (mã chuyển từ KiotViet,
+// kể cả dạng HD000068.01), và luôn bỏ qua mã đã có.
 export function salesOrderCode(book, kind) {
   const prefix = kind === 'dat_hang' ? 'DH' : 'HD';
+  const tables = prefix === 'HD' ? ['sales_orders', 'deliveries'] : ['sales_orders'];
   if (!one(`select 1 from doc_counters where book_id = ? and kind = ?`, book, prefix)) {
-    const max = Math.max(0, ...all(`select code from sales_orders where book_id = ? and code like ?`, book, prefix + '%')
-      .map((x) => Number(/^[A-Z]+(\d+)$/.exec(x.code)?.[1] || 0)));
+    const max = Math.max(0, ...tables.flatMap((t) => all(`select code from ${t} where book_id = ? and code like ?`, book, prefix + '%'))
+      .map((x) => Number(/^[A-Z]+(\d+)/.exec(x.code)?.[1] || 0)));
     if (max) run(`insert into doc_counters (book_id, kind, last_no) values (?, ?, ?)`, book, prefix, max);
   }
-  return newMasterCode(book, prefix, 'sales_orders');
+  for (;;) {
+    const c = nextCode(book, prefix);
+    if (!tables.some((t) => one(`select 1 from ${t} where book_id = ? and lower(code) = lower(?)`, book, c))) return c;
+  }
 }
 
 // Mã danh mục chưa ai dùng (SKU / mã khách / mã NCC)

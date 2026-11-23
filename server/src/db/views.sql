@@ -275,7 +275,8 @@ left join purchase_order_lines pl on pl.id = l.po_line_id
 left join purchase_orders po on po.id = pl.po_id;
 
 create view v_deliveries as
-select d.id, d.book_id, d.code, d.order_id, o.code as order_code, o.customer_id, c.name as customer_name, c.phone as customer_phone,
+select d.id, d.book_id, d.code, d.order_id, o.code as order_code, o.kind as order_kind, o.status as order_status, o.staff, o.channel,
+  o.customer_id, c.code as customer_code, c.name as customer_name, c.phone as customer_phone,
   c.address as customer_address, d.delivery_date, d.shipping_fee, d.note, d.created_at, d.deposit_used, o.vat_rate,
   coalesce(x.revenue, 0) as goods_revenue, round(coalesce(x.revenue, 0) * o.vat_rate / 100.0) as vat,
   coalesce(x.revenue, 0) + round(coalesce(x.revenue, 0) * o.vat_rate / 100.0) + d.shipping_fee as total,

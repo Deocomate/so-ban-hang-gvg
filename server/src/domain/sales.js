@@ -70,7 +70,8 @@ export function doDeliver(orderId, date, lines, ship, note, override, depositUse
     if (dep > v.paid_net - v.deposit_used) fail(`Tiền cọc còn lại chỉ ${Math.max(v.paid_net - v.deposit_used, 0)}`);
   }
 
-  const dcode = nextCode(o.book_id, 'GH'); const dlv = uuid();
+  // Như KiotViet: xử lý đơn đặt hàng tạo hóa đơn mã HD… (chung dãy với hóa đơn bán ngay); phiếu giao của hóa đơn bán ngay giữ mã GH…
+  const dcode = o.kind === 'dat_hang' ? salesOrderCode(o.book_id, 'ban_san') : nextCode(o.book_id, 'GH'); const dlv = uuid();
   insert('deliveries', { id: dlv, book_id: o.book_id, code: dcode, order_id: o.id, delivery_date: date,
     shipping_fee: rnd(ship ?? Math.max(o.shipping_fee - shipped, 0)), note: note ?? null, deposit_used: dep, created_by: ctx.uid, created_at: nowIso() });
 
