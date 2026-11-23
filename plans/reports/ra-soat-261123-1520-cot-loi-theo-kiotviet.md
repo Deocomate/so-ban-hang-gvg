@@ -113,3 +113,28 @@ Chủ cửa hàng xác nhận các phiếu thu ngày 22–23/11 là ghi bù đ�
 3. **53 hóa đơn còn khác số đã thu trên KiotViet.** Phần lớn là hóa đơn KiotViet ghi chưa thu (theo bản xuất 09/11) mà sổ mới đã thu bằng phiếu ghi bù.
 4. Đã quyết (23/11): chủ cửa hàng giữ nguyên các đơn đã hủy ngày 22/11, gồm DH000061, DH000065, DH000054, HD001226, HD001235.01, HD001249.01, HD001247; không khôi phục.
 5. Đã sửa `add-kiotviet-docs` (commit `71b7e9a`): tiền gắn theo chứng từ KiotViet ghi, tiền cọc chuyển theo cặp TTTU, phiếu trả nợ chung để riêng. Chạy thử lại lần nạp 20/11 trên bản sao trước lần nạp đó: mọi hóa đơn và công nợ khớp KiotViet. Bản trên máy chủ được cập nhật ở lần deploy tới.
+
+## Đợt 4 (23/11, 16:20): rà các phân hệ còn lại
+
+So bản sao sổ thật sau khi sửa với dữ liệu xuất KiotViet (09/11, 12/11, 20/11), tính từ 01/01/2026, tức sau mốc ngắt dữ liệu.
+
+| Phân hệ | Kết quả |
+|---|---|
+| Trả hàng khách 2026 | 3/3 phiếu khớp mã và giá trị |
+| Nhập hàng 2026 | 72/72 phiếu khớp mã, trạng thái, giá trị đã nhận; không có trả hàng nhập năm 2026 |
+| Công nợ nhà cung cấp | 32/32 khớp KiotViet sau khi trừ nợ cũ đã ngắt. Riêng NCC099 có thêm phiếu nhập PN01048 160.000 đ lập trên sổ mới ngày 20/11 |
+| Sổ quỹ 2026 | 97/97 phiếu thu chi KiotViet có trên sổ, đúng số tiền, không phiếu nào bị hủy |
+| Hóa đơn 2026 | 205 hóa đơn. Lệch chỉ ở các hóa đơn chủ cửa hàng đã hủy trên sổ mới và hai đơn lập trên sổ mới (DH01854, DH01855) |
+| Doanh thu từng tháng 2026 | Tháng 2–5, 7, 8 khớp tuyệt đối. Tháng 6 chênh 497.200 đ là phí trả hàng của TH000030. Tháng 9–11 chênh đúng bằng các đơn chủ cửa hàng hủy hoặc tự lập trên sổ mới |
+| Tồn kho | Không thấy sai ở tồn hiện tại. Tồn tính lùi về ngày 09/11 lệch ở 21 mã, đều giải thích được (xem dưới) |
+
+### Khác cách làm với KiotViet (chưa sửa, cần quyết)
+
+1. **Hủy hoặc sửa hóa đơn làm tồn kho trong quá khứ khác KiotViet.**
+   - Sổ mới trả hàng về kho vào **ngày hủy**. Ví dụ HD001233.01 bán ngày 07/11, hủy ngày 20/11: tồn từ 07/11 đến 20/11 bị trừ hai lần cùng với bản .03.
+   - KiotViet thì coi hóa đơn đã hủy như chưa từng có, nên thẻ kho và tồn tại mọi ngày trong quá khứ không tính nó.
+   - Tồn hiện tại vẫn đúng; chỉ báo cáo xuất nhập tồn theo kỳ cũ và giá vốn trong khoảng đó bị lệch.
+2. **Phí trả hàng.** Sổ mới trừ doanh thu theo giá trị trả đã trừ phí (phí vẫn tính là doanh thu). KiotViet trừ đủ giá trị trả, còn phí ghi riêng. Công nợ khách như nhau.
+
+### Cần chủ cửa hàng xác nhận
+- **HD001250.01**, 302.095.440 đ, khách KH000677: công cụ nạp nạp ngày 20/11, rồi tài khoản Chủ cửa hàng hủy lúc 17:13 cùng ngày. KiotViet ghi hoàn thành, và khách đó trên KiotViet còn nợ đúng 302.095.440 đ.
