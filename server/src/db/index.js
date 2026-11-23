@@ -100,6 +100,7 @@ const ADDED_COLUMNS = [
   ['customers', 'stage', "text not null default 'moi'"],
   ['sales_orders', 'vat_rate', 'real not null default 0 check (vat_rate >= 0 and vat_rate <= 100)'],
   ['deliveries', 'deposit_used', 'real not null default 0 check (deposit_used >= 0)'],
+  ['payment_allocations', 'delivery_id', 'text'], // hóa đơn HD (phiếu giao của đơn đặt hàng) mà khoản thu trừ vào
   ['stock_adjustments', 'purpose', 'text'],
   ['expenses', 'invoice_no', 'text'],
   ['expenses', 'pl_amount', 'real'],

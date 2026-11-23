@@ -3,7 +3,7 @@
 // Một phiếu thu là một dòng trong sổ; phần trừ vào từng đơn nằm ở payment_allocations.
 import { fail, one, all, insert, uuid, num, nz, trimNz, rnd } from '../lib/context.js';
 import { requirePerm, once } from './access.js';
-import { doPayment } from './cash.js';
+import { doPayment, insertAlloc } from './cash.js';
 
 const roundVat = (v, rate) => Math.round((v * rate) / 100);
 const vnd = (v) => Math.round(v).toLocaleString('en-US');
@@ -97,7 +97,7 @@ function usablePrepaid(book, cid) {
 
 function openDebts(book, cid) {
   return all(`select doc_type, doc_id, code, doc_date, debt_date, due_date, total, due_now, paid_net, remaining_due from v_open_docs
-    where book_id = ? and party_type = 'kh' and party_id = ? and status <> 'huy' and doc_type in ('don_ban', 'no_dau_ky') and remaining_due > 0.5
+    where book_id = ? and party_type = 'kh' and party_id = ? and status <> 'huy' and doc_type in ('don_ban', 'hoa_don', 'no_dau_ky') and remaining_due > 0.5
     order by debt_date, doc_date, code`, book, cid).map((d) => ({ ...d, left: Math.round(d.remaining_due) }));
 }
 
@@ -168,7 +168,7 @@ const sameAlloc = (a, b) => JSON.stringify((a || []).map((x) => [x.doc_id, Math.
   === JSON.stringify((b || []).map((x) => [x.doc_id, Math.round(Number(x.amount))]).sort());
 
 function applyPrepaid(book, uses) {
-  for (const u of uses) insert('payment_allocations', { id: uuid(), payment_id: u.payment_id, book_id: book, doc_type: u.doc_type, doc_id: u.doc_id, amount: u.amount });
+  for (const u of uses) insertAlloc(book, u.payment_id, u.doc_type, u.doc_id, u.amount);
 }
 
 // Ghi 1 phiếu thu cho khách và phần trừ vào từng đơn trong cùng một giao dịch; lúc lưu tính lại từ đầu

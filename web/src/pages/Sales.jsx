@@ -38,9 +38,11 @@ const PAY_FILTER = {
   refund: (o) => o.payment_status === 'thua_tien' && (o.status === 'huy' || o.remaining_qty === 0),
 };
 const invoiceDate = (o) => o.order_date;
-// Hóa đơn lập từ đơn đặt hàng (phiếu giao) đưa về cùng dạng dòng với hóa đơn bán ngay; tiền đã trả theo dõi trên đơn đặt
-const orderInvoiceRow = (x) => ({ ...x, row_id: 'dl-' + x.id, from_order: true, order_date: x.delivery_date, status: x.order_status === 'huy' ? 'huy' : 'xac_nhan',
-  remaining_qty: 0, discount: 0, order_total: x.total, paid_net: 0 });
+// Hóa đơn HD lập từ đơn đặt hàng (phiếu giao) đưa về cùng dạng dòng với hóa đơn bán ngay; mỗi hóa đơn có số đã thu / còn nợ riêng như KiotViet
+export const orderInvoiceRow = (x) => ({ ...x, row_id: 'dl-' + x.id, from_order: true, doc_type: 'hoa_don', doc_id: x.id, order_date: x.delivery_date,
+  status: x.order_status === 'huy' ? 'huy' : 'xac_nhan', remaining_qty: 0, discount: 0, order_total: x.total, delivered_value: x.total, paid_net: x.paid,
+  receivable: x.debt, remaining_to_pay: x.debt, prepaid: 0,
+  payment_status: x.debt <= 0 ? 'da_thanh_toan_du' : x.paid > 0 ? 'thanh_toan_mot_phan' : 'chua_thanh_toan' });
 export function SalesPage() {
   const { open, can, settings } = useApp();
   const time = useTimeFilter('month');
@@ -50,7 +52,7 @@ export function SalesPage() {
   const [channel, setChannel] = useState('');
   const [openId, setOpenId] = useState(null); // hóa đơn đang xổ chi tiết ngay trong bảng (như KiotViet)
   const { data, error } = useQ('sales_orders', [['kind', 'neq', 'dat_hang']], 'created_at desc', 5000);
-  const fromOrders = useQ('deliveries', [['order_kind', 'eq', 'dat_hang']], 'created_at desc', 5000);
+  const fromOrders = useQ('order_invoices', [], 'created_at desc', 5000);
   const invoices = useMemo(() => [...(data || []).filter((o) => o.kind !== 'dat_hang').map((o) => ({ ...o, row_id: o.id })), ...(fromOrders.data || []).map(orderInvoiceRow)], [data, fromOrders.data]);
   // Lọc được cả kênh đã bỏ khỏi Cài đặt nhưng còn gắn trên hóa đơn cũ
   const channelList = useMemo(() => channelOptions(settings, invoices.map((o) => o.channel)), [settings.channels, invoices]);
@@ -67,10 +69,9 @@ export function SalesPage() {
     { key: 'customer', label: 'Khách hàng', className: 'col-clip', render: (o) => <span title={o.customer_name}>{o.customer_name}</span> },
     { key: 'disc', label: 'Giảm giá', align: 'right', render: (o) => money(o.discount || 0) },
     { key: 'total', label: 'Khách cần trả', align: 'right', render: (o) => money(o.order_total) },
-    { key: 'paid', label: 'Khách đã trả', align: 'right', render: (o) => (o.from_order ? (o.deposit_used > 0 ? <span className="muted small">trừ cọc {money(o.deposit_used)}</span> : '') : money(o.paid_net)) },
+    { key: 'paid', label: 'Khách đã trả', align: 'right', render: (o) => <>{money(o.paid_net)}{o.from_order && o.deposit_used > 0 && <div className="cell-sub">trừ cọc {money(o.deposit_used)}</div>}</> },
     { key: 'due', label: 'Còn nợ', align: 'right', render: (o) => (o.receivable > 0 ? <span className={o.overdue_days > 0 ? 'bad strong' : 'strong'}>{money(o.receivable)}</span> : o.prepaid > 0 ? <span className="muted small">cọc {money(o.prepaid)}</span> : '') },
     { key: 'ps', label: 'Thanh toán', render: (o) => {
-      if (o.from_order) return <span className="muted small">theo đơn {o.order_code}</span>;
       const pill = <StatusPill map={PAYMENT} value={o.payment_status} />;
       const editable = can('thu_chi') && o.status !== 'nhap' && (o.status !== 'huy' || o.payment_status === 'thua_tien');
       return editable ? <HoverCard label={`Thanh toán đơn ${o.code}`} trigger={pill}>{({ close }) => <QuickPayment order={o} close={close} />}</HoverCard> : pill;
@@ -137,14 +138,14 @@ function QuickPayment({ order: o, close }) {
     try { localStorage.setItem(QUICK_FUND_KEY, fund); } catch (e) { /* bỏ qua */ }
     const tab = reserveTab();
     const r = await run('create_payment', { kind, date: todayVN(), fund_id: fund, party_id: o.customer_id, amount: amt,
-      allocations: [{ doc_type: 'don_ban', doc_id: o.id, amount: amt }] }, (x) => `${refund ? 'Đã hoàn' : 'Đã thu'} ${money(amt)} đ – phiếu ${x.code}`);
+      allocations: [{ doc_type: o.doc_type || 'don_ban', doc_id: o.doc_id || o.id, amount: amt }] }, (x) => `${refund ? 'Đã hoàn' : 'Đã thu'} ${money(amt)} đ – phiếu ${x.code}`);
     if (!r) { tab.cancel(); return; }
     close();
     // Phiếu thu / chi theo mẫu mở ở tab mới để sửa thông tin và tải PDF
     const doc = { kind: 'payment', id: r.id, type: 'phieu_thu' };
     if (!tab.go({ book: bookId, ...doc })) open('doc', doc);
   };
-  const openFull = () => { close(); open('payment', { kind, party_id: o.customer_id, alloc: { doc_type: 'don_ban', doc_id: o.id, code: o.code, amount: full } }); };
+  const openFull = () => { close(); open('payment', { kind, party_id: o.customer_id, alloc: { doc_type: o.doc_type || 'don_ban', doc_id: o.doc_id || o.id, code: o.code, amount: full } }); };
   return (
     <div className="qe">
       <div className="qe-head"><b>{refund ? 'Hoàn tiền cho khách' : 'Thu tiền'}</b><span className="muted small">{o.code} · {o.customer_name}</span></div>

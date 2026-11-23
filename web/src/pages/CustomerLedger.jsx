@@ -141,28 +141,22 @@ function LedgerTab({ id }) {
 
 // Lịch sử bán / trả hàng (như KiotViet): chỉ hóa đơn HD và phiếu trả hàng của khách, theo ngày bán / ngày trả, mới nhất trước.
 // Đơn đặt hàng (DH) không phải hóa đơn nên không hiện; mỗi đợt giao của đơn đặt là một hóa đơn HD riêng (như trang Hóa đơn).
-// Tiền đã thu và còn nợ của đơn đặt theo dõi trên cả đơn, nên ghi ở hóa đơn mới nhất của đơn đó.
+// Mỗi hóa đơn có số đã thu / còn nợ riêng như KiotViet (v_order_invoices).
 // Đơn đã hủy không hiện. Bấm một dòng là chi tiết đơn xổ ra ngay dưới dòng.
 function OrdersTab({ id, usablePrepaid }) {
   const { can } = useApp();
   const { run, busy } = useAction();
   const [only, setOnly] = useState('');
   const q = useQ('sales_orders', [['customer_id', 'eq', id]], 'order_date desc', 5000);
-  const dq = useQ('deliveries', [['customer_id', 'eq', id], ['order_kind', 'eq', 'dat_hang']], 'delivery_date desc', 5000);
+  const dq = useQ('order_invoices', [['customer_id', 'eq', id]], 'delivery_date desc', 5000);
   const rq = useQ('sales_returns', [['customer_id', 'eq', id]], 'return_date desc', 2000);
   const all = useMemo(() => {
     if (!q.data || !dq.data) return [];
-    const orders = Object.fromEntries(q.data.map((o) => [o.id, o]));
     const direct = q.data.filter((o) => o.kind !== 'dat_hang' && o.status !== 'huy')
       .map((o) => ({ ...o, key: o.id, type: 'ban', day: o.order_date, at: o.created_at, order_id: o.id }));
-    const seen = new Set(); // dq xếp mới nhất trước: dòng đầu tiên của mỗi đơn đặt mang số đã thu / còn nợ của đơn
-    const fromOrders = dq.data.filter((d) => d.order_status !== 'huy').map((d) => {
-      const o = orders[d.order_id] || {};
-      const last = !seen.has(d.order_id); seen.add(d.order_id);
-      return { key: 'dl-' + d.id, type: 'ban', from_order: true, code: d.code, order_code: d.order_code, order_id: d.order_id, day: d.delivery_date, at: d.created_at,
-        staff: d.staff, net_total: d.total, paid_net: last ? o.paid_net : 0, receivable: last ? o.receivable : 0, overdue_days: last ? o.overdue_days : 0,
-        status: 'xac_nhan', delivery_status: 'da_giao_du', delivered_value: last ? o.delivered_value : 0 };
-    });
+    const fromOrders = dq.data.filter((d) => d.order_status !== 'huy').map((d) => ({ key: 'dl-' + d.id, type: 'ban', from_order: true, code: d.code,
+      order_code: d.order_code, order_id: d.order_id, day: d.delivery_date, at: d.created_at, staff: d.staff, net_total: d.total, paid_net: d.paid,
+      receivable: d.debt, overdue_days: d.overdue_days, status: 'xac_nhan', delivery_status: 'da_giao_du', delivered_value: d.total }));
     return [...direct, ...fromOrders];
   }, [q.data, dq.data]);
   const owing = all.filter((o) => o.receivable > 0);

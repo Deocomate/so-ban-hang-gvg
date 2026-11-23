@@ -4,7 +4,7 @@ import { requirePerm, isOwner, bookSettings, hasBusiness, can } from './access.j
 
 // view → quyền cần có ('' = thành viên có quyền nghiệp vụ; 'nv' = như '' hoặc có quyền chấm công)
 const VIEWS = {
-  products: '', price_books: '', price_book_items: '', customers: '', suppliers: '', sales_orders: 'xem_ban_hang', sales_order_lines: 'xem_ban_hang', deliveries: 'xem_ban_hang', delivery_lines: 'xem_ban_hang', sales_returns: 'xem_ban_hang',
+  products: '', price_books: '', price_book_items: '', customers: '', suppliers: '', sales_orders: 'xem_ban_hang', sales_order_lines: 'xem_ban_hang', deliveries: 'xem_ban_hang', order_invoices: 'xem_ban_hang', delivery_lines: 'xem_ban_hang', sales_returns: 'xem_ban_hang',
   stock_moves: '', adjustments: '', productions: '', bom_items: '', employees: 'nv', shifts: 'nv', work_schedules: 'nv', timesheets: 'cham_cong', commission_tables: 'quan_ly_luong', paysheets: 'quan_ly_luong', paysheet_lines: 'quan_ly_luong', opening_debts: '', doc_payments: '', purchase_orders: 'xem_nhap_hang', purchase_order_lines: 'xem_nhap_hang', receipts: 'xem_nhap_hang',
   supplier_returns: 'xem_nhap_hang', funds: '', drivers: '', driver_trips: 'xem_ban_hang', quotes: 'xem_ban_hang', contracts: 'xem_ban_hang', attachments: '', tax_invoices: 'xem_bao_cao', payments: 'xem_thu_chi', open_docs: '', expenses: 'xem_chi_phi', expense_recurring: 'xem_chi_phi', members: 'nv', audit: 'owner', order_events: 'xem_ban_hang', shipments: 'xem_ban_hang', bank_txns: 'xem_thu_chi',
 };

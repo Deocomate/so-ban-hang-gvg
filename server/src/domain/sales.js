@@ -410,6 +410,7 @@ function undoDelivery(d, reason) {
   run(`update driver_trips set delivery_id = null where delivery_id = ?`, d.id);
   run(`delete from doc_info where ref_type = 'delivery' and ref_id = ?`, d.id);
   cancelPoints(d.id, today());
+  run(`update payment_allocations set delivery_id = null where delivery_id = ?`, d.id); // tiền đã thu quay về đơn đặt
   run(`delete from deliveries where id = ?`, d.id);
   logOrder(d.order_id, 'huy_giao', `Hủy phiếu giao ${d.code} (giao ngày ${d.delivery_date.split('-').reverse().join('/')})`,
     [...(trimNz(reason) ? [`Lý do: ${reason}`] : []), ...text, 'Hàng đã nhập lại kho, doanh thu đợt này đã bỏ']);

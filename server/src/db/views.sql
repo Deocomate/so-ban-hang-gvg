@@ -20,6 +20,7 @@ drop view if exists v_members;
 drop view if exists v_bank_txns;
 drop view if exists v_shipments;
 drop view if exists v_open_docs;
+drop view if exists v_order_invoices;
 drop view if exists v_doc_payments;
 drop view if exists v_payments;
 drop view if exists v_funds;
@@ -284,6 +285,42 @@ select d.id, d.book_id, d.code, d.order_id, o.code as order_code, o.kind as orde
 from deliveries d join sales_orders o on o.id = d.order_id
 left join customers c on c.id = o.customer_id
 left join (select delivery_id, sum(revenue) as revenue, sum(cogs) as cogs from delivery_lines group by delivery_id) x on x.delivery_id = d.id;
+
+-- Hóa đơn HD lập từ đơn đặt hàng (mỗi phiếu giao một hóa đơn, như KiotViet), mỗi hóa đơn có số đã thu / còn nợ riêng.
+-- Tiền cọc trừ khi giao và phiếu thu gắn thẳng vào hóa đơn (payment_allocations.delivery_id) tính cho đúng hóa đơn đó;
+-- phần đã thu còn lại của đơn (phiếu thu gắn vào đơn trước khi có hóa đơn, cọc chưa trừ) trả dần hóa đơn cũ trước.
+-- Giá trị hóa đơn đã trừ hàng khách trả; phần chênh do làm tròn VAT theo cả đơn dồn vào hóa đơn mới nhất.
+create view v_order_invoices as
+with dv as (
+  select d.id, d.book_id, d.code, d.order_id, d.delivery_date, d.created_at, d.deposit_used, d.shipping_fee, d.note,
+    coalesce((select sum(x.revenue) from delivery_lines x where x.delivery_id = d.id), 0) as goods,
+    coalesce((select sum(rl.revenue) from sales_return_lines rl join delivery_lines x on x.id = rl.delivery_line_id where x.delivery_id = d.id), 0) as goods_back,
+    coalesce((select sum(a.amount) from payment_allocations a join payments p on p.id = a.payment_id and p.voided = 0 and p.kind = 'thu_khach'
+      where a.delivery_id = d.id), 0) as paid_direct
+  from deliveries d join sales_orders o on o.id = d.order_id where o.kind = 'dat_hang'
+), t as (
+  select dv.*, dv.goods + round(dv.goods * o.vat_rate / 100.0) + dv.shipping_fee - dv.goods_back - round(dv.goods_back * o.vat_rate / 100.0) as raw_total,
+    row_number() over (partition by dv.order_id order by dv.delivery_date desc, dv.created_at desc, dv.id desc) as rn_last
+  from dv join sales_orders o on o.id = dv.order_id
+), t2 as (
+  select t.*, so.delivered_value, so.paid_net as order_paid, t.deposit_used + t.paid_direct as direct,
+    t.raw_total + case when t.rn_last = 1 then so.delivered_value - sum(t.raw_total) over (partition by t.order_id) else 0 end as total
+  from t join v_sales_orders so on so.id = t.order_id
+), t3 as (
+  select t2.*, t2.order_paid - sum(t2.direct) over (partition by t2.order_id) as pool,
+    coalesce(sum(max(t2.total - t2.direct, 0)) over (partition by t2.order_id order by t2.delivery_date, t2.created_at, t2.id
+      rows between unbounded preceding and 1 preceding), 0) as need_before
+  from t2
+), t4 as (
+  select t3.*, t3.direct + min(max(t3.total - t3.direct, 0), max(t3.pool - t3.need_before, 0)) as paid from t3
+)
+select t4.id, t4.book_id, t4.code, t4.order_id, so.code as order_code, so.status as order_status, so.customer_id, so.customer_code, so.customer_name,
+  so.customer_phone, so.staff, so.channel, so.vat_rate, t4.delivery_date, t4.created_at, t4.note, t4.shipping_fee, t4.deposit_used,
+  t4.total, t4.paid, max(t4.total - t4.paid, 0) as debt, t4.rn_last = 1 as is_last,
+  case when t4.total - t4.paid > 0 then date(t4.delivery_date, '+' || coalesce(c.credit_days, 0) || ' days') end as due_date,
+  case when t4.total - t4.paid > 0 and date(t4.delivery_date, '+' || coalesce(c.credit_days, 0) || ' days') < today()
+       then days(today(), date(t4.delivery_date, '+' || coalesce(c.credit_days, 0) || ' days')) else 0 end as overdue_days
+from t4 join v_sales_orders so on so.id = t4.order_id left join customers c on c.id = so.customer_id;
 
 create view v_delivery_lines as
 select x.id, x.book_id, x.delivery_id, d.code as delivery_code, d.delivery_date, d.order_id, x.order_line_id,
@@ -596,9 +633,10 @@ from payments p join funds f on f.id = p.fund_id left join funds tf on tf.id = p
 left join customers c on p.party_type = 'kh' and c.id = p.party_id
 left join suppliers s on p.party_type = 'ncc' and s.id = p.party_id
 left join (select a.payment_id, sum(a.amount) as allocated, json_group_array(json_object('doc_type', a.doc_type, 'doc_id', a.doc_id, 'amount', a.amount,
-     'doc_code', coalesce(so.code, po.code, e.code, od.code))) as allocations
+     'delivery_id', a.delivery_id, 'doc_code', coalesce(dl.code, so.code, po.code, e.code, od.code))) as allocations
    from payment_allocations a
    left join sales_orders so on a.doc_type = 'don_ban' and so.id = a.doc_id
+   left join deliveries dl on dl.id = a.delivery_id
    left join purchase_orders po on a.doc_type = 'don_mua' and po.id = a.doc_id
    left join expenses e on a.doc_type = 'chi_phi' and e.id = a.doc_id
    left join opening_debts od on a.doc_type = 'no_dau_ky' and od.id = a.doc_id
@@ -606,15 +644,21 @@ left join (select a.payment_id, sum(a.amount) as allocated, json_group_array(jso
 
 -- Các khoản thanh toán gắn với 1 chứng từ (để xem trong chi tiết đơn)
 create view v_doc_payments as
-select a.book_id, a.doc_id, a.doc_type, a.payment_id, p.code, p.pay_date, p.kind, a.amount, a.signed_amount, f.name as fund_name, p.method, p.note, p.ref_no
+select a.book_id, a.doc_id, a.doc_type, a.payment_id, p.code, p.pay_date, p.kind, a.amount, a.signed_amount, f.name as fund_name, p.method, p.note, p.ref_no,
+  a.delivery_id, (select d.code from deliveries d where d.id = a.delivery_id) as invoice_code
 from v_alloc_signed a join payments p on p.id = a.payment_id join funds f on f.id = p.fund_id;
 
 -- Chứng từ còn mở của 1 đối tượng (gợi ý phân bổ khi thu/chi)
 create view v_open_docs as
 select book_id, 'don_ban' as doc_type, id as doc_id, code, order_date as doc_date, customer_id as party_id, 'kh' as party_type,
   net_total as total, delivered_value as due_now, paid_net, net_total - paid_net as remaining_total,
-  delivered_value - paid_net as remaining_due, pay_due_date as due_date, status, coalesce(first_delivery_date, order_date) as debt_date
+  case when kind = 'dat_hang' then 0 else delivered_value - paid_net end as remaining_due, pay_due_date as due_date, status,
+  coalesce(first_delivery_date, order_date) as debt_date
 from v_sales_orders where status <> 'nhap' or paid_net <> 0
+union all
+-- Đơn đặt hàng: phần nợ nằm ở từng hóa đơn HD lập khi giao (như KiotViet), đơn đặt chỉ còn nhận tiền cọc
+select book_id, 'hoa_don', id, code, delivery_date, customer_id, 'kh', total, total, paid, debt, debt, due_date, order_status, delivery_date
+from v_order_invoices
 union all
 select book_id, 'don_mua', id, code, order_date, supplier_id, 'ncc', net_total, received_value, paid_net, net_total - paid_net,
   received_value - paid_net, pay_due_date, status, order_date

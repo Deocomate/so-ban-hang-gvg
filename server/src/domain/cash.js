@@ -28,6 +28,19 @@ export function insertExpense(book, e, prefix = 'CP') {
   return one(`select * from expenses where id = ?`, id);
 }
 
+// Ghi một khoản phân bổ. Hóa đơn HD lập từ đơn đặt hàng (doc_type 'hoa_don', doc_id là phiếu giao) lưu vào đơn đặt
+// kèm delivery_id, để tiền đã thu của đơn không đổi mà vẫn biết khoản thu trừ vào hóa đơn nào (như KiotViet).
+export function insertAlloc(book, paymentId, docType, docId, amount) {
+  if (docType === 'hoa_don') {
+    const d = one(`select order_id from deliveries where id = ? and book_id = ?`, docId, book);
+    if (!d) fail('Không tìm thấy hóa đơn cần thanh toán');
+    insert('payment_allocations', { id: uuid(), payment_id: paymentId, book_id: book, doc_type: 'don_ban', doc_id: d.order_id, delivery_id: docId, amount });
+    return d.order_id;
+  }
+  insert('payment_allocations', { id: uuid(), payment_id: paymentId, book_id: book, doc_type: docType, doc_id: docId, amount });
+  return docType === 'don_ban' ? docId : null;
+}
+
 // Gợi ý phân bổ: trả các khoản đã đến hạn (hàng đã giao/nhận, nợ đầu kỳ) – khoản ghi nhận nợ sớm nhất trước
 export function suggestAlloc(book, ptype, party, amount) {
   let left = amount; const res = [];
@@ -74,7 +87,7 @@ export function doPayment(book, p) {
   for (const a of al) {
     const dt = a.doc_type; const aa = rnd(num(a.amount));
     if (aa == null || aa <= 0) continue;
-    if (!((['thu_khach', 'hoan_khach'].includes(k) && ['don_ban', 'no_dau_ky'].includes(dt))
+    if (!((['thu_khach', 'hoan_khach'].includes(k) && ['don_ban', 'no_dau_ky'].includes(dt)) || (k === 'thu_khach' && dt === 'hoa_don')
       || (['tra_ncc', 'ncc_hoan'].includes(k) && ['don_mua', 'no_dau_ky', 'chi_phi'].includes(dt))
       || (k === 'chi_phi' && dt === 'chi_phi'))) fail(`Phiếu "${k}" không thể gắn với loại chứng từ này`);
     const doc = one(`select * from v_open_docs where book_id = ? and doc_type = ? and doc_id = ?`, book, dt, a.doc_id);
@@ -89,10 +102,10 @@ export function doPayment(book, p) {
       const lim = dt === 'no_dau_ky' ? -doc.remaining_total : doc.paid_net - doc.due_now;
       if (aa > lim) fail(`Số tiền hoàn cho ${doc.code} (${aa}) vượt số đã trả dư (${Math.max(lim, 0)})`);
     }
-    insert('payment_allocations', { id: uuid(), payment_id: payId, book_id: book, doc_type: dt, doc_id: a.doc_id, amount: aa });
-    if (dt === 'don_ban') {
+    const orderId = insertAlloc(book, payId, dt, a.doc_id, aa);
+    if (orderId) {
       const fund = one(`select name from funds where id = ?`, fid)?.name;
-      logOrder(a.doc_id, k === 'hoan_khach' ? 'hoan_tien' : 'thu_tien', `${k === 'hoan_khach' ? 'Hoàn tiền cho khách' : 'Thu tiền'} – phiếu ${code}: ${vnd(aa)}`,
+      logOrder(orderId, k === 'hoan_khach' ? 'hoan_tien' : 'thu_tien', `${k === 'hoan_khach' ? 'Hoàn tiền cho khách' : 'Thu tiền'} – phiếu ${code}${dt === 'hoa_don' ? ` cho hóa đơn ${doc.code}` : ''}: ${vnd(aa)}`,
         [fund ? `${k === 'hoan_khach' ? 'Chi từ' : 'Vào'} quỹ: ${fund}` : null, aa !== amt ? `Phiếu ${vnd(amt)}, phần cho đơn này ${vnd(aa)}` : null, trimNz(p.note) ? `Ghi chú: ${p.note}` : null].filter(Boolean));
     }
     tot += aa;
