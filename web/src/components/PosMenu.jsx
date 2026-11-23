@@ -86,7 +86,7 @@ export function PickOrderDialog({ mode, onClose }) {
   const rows = useMemo(() => (data || []).filter((o) => o.status !== 'huy'
     && (isReturn ? o.delivered_value > 0 : o.kind === 'dat_hang' && (o.status === 'nhap' || o.remaining_qty > 0))
     && match(`${o.code} ${o.customer_name} ${o.customer_phone || ''} ${o.note || ''}`, search)), [data, search, isReturn]);
-  const pick = (o) => { onClose(); open(isReturn ? 'return' : 'order', isReturn ? { order: o } : { id: o.id }); };
+  const pick = (o) => { onClose(); open(isReturn ? 'return' : 'order-process', isReturn ? { order: o } : { id: o.id }); };
   return (
     <Modal title={isReturn ? 'Chọn hóa đơn trả hàng' : 'Xử lý đặt hàng'} onClose={onClose} size="lg">
       <div className="stack">

@@ -377,6 +377,7 @@ Bấm **Tạo đơn bán** thì màn hình tạo đơn mở toàn màn hình. Kh
   - Với đơn **Đặt riêng** (nút gạt trên cùng), nút chính là **XÁC NHẬN ĐƠN** và nút IN mở đơn đặt hàng PDF.
   - "Lưu nháp" và "Chỉ xác nhận, giao sau" nằm ngay phía trên hai nút.
 - **Đóng màn hình** bằng nút ✕ góc phải. Nếu đơn đang có hàng, phải bấm hai lần để tránh mất đơn do bấm nhầm.
+- **Xử lý đơn đặt hàng (như KiotViet):** ở **Đơn hàng → Đặt hàng**, bấm vào đơn rồi bấm **Xử lý đơn hàng** (hoặc menu ☰ ở màn bán hàng → Xử lý đặt hàng). Màn hình bán hàng riêng của đơn mở ra, tab mang mã `DH…`, các dòng hàng còn phải giao điền sẵn. Sửa số lượng lấy đợt này (bấm ✕ để bỏ dòng khỏi đợt này), nhập **Khách thanh toán** và hình thức trả, rồi bấm **TẠO HÓA ĐƠN** (hoặc **IN** để tạo và mở luôn hóa đơn PDF). Phần mềm trừ kho, ghi doanh thu, khấu trừ tiền khách đã trả trước (cọc) và lập phiếu thu; phần còn thiếu tính vào công nợ. Đơn còn hàng chưa lấy thì xử lý tiếp lần sau. Phiếu tạm được xác nhận luôn khi tạo hóa đơn. Muốn đổi hàng, giá của đơn thì bấm **Sửa đơn đặt hàng**.
 
 ## 11. Tự chia thùng và tính tổng trọng lượng
 

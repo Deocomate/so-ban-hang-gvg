@@ -21,6 +21,7 @@ import { BankTxnDialog, BankSimDialog } from './BankTxns.jsx';
 import { QrBox } from './SettingsExtra.jsx';
 import { DocDialog } from './Documents.jsx';
 import { OrderPos } from './OrderPos.jsx';
+import { OrderProcess } from './OrderProcess.jsx';
 import { DriverForm, TripForm, PayDriverDialog, PriceBookForm, PriceBookImport } from './Catalog.jsx';
 import { QuoteForm, QuoteDetail } from './Quotes.jsx';
 import { ContractForm, ContractDetail } from './Contracts.jsx';
@@ -33,7 +34,7 @@ const ContractWriter = (p) => <Suspense fallback={<Modal title="Soạn hợp đ�
 import { orderTransferContent } from '../lib/vietqr.js';
 
 const MAP = {
-  'order-form': OrderPos, order: OrderDetail, deliver: DeliverDialog, return: ReturnDialog,
+  'order-form': OrderPos, 'order-process': OrderProcess, order: OrderDetail, deliver: DeliverDialog, return: ReturnDialog,
   'po-form': PurchasePos, po: PoDetail, receive: ReceiveDialog, 'po-return': ReturnPos, sret: SupplierReturnDetail, 'po-print': PurchaseSlip,
   payment: PaymentForm, 'pay-detail': PaymentDetail, expense: ExpenseForm, recurring: RecurringForm, receipt: ReceiptForm,
   product: ProductForm, 'product-detail': ProductDetail, 'price-book': PriceBookForm, 'price-book-import': PriceBookImport, stockcard: StockCard, adjust: AdjustForm, production: ProductionForm, 'customer-group': CustomerGroupForm,

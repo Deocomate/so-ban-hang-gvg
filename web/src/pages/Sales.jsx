@@ -313,7 +313,7 @@ export function SpecialPage() {
       { key: 'paid', label: 'Khách đã trả', align: 'right', render: (o) => money(o.paid_net) },
       { key: 'ds', label: 'Giao hàng', render: (o) => {
         const pill = <div className="row gap-s"><StatusPill map={DELIVERY} value={o.delivery_status} />{o.is_late && <Pill tone="bad">trễ hẹn</Pill>}</div>;
-        return can('ban_hang') && o.status !== 'huy' ? <HoverCard label={`Giao hàng đơn ${o.code}`} trigger={pill} width={340}>{({ close }) => <QuickDelivery order={o} close={close} />}</HoverCard> : pill;
+        return o.kind !== 'dat_hang' && can('ban_hang') && o.status !== 'huy' ? <HoverCard label={`Giao hàng đơn ${o.code}`} trigger={pill} width={340}>{({ close }) => <QuickDelivery order={o} close={close} />}</HoverCard> : pill;
       } },
     ];
     return (
@@ -411,6 +411,10 @@ export function OrderDetail({ id, onClose }) {
   if (!d) return <Modal title="Đơn hàng" onClose={onClose} size="lg">{o.error ? <ErrorBox error={o.error} /> : <Loading />}</Modal>;
   const canSell = can('ban_hang');
   const unlinked = (lines.data || []).filter((l) => !l.po_line_id && l.remaining_qty > 0 && !l.is_kit);
+  // Đơn đặt hàng: tạo hóa đơn ở màn hình bán hàng riêng của đơn (như KiotViet), không giao ngay trong chi tiết
+  const isDat = d.kind === 'dat_hang';
+  const canProcess = canSell && isDat && (d.status === 'nhap' || d.status === 'xac_nhan') && d.remaining_qty > 0;
+  const processOrder = () => { onClose(); open('order-process', { id }); };
   const payKind = d.payment_status === 'thua_tien' ? 'hoan_khach' : 'thu_khach';
   // Các nút như KiotViet: Hủy · Sao chép · Xuất file … Chỉnh sửa · Lưu · Trả hàng · In
   const editable = canSell && d.status !== 'huy';
@@ -443,8 +447,9 @@ export function OrderDetail({ id, onClose }) {
             alloc: { doc_type: 'don_ban', doc_id: d.id, code: d.code, amount: payKind === 'thu_khach' ? d.remaining_to_pay : d.paid_net - d.delivered_value } })}>
             {payKind === 'thu_khach' ? (d.delivered_value === 0 ? 'Nhận cọc / thu tiền' : 'Thu tiền') : 'Hoàn tiền cho khách'}</Btn>
         )}
-        {canSell && d.status === 'xac_nhan' && d.remaining_qty > 0 && <Btn kind="soft" icon="truck" onClick={() => open('deliver', { order: d })}>Giao hàng</Btn>}
-        {editable && <Btn kind="primary" icon="edit" onClick={() => { onClose(); open('order-form', { id }); }}>Chỉnh sửa</Btn>}
+        {canSell && d.status === 'xac_nhan' && d.remaining_qty > 0 && !isDat && <Btn kind="soft" icon="truck" onClick={() => open('deliver', { order: d })}>Giao hàng</Btn>}
+        {canProcess && <Btn kind="primary" icon="bag" onClick={processOrder}>Xử lý đơn hàng</Btn>}
+        {editable && <Btn kind={canProcess ? 'soft' : 'primary'} icon="edit" onClick={() => { onClose(); open('order-form', { id }); }}>Chỉnh sửa</Btn>}
         {editable && <Btn icon="check" busy={busy} disabled={!dirty} onClick={saveInfo} title="Lưu ghi chú, người bán, kênh bán vừa sửa">Lưu</Btn>}
         {canSell && d.delivered_value > 0 && <Btn icon="return" onClick={() => open('return', { order: d })}>Trả hàng</Btn>}
         <Btn icon="print" onClick={() => open('doc', { kind: 'order', id, type: d.kind === 'dat_hang' && !d.delivery_count ? 'don_dat_hang' : 'hoa_don' })}>In</Btn>
@@ -542,7 +547,7 @@ export function OrderDetail({ id, onClose }) {
       {tab === 'ship' && <>
         <Section title="Các đợt giao hàng" actions={<div className="row gap-s">
           {(dels.data || []).length > 0 && <Btn small icon="dl" onClick={() => open('doc', contract.data?.[0] ? { kind: 'contract', id: contract.data[0].id, type: 'doi_chieu_tt' } : { kind: 'order', id, type: 'doi_chieu_tt' })}>Hồ sơ đối chiếu</Btn>}
-          {canSell && d.status === 'xac_nhan' && d.remaining_qty > 0 && <Btn small icon="plus" onClick={() => open('deliver', { order: d })}>Tạo đợt giao tiếp theo</Btn>}</div>}>
+          {canSell && d.status === 'xac_nhan' && d.remaining_qty > 0 && (isDat ? <Btn small icon="plus" onClick={processOrder}>Xử lý đơn hàng</Btn> : <Btn small icon="plus" onClick={() => open('deliver', { order: d })}>Tạo đợt giao tiếp theo</Btn>)}</div>}>
           <Table dense rows={dels.data} empty="Chưa giao" columns={[
             { key: 'c', label: 'Đợt', render: (r) => <><b>Đợt {dels.data.indexOf(r) + 1}</b><div className="cell-sub">{r.code} · {dmy(r.delivery_date)}</div></> },
             { key: 'v', label: 'Tiền đợt này', align: 'right', render: (r) => money(r.total) },
