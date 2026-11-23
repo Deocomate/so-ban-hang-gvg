@@ -136,5 +136,5 @@ So bản sao sổ thật sau khi sửa với dữ liệu xuất KiotViet (09/11,
    - Tồn hiện tại vẫn đúng; chỉ báo cáo xuất nhập tồn theo kỳ cũ và giá vốn trong khoảng đó bị lệch.
 2. **Phí trả hàng.** Sổ mới trừ doanh thu theo giá trị trả đã trừ phí (phí vẫn tính là doanh thu). KiotViet trừ đủ giá trị trả, còn phí ghi riêng. Công nợ khách như nhau.
 
-### Cần chủ cửa hàng xác nhận
-- **HD001250.01**, 302.095.440 đ, khách KH000677: công cụ nạp nạp ngày 20/11, rồi tài khoản Chủ cửa hàng hủy lúc 17:13 cùng ngày. KiotViet ghi hoàn thành, và khách đó trên KiotViet còn nợ đúng 302.095.440 đ.
+### Đã quyết
+- Giữ hủy (chủ cửa hàng xác nhận 23/11): **HD001250.01**, 302.095.440 đ, khách KH000677: công cụ nạp nạp ngày 20/11, rồi tài khoản Chủ cửa hàng hủy lúc 17:13 cùng ngày. KiotViet ghi hoàn thành, và khách đó trên KiotViet còn nợ đúng 302.095.440 đ.
