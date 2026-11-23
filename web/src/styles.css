@@ -400,6 +400,8 @@ span.cal-title { cursor: default; }
 .toasts { position: fixed; z-index: 200; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 8px; max-width: min(420px, calc(100vw - 32px)); }
 .toast { background: var(--ink); color: var(--bg); padding: 10px 14px; border-radius: 10px; box-shadow: var(--shadow); font-size: 13.5px; display: flex; gap: 8px; align-items: flex-start; }
 .toast.err { background: var(--bad); color: #fff; }
+.new-version { position: fixed; z-index: 210; left: 50%; transform: translateX(-50%); top: calc(10px + env(safe-area-inset-top, 0px)); display: flex; gap: 12px; align-items: center; background: var(--ink); color: var(--bg); padding: 10px 12px 10px 16px; border-radius: 10px; box-shadow: var(--shadow); font-size: 13.5px; max-width: calc(100vw - 32px); }
+.new-version button { background: var(--bg); color: var(--ink); border: 0; border-radius: 8px; padding: 6px 12px; font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap; }
 
 /* ---------- Phiếu in ---------- */
 /* Phiếu in nhanh: cùng phông Times New Roman, cỡ chữ cơ bản 13 như mọi giấy tờ */

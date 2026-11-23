@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { NewVersionBar } from './components/NewVersionBar.jsx';
 import { AppProvider, useApp } from './lib/store.jsx';
 import { createApiBackend } from './lib/backend.js';
 import { Btn, Icon, Loading, Note, Field, Input, Modal } from './components/ui.jsx';
@@ -441,5 +442,5 @@ function Gate() {
 
 export default function App() {
   const [backend] = useState(() => createApiBackend());
-  return <AppProvider backend={backend}><Gate /></AppProvider>;
+  return <AppProvider backend={backend}><Gate /><NewVersionBar /></AppProvider>;
 }
