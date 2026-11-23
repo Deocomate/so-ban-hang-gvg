@@ -2,7 +2,7 @@
 // Dữ liệu KiotViet ở đây là mẫu tự dựng, đủ các trường hợp gặp trong dữ liệu thật (không dùng dữ liệu khách).
 import { freshDb, makeApi, suite, finish, rid, TODAY, daysAgo } from './harness.js';
 import { convertKiotViet } from '../scripts/kiotviet-convert.js';
-import { custBalances, suppBalances } from '../src/domain/reports.js';
+import { custBalances, suppBalances, calcPl } from '../src/domain/reports.js';
 
 const { G, C, E } = suite();
 const d = TODAY();
@@ -27,6 +27,10 @@ const t1 = await api.call('sales_return', { order_id: so.id, date: d, fee: 5000,
 C('Trả 4 viên phí 5.000: doanh thu giảm 35.000, khách còn nợ 65.000', [t1.revenue, await bal()], [35000, 65000]);
 const ret = (await api.sql(`select fee from sales_returns where id = ?`, [t1.id]))[0];
 C('Phiếu trả ghi phí', ret.fee, 5000);
+// Như KiotViet: doanh thu trừ đủ giá trị hàng trả (40.000), phí trả hàng ghi riêng là thu nhập khác
+const pl = calcPl(TH, d, d);
+C('Báo cáo: hàng trả 40.000, phí trả hàng 5.000, doanh thu 60.000', [pl.revenue_returns, pl.return_fees, pl.revenue], [40000, 5000, 60000]);
+C('Lợi nhuận cộng phí trả hàng', pl.profit, pl.gross_profit - pl.expenses - pl.stock_loss + pl.stock_gain + 5000);
 await api.call('sales_return', { order_id: so.id, date: d, lines: [{ delivery_line_id: dl.id, qty: 6 }] });
 C('Trả nốt 6 viên không phí: khách còn nợ đúng phần phí 5.000', await bal(), 5000);
 C('Tồn kho trở lại đủ 100', (await api.one('products', TH, [['id', 'eq', sp]])).on_hand, 100);

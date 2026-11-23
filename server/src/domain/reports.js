@@ -47,7 +47,8 @@ export function calcPl(b, d1, d2) {
   const del = oneN(`select coalesce(sum(x.revenue), 0) as rg, coalesce(sum(x.cogs), 0) as cg from delivery_lines x join deliveries d on d.id = x.delivery_id
     where d.book_id = @b and d.delivery_date between @d1 and @d2`, o);
   const rs = oneN(`select coalesce(sum(shipping_fee), 0) as v from deliveries where book_id = @b and delivery_date between @d1 and @d2`, o).v;
-  const ret = oneN(`select coalesce(sum(x.revenue), 0) as rr, coalesce(sum(x.cogs), 0) as cg from sales_return_lines x join sales_returns r on r.id = x.return_id
+  // Như KiotViet: hàng trả trừ doanh thu theo đủ giá trị hàng trả, phí trả hàng khách chịu ghi riêng là thu nhập khác
+  const ret = oneN(`select coalesce(sum(x.revenue + x.fee), 0) as rr, coalesce(sum(x.fee), 0) as fee, coalesce(sum(x.cogs), 0) as cg from sales_return_lines x join sales_returns r on r.id = x.return_id
     where r.book_id = @b and r.return_date between @d1 and @d2`, o);
   const cgx = oneN(`select coalesce(-sum(value), 0) as v from stock_moves where book_id = @b and doc_type = 'chenh_lech' and move_date between @d1 and @d2`, o).v;
   // Chi phí theo kỳ: khoản phân bổ dần (công cụ dụng cụ, tiền nhà trả trước…) chỉ tính phần của từng tháng
@@ -64,10 +65,10 @@ export function calcPl(b, d1, d2) {
   const vat = rnd(rev * vatRate);
   const cg = del.cg - ret.cg + cgx;
   const gp = rev - vat - cg;
-  const pf = gp - ex - loss + gain;
+  const pf = gp - ex - loss + gain + ret.fee;
   const pit = rnd(Math.max(pf, 0) * pitRate);
   return {
-    revenue_goods: del.rg, revenue_shipping: rs, revenue_returns: ret.rr, revenue: rev, vat, vat_rate: vatRate,
+    revenue_goods: del.rg, revenue_shipping: rs, revenue_returns: ret.rr, return_fees: ret.fee, revenue: rev, vat, vat_rate: vatRate,
     revenue_net: rev - vat, cogs: cg, gross_profit: gp, gross_margin: rev - vat !== 0 ? rnd(gp / (rev - vat), 4) : null,
     expenses: ex, stock_loss: loss, stock_gain: gain, opex: ex + loss, profit: pf, pit_rate: pitRate, pit, profit_after_tax: pf - pit,
     cash_in: cin.ci, cash_in_customers: cin.cic, cash_out: co, net_cash: cin.ci - co,
@@ -131,7 +132,7 @@ export function rpt_drill(p) {
         union all
         select r.return_date, r.code, 'Khách trả hàng', c.name, o.code, 'tra_hang', r.order_id, -coalesce(x.rev, 0), -coalesce(x.cg, 0)
         from sales_returns r join sales_orders o on o.id = r.order_id left join customers c on c.id = o.customer_id
-        left join (select return_id, sum(revenue) as rev, sum(cogs) as cg from sales_return_lines group by return_id) x on x.return_id = r.id
+        left join (select return_id, sum(revenue + fee) as rev, sum(cogs) as cg from sales_return_lines group by return_id) x on x.return_id = r.id
         where r.book_id = @b and r.return_date between @d1 and @d2
         union all
         select move_date, doc_code, 'Chênh lệch giá vốn', null, null, doc_type, doc_id, 0, -value
@@ -236,7 +237,7 @@ export function rpt_monthly(p) {
 const SOLD = `select dl.product_id, dl.qty, dl.revenue, dl.cogs, d.order_id from delivery_lines dl join deliveries d on d.id = dl.delivery_id
     where d.book_id = @b and d.delivery_date between @d1 and @d2
   union all
-  select rl.product_id, -rl.qty, -rl.revenue, -rl.cogs, r.order_id from sales_return_lines rl join sales_returns r on r.id = rl.return_id
+  select rl.product_id, -rl.qty, -(rl.revenue + rl.fee), -rl.cogs, r.order_id from sales_return_lines rl join sales_returns r on r.id = rl.return_id
     where r.book_id = @b and r.return_date between @d1 and @d2`;
 
 export function rpt_products(p) {
@@ -332,7 +333,7 @@ export function rpt_dashboard(p) {
   const daily = allN(`with r as (
       select d.delivery_date as day, x.revenue as v from delivery_lines x join deliveries d on d.id = x.delivery_id where d.book_id = @b and d.delivery_date between @d1 and @d2
       union all select delivery_date, shipping_fee from deliveries where book_id = @b and delivery_date between @d1 and @d2
-      union all select r.return_date, -x.revenue from sales_return_lines x join sales_returns r on r.id = x.return_id where r.book_id = @b and r.return_date between @d1 and @d2)
+      union all select r.return_date, -(x.revenue + x.fee) from sales_return_lines x join sales_returns r on r.id = x.return_id where r.book_id = @b and r.return_date between @d1 and @d2)
     select day, sum(v) as revenue from r group by day order by day`, o);
   const cash = allN(`select pay_date as day, coalesce(sum(amount - fee) filter (where direction = 'thu'), 0) as cash_in, coalesce(sum(amount) filter (where direction = 'chi'), 0) as cash_out
     from payments where book_id = @b and voided = 0 and pay_date between @d1 and @d2 group by pay_date order by pay_date`, o);
@@ -367,7 +368,7 @@ export function rpt_dashboard(p) {
       (select count(*) from v_suppliers where book_id = @b and payable > 0) as payable_count,
       (select coalesce(sum(unpaid), 0) from v_drivers where book_id = @b) as driver_payable`, o);
   const growth = (k) => (prev[k] > 0 ? rnd((cur[k] - prev[k]) / prev[k], 4) : null);
-  return mask(b, { ...cur, from: d1, to: d2, target, break_even: margin > 0 ? rnd((cur.expenses + cur.stock_loss - cur.stock_gain) / margin) : null,
+  return mask(b, { ...cur, from: d1, to: d2, target, break_even: margin > 0 ? rnd((cur.expenses + cur.stock_loss - cur.stock_gain - cur.return_fees) / margin) : null,
     growth_revenue: growth('revenue'), growth_profit: cost ? growth('profit') : null, growth_cash: growth('cash_in'),
     daily, cash, funnel, top_products, top_customers, costs, todo, ops,
     stock_value: cost ? oneN(`select coalesce(sum(stock_value), 0) as v from products where book_id = @b`, o).v : null, can_cost: cost });
@@ -405,13 +406,13 @@ export function rpt_end_of_day(p) {
       coalesce(sum(x.revenue), 0) + d.shipping_fee as revenue, coalesce(sum(x.cogs), 0) as cogs
     from deliveries d join sales_orders o on o.id = d.order_id left join customers c on c.id = o.customer_id
     left join delivery_lines x on x.delivery_id = d.id where d.book_id = @b and d.delivery_date = @d group by d.id order by d.code`, o);
-  const returns = allN(`select r.code, o.code as order_code, o.id as order_id, c.name as customer_name, coalesce(sum(x.revenue), 0) as revenue
+  const returns = allN(`select r.code, o.code as order_code, o.id as order_id, c.name as customer_name, coalesce(sum(x.revenue + x.fee), 0) as revenue, coalesce(sum(x.fee), 0) as fee
     from sales_returns r join sales_orders o on o.id = r.order_id left join customers c on c.id = o.customer_id
     left join sales_return_lines x on x.return_id = r.id where r.book_id = @b and r.return_date = @d group by r.id order by r.code`, o);
   const products = allN(`select p.sku, p.name, p.unit, sum(q) as qty, sum(rev) as revenue from (
       select x.product_id, x.qty as q, x.revenue as rev from delivery_lines x join deliveries d on d.id = x.delivery_id where d.book_id = @b and d.delivery_date = @d
       union all
-      select x.product_id, -x.qty, -x.revenue from sales_return_lines x join sales_returns r on r.id = x.return_id where r.book_id = @b and r.return_date = @d
+      select x.product_id, -x.qty, -(x.revenue + x.fee) from sales_return_lines x join sales_returns r on r.id = x.return_id where r.book_id = @b and r.return_date = @d
     ) t join products p on p.id = t.product_id group by p.id order by revenue desc`, o);
   const orders = allN(`select id, code, kind, customer_name, order_total, staff from v_sales_orders
     where book_id = @b and order_date = @d and status = 'xac_nhan' order by code`, o);

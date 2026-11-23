@@ -41,7 +41,7 @@ function buildModel(months, exp, settings, pitRate) {
     const admin = adminG.reduce((s, k) => s + g[k], 0);
     return { ...m, g, selling: m.cogs === null ? null : selling, admin: m.cogs === null ? null : admin };
   });
-  const NUM = ['revenue_goods', 'revenue_shipping', 'revenue_returns', 'revenue', 'vat', 'revenue_net', 'cogs', 'gross_profit', 'expenses', 'stock_loss', 'stock_gain', 'opex', 'profit',
+  const NUM = ['revenue_goods', 'revenue_shipping', 'revenue_returns', 'revenue', 'vat', 'revenue_net', 'cogs', 'gross_profit', 'expenses', 'stock_loss', 'stock_gain', 'return_fees', 'opex', 'profit',
     'selling', 'admin', 'cash_in', 'cash_out', 'net_cash'];
   const sum = (k) => (rows.some((m) => m[k] === null || m[k] === undefined) ? null : rows.reduce((s, m) => s + n0(m[k]), 0));
   const total = { month: 'total', ...Object.fromEntries(NUM.map((k) => [k, sum(k)])), g: Object.fromEntries([...sellG, ...adminG].map((k) => [k, rows.reduce((s, m) => s + m.g[k], 0)])) };
@@ -73,6 +73,7 @@ function rowSpec(sellG, adminG, cost) {
     { group: 'D. Lợi nhuận', cost: true },
     { k: 'opex', label: 'Tổng chi phí hoạt động (B + C)', drill: 'opex', cost: true },
     { k: 'stock_gain', label: '+ Chênh lệch kiểm kho tăng', drill: 'stock_gain', cost: true },
+    { k: 'return_fees', label: '+ Phí trả hàng (thu nhập khác)', cost: true },
     { k: 'profit', label: '04 · Lợi nhuận trước thuế', type: 'total', drill: 'profit', cost: true },
     { k: 'pm', label: 'Biên lợi nhuận trước thuế', type: 'ratio', get: (r) => div(r.profit, r.revenue_net), cost: true },
     { k: 'pit', label: '− Thuế TNCN ước tính', cost: true },
@@ -245,7 +246,7 @@ function Waterfall({ T }) {
     ['Lợi nhuận', 'gộp', 0, T.gross_profit, 'var(--celadon)', T.gross_profit],
     ['CP bán', 'hàng', T.gross_profit, T.gross_profit - T.selling, '#d9844f', neg(T.selling)],
     ['CP quản lý', '& vận hành', T.gross_profit - T.selling, T.gross_profit - T.selling - T.admin, '#b9805c', neg(T.admin)],
-    ...(T.stock_gain ? [['Kiểm kho', 'tăng', T.gross_profit - T.selling - T.admin, T.profit, 'var(--celadon)', T.stock_gain]] : []),
+    ...(T.stock_gain || T.return_fees ? [['Thu nhập', 'khác', T.gross_profit - T.selling - T.admin, T.profit, 'var(--celadon)', n0(T.stock_gain) + n0(T.return_fees)]] : []),
     ['LN trước', 'thuế', 0, T.profit, T.profit < 0 ? 'var(--bad)' : 'var(--info)', T.profit],
     ['Thuế', 'TNCN', T.profit, T.profit_after_tax, '#8a96a8', neg(T.pit)],
     ['LN sau', 'thuế', 0, T.profit_after_tax, T.profit_after_tax < 0 ? 'var(--bad)' : 'var(--good)', T.profit_after_tax],

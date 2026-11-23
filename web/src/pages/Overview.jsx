@@ -121,6 +121,7 @@ export default function Overview({ go }) {
                 <PLRow sub label="− Chi phí" v={cost ? -data.expenses : null} onClick={cost ? () => drill('opex') : null} />
                 <PLRow sub label="− Hao hụt kho" v={cost ? -data.stock_loss : null} />
                 {cost && data.stock_gain > 0 && <PLRow sub label="+ Chênh lệch kiểm kho tăng" v={data.stock_gain} onClick={() => drill('stock_gain')} />}
+                {cost && data.return_fees > 0 && <PLRow sub label="+ Phí trả hàng (thu nhập khác)" v={data.return_fees} />}
                 <PLRow t label="Lợi nhuận sau chi phí" v={data.profit} />
                 <PLRow sub label={`Thuế TNCN ước tính (${pct(data.pit_rate)} × lợi nhuận)`} v={cost ? -data.pit : null} />
                 <PLRow t label="Lợi nhuận sau thuế (ước tính)" v={data.profit_after_tax} />
