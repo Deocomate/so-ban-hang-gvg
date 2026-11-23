@@ -146,3 +146,10 @@ So bản sao sổ thật sau khi sửa với dữ liệu xuất KiotViet (09/11,
   - Sổ TH: DH01854 → HD001254, DH01855 → HD001255; phiếu giao GH01253 và GH01254 của DH000068.01.01 → HD001256 và HD001257.
   - Sổ VG: DH00001 → HD000001.
   - Mã trên thẻ kho đổi theo. Lịch sử đơn có ghi mã cũ để tra lại.
+
+## Đợt 6 (23/11, 16:43): đơn DH000068.01.01 bị tách làm hai hóa đơn
+
+- **Nguyên nhân:** ngày 12/11, đơn được bấm giao hai lần trên sổ mới: 16:49 giao 11.166.000 đ, 17:04 giao nốt 882.000 đ. Mỗi lần giao sinh một hóa đơn HD (HD001256, HD001257). Bên KiotViet đơn chỉ xử lý một lần. Đây là đơn duy nhất của sổ có nhiều hóa đơn.
+- **Đã gộp** thành một hóa đơn HD001256, tổng 12.048.000 đ. Dòng hàng, sổ kho, tiền đã thu, phí vận chuyển và tiền cọc chuyển theo; tổng tiền, tiền đã thu và tồn kho không đổi. Bộ đếm HD trả về 1256. Sao lưu: `backups/20261123-164355-truoc-gop-hoa-don-dh000068/`.
+- **Lưu ý cách dùng:** muốn thêm hàng quên vào hóa đơn đã lập từ đơn đặt thì sửa hóa đơn đó, đừng bấm giao thêm lần nữa. Giao thêm sẽ sinh hóa đơn thứ hai, KiotViet cũng làm vậy khi xử lý đơn nhiều lần.
+- **Rủi ro trùng mã khi còn dùng song song KiotViet:** sổ mới đã cấp HD001254–HD001256 cho hóa đơn lập trên sổ mới, trong khi KiotViet đánh số HD theo dãy riêng. Hóa đơn KiotViet trùng mã sẽ bị công cụ nạp bỏ qua vì coi là "đã có".
