@@ -66,7 +66,10 @@ G('4. Làm tiếp nghiệp vụ sau khi nhập');
 const kh = (await api.q('customers', TH))[0];
 const prod = (await api.q('products', TH)).find((p) => !p.is_kit && p.available > 5);
 const o = await api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: kh.id, lines: [{ product_id: prod.id, qty: 1 }], deliver_now: true });
-C('Tạo đơn mới tiếp nối số chứng từ cũ', Number(o.code.slice(2)) > backup.TH.sales_orders.length - 1, true);
+C('Hóa đơn bán ngay mang mã HD như KiotViet', o.code.slice(0, 2), 'HD');
+const maxDh = Math.max(0, ...backup.TH.sales_orders.filter((x) => /^DH\d+$/.test(x.code)).map((x) => Number(x.code.slice(2))));
+const dh = await api.call('save_sales_order', { book_id: TH, request_id: rid(), kind: 'dat_hang', customer_id: kh.id, lines: [{ product_id: prod.id, qty: 1 }] });
+C('Đơn đặt hàng mới tiếp nối số DH cũ', dh.code.startsWith('DH') && Number(dh.code.slice(2)) > maxDh, true);
 const audit = await api.q('audit', TH, [['table_name', 'eq', 'books']]);
 C('Nhật ký ghi lần nhập', audit.some((a) => a.op === 'IMPORT'), true);
 

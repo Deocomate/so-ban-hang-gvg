@@ -557,7 +557,7 @@ export function convertKiotViet(K0, { today, ledger = null, hidden = null, catal
   }
 
   // Số chứng từ tiếp theo không trùng mã cũ của KiotViet cùng tiền tố
-  for (const [kind, table] of [['DH', 'sales_orders'], ['PN', 'purchase_orders']]) {
+  for (const [kind, table] of [['DH', 'sales_orders'], ['HD', 'sales_orders'], ['PN', 'purchase_orders']]) {
     const max = Math.max(0, ...rows(`select code from ${table} where book_id = ? and code like ?`, B, kind + '%').map((x) => Number(/^[A-Z]+(\d+)$/.exec(x.code)?.[1] || 0)));
     sql(`insert into doc_counters (book_id, kind, last_no) values (?, ?, ?) on conflict (book_id, kind) do update set last_no = max(last_no, excluded.last_no)`, B, kind, max);
   }

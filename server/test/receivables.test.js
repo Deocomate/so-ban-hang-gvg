@@ -123,4 +123,20 @@ api.as(staff);
 await E('Nhân viên không có quyền thu chi không ghi được phiếu', () => receipt(A, 1000), 'quyền');
 await E('Nhân viên không có quyền xem thu chi không xem được sổ', () => ledger(A), 'quyền');
 
+G('Mã đơn như KiotViet: hóa đơn HD, đặt hàng DH, không trùng mã đã có');
+api.as(owner);
+const codeOf = async (id) => (await order(id)).code;
+const num = (c) => Number(c.slice(2));
+const h1 = await codeOf(await sell(A, 1, 1000));
+C('Hóa đơn bán ngay mang mã HD', /^HD\d{5}$/.test(h1), true);
+const taken = 'HD' + String(num(h1) + 1).padStart(5, '0');
+await api.sql('update sales_orders set code = ? where code = ?', [taken, h1]);
+C('Bỏ qua mã đã có', await codeOf(await sell(A, 1, 1000)), 'HD' + String(num(h1) + 2).padStart(5, '0'));
+const dat = await api.call('save_sales_order', { book_id: TH, request_id: rid(), kind: 'dat_hang', customer_id: A, lines: [{ product_id: P, qty: 1, unit_price: 1000 }] });
+C('Đơn đặt hàng mang mã DH', dat.code.slice(0, 2), 'DH');
+// Sổ chưa có bộ đếm HD (vd. vừa chuyển từ KiotViet): đếm tiếp sau mã HD lớn nhất đã có
+await api.sql(`update sales_orders set code = 'HD009999' where code = ?`, [taken]);
+await api.sql(`delete from doc_counters where book_id = ? and kind = 'HD'`, [TH]);
+C('Đếm tiếp sau mã KiotViet lớn nhất', await codeOf(await sell(A, 1, 1000)), 'HD10000');
+
 finish('Sổ công nợ khách hàng');

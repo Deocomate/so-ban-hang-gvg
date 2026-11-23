@@ -174,7 +174,7 @@ const t1 = await sell(TH, KT, TP['NGOI-L'], 200, 15000);   // nợ 3.000.000
 const t1o = await ord(TH, t1.id);
 const content1 = `MBVCB.8312.TH${t1o.code}.CT tu 0071000 NGUYEN VAN A`;
 r = await svc('ingest_bank_txn', { provider: 'casso', ext_id: 'CS-1', account_no: '110 673 8888', amount: 2000000, direction: 'in', content: content1, txn_at: new Date().toISOString() });
-C('Tìm thấy mã đơn trong nội dung CK và ghi phiếu thu', [r.status, r.order_code], ['da_ghi', t1o.code]);
+C('Tìm thấy mã hóa đơn (HD…) trong nội dung CK và ghi phiếu thu', [t1o.code.slice(0, 2), r.status, r.order_code], ['HD', 'da_ghi', t1o.code]);
 C('Ghi đúng sổ Thanh Hải dù 2 sổ dùng chung tài khoản', (await api.q('bank_txns', TH, [['id', 'eq', r.id]])).length, 1);
 C('Sổ Vũ Gia không thấy giao dịch của Thanh Hải', (await api.q('bank_txns', VG, [['id', 'eq', r.id]])).length, 0);
 C('Đơn còn nợ 1.000.000', (await ord(TH, t1.id)).receivable, 1000000);

@@ -1,6 +1,6 @@
 // Bán hàng: đơn bán (bán sẵn / đặt riêng), xác nhận, hủy, giao hàng (trừ kho, ghi doanh thu + giá vốn), trả hàng.
 import { ctx, fail, one, all, run, insert, uuid, nowIso, num, bool, nz, trimNz, rnd, asDate, today, vnd } from '../lib/context.js';
-import { requirePerm, isOwner, checkDate, nextCode, once, bookSettings } from './access.js';
+import { requirePerm, isOwner, checkDate, nextCode, salesOrderCode, once, bookSettings } from './access.js';
 import { postMove, doAdjust, lineUnit } from './stock.js';
 import { checkPriceBook, priceLevel } from './price-books.js';
 import { doPayment, moveDocPayments } from './cash.js';
@@ -167,7 +167,7 @@ export function save_sales_order(p) {
     let o; let wasConfirmed = false; let delivered = false; let before = null; let redo = null; const notices = [];
     if (!nz(p.id)) {
       const id = uuid();
-      insert('sales_orders', { id, book_id: b, code: nextCode(b, 'DH'), kind, status: st, ...head, created_by: ctx.uid, created_at: nowIso(),
+      insert('sales_orders', { id, book_id: b, code: salesOrderCode(b, kind), kind, status: st, ...head, created_by: ctx.uid, created_at: nowIso(),
         confirmed_at: st === 'xac_nhan' ? nowIso() : null });
       o = one(`select * from sales_orders where id = ?`, id);
     } else {

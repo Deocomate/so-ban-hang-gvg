@@ -56,14 +56,14 @@ export function ingestBankTxn(p) {
     received_at: nowIso() });
   if (dir === 'out') return { id, status: 'bo_qua' };
 
-  // Tìm mã đơn trong nội dung: <mã sổ>DH<5 số>, ví dụ THDH00012 / VG DH00007
+  // Tìm mã đơn trong nội dung: <mã sổ>DH|HD<5 số> (đơn đặt hàng / hóa đơn), ví dụ THDH00012 / VG HD00007
   const norm = `${p.code ?? ''} ${p.content ?? ''}`.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
   let foundBook = null, foundOrder = null;
   for (const b of cands) {
-    let m = norm.match(new RegExp(String(b.short_name).toUpperCase() + 'DH(\\d{5})(?!\\d)'));
-    if (!m && cands.length === 1) m = norm.match(/DH(\d{5})(?!\d)/);
+    let m = norm.match(new RegExp(String(b.short_name).toUpperCase() + '(DH|HD)(\\d{5})(?!\\d)'));
+    if (!m && cands.length === 1) m = norm.match(/(DH|HD)(\d{5})(?!\d)/);
     if (m) {
-      const o = one(`select id from sales_orders where book_id = ? and code = ?`, b.id, 'DH' + m[1]);
+      const o = one(`select id from sales_orders where book_id = ? and code = ?`, b.id, m[1] + m[2]);
       if (o) { foundBook = b.id; foundOrder = o.id; break; }
     }
   }
