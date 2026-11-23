@@ -143,4 +143,13 @@ await api.call('update_order_info', { book_id: TH, id: o6, note: 'Giao buổi ch
 C('Lưu nhanh ghi chú và người bán', [(await order(o6)).note, (await order(o6)).staff], ['Giao buổi chiều', 'Mai']);
 C('Lưu nhanh có ghi lịch sử', (await events(o6)).at(-1).summary, 'Sửa thông tin hóa đơn');
 
+G('Giá riêng khách deal: lưu cờ theo từng dòng, sửa đơn giữ hoặc bỏ được');
+const oD = (await api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: A, kind: 'dat_hang', status: 'xac_nhan', order_date: D(0),
+  lines: [{ product_id: P, qty: 2, unit_price: 850, custom_price: true }, { product_id: Q, qty: 1, unit_price: 400 }] })).id;
+let lD = await lines(oD);
+C('Dòng deal có cờ giá riêng, dòng thường không', lD.map((l) => [l.unit_price, l.custom_price]), [[850, 1], [400, 0]]);
+await edit(oD, [{ id: lD[0].id, product_id: P, qty: 2, unit_price: 1000, custom_price: false }, { id: lD[1].id, product_id: Q, qty: 1, unit_price: 380, custom_price: true }]);
+lD = await lines(oD);
+C('Sửa đơn: bỏ giá riêng dòng 1, đặt giá riêng dòng 2', lD.map((l) => [l.unit_price, l.custom_price]), [[1000, 0], [380, 1]]);
+
 finish('Sửa đơn đã giao · hủy đợt giao · lịch sử đơn');

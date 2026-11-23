@@ -267,7 +267,7 @@ select l.id, l.book_id, l.order_id, o.code as order_code, o.status as order_stat
   max(l.qty - l.cancelled_qty - l.delivered_qty, 0) as remaining_qty,
   round((l.qty - l.cancelled_qty) * l.unit_price * (1 - l.discount_pct / 100.0)) as line_total,
   l.po_line_id, po.code as po_code, po.id as po_id, po.prod_step as po_step,
-  pl.received_qty - pl.returned_qty as po_received, l.note, l.unit_name, l.unit_conv, p.product_type
+  pl.received_qty - pl.returned_qty as po_received, l.note, l.unit_name, l.unit_conv, l.custom_price, p.product_type
 from sales_order_lines l
 join sales_orders o on o.id = l.order_id
 join products p on p.id = l.product_id

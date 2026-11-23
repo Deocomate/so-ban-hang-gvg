@@ -230,15 +230,16 @@ export function save_sales_order(p) {
       const disc = num(ln.discount_pct) ?? 0;
       if (disc < 0 || disc > 100) fail(`Dòng ${i}: chiết khấu phải từ 0 đến 100%`);
       const polid = nz(ln.po_line_id);
+      const cp = ln.custom_price ? 1 : 0;
       if (polid && pr.is_kit) fail(`Dòng ${i}: bộ sản phẩm không gắn trực tiếp với đơn đặt xưởng`);
       let lid = nz(ln.id);
       if (lid && one(`select 1 from sales_order_lines where id = ? and order_id = ?`, lid, o.id)) {
-        run(`update sales_order_lines set line_no = ?, product_id = ?, qty = ?, unit_price = ?, discount_pct = ?, cancelled_qty = 0, po_line_id = ?, note = ?, unit_name = ?, unit_conv = ? where id = ?`,
-          i, pr.id, q, price, disc, polid, ln.note ?? null, un.unit_name, un.unit_conv, lid);
+        run(`update sales_order_lines set line_no = ?, product_id = ?, qty = ?, unit_price = ?, discount_pct = ?, cancelled_qty = 0, po_line_id = ?, note = ?, unit_name = ?, unit_conv = ?, custom_price = ? where id = ?`,
+          i, pr.id, q, price, disc, polid, ln.note ?? null, un.unit_name, un.unit_conv, cp, lid);
       } else {
         lid = uuid();
         insert('sales_order_lines', { id: lid, order_id: o.id, book_id: b, line_no: i, product_id: pr.id, qty: q, unit_price: price, discount_pct: disc,
-          po_line_id: polid, note: ln.note ?? null, ...un });
+          po_line_id: polid, note: ln.note ?? null, ...un, custom_price: cp });
       }
       keep.push(lid);
     }

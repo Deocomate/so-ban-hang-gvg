@@ -14,7 +14,7 @@ import { PosMenu } from '../components/PosMenu.jsx';
 const STATUS = { nhap: ['Nháp', 'neutral'], da_gui: ['Đã gửi khách', 'info'], chot: ['Đã chốt', 'good'], huy: ['Đã hủy', 'mute'] };
 const QStatus = ({ v }) => <Pill tone={STATUS[v]?.[1]}>{STATUS[v]?.[0]}</Pill>;
 let seq = 0;
-const newLine = () => ({ key: ++seq, product_id: null, name: '', spec: '', image: '', note: '', measure: null, measure_unit: 'm2', norm: null, deduct: null, qty: null, unit: 'viên', price: 0, manual: false });
+const newLine = () => ({ key: ++seq, product_id: null, name: '', spec: '', image: '', note: '', measure: null, measure_unit: 'm2', norm: null, deduct: null, qty: null, unit: 'viên', price: 0, manual: false, deal: false });
 
 // Quy cách gộp từ danh mục: kích thước, cân nặng, chất liệu, màu sắc
 const specOf = (p) => [p.size, p.weight_per_unit ? `${fq(p.weight_per_unit)} kg` : '', p.material, p.color].filter(Boolean).join(', ');
@@ -114,13 +114,20 @@ function markManual(lines, mosaic) {
 }
 
 // Một dòng hàng của báo giá, cùng kiểu dòng hàng ở màn tạo hóa đơn
-function QuoteLine({ l, i, mosaic, showNorm, onChange, onDel, pmap, products, onPick }) {
+function QuoteLine({ l, i, mosaic, showNorm, onChange, onDel, pmap, products, onPick, listPrice }) {
   const p = pmap[l.product_id];
   const set = (patch) => {
     const n = { ...l, ...patch };
     if ('measure_unit' in patch && p) n.norm = patch.measure_unit === 'm' ? p.norm_m : p.norm_m2;
     if ('measure' in patch || 'norm' in patch || 'measure_unit' in patch) n.qty_manual = false;
     onChange(n);
+  };
+  // Giá riêng (khách deal): giữ nguyên khi đổi bảng giá; bấm lần nữa để lấy lại giá theo bảng giá
+  const setPrice = (v) => { if (Number(v) !== Number(l.price)) set({ price: v, deal: !!p }); };
+  const toggleDeal = (e) => {
+    if (l.deal) { set({ deal: false, price: listPrice(p) }); return; }
+    set({ deal: true });
+    const inp = e.currentTarget.closest('.qline-price')?.querySelector('input'); inp?.focus(); inp?.select();
   };
   const amount = (Number(l.qty) || 0) * (Number(l.price) || 0);
   const auto = !mosaic && isTile(l.name) && sideOf(l.name);
@@ -144,7 +151,14 @@ function QuoteLine({ l, i, mosaic, showNorm, onChange, onDel, pmap, products, on
             title={auto ? 'Tự lấy số lượng diềm cùng loại trong nhóm; xóa số đã gõ để tính lại' : 'Số lượng trừ đi'} /></label>}
         <label className="q-mini"><span>Số lượng{l.qty_manual && l.measure ? ' (tay)' : ''}</span><NumInput money={false} min={0} value={l.qty} onChange={(v) => set({ qty: v, qty_manual: v != null })} aria-label="Số lượng" /></label>
         <label className="q-mini q-unit"><span>ĐVT</span><Input value={l.unit} onChange={(v) => set({ unit: v })} aria-label="Đơn vị tính" /></label>
-        <label className="q-mini qline-price"><span>Đơn giá</span><NumInput suffix={false} min={0} value={l.price} onChange={(v) => set({ price: v })} aria-label="Đơn giá" /></label>
+        <div className={`q-mini qline-price${l.deal ? ' deal' : ''}`}>
+          <span className="pos-price-head"><span className="muted">{l.deal ? 'Giá riêng' : 'Đơn giá'}</span>
+            {p && <button type="button" className={`pos-deal-btn${l.deal ? ' on' : ''}`} onClick={toggleDeal} aria-pressed={!!l.deal}
+              title={l.deal ? 'Bỏ giá riêng, lấy lại giá theo bảng giá' : 'Đặt giá riêng cho mặt hàng này (khách deal giá) — đổi bảng giá không ghi đè'}>
+              <Icon name={l.deal ? 'refresh' : 'tag'} size={13} />{l.deal ? 'Bảng giá' : 'Giá riêng'}</button>}</span>
+          <NumInput suffix={false} min={0} value={l.price} onChange={setPrice} aria-label={l.deal ? 'Giá riêng' : 'Đơn giá'} />
+          {l.deal && p && listPrice(p) !== Number(l.price) && <span className="pos-deal-list small muted">Bảng giá {money(listPrice(p))}</span>}
+        </div>
       </div>
     </div>
   );
@@ -203,14 +217,14 @@ export function QuoteForm({ id, onClose, onSaved }) {
     const next = parsePriceSource(v, custTier);
     const nb = myBooks.find((b) => b.id === next.price_book_id) || null;
     const nt = levelTier(next.price_level, custTier);
-    setF((s) => ({ ...s, ...next, groups: s.groups.map((g) => ({ ...g, lines: g.lines.map((l) => (pmap[l.product_id] ? { ...l, price: priceOf(pmap[l.product_id], { tier: nt, book: nb }) } : l)) })) }));
+    setF((s) => ({ ...s, ...next, groups: s.groups.map((g) => ({ ...g, lines: g.lines.map((l) => (pmap[l.product_id] && !l.deal ? { ...l, price: priceOf(pmap[l.product_id], { tier: nt, book: nb }) } : l)) })) }));
   };
   const groupKey = f.groups.some((g) => g.key === active) ? active : f.groups[f.groups.length - 1].key;
   const addProduct = (p) => {
     const x = fromProduct(p); if (!x) return;
     setLines(groupKey, (ls) => [...ls, { ...newLine(), ...x }]);
   };
-  const pickInto = (gkey, l, p) => { const x = fromProduct(p); if (x) setLines(gkey, (ls) => ls.map((y) => (y.key === l.key ? { ...l, ...x, qty_manual: false } : y))); };
+  const pickInto = (gkey, l, p) => { const x = fromProduct(p); if (x) setLines(gkey, (ls) => ls.map((y) => (y.key === l.key ? { ...l, ...x, qty_manual: false, deal: false } : y))); };
   const switchTemplate = (t) => setF((s) => ({ ...s, template: t, terms: textOf(t === 'mosaic' ? 'quote_mosaic' : 'quote_ngoi'),
     groups: s.groups.map((g) => ({ ...g, lines: recalcLines(g.lines, t === 'mosaic') })) }));
 
@@ -273,7 +287,7 @@ export function QuoteForm({ id, onClose, onSaved }) {
                 </div>
                 {g.lines.length === 0 && <div className="muted small qgroup-empty">Gõ tên hoặc mã hàng ở ô tìm kiếm phía trên để thêm vào nhóm này, hoặc thêm dòng tự nhập.</div>}
                 {g.lines.map((l, i) => <QuoteLine key={l.key} l={l} i={i} mosaic={mosaic} showNorm={f.show_norm} pmap={pmap} products={products.data}
-                  onPick={(p) => pickInto(g.key, l, p)} onChange={(n) => setLines(g.key, (ls) => ls.map((x) => (x.key === l.key ? n : x)))} onDel={() => setLines(g.key, (ls) => ls.filter((x) => x.key !== l.key))} />)}
+                  listPrice={(p) => priceOf(p, { tier, book: pbook })} onPick={(p) => pickInto(g.key, l, p)} onChange={(n) => setLines(g.key, (ls) => ls.map((x) => (x.key === l.key ? n : x)))} onDel={() => setLines(g.key, (ls) => ls.filter((x) => x.key !== l.key))} />)}
                 <div className="row gap-s"><button className="link-btn small" onClick={() => { setActive(g.key); setLines(g.key, (ls) => [...ls, newLine()]); }}>+ Thêm dòng tự nhập</button></div>
               </div>
             ))}

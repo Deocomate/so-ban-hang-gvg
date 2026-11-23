@@ -106,7 +106,7 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
       setF((s) => ({ ...s, kind: o.kind, customer_id: o.customer_id, channel: o.channel || '', staff: o.staff || s.staff, note: o.note || '',
         shipping_fee: o.shipping_fee, vat_rate: o.vat_rate || 0, price_book_id: o.price_book_id || '', price_level: o.price_level || '', level_cust: o.customer_id,
         lines: ls.filter((l) => l.qty - (l.cancelled_qty || 0) > 0).map((l) => { const c = l.unit_conv || 1; return { key: ++seq, product_id: l.product_id,
-          qty: (l.qty - (l.cancelled_qty || 0)) / c, unit_price: l.unit_price * c, unit: l.unit_name || l.unit, conv: c, discount_pct: l.discount_pct, note: l.note || '', manual: true }; }) }));
+          qty: (l.qty - (l.cancelled_qty || 0)) / c, unit_price: l.unit_price * c, unit: l.unit_name || l.unit, conv: c, discount_pct: l.discount_pct, note: l.note || '', manual: true, deal: !!l.custom_price }; }) }));
       setLoaded(true);
       toast(`Đã sao chép từ đơn ${o.code} — kiểm tra lại rồi lưu thành đơn mới`);
     })().catch((e) => toast(e.message, 'err'));
@@ -126,7 +126,7 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
         delivered0: ls.filter((l) => l.delivered_qty > 0).map((l) => ({ id: l.id, sku: l.sku, product_id: l.product_id, delivered: l.delivered_qty })),
         lines: ls.filter((l) => l.qty - (l.cancelled_qty || 0) > 0 || l.delivered_qty > 0).map((l) => { const c = l.unit_conv || 1; return { key: ++seq, id: l.id, product_id: l.product_id,
           qty: (l.qty - (l.cancelled_qty || 0)) / c, unit_price: l.unit_price * c, unit: l.unit_name || l.unit, conv: c, delivered: l.delivered_qty || 0,
-          discount_pct: l.discount_pct, po_line_id: l.po_line_id, note: l.note || '', manual: true }; }) }));
+          discount_pct: l.discount_pct, po_line_id: l.po_line_id, note: l.note || '', manual: true, deal: !!l.custom_price }; }) }));
       setLoaded(true);
     })().catch((e) => toast(e.message, 'err'));
   }, [id]);
@@ -137,7 +137,7 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
     rpc('q', { view: 'quotes', filters: [['id', 'eq', quote_id]] }).then(([q]) => {
       const b = q.body; const ls = b.groups.flatMap((g) => g.lines).filter((l) => l.product_id);
       setF((s) => ({ ...s, customer_id: q.customer_id || s.customer_id, note: `Theo báo giá ${q.code}${q.site ? ' · ' + q.site : ''}`, vat_rate: b.vat_mode === 'them' ? b.vat_rate : 0, shipping_fee: b.ship?.amount || 0, price_book_id: b.price_book_id || '', price_level: b.price_level || '',
-        lines: ls.map((l) => ({ key: ++seq, product_id: l.product_id, qty: l.qty, unit_price: l.price, conv: 1, discount_pct: 0, note: l.note || '', manual: true })) }));
+        lines: ls.map((l) => ({ key: ++seq, product_id: l.product_id, qty: l.qty, unit_price: l.price, conv: 1, discount_pct: 0, note: l.note || '', manual: true, deal: !!l.deal })) }));
       setLoaded(true);
     }).catch((e) => toast(e.message, 'err'));
   }, [quote_id]);
@@ -175,13 +175,13 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
   useEffect(() => {
     setF((s) => ({ ...s, lines: s.lines.map((l) => (!l.manual && pmap[l.product_id] ? { ...l, unit_price: linePrice(pmap[l.product_id], l) } : l)) }));
   }, [tier, pmap, pbook]);
-  // Người bán đổi bảng giá / mức giá: tính lại giá mọi dòng theo lựa chọn mới, kể cả dòng đã sửa tay hoặc mở từ đơn cũ
+  // Người bán đổi bảng giá / mức giá: tính lại giá mọi dòng theo lựa chọn mới, kể cả dòng mở từ đơn cũ; dòng đặt giá riêng (khách deal) giữ nguyên
   const pickPriceSource = (v) => {
     const next = parsePriceSource(v, custTier);
     const nb = (priceBooks.data || []).find((b) => b.id === next.price_book_id) || null;
     const nt = levelTier(next.price_level, custTier);
     setF((s) => ({ ...s, ...next, lines: s.lines.map((l) => { const p = pmap[l.product_id];
-      return p ? { ...l, unit_price: priceOf(p, { tier: nt, book: nb, unit: findUnit(p, l.unit) }), manual: false } : l; }) }));
+      return p && !l.deal ? { ...l, unit_price: priceOf(p, { tier: nt, book: nb, unit: findUnit(p, l.unit) }), manual: false } : l; }) }));
   };
   const sellable = useMemo(() => (products.data || []).filter((p) => p.sell_direct), [products.data]);
 
@@ -200,7 +200,7 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
   };
   // Import file (menu ☰): thêm nhiều dòng từ Excel có cột Mã hàng, Số lượng, Đơn giá, Giảm giá (số tiền trên mỗi đơn vị)
   const fileLine = (p, x) => {
-    const l = { key: ++seq, product_id: p.id, qty: x.qty ?? 1, unit: p.unit, conv: 1, note: p.order_note || '', manual: x.price != null };
+    const l = { key: ++seq, product_id: p.id, qty: x.qty ?? 1, unit: p.unit, conv: 1, note: p.order_note || '', manual: x.price != null, deal: x.price != null };
     const price = x.price ?? linePrice(p, l);
     return { ...l, unit_price: price, discount_pct: x.discount > 0 && price > 0 ? Math.min(100, Math.round((x.discount / price) * 10000) / 100) : grpPct };
   };
@@ -208,6 +208,14 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
   const setUnit = (l, name) => {
     const p = pmap[l.product_id]; const u = findUnit(p, name);
     setLine(l.key, { unit: u.name, conv: u.conv, unit_price: l.manual ? (Number(l.unit_price) || 0) / (l.conv || 1) * u.conv : linePrice(p, { unit: u.name }) });
+  };
+  // Giá riêng: khách deal lại giá một mặt hàng → khóa đơn giá dòng đó, đổi bảng giá không ghi đè; bấm lần nữa để lấy lại giá theo bảng giá
+  const setPrice = (l, v) => { if (Number(v) !== Number(l.unit_price)) setLine(l.key, { unit_price: v, manual: true, deal: true }); };
+  const toggleDeal = (l) => {
+    const p = pmap[l.product_id];
+    if (l.deal) { setLine(l.key, { deal: false, manual: false, ...(p ? { unit_price: linePrice(p, l) } : {}) }); return; }
+    setLine(l.key, { deal: true, manual: true });
+    const inp = rootRef.current?.querySelector(`[data-line="${l.key}"] .pos-price input`); inp?.focus(); inp?.select();
   };
   useEffect(() => {
     if (!lastAdded.current) return;
@@ -279,7 +287,7 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
       status: mode === 'draft' ? 'nhap' : 'xac_nhan', deliver_now: mode === 'deliver',
       lines: lines.map((l) => ({ id: l.id || null, product_id: l.product_id, qty: baseQty(l), unit_price: (Number(l.unit_price) || 0) / (l.conv || 1),
         unit_name: (l.conv || 1) !== 1 ? l.unit : null, discount_pct: Number(l.discount_pct) || 0,
-        po_line_id: l.po_line_id || null, note: (l.note || '').trim() || null })),
+        po_line_id: l.po_line_id || null, note: (l.note || '').trim() || null, custom_price: !!l.deal })),
       deposit: payAmt > 0 && mode !== 'draft' ? { amount: Math.min(payAmt, mode === 'deliver' ? total : payAmt), fund_id: f.pay.fund_id, method: f.pay.method, fee: f.pay.fee || 0 } : null,
     };
     const r = await run('save_sales_order', p, (r2) => `Đã lưu đơn ${r2.code}${r2.delivery_code ? ' · đã giao (' + r2.delivery_code + ')' : ''}${r2.payment_code ? ' · phiếu thu ' + r2.payment_code : ''}`);
@@ -392,7 +400,14 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
                     {us.length > 1 ? <select className="pos-unit pos-unit-sel" value={l.unit || p.unit} onChange={(e) => setUnit(l, e.target.value)} aria-label="Đơn vị tính">
                       {us.map((u) => <option key={u.name} value={u.name}>{u.name}</option>)}</select> : <span className="pos-unit">{l.unit || p.unit}</span>}
                   </div>
-                  <label className="pos-price"><span className="muted small">Đơn giá</span><NumInput suffix={false} value={l.unit_price} onChange={(v) => setLine(l.key, { unit_price: v, manual: true })} aria-label="Đơn giá" /></label>
+                  <div className={`pos-price${l.deal ? ' deal' : ''}`}>
+                    <span className="pos-price-head"><span className="muted small">{l.deal ? 'Giá riêng' : 'Đơn giá'}</span>
+                      <button type="button" className={`pos-deal-btn${l.deal ? ' on' : ''}`} onClick={() => toggleDeal(l)} aria-pressed={!!l.deal}
+                        title={l.deal ? 'Bỏ giá riêng, lấy lại giá theo bảng giá' : 'Đặt giá riêng cho mặt hàng này (khách deal giá) — đổi bảng giá không ghi đè'}>
+                        <Icon name={l.deal ? 'refresh' : 'tag'} size={13} />{l.deal ? 'Bảng giá' : 'Giá riêng'}</button></span>
+                    <NumInput suffix={false} value={l.unit_price} onChange={(v) => setPrice(l, v)} aria-label={l.deal ? 'Giá riêng' : 'Đơn giá'} />
+                    {l.deal && p.id && linePrice(p, l) !== Number(l.unit_price) && <span className="pos-deal-list small muted">Bảng giá {money(linePrice(p, l))}</span>}
+                  </div>
                   <label className="pos-ck"><span className="muted small">CK %</span><NumInput money={false} min={0} max={100} value={l.discount_pct} onChange={(v) => setLine(l.key, { discount_pct: v })} aria-label="Chiết khấu %" /></label>
                   <div className="pos-line-total">{money(lineTotal(l))}</div>
                 </div>

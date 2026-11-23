@@ -15,7 +15,7 @@ export function normalizeBody(body) {
       const qty = num(l.qty) ?? 0; const price = num(l.price) ?? 0;
       if (qty < 0 || price < 0) fail(`Dòng "${l.name}": số lượng và đơn giá không được âm`);
       const line = { product_id: nz(l.product_id), name: trimNz(l.name), spec: l.spec ?? '', image: l.image ?? '', note: l.note ?? '', measure: num(l.measure), measure_unit: l.measure_unit ?? '',
-        norm: num(l.norm), deduct: num(l.deduct), qty, unit: l.unit ?? '', price, amount: rnd(qty * price) };
+        norm: num(l.norm), deduct: num(l.deduct), qty, unit: l.unit ?? '', price, amount: rnd(qty * price), ...(l.deal && nz(l.product_id) ? { deal: true } : {}) };
       goods += line.amount;
       return line;
     }),

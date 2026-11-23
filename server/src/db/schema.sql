@@ -287,7 +287,8 @@ create table if not exists sales_order_lines (
   po_line_id text,
   note text,
   unit_name text,                              -- đơn vị đã chọn khi bán; qty và unit_price luôn theo đơn vị cơ bản
-  unit_conv real not null default 1
+  unit_conv real not null default 1,
+  custom_price integer not null default 0     -- 1 = giá riêng đã deal với khách, không đổi theo bảng giá
 );
 create index if not exists sol_order_idx on sales_order_lines (order_id);
 

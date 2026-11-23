@@ -29,6 +29,10 @@ const quote = await api.call('save_quote', { book_id: TH, customer_id: cust, sit
 let q1 = await api.one('quotes', TH, [['id', 'eq', quote.id]]);
 C('Máy chủ tự tính tổng báo giá', [q1.body.goods, q1.body.vat, q1.body.ship.amount, q1.total], [27000000, 2160000, 2600000, 31760000]);
 C('Báo giá không giữ hàng', (await api.one('products', TH, [['id', 'eq', am]])).reserved, 0);
+const qd = await api.call('save_quote', { book_id: TH, customer_id: cust, body: { vat_mode: 'khong', groups: [{ name: 'Deal', lines: [
+  { product_id: am, name: 'Ngói âm', qty: 10, unit: 'viên', price: 9000, deal: true }, { name: 'Hàng tự nhập', qty: 1, unit: 'cái', price: 5000, deal: true }] }] } });
+const qdl = (await api.one('quotes', TH, [['id', 'eq', qd.id]])).body.groups[0].lines;
+C('Báo giá giữ cờ giá riêng cho dòng gắn hàng hóa', qdl.map((l) => [l.price, !!l.deal]), [[9000, true], [5000, false]]);
 await E('Báo giá trống bị từ chối', () => api.call('save_quote', { book_id: TH, customer_name: 'A', body: { groups: [] } }), /chưa có sản phẩm/);
 const o = await api.call('save_sales_order', { book_id: TH, kind: 'dat_hang', customer_id: cust, status: 'xac_nhan', quote_id: quote.id, vat_rate: 8, lines: [{ product_id: am, qty: 10000, unit_price: 10000 }] });
 q1 = await api.one('quotes', TH, [['id', 'eq', quote.id]]);
