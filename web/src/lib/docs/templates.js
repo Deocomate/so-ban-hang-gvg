@@ -4,6 +4,7 @@
 // - renderTemplate(): lặp dòng hàng hóa, ẩn dòng có biến trống, thay biến bằng dữ liệu.
 import { DOC_TYPES, DEFAULT_TEXTS } from './model.js';
 import { ALL_TOKENS, ITEM_TOKENS, esc, richText, tokenValues } from './tokens.js';
+import { fitColumns, colKey } from './col-fit.js';
 
 // ---------- Khổ giấy ----------
 // Kích thước mm (rộng × cao khổ dọc); khổ cuộn K80/K58 cao tự do
@@ -49,14 +50,15 @@ export const baseFor = (ds, tpl) => (PAPERS[tpl?.paper]?.roll ? 0 : ds?.base ?? 
 
 // ---------- Tùy chọn lúc xuất (không đổi mẫu) ----------
 // orient: '' = theo mẫu | 'portrait' | 'landscape' (giấy cuộn bỏ qua); scale: hệ số phóng to / thu nhỏ toàn bộ chữ (1 = giữ nguyên)
+// cols: độ rộng cột người dùng kéo trên bản xem trước, theo colKey() (loại chứng từ + mẫu + hướng giấy)
 export const EXPORT_SCALES = [0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.5];
 export function applyExportOpts(doc, opts) {
-  if (!doc || doc.error || !opts) return doc;
+  if (!doc || doc.error) return doc;
   let out = doc;
-  const orient = opts.orient && !PAPERS[doc.paper]?.roll ? opts.orient : '';
+  const orient = opts?.orient && !PAPERS[doc.paper]?.roll ? opts.orient : '';
   if (orient && orient !== (doc.orient || 'portrait')) out = { ...out, orient };
-  const k = Number(opts.scale) || 1;
-  // Cột cố định giãn theo cỡ chữ (chữ to không bị xuống dòng vụn); chỗ dư của khổ ngang dành cho cột co giãn; vượt chỗ trống thì co lại
+  const k = Number(opts?.scale) || 1;
+  // Bảng không viền (đầu trang, ký tên): cột cố định giãn theo cỡ chữ, vượt chỗ trống thì co lại
   if (out !== doc || k !== 1) out = { ...out, html: fitTables(out.html, contentWidthPx(out), k) };
   if (k !== 1) {
     // Nâng cỡ chữ cơ bản vào nội dung trước, rồi nhân mọi cỡ chữ với hệ số; chữ không ghi cỡ theo khối bọc ngoài
@@ -64,7 +66,9 @@ export function applyExportOpts(doc, opts) {
     const html = withBaseSize(out.html, out.base).replace(/font-size:\s*([\d.]+)\s*(pt|px)/gi, (m, n, u) => `font-size:${r(u.toLowerCase() === 'px' ? Number(n) * 0.75 : Number(n))}pt`);
     out = { ...out, base: 0, html: `<div style="font-size:${r(out.base || 10)}pt">${html}</div>` };
   }
-  return out;
+  // Bảng có viền: độ rộng cột theo nội dung (hoặc theo độ rộng người dùng đã kéo)
+  const html = fitColumns(out.html, { shown: withBaseSize(out.html, out.base), widthPx: contentWidthPx(out), fontCss: FONT_CSS[out.font] || FONT_CSS.Tinos, basePt: out.base, saved: opts?.cols?.[colKey(out)] });
+  return html === out.html ? out : { ...out, html };
 }
 
 // ---------- Mẫu mặc định ----------
@@ -509,5 +513,5 @@ export function buildPrintDoc(type, data, ds, info, tplId) {
   const title = type === 'phieu_thu' ? (thu ? 'Phiếu thu' : 'Phiếu chi') : DOC_TYPES[type].label;
   const prefix = type === 'phieu_thu' ? (thu ? 'phieu-thu' : 'phieu-chi') : FILE_PREFIX[type];
   return { html: fitTables(renderTemplate(tpl.html, vals), contentWidthPx(tpl)), font: ds.font || 'Tinos', base: baseFor(ds, tpl), paper: tpl.paper || 'A4', orient: tpl.orient || 'portrait', margin: marginOf(tpl),
-    filename: `${prefix}_${code.replace(/[\/:*?"<>|]+/g, '-')}.pdf`, title, code, tplId: tpl.id, due: vals.due };
+    filename: `${prefix}_${code.replace(/[\/:*?"<>|]+/g, '-')}.pdf`, title, code, tplId: tpl.id, type, due: vals.due };
 }

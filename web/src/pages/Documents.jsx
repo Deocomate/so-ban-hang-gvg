@@ -8,6 +8,7 @@ import { DOC_TYPES, DEFAULT_TEXTS, docSettings, loadDocData, defaults, currentIn
 import { VatReminder, VatReminderPopup } from '../components/VatReminder.jsx';
 import { buildPrintDoc, templatesFor, pageSize, PAPERS, FONT_CSS, withBaseSize, applyExportOpts, EXPORT_SCALES } from '../lib/docs/templates.js';
 import { openTemplateEditor } from '../lib/docs/editor-link.js';
+import { colKey, dataTables, MIN_COL } from '../lib/docs/col-fit.js';
 import { sampleData } from '../lib/docs/tokens.js';
 
 import { useDocFonts } from '../lib/docs/fonts.js';
@@ -15,7 +16,8 @@ import { useDocFonts } from '../lib/docs/fonts.js';
 const TYPES_FOR = { quote: ['bao_gia'], contract: ['de_nghi_tam_ung', 'doi_chieu_sl', 'doi_chieu_tt', 'de_nghi_tt'], order: ['hoa_don', 'don_dat_hang', 'bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen', 'yeu_cau_vat', 'cn_xuat_xuong', 'doi_chieu_tt', 'doi_chieu_sl'], delivery: ['bien_ban', 'hoa_don', 'hd_van_chuyen', 'phieu_xuat_kho', 'don_dat_hang', 'yeu_cau_vat', 'cn_xuat_xuong'], payment: ['phieu_thu'] };
 
 // ---------- Bản xem trước: chứng từ dựng từ mẫu in (HTML), đúng khổ giấy và lề ----------
-export function DocPreview({ doc }) {
+// opts / setOpt (tùy chọn xuất): có thì kéo được đường kẻ giữa hai cột của bảng có viền để chỉnh độ rộng cột
+export function DocPreview({ doc, opts, setOpt }) {
   useDocFonts();
   const size = pageSize(doc); const m = doc.margin || {};
   // Thu nhỏ trang cho vừa khung (điện thoại, hộp thoại hẹp)
@@ -25,23 +27,100 @@ export function DocPreview({ doc }) {
     const ro = new ResizeObserver(() => { const w = el.clientWidth - 16; setZoom(Math.min(1, Math.max(0.3, w / (size.w * 96 / 25.4)))); });
     ro.observe(el); return () => ro.disconnect();
   }, [size.w]);
+  const tplRef = React.useRef(null); const guideRef = React.useRef(null);
+  const resizable = !!setOpt;
+  // Lưu độ rộng (tỷ lệ) của bảng thứ ti cho loại chứng từ + mẫu + hướng giấy đang xem
+  const saveRef = React.useRef(null);
+  saveRef.current = (ti, ws) => {
+    const key = colKey(doc); const total = ws.reduce((a, b) => a + b, 0); const all = opts?.cols || {};
+    setOpt('cols', { ...all, [key]: { ...(all[key] || {}), [ti]: { n: ws.length, w: ws.map((w) => Math.round((w / total) * 10000) / 10000) } } });
+  };
+  useColumnDrag(resizable, tplRef, ref, guideRef, saveRef);
   return (
-    <div className="doc-scroll" ref={ref}>
+    <div className={`doc-scroll${resizable ? ' doc-resizable' : ''}`} ref={ref}>
       <div className="doc-page" style={{ fontFamily: FONT_CSS[doc.font], zoom, width: `${size.w}mm`, minHeight: size.h ? `${size.h}mm` : 'auto', padding: `${m.top}mm ${m.right}mm ${m.bottom}mm ${m.left}mm` }}>
-        <div className="tpl" style={doc.base ? { fontSize: `${doc.base}pt` } : undefined} dangerouslySetInnerHTML={{ __html: withBaseSize(doc.html, doc.base) }} />
+        <div className="tpl" ref={tplRef} style={doc.base ? { fontSize: `${doc.base}pt` } : undefined} dangerouslySetInnerHTML={{ __html: withBaseSize(doc.html, doc.base) }} />
       </div>
+      {resizable && <div className="col-guide" ref={guideRef} hidden />}
     </div>
   );
 }
 
-// ---------- Tùy chọn xuất: hướng giấy + cỡ chữ tổng thể (nhớ trên máy này, áp cho xem trước, In, Tải PDF / ảnh) ----------
+// Kéo đường kẻ dọc giữa hai cột: hai cột kề nhau đổi độ rộng cho nhau (tổng bảng giữ nguyên), thả chuột thì lưu
+function useColumnDrag(on, tplRef, scrollRef, guideRef, saveRef) {
+  useEffect(() => {
+    const root = tplRef.current; const scroller = scrollRef.current;
+    if (!on || !root || !scroller) return undefined;
+    let drag = null;
+    const guide = (x, r) => {
+      const g = guideRef.current; if (!g) return;
+      if (x === null) { g.hidden = true; return; }
+      const sr = scroller.getBoundingClientRect();
+      g.hidden = false;
+      g.style.left = `${x - sr.left + scroller.scrollLeft - 1}px`; g.style.top = `${r.top - sr.top + scroller.scrollTop}px`; g.style.height = `${r.height}px`;
+    };
+    // Đường kẻ cột gần con trỏ (trong vòng vài px) của bảng có viền ngoài cùng
+    const find = (e, tol) => {
+      let t = e.target.closest?.('table');
+      while (t && t.parentElement?.closest('td,th') && root.contains(t.parentElement)) t = t.parentElement.closest('table');
+      if (!t || t.getAttribute('data-border') !== '1' || !root.contains(t)) return null;
+      const cols = [...t.querySelectorAll(':scope > colgroup > col')]; const ws = cols.map((c) => parseFloat(c.style.width) || 0);
+      if (cols.length < 2 || ws.some((w) => !w)) return null;
+      const r = t.getBoundingClientRect(); const k = r.width / ws.reduce((a, b) => a + b, 0);
+      let x = r.left;
+      for (let i = 0; i < ws.length - 1; i++) { x += ws[i] * k; if (Math.abs(e.clientX - x) <= tol) return { t, cols, ws, k, i, x, r }; }
+      return null;
+    };
+    const move = (e) => {
+      if (drag) {
+        const { cols, ws, i, k, x, r } = drag; const pair = ws[i] + ws[i + 1];
+        const a = Math.min(pair - MIN_COL, Math.max(MIN_COL, ws[i] + (e.clientX - drag.x0) / k));
+        cols[i].style.width = `${a}px`; cols[i + 1].style.width = `${pair - a}px`;
+        guide(x + (a - ws[i]) * k, r); return;
+      }
+      const h = find(e, 5);
+      root.style.cursor = h ? 'col-resize' : '';
+      guide(h ? h.x : null, h?.r);
+    };
+    const down = (e) => {
+      if (e.button !== 0) return;
+      const h = find(e, e.pointerType === 'touch' ? 12 : 5); if (!h) return;
+      e.preventDefault(); drag = { ...h, x0: e.clientX };
+      try { root.setPointerCapture(e.pointerId); } catch (x) { /* bỏ qua */ }
+      guide(h.x, h.r);
+    };
+    const up = () => {
+      if (!drag) return;
+      const { t, cols } = drag; drag = null; guide(null);
+      const ti = dataTables(root).indexOf(t);
+      if (ti >= 0) saveRef.current(ti, cols.map((c) => parseFloat(c.style.width) || MIN_COL));
+    };
+    const leave = () => { if (!drag) { root.style.cursor = ''; guide(null); } };
+    root.addEventListener('pointermove', move); root.addEventListener('pointerdown', down);
+    root.addEventListener('pointerup', up); root.addEventListener('pointercancel', up); root.addEventListener('pointerleave', leave);
+    return () => {
+      root.removeEventListener('pointermove', move); root.removeEventListener('pointerdown', down);
+      root.removeEventListener('pointerup', up); root.removeEventListener('pointercancel', up); root.removeEventListener('pointerleave', leave);
+    };
+  }, [on]);
+}
+
+// ---------- Tùy chọn xuất: hướng giấy + cỡ chữ tổng thể + độ rộng cột đã kéo (nhớ trên máy này, áp cho xem trước, In, Tải PDF / ảnh) ----------
 const OPTS_KEY = 'gomsu.export_opts';
 export function useExportOpts() {
-  const [opts, setOpts] = useState(() => { try { const v = JSON.parse(localStorage.getItem(OPTS_KEY) || 'null'); return { orient: v?.orient || '', scale: EXPORT_SCALES.includes(v?.scale) ? v.scale : 1 }; } catch (e) { return { orient: '', scale: 1 }; } });
+  const [opts, setOpts] = useState(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(OPTS_KEY) || 'null');
+      return { orient: v?.orient || '', scale: EXPORT_SCALES.includes(v?.scale) ? v.scale : 1, cols: v?.cols && typeof v.cols === 'object' ? v.cols : {} };
+    } catch (e) { return { orient: '', scale: 1, cols: {} }; }
+  });
   const set = (k, v) => setOpts((s) => { const n = { ...s, [k]: v }; try { localStorage.setItem(OPTS_KEY, JSON.stringify(n)); } catch (e) { /* bỏ qua */ } return n; });
   return [opts, set];
 }
-export function ExportOpts({ opts, set, roll }) {
+// doc: chứng từ đang xem — có bảng có viền thì hiện cách chỉnh độ rộng cột và nút dùng lại độ rộng tự động
+export function ExportOpts({ opts, set, roll, doc }) {
+  const hasTable = !!doc && !doc.error && String(doc.html || '').includes('data-border="1"');
+  const key = hasTable ? colKey(doc) : null; const custom = !!(key && opts.cols?.[key]);
   return (
     <div className="stack-s">
       <Field label="Hướng giấy khi xuất">
@@ -52,6 +131,10 @@ export function ExportOpts({ opts, set, roll }) {
         <Select value={String(opts.scale)} onChange={(v) => set('scale', Number(v))}
           options={EXPORT_SCALES.map((k) => ({ value: String(k), label: k === 1 ? '100% (theo mẫu)' : `${Math.round(k * 100)}%` }))} />
       </Field>
+      {hasTable && <div className="muted small">
+        Độ rộng cột: <b>{custom ? 'đã chỉnh tay' : 'tự động theo nội dung'}</b>. Kéo đường kẻ dọc giữa hai cột trên bản xem trước để chỉnh (nhớ riêng khổ dọc / khổ ngang).
+        {custom && <> <button className="link-btn small" onClick={() => { const rest = { ...opts.cols }; delete rest[key]; set('cols', rest); }}>Dùng lại độ rộng tự động</button></>}
+      </div>}
     </div>
   );
 }
@@ -355,7 +438,7 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
                 {can('owner') && <button className="link-btn small" onClick={() => openTemplateEditor({ book: book.id, type, tpl: (ds.templates[type] || []).length ? doc?.tplId : '' })}>Sửa mẫu in này (mở tab mới)</button>}
               </Field>
             )}
-            {ready && <ExportOpts opts={opts} set={setOpt} roll={!!PAPERS[doc?.paper]?.roll} />}
+            {ready && <ExportOpts opts={opts} set={setOpt} roll={!!PAPERS[doc?.paper]?.roll} doc={doc} />}
             {ready && <HeaderEditor type={type} prof={profileFor(ds, type, { ...info, ...Object.fromEntries(HEADER_FIELDS.map(([k]) => [headerKey(type, k), ''])), [headerKey(type, 'logo')]: '' })} info={info} setEdit={setEdit} />}
             <button className="link-btn small" onClick={() => setShowForm((x) => !x)}>{showForm ? '▾' : '▸'} Thông tin trên chứng từ</button>
             {showForm && ready && <div className="stack-s">
@@ -383,7 +466,7 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
               <div className="muted small">Đơn vị phát hành, logo, nội dung và cách trình bày: Cài đặt → Mẫu in.</div>
             </div>}
           </div>
-          <div className="doc-main">{doc && !doc.error ? <DocPreview doc={doc} /> : !doc?.error && <Loading />}</div>
+          <div className="doc-main">{doc && !doc.error ? <DocPreview doc={doc} opts={opts} setOpt={setOpt} /> : !doc?.error && <Loading />}</div>
         </div>
       )}
     </>
@@ -456,7 +539,7 @@ function TemplateManager() {
   const cur = list.find((t) => t.id === sel) || list.find((t) => t.is_default) || list[0];
   const [busy, setBusy] = useState(false);
   const data = useMemo(() => sampleData(type), [type]);
-  const doc = useMemo(() => { try { return buildPrintDoc(type, data, ds, defaults(type, data, ds), cur.id); } catch (e) { return { error: e.message }; } }, [type, ds, cur.id, data]);
+  const doc = useMemo(() => { try { return applyExportOpts(buildPrintDoc(type, data, ds, defaults(type, data, ds), cur.id)); } catch (e) { return { error: e.message }; } }, [type, ds, cur.id, data]);
   const persist = async (next, msg) => {
     setBusy(true);
     try { await rpc('save_print_templates', { doc_type: type, templates: next }); await loadBooks(); toast(msg); return true; } catch (e) { toast(e.message, 'err'); return false; } finally { setBusy(false); }

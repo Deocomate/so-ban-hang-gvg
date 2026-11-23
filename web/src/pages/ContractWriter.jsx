@@ -131,7 +131,7 @@ export default function ContractWriter({ id: id0, order_id, onClose }) {
         <Tabs value={mode} onChange={setMode} tabs={MODES} />
         {mode === 'form' && <div className="doc-wrap cw-wrap">
           <div className="doc-side cw-side">
-            <ExportOpts opts={opts} set={setOpt} />
+            <ExportOpts opts={opts} set={setOpt} doc={doc} />
             {body && <Note tone="warn">Hợp đồng đã được sửa trực tiếp nên các trường dưới đây không còn áp vào nội dung.
               {edit && <> <button className="link-btn" onClick={() => { if (window.confirm('Bỏ phần đã sửa trực tiếp và dựng lại từ mẫu theo các trường?')) { setBody(null); setDirty(true); } }}>Dựng lại từ mẫu</button></>}</Note>}
             {fieldsFor(kind).map((g) => (
@@ -150,7 +150,7 @@ export default function ContractWriter({ id: id0, order_id, onClose }) {
             ))}
             <div className="muted small">Ô nhiều dòng: dòng bắt đầu "- " là gạch đầu dòng, "+ " là ý con, "# " là tiêu đề in đậm. Bảng hàng hóa lấy từ đơn hàng.</div>
           </div>
-          <div className="doc-main"><DocPreview doc={doc} /></div>
+          <div className="doc-main"><DocPreview doc={doc} opts={opts} setOpt={setOpt} /></div>
         </div>}
         {mode === 'edit' && <DirectEditor key={kind} html={withBaseSize(body ?? contractHtml(kind, f, data), ds.base)} base={ds.base} readOnly={!edit}
           onChange={(h) => { setBody(h); setDirty(true); }} edited={!!body} onReset={() => { setBody(null); setDirty(true); return withBaseSize(contractHtml(kind, f, data), ds.base); }} />}

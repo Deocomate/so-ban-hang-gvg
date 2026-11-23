@@ -554,6 +554,10 @@ code { font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-r
 .doc-scroll { overflow: auto; background: var(--surface-2); border-radius: 10px; padding: 14px; max-height: 72vh; }
 .doc-page { background: #fff; color: #000; width: 595pt; min-height: 842pt; box-sizing: border-box; padding: 34pt 40pt 36pt; margin: 0 auto; box-shadow: 0 2px 12px rgba(0,0,0,.18); line-height: 1.2; }
 .doc-page img { max-width: none; }
+/* Kéo đường kẻ giữa hai cột của bảng trên bản xem trước để đổi độ rộng cột */
+.doc-resizable { position: relative; }
+.col-guide { position: absolute; width: 3px; background: var(--accent, #1f6feb); opacity: .7; pointer-events: none; border-radius: 2px; z-index: 2; }
+.doc-resizable .tpl table[data-border="1"] { touch-action: pan-y; }
 .doc-rule { height: 3pt; background: #1f3864; border-bottom: 3pt solid #fff; box-shadow: 0 0.6pt 0 0 #8ea2c6; margin-bottom: 8pt; }
 .doc-lh { display: flex; gap: 14pt; align-items: flex-start; }
 .doc-lh img { width: 96pt; height: auto; max-height: 84pt; object-fit: contain; }
