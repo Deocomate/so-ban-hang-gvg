@@ -43,7 +43,7 @@ export function BankSettings({ part = 'account' }) {
   return (
     <div className="stack-l" style={{ maxWidth: 860 }}>
       {part === 'account' && <Section title="Tài khoản nhận chuyển khoản">
-        <div className="muted small">Dùng để in mã QR trên đơn và phiếu (khách quét là tự điền số tiền + nội dung), và để nhận giao dịch tự động từ SePay. Hai sổ có thể dùng chung 1 tài khoản — phần mềm phân biệt bằng mã sổ trong nội dung ({orderTransferContent(book, 'DH00012')}).</div>
+        <div className="muted small">Dùng để in mã QR trên đơn và phiếu (khách quét là tự điền số tiền + nội dung), và để nhận giao dịch tự động từ SePay. Hai sổ có thể dùng chung 1 tài khoản — phần mềm phân biệt bằng mã sổ trong nội dung ({orderTransferContent(book, 'DH000012')}).</div>
         <div className="grid">
           <Field label="Ngân hàng"><Select value={f.bin} onChange={(v) => set('bin', v)} options={BANKS.map((x) => ({ value: x.bin, label: x.name }))} /></Field>
           <Field label="Số tài khoản"><Input value={f.account_no} onChange={(v) => set('account_no', v)} inputMode="numeric" /></Field>
@@ -55,8 +55,8 @@ export function BankSettings({ part = 'account' }) {
       {part === 'payment' && !settings.bank && <Note>Chưa có tài khoản nhận chuyển khoản. Thêm ở <b>Sổ quỹ → Tài khoản ngân hàng</b> để in mã QR.</Note>}
       {part === 'payment' && settings.bank && <Section title="Xem thử mã QR">
         <div className="row gap" style={{ alignItems: 'flex-start' }}>
-          <QrBox amount={1250000} content={orderTransferContent(book, 'DH00012')} />
-          <div className="muted small" style={{ maxWidth: 360 }}>Ví dụ QR cho đơn DH00012 còn phải trả 1.250.000 đ. Mỗi đơn và phiếu in có QR riêng với đúng số tiền còn phải trả. Hãy quét thử bằng app ngân hàng (không cần chuyển) để kiểm tra tên tài khoản hiện đúng.</div>
+          <QrBox amount={1250000} content={orderTransferContent(book, 'DH000012')} />
+          <div className="muted small" style={{ maxWidth: 360 }}>Ví dụ QR cho đơn DH000012 còn phải trả 1.250.000 đ. Mỗi đơn và phiếu in có QR riêng với đúng số tiền còn phải trả. Hãy quét thử bằng app ngân hàng (không cần chuyển) để kiểm tra tên tài khoản hiện đúng.</div>
         </div>
       </Section>}
       {part === 'payment' && <Section title="Nhận tiền về tự động (SePay)">

@@ -128,23 +128,23 @@ api.as(owner);
 const codeOf = async (id) => (await order(id)).code;
 const num = (c) => Number(c.slice(2));
 const h1 = await codeOf(await sell(A, 1, 1000));
-C('Hóa đơn bán ngay mang mã HD', /^HD\d{5}$/.test(h1), true);
-const taken = 'HD' + String(num(h1) + 1).padStart(5, '0');
+C('Hóa đơn bán ngay mang mã HD', /^HD\d{6}$/.test(h1), true);
+const taken = 'HD' + String(num(h1) + 1).padStart(6, '0');
 await api.sql('update sales_orders set code = ? where code = ?', [taken, h1]);
-C('Bỏ qua mã đã có', await codeOf(await sell(A, 1, 1000)), 'HD' + String(num(h1) + 2).padStart(5, '0'));
+C('Bỏ qua mã đã có', await codeOf(await sell(A, 1, 1000)), 'HD' + String(num(h1) + 2).padStart(6, '0'));
 const dat = await api.call('save_sales_order', { book_id: TH, request_id: rid(), kind: 'dat_hang', customer_id: A, lines: [{ product_id: P, qty: 1, unit_price: 1000 }] });
 C('Đơn đặt hàng mang mã DH', dat.code.slice(0, 2), 'DH');
 // Sổ chưa có bộ đếm HD (vd. vừa chuyển từ KiotViet): đếm tiếp sau mã HD lớn nhất đã có
 await api.sql(`update sales_orders set code = 'HD009999' where code = ?`, [taken]);
 await api.sql(`delete from doc_counters where book_id = ? and kind = 'HD'`, [TH]);
-C('Đếm tiếp sau mã KiotViet lớn nhất', await codeOf(await sell(A, 1, 1000)), 'HD10000');
+C('Đếm tiếp sau mã KiotViet lớn nhất', await codeOf(await sell(A, 1, 1000)), 'HD010000');
 // Xử lý đơn đặt hàng tạo hóa đơn HD chung dãy với hóa đơn bán ngay, bỏ qua mã hóa đơn đã có (kể cả mã KiotViet dạng .01)
 await api.call('confirm_sales_order', { book_id: TH, request_id: rid(), id: dat.id });
 const datLine = (await api.q('sales_order_lines', TH, [['order_id', 'eq', dat.id]]))[0];
 await api.sql(`update deliveries set code = 'HD010001.01' where code = (select code from deliveries limit 1)`);
 await api.sql(`delete from doc_counters where book_id = ? and kind = 'HD'`, [TH]);
 const inv = await api.call('deliver', { book_id: TH, request_id: rid(), order_id: dat.id, lines: [{ order_line_id: datLine.id, qty: 1 }] });
-C('Hóa đơn từ đặt hàng mang mã HD, đếm sau mã hóa đơn lớn nhất', inv.code, 'HD10002');
-C('Hóa đơn bán ngay tiếp theo không trùng', await codeOf(await sell(A, 1, 1000)), 'HD10003');
+C('Hóa đơn từ đặt hàng mang mã HD, đếm sau mã hóa đơn lớn nhất', inv.code, 'HD010002');
+C('Hóa đơn bán ngay tiếp theo không trùng', await codeOf(await sell(A, 1, 1000)), 'HD010003');
 
 finish('Sổ công nợ khách hàng');

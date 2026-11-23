@@ -187,7 +187,7 @@ function OrdersPanel({ go }) {
         <EditModal title="Quy tắc tạo mã giao dịch" onClose={() => setDlg('')}>
           <div><div className="field-label">Cách tạo mã giao dịch</div><b>Tăng dần theo thứ tự tạo</b></div>
           <div className="small">Mỗi loại chứng từ có tiền tố riêng (HD hóa đơn, DH đặt hàng, GH phiếu giao, BG báo giá…), phần số tăng dần theo thứ tự tạo trong từng sổ.</div>
-          <div className="muted small">Ví dụ: HD00001 → HD00002 → HD00003</div>
+          <div className="muted small">Ví dụ: HD000001 → HD000002 → HD000003</div>
         </EditModal>
       )}
     </>

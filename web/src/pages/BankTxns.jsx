@@ -111,7 +111,7 @@ export function BankSimDialog({ onClose }) {
       <div className="grid">
         <Field label="Số tiền"><NumInput value={amount} onChange={setAmount} /></Field>
         <Field label="Người chuyển"><Input value={name} onChange={setName} /></Field>
-        <Field label="Nội dung chuyển khoản" wide><Input value={content} onChange={setContent} placeholder="vd. chuyen tien THDH00012, SPX COD 14/10 hoặc BEST EXPRESS TT COD" /></Field>
+        <Field label="Nội dung chuyển khoản" wide><Input value={content} onChange={setContent} placeholder="vd. chuyen tien THDH000012, SPX COD 14/10 hoặc BEST EXPRESS TT COD" /></Field>
       </div>
     </Modal>
   );

@@ -204,7 +204,7 @@ Hai người bấm lưu đúng cùng lúc trên cùng một mặt hàng không t
 ## 7. Vận chuyển (Shopee Express, BEST Express), tiền về tài khoản, thông báo điện thoại
 
 ### 7.1 Đã có ngay (không cần đăng ký thêm)
-- **Mã QR chuyển khoản theo đơn** (chuẩn VietQR): hiện trong màn hình đơn hàng và in trên phiếu. Khách quét bằng app ngân hàng nào cũng tự điền số tiền còn phải trả và nội dung **mã sổ + mã đơn** (ví dụ `THHD00012` cho hóa đơn, `VGDH00007` cho đơn đặt hàng). Như KiotViet, hóa đơn bán ngay mang mã `HD…`, đơn đặt hàng mang mã `DH…`. Hai sổ dùng chung một tài khoản Vietcombank, phần mềm phân biệt nhờ mã sổ. Khai báo tài khoản: **Cài đặt → Tài khoản nhận tiền**, làm cho từng sổ.
+- **Mã QR chuyển khoản theo đơn** (chuẩn VietQR): hiện trong màn hình đơn hàng và in trên phiếu. Khách quét bằng app ngân hàng nào cũng tự điền số tiền còn phải trả và nội dung **mã sổ + mã đơn** (ví dụ `THHD000012` cho hóa đơn, `VGDH000007` cho đơn đặt hàng). Như KiotViet, hóa đơn bán ngay mang mã `HD…`, đơn đặt hàng mang mã `DH…`. Hai sổ dùng chung một tài khoản Vietcombank, phần mềm phân biệt nhờ mã sổ. Khai báo tài khoản: **Cài đặt → Tài khoản nhận tiền**, làm cho từng sổ.
 - **Vận đơn SPX**:
   - Khi giao hàng, tick **Gửi qua Shopee Express** rồi dán mã vận đơn (SPXVN…) và tiền thu hộ (COD). Hoặc mở đơn rồi bấm **Tạo vận đơn SPX**.
   - Trang **Vận chuyển SPX** có các trạng thái giống app SPX: Chờ lấy hàng → Đã lấy hàng → Đang trung chuyển → Đang giao → Giao thành công / Giao thất bại → Đang hoàn → Đã hoàn.

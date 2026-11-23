@@ -72,13 +72,13 @@ export const bookSettings = (book) => json(val(`select settings from books where
 export const setting = (book, key) => bookSettings(book)[key];
 
 // Số chứng từ tự tăng, không trùng
-export function nextCode(book, kind) {
+export function nextCode(book, kind, width = 5) {
   const n = val(`insert into doc_counters (book_id, kind, last_no) values (?, ?, 1)
     on conflict (book_id, kind) do update set last_no = last_no + 1 returning last_no`, book, kind);
-  return kind + String(n).padStart(5, '0');
+  return kind + String(n).padStart(width, '0');
 }
 
-// Mã đơn bán như KiotViet: hóa đơn HD…, đơn đặt hàng DH…. Hóa đơn bán ngay và hóa đơn lập từ đơn đặt hàng (phiếu giao)
+// Mã đơn bán như KiotViet: hóa đơn HD……, đơn đặt hàng DH…… (6 chữ số, vd. HD001254). Hóa đơn bán ngay và hóa đơn lập từ đơn đặt hàng (phiếu giao)
 // dùng chung một dãy HD. Lần đầu dùng một tiền tố trong sổ thì đếm tiếp sau số lớn nhất đã có (mã chuyển từ KiotViet,
 // kể cả dạng HD000068.01), và luôn bỏ qua mã đã có.
 export function salesOrderCode(book, kind) {
@@ -90,7 +90,7 @@ export function salesOrderCode(book, kind) {
     if (max) run(`insert into doc_counters (book_id, kind, last_no) values (?, ?, ?)`, book, prefix, max);
   }
   for (;;) {
-    const c = nextCode(book, prefix);
+    const c = nextCode(book, prefix, 6);
     if (!tables.some((t) => one(`select 1 from ${t} where book_id = ? and lower(code) = lower(?)`, book, c))) return c;
   }
 }

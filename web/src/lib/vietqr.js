@@ -36,7 +36,7 @@ export function vietqrPayload({ bin, account_no, amount, content }) {
   return s + crc16(s);
 }
 
-// Nội dung CK theo đơn: <mã sổ><mã đơn>, ví dụ THDH00013 — phần mềm dựa vào đây để tự gạch nợ khi tiền về
+// Nội dung CK theo đơn: <mã sổ><mã đơn>, ví dụ THDH000013 — phần mềm dựa vào đây để tự gạch nợ khi tiền về
 export const orderTransferContent = (book, orderCode) => `${(book?.short_name || '').toUpperCase()}${orderCode}`;
 
 export async function qrSvg(payload, size = 220) {
