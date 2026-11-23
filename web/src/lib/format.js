@@ -30,13 +30,6 @@ export function dmyhm(ts) {
   const p = (n) => String(n).padStart(2, '0');
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
-// Ngày nghiệp vụ (ngày bán, ngày trả…) kèm giờ lập phiếu khi phiếu được lập đúng ngày đó; lập bù / nhập lại sau thì chỉ hiện ngày,
-// để cột "Thời gian" không bao giờ hiện ngày sửa / ngày nhập liệu thay cho ngày bán.
-export function dayTime(date, ts) {
-  if (!date) return dmyhm(ts);
-  const t = ts ? dmyhm(ts) : '';
-  return t.startsWith(dmy(date)) ? t : dmy(date);
-}
 
 // Ngày theo giờ Việt Nam, dạng yyyy-mm-dd
 export function todayVN() {

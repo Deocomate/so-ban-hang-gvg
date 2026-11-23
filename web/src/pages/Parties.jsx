@@ -167,9 +167,7 @@ function SupplierDetail({ type, id, onClose }) {
   const { open, can, settings } = useApp();
   const isKh = type === 'kh';
   const q = useQ(isKh ? 'customers' : 'suppliers', [['id', 'eq', id]]);
-  const allOrders = useQ(isKh ? 'sales_orders' : 'purchase_orders', [[isKh ? 'customer_id' : 'supplier_id', 'eq', id]], 'order_date desc', 500, can(isKh ? 'xem_ban_hang' : 'xem_nhap_hang'));
-  // Đơn đã hủy không hiện trong lịch sử
-  const orders = useMemo(() => ({ ...allOrders, data: allOrders.data && allOrders.data.filter((o) => o.status !== 'huy') }), [allOrders]);
+  const orders = useQ(isKh ? 'sales_orders' : 'purchase_orders', [[isKh ? 'customer_id' : 'supplier_id', 'eq', id]], 'order_date desc', 500, can(isKh ? 'xem_ban_hang' : 'xem_nhap_hang'));
   const pays = useQ('payments', [['party_id', 'eq', id]], 'pay_date desc', 500, can('xem_thu_chi'));
   const debts = useQ('opening_debts', [['party_id', 'eq', id]], 'debt_date');
   const [tab, setTab] = useState('orders');
@@ -205,7 +203,7 @@ function SupplierDetail({ type, id, onClose }) {
         { key: 'h', label: 'Hạn thanh toán', render: (o) => (o.pay_due_date ? dmy(o.pay_due_date) + (o.overdue_days > 0 ? ` (quá hạn ${o.overdue_days} ngày)` : '') : '—') },
         { key: 's', label: 'Trạng thái', render: (o) => (isKh ? <div className="row gap-s"><StatusPill map={DELIVERY} value={o.delivery_status} /><StatusPill map={PAYMENT} value={o.payment_status} /></div> : <StatusPill map={RECEIVE} value={o.receive_status} />) },
       ]} />}
-      {tab === 'pays' && <Table dense rows={pays.data && pays.data.filter((p) => !p.voided)} expand={(p, close) => <PaymentDetail id={p.id} onClose={close} />} columns={[
+      {tab === 'pays' && <Table dense rows={pays.data} expand={(p, close) => <PaymentDetail id={p.id} onClose={close} />} rowClass={(p) => (p.voided ? 'row-void' : '')} columns={[
         { key: 'c', label: 'Phiếu', render: (p) => <><b>{p.code}</b><div className="cell-sub">{dmy(p.pay_date)} · {p.fund_name}</div></> },
         { key: 'k', label: 'Loại', render: (p) => p.kind_label },
         { key: 'al', label: 'Trả cho', render: (p) => (p.allocations || []).map((a) => a.doc_code).join(', ') || <span className="muted">trả trước</span> },

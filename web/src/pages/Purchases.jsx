@@ -163,7 +163,15 @@ export function SupplierReturnsPage() {
 }
 
 function CancelBox({ busy, onCancel, label, hint }) {
-  return <div className="row gap"><ConfirmBtn kind="danger" busy={busy} onConfirm={onCancel}>{label}</ConfirmBtn>{hint && <span className="muted small">{hint}</span>}</div>;
+  const [on, setOn] = useState(false); const [reason, setReason] = useState('');
+  if (!on) return <div className="row gap"><Btn onClick={() => setOn(true)}>{label}</Btn>{hint && <span className="muted small">{hint}</span>}</div>;
+  return (
+    <div className="row gap">
+      <Input value={reason} onChange={setReason} placeholder="Lý do (bắt buộc)" style={{ maxWidth: 360 }} autoFocus />
+      <ConfirmBtn kind="danger" busy={busy} onConfirm={async () => { if (await onCancel(reason)) setOn(false); }}>Xác nhận hủy</ConfirmBtn>
+      <Btn onClick={() => setOn(false)}>Thôi</Btn>
+    </div>
+  );
 }
 
 const exportLines = (code, lines) => exportXlsx(`${code}.xlsx`, [{ name: code, rows: lines, columns: [
@@ -184,6 +192,7 @@ export function PoDetail({ id, onClose }) {
   const [tab, setTab] = useState('info');
   const [info, setInfo] = useState(null); // ghi chú / số hóa đơn đang sửa ngay trong chi tiết (nút Lưu)
   const [askCancel, setAskCancel] = useState(false);
+  const [reason, setReason] = useState('');
   const d = o.data?.[0];
   if (!d) return <Modal title="Phiếu nhập" onClose={onClose} size="lg">{o.error ? <ErrorBox error={o.error} /> : <Loading />}</Modal>;
   const isNhap = d.mode === 'nhap';
@@ -201,16 +210,17 @@ export function PoDetail({ id, onClose }) {
   const setCur = (k, v) => setInfo({ ...cur, [k]: v });
   const saveInfo = async () => { if (await run('update_po_info', { id, ...cur }, 'Đã lưu thông tin phiếu')) setInfo(null); };
   const doCancel = async () => {
-    const r = await run('cancel_purchase_order', { id }, (x) => `Đã hủy ${d.code}`
+    if (!reason.trim()) return;
+    const r = await run('cancel_purchase_order', { id, reason: reason.trim() }, (x) => `Đã hủy ${d.code}`
       + (x.receipts?.length ? ` · tự hủy lần nhập ${x.receipts.join(', ')}, hàng đã xuất lại khỏi kho` : '') + (x.paid > 0 ? ` · nhà cung cấp cần hoàn lại ${money(x.paid)} đ` : ''));
-    if (r) setAskCancel(false);
+    if (r) { setAskCancel(false); setReason(''); }
   };
   const qtySum = (lines.data || []).reduce((t, l) => t + (l.unit_conv && l.unit_conv !== 1 ? l.eff_qty / l.unit_conv : l.eff_qty), 0);
   return (
     <Modal title={d.supplier_name} onClose={onClose} size="xl"
       subtitle={<span className="row gap-s">{d.code} · {isNhap ? 'Phiếu nhập hàng' : KIND_LABEL[d.kind]} <StatusTag label={d.status_label} /> {d.is_late && <Pill tone="bad">trễ hẹn nhận</Pill>}</span>}
       footer={<>
-        {canBuy && live && <Btn icon="trash" onClick={() => setAskCancel(true)}>Hủy</Btn>}
+        {canBuy && live && <Btn icon="trash" onClick={() => { setReason(''); setAskCancel(true); }}>Hủy</Btn>}
         {canBuy && <Btn icon="copy" onClick={() => { onClose(); open('po-form', { copy_id: id }); }}>Sao chép</Btn>}
         <Btn icon="dl" onClick={() => exportLines(d.code, lines.data || [])}>Xuất file</Btn>
         <span className="grow" />
@@ -225,7 +235,7 @@ export function PoDetail({ id, onClose }) {
       </>}>
       {askCancel && (
         <Modal title={isNhap ? 'Hủy phiếu nhập' : 'Hủy đơn đặt hàng nhập'} size="sm" onClose={() => setAskCancel(false)}
-          footer={<><Btn onClick={() => setAskCancel(false)}>Bỏ qua</Btn><Btn kind="danger" busy={busy} disabled={hasReturn} onClick={doCancel}>Đồng ý</Btn></>}>
+          footer={<><Btn onClick={() => setAskCancel(false)}>Bỏ qua</Btn><Btn kind="danger" busy={busy} disabled={!reason.trim() || hasReturn} onClick={doCancel}>Đồng ý</Btn></>}>
           <div className="stack-s">
             {hasReturn ? <Note tone="warn">{d.code} đã có phiếu trả hàng nhập nên không hủy được. Hàng còn lại muốn trả nhà cung cấp: dùng "Trả hàng nhập".</Note> : <>
               <div>Khi hủy <b>{d.code}</b>, phần mềm sẽ tự động:</div>
@@ -234,6 +244,7 @@ export function PoDetail({ id, onClose }) {
                 {d.paid_net > 0 && <li>Số tiền đã trả {money(d.paid_net)} đ thành tiền nhà cung cấp cần hoàn lại (bấm "NCC hoàn tiền" khi nhận lại)</li>}
                 {d.remaining_qty > 0 && !isNhap && <li>Bỏ phần hàng chưa nhận</li>}
               </ul>
+              <Input value={reason} onChange={setReason} placeholder="Lý do hủy (bắt buộc)" autoFocus />
             </>}
           </div>
         </Modal>
@@ -307,7 +318,7 @@ export function PoDetail({ id, onClose }) {
         ]} />}
         {!isNhap && live && canBuy && d.received_qty > 0 && d.remaining_qty > 0 && (
           <Section title="Hủy phần chưa nhận"><CancelBox busy={busy} label="Hủy phần chưa nhận" hint="Hàng đã nhận giữ nguyên; muốn bỏ một đợt đã nhận thì hủy đợt đó ở bảng trên."
-            onCancel={() => run('cancel_po_remaining', { id }, 'Đã hủy phần chưa nhận')} /></Section>
+            onCancel={(why) => run('cancel_po_remaining', { id, reason: why }, 'Đã hủy phần chưa nhận')} /></Section>
         )}
       </>}
       {tab === 'prod' && (
@@ -401,7 +412,7 @@ export function SupplierReturnDetail({ id, onClose }) {
         ]} />
       </Section>
       {!r.cancelled_at && can('nhap_hang') && <Section title="Hủy"><CancelBox busy={busy} label="Hủy phiếu trả" hint="Hàng được nhập lại kho, công nợ NCC trở lại như trước. Có phiếu thu NCC hoàn tiền thì hủy phiếu thu trước."
-        onCancel={() => run('cancel_supplier_return', { id }, 'Đã hủy phiếu trả hàng nhập')} /></Section>}
+        onCancel={(reason) => run('cancel_supplier_return', { id, reason }, 'Đã hủy phiếu trả hàng nhập')} /></Section>}
     </Modal>
   );
 }
