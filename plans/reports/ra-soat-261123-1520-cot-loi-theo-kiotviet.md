@@ -131,7 +131,7 @@ So bản sao sổ thật sau khi sửa với dữ liệu xuất KiotViet (09/11,
 ### Khác cách làm với KiotViet (chưa sửa, cần quyết)
 
 1. Đã sửa (23/11, commit `4857a72`, deploy 16:22). Hủy phiếu giao (hóa đơn), phiếu nhập hoặc phiếu trả hàng nhập giờ bỏ hẳn các dòng sổ kho của chứng từ, rồi tính lại giá vốn từ ngày chứng từ, như KiotViet. Lệnh `scripts/drop-cancelled-stock-moves.js` đã dọn 13 chứng từ hủy trước đó (124 dòng sổ kho), tồn hiện tại không đổi. Sao lưu trước khi dọn: `backups/20261123-162211-truoc-don-so-kho-huy/`. Sau khi dọn, tồn ngày 09/11 chỉ còn lệch KiotViet ở các mã của hóa đơn chủ cửa hàng giữ hủy, các phiếu lập lùi ngày trên sổ mới và các mã được ghép.
-2. **Phí trả hàng.** Sổ mới trừ doanh thu theo giá trị trả đã trừ phí (phí vẫn tính là doanh thu). KiotViet trừ đủ giá trị trả, còn phí ghi riêng. Công nợ khách như nhau.
+2. Đã sửa (23/11, commit `7a3f8e7`, deploy 16:26). Hàng khách trả trừ doanh thu theo đủ giá trị hàng trả, phí trả hàng ghi riêng là thu nhập khác và cộng vào lợi nhuận, như KiotViet. Doanh thu tháng 6 giờ khớp KiotViet (392.644.000 đ). Công nợ khách không đổi.
 
 ### Đã quyết
 - Giữ hủy (chủ cửa hàng xác nhận 23/11): **HD001250.01**, 302.095.440 đ, khách KH000677: công cụ nạp nạp ngày 20/11, rồi tài khoản Chủ cửa hàng hủy lúc 17:13 cùng ngày. KiotViet ghi hoàn thành, và khách đó trên KiotViet còn nợ đúng 302.095.440 đ.
