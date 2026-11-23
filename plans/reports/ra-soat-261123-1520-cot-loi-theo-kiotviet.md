@@ -135,3 +135,14 @@ So bản sao sổ thật sau khi sửa với dữ liệu xuất KiotViet (09/11,
 
 ### Đã quyết
 - Giữ hủy (chủ cửa hàng xác nhận 23/11): **HD001250.01**, 302.095.440 đ, khách KH000677: công cụ nạp nạp ngày 20/11, rồi tài khoản Chủ cửa hàng hủy lúc 17:13 cùng ngày. KiotViet ghi hoàn thành, và khách đó trên KiotViet còn nợ đúng 302.095.440 đ.
+
+## Đợt 5 (23/11, 16:32): mã DH / GH còn lẫn trong lịch sử bán
+
+- **Nguyên nhân:**
+  - Ba hóa đơn bán ngay lập trên sổ mới trước khi đổi cách đánh mã vẫn mang mã DH: DH01854, DH01855 (sổ TH) và DH00001 (sổ VG).
+  - Phiếu giao của hóa đơn bán ngay vẫn được sinh mã GH riêng. Vì vậy sổ "Nợ cần thu" hiện GH thay vì HD.
+- **Sửa code (commit `b8f6514`):** hóa đơn bán ngay chỉ có một mã HD như KiotViet. Phiếu giao mang luôn mã hóa đơn; nếu giao thêm đợt sau thì thêm hậu tố -2, -3.
+- **Sửa dữ liệu (sao lưu `backups/20261123-163245-truoc-doi-ma-hd/`):**
+  - Sổ TH: DH01854 → HD001254, DH01855 → HD001255; phiếu giao GH01253 và GH01254 của DH000068.01.01 → HD001256 và HD001257.
+  - Sổ VG: DH00001 → HD000001.
+  - Mã trên thẻ kho đổi theo. Lịch sử đơn có ghi mã cũ để tra lại.
