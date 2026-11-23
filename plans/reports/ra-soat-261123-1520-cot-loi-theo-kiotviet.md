@@ -111,5 +111,5 @@ Chủ cửa hàng xác nhận các phiếu thu ngày 22–23/11 là ghi bù đ�
 1. Đã xử lý ngày 23/11, 16:03: chủ cửa hàng xác nhận các phiếu thu ngày 12/11 và 20/11 cũng là ghi bù. Đã gỡ thêm 193.340.500 đ trên 8 phiếu: 5 phiếu hủy hẳn, 3 phiếu giảm số tiền. Sao lưu trước khi sửa: `backups/20261123-160325-truoc-go-ghi-bu-12-20-11/`. Không còn khách nào hiện trả trước ảo; khách còn trả trước thì khớp số trả trước trên KiotViet.
 2. **Khách KiotViet còn nợ nhưng sổ mới về 0.** Một số khách KiotViet ghi còn nợ (năm 2026), nhưng sau khi sửa sổ mới về 0, vì phiếu ghi bù được giữ đúng bằng phần nợ đó. Nếu thực tế khách chưa trả phần này, cần hủy tiếp phần ghi bù tương ứng.
 3. **53 hóa đơn còn khác số đã thu trên KiotViet.** Phần lớn là hóa đơn KiotViet ghi chưa thu (theo bản xuất 09/11) mà sổ mới đã thu bằng phiếu ghi bù.
-4. **Đơn KiotViet hoàn thành nhưng sổ mới đã hủy ngày 22/11:** DH000061, DH000065, DH000054 và vài hóa đơn khác. Chưa khôi phục.
+4. Đã quyết (23/11): chủ cửa hàng giữ nguyên các đơn đã hủy ngày 22/11, gồm DH000061, DH000065, DH000054, HD001226, HD001235.01, HD001249.01, HD001247; không khôi phục.
 5. **Công cụ nạp phát sinh `add-kiotviet-docs`** cần chuyển tiền cọc và tiền của hóa đơn sửa lại theo cặp phiếu TTTU như KiotViet, để lần nạp sau không lặp lại lỗi này.
