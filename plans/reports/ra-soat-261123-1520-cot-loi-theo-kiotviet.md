@@ -112,4 +112,4 @@ Chủ cửa hàng xác nhận các phiếu thu ngày 22–23/11 là ghi bù đ�
 2. **Khách KiotViet còn nợ nhưng sổ mới về 0.** Một số khách KiotViet ghi còn nợ (năm 2026), nhưng sau khi sửa sổ mới về 0, vì phiếu ghi bù được giữ đúng bằng phần nợ đó. Nếu thực tế khách chưa trả phần này, cần hủy tiếp phần ghi bù tương ứng.
 3. **53 hóa đơn còn khác số đã thu trên KiotViet.** Phần lớn là hóa đơn KiotViet ghi chưa thu (theo bản xuất 09/11) mà sổ mới đã thu bằng phiếu ghi bù.
 4. Đã quyết (23/11): chủ cửa hàng giữ nguyên các đơn đã hủy ngày 22/11, gồm DH000061, DH000065, DH000054, HD001226, HD001235.01, HD001249.01, HD001247; không khôi phục.
-5. **Công cụ nạp phát sinh `add-kiotviet-docs`** cần chuyển tiền cọc và tiền của hóa đơn sửa lại theo cặp phiếu TTTU như KiotViet, để lần nạp sau không lặp lại lỗi này.
+5. Đã sửa `add-kiotviet-docs` (commit `71b7e9a`): tiền gắn theo chứng từ KiotViet ghi, tiền cọc chuyển theo cặp TTTU, phiếu trả nợ chung để riêng. Chạy thử lại lần nạp 20/11 trên bản sao trước lần nạp đó: mọi hóa đơn và công nợ khớp KiotViet. Bản trên máy chủ được cập nhật ở lần deploy tới.
