@@ -1,14 +1,14 @@
-// Phông nhúng (Arimo ≈ Arial, Tinos ≈ Times New Roman) cho bản xem trước và trình sửa mẫu — cùng phông với tệp PDF nên chữ xuống dòng giống nhau.
+// Phông nhúng (Arimo ≈ Arial, Times New Roman thật — khóa nội bộ 'Tinos') cho bản xem trước và trình sửa mẫu — cùng phông với tệp PDF nên chữ xuống dòng giống nhau.
 // Kèm CSS chung của nội dung mẫu in (TPL_CSS). Chỉ chèn vào trang một lần.
 import { useEffect } from 'react';
 import ArimoR from '../../assets/fonts/Arimo-Regular.ttf?url';
 import ArimoB from '../../assets/fonts/Arimo-Bold.ttf?url';
 import ArimoI from '../../assets/fonts/Arimo-Italic.ttf?url';
 import ArimoBI from '../../assets/fonts/Arimo-BoldItalic.ttf?url';
-import TinosR from '../../assets/fonts/Tinos-Regular.ttf?url';
-import TinosB from '../../assets/fonts/Tinos-Bold.ttf?url';
-import TinosI from '../../assets/fonts/Tinos-Italic.ttf?url';
-import TinosBI from '../../assets/fonts/Tinos-BoldItalic.ttf?url';
+import TinosR from '../../assets/fonts/TimesNewRoman-Regular.ttf?url';
+import TinosB from '../../assets/fonts/TimesNewRoman-Bold.ttf?url';
+import TinosI from '../../assets/fonts/TimesNewRoman-Italic.ttf?url';
+import TinosBI from '../../assets/fonts/TimesNewRoman-BoldItalic.ttf?url';
 import { TPL_CSS } from './templates.js';
 
 let injected = false;

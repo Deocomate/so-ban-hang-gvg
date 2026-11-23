@@ -1,6 +1,6 @@
 // Nút ☰ góc trên bên phải các màn hình tạo đơn (bán hàng, báo giá, nhập hàng) — như KiotViet:
 // mở thêm việc khác (lập phiếu thu, xử lý đặt hàng, trả hàng, báo cáo cuối ngày…) mà không mất đơn đang làm.
-// Việc nào phải rời màn hình (Quản lý, Thiết lập, Đăng xuất) mà đơn đang dở thì hỏi lại một lần.
+// Mọi mục trong menu chỉ cần bấm một lần.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useQ } from '../lib/store.jsx';
 import { money, dmy, match } from '../lib/format.js';
@@ -8,10 +8,9 @@ import { Icon, Modal, Table, Search, ErrorBox, StatusPill, DELIVERY, PAYMENT } f
 import { EndOfDayReport } from '../pages/Reports.jsx';
 
 // screen: 'sale' | 'quote' | 'purchase'; dirty: đang có dòng hàng chưa lưu; onImport(file): thêm dòng từ file Excel
-export function PosMenu({ screen = 'sale', dirty, onClose, onImport, keys = [] }) {
+export function PosMenu({ screen = 'sale', onClose, onImport, keys = [] }) {
   const { session, setSession, backend, can, open } = useApp();
   const [show, setShow] = useState(false);
-  const [armed, setArmed] = useState(null);
   const [side, setSide] = useState('dd-right'); // menu mở sang phải hay trái tùy chỗ trống (thanh trên bị xuống dòng ở màn hẹp)
   const ref = useRef(null); const fileRef = useRef(null);
   useEffect(() => {
@@ -21,14 +20,10 @@ export function PosMenu({ screen = 'sale', dirty, onClose, onImport, keys = [] }
     document.addEventListener('mousedown', down); window.addEventListener('keydown', esc, true);
     return () => { document.removeEventListener('mousedown', down); window.removeEventListener('keydown', esc, true); };
   }, [show]);
-  useEffect(() => { if (!show) setArmed(null); }, [show]);
 
   const run = (fn) => () => { setShow(false); fn(); };
-  // Rời màn hình tạo đơn: đơn đang dở thì bấm lần nữa mới rời
-  const leave = (key, after) => () => {
-    if (dirty && armed !== key) { setArmed(key); return; }
-    setShow(false); onClose(); after?.();
-  };
+  // Rời màn hình tạo đơn
+  const leave = (after) => () => { setShow(false); onClose(); after?.(); };
   const goPage = (hash) => () => { location.hash = hash; };
   const userName = session?.user?.name || session?.user?.email || 'Tài khoản';
   const isBuy = screen === 'purchase';
@@ -42,8 +37,8 @@ export function PosMenu({ screen = 'sale', dirty, onClose, onImport, keys = [] }
   ];
   if (onImport) tasks.push({ key: 'import', icon: 'file-in', label: 'Import file', on: run(() => fileRef.current?.click()) });
   const item = (x) => x && (
-    <button key={x.key} type="button" role="menuitem" className={`dd-item${x.danger ? ' pos-menu-danger' : ''}${armed === x.key ? ' armed' : ''}`} onClick={x.on}>
-      <Icon name={x.icon} size={19} />{armed === x.key ? 'Bỏ đơn đang làm? Bấm lần nữa' : x.label}
+    <button key={x.key} type="button" role="menuitem" className={`dd-item${x.danger ? ' pos-menu-danger' : ''}`} onClick={x.on}>
+      <Icon name={x.icon} size={19} />{x.label}
     </button>
   );
   return (
@@ -57,8 +52,8 @@ export function PosMenu({ screen = 'sale', dirty, onClose, onImport, keys = [] }
         <div className={`dd-menu ${side} pos-menu-list`} role="menu">
           <div className="pos-menu-user"><Icon name="users" size={20} /><b>{userName}</b></div>
           <div className="pos-menu-tiles">
-            <button type="button" role="menuitem" className={armed === 'quan-ly' ? 'armed' : ''} onClick={leave('quan-ly')}>
-              <span className="pos-menu-tile tile-a"><Icon name="dashboard" size={20} /></span>{armed === 'quan-ly' ? 'Bấm lần nữa để rời' : 'Quản lý'}
+            <button type="button" role="menuitem" onClick={leave()}>
+              <span className="pos-menu-tile tile-a"><Icon name="dashboard" size={20} /></span>Quản lý
             </button>
             {can('xem_bao_cao') && <button type="button" role="menuitem" onClick={run(() => open('pos-eod', {}))}>
               <span className="pos-menu-tile tile-b"><Icon name="pie" size={20} /></span>Báo cáo cuối ngày
@@ -67,10 +62,10 @@ export function PosMenu({ screen = 'sale', dirty, onClose, onImport, keys = [] }
           <div className="pos-menu-sep" />
           {tasks.filter(Boolean).map(item)}
           <div className="pos-menu-sep" />
-          {item({ key: 'thiet-lap', icon: 'sliders', label: 'Thiết lập & Hiển thị', on: leave('thiet-lap', goPage(isBuy ? '#cai-dat/mua-hang' : '#cai-dat/don-hang')) })}
+          {item({ key: 'thiet-lap', icon: 'sliders', label: 'Thiết lập & Hiển thị', on: leave(goPage(isBuy ? '#cai-dat/mua-hang' : '#cai-dat/don-hang')) })}
           {item({ key: 'phim-tat', icon: 'keyboard', label: 'Phím tắt', on: run(() => open('pos-keys', { keys })) })}
           <div className="pos-menu-sep" />
-          {item({ key: 'dang-xuat', icon: 'logout', label: 'Đăng xuất', danger: true, on: leave('dang-xuat', () => backend.signOut().then(() => setSession(null))) })}
+          {item({ key: 'dang-xuat', icon: 'logout', label: 'Đăng xuất', danger: true, on: leave(() => backend.signOut().then(() => setSession(null))) })}
         </div>
       )}
     </div>

@@ -598,8 +598,6 @@ code { font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-r
 .pos-menu { position: relative; }
 .pos-menu-list { top: calc(100% - 4px); width: 330px; max-width: calc(100vw - 20px); border-radius: 12px; padding: 8px; z-index: 120; }
 .pos-menu-list .dd-item { padding: 11px 14px; font-size: 15px; }
-.pos-menu-list .dd-item.armed { background: var(--bad); color: #fff; }
-.pos-menu-list .dd-item.armed svg { color: #fff; }
 .pos-menu-list .pos-menu-danger, .pos-menu-list .pos-menu-danger svg { color: var(--bad); }
 .pos-menu-user { display: flex; align-items: center; gap: 12px; padding: 10px 14px 12px; font-size: 16px; }
 .pos-menu-user svg { color: var(--muted); }
@@ -607,7 +605,6 @@ code { font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-r
 .pos-menu-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .pos-menu-tiles button { display: flex; align-items: center; gap: 10px; border: 0; background: none; padding: 8px 10px; border-radius: 8px; cursor: pointer; color: var(--ink); font: inherit; font-weight: 500; text-align: left; }
 .pos-menu-tiles button:hover { background: var(--accent-2); }
-.pos-menu-tiles button.armed { background: var(--bad); color: #fff; }
 .pos-menu-tile { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; flex: none; }
 .pos-menu-tile.tile-a { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
 .pos-menu-tile.tile-b { background: color-mix(in srgb, #f59e0b 18%, transparent); color: #d97706; }

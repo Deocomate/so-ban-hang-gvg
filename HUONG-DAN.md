@@ -352,10 +352,10 @@ Có 5 loại chứng từ, xuất ra PDF khổ A4, dựng theo đúng mẫu cử
 - **Biên bản và phiếu xuất kho** lập theo từng lần giao. Nếu chưa giao, chọn "Cả đơn" để in trước, giao cho lái xe mang theo.
 - **Phiếu thu, phiếu chi và phiếu xuất kho** có dòng "Mẫu số … Thông tư 88/2021/TT-BTC" ở góc phải. Muốn bỏ dòng này thì sửa mẫu in và xóa ô đó. Nếu đơn vị phát hành là công ty, nên sửa dòng này theo chế độ kế toán công ty đang áp dụng (hỏi kế toán).
 - **Phông chữ:**
-  - Tất cả chứng từ dùng chung một phông, mặc định Times New Roman (Tinos), cỡ chữ cơ bản 13: chữ nhỏ hơn 13 trong mẫu được nâng lên 13, tiêu đề lớn giữ nguyên; giấy cuộn K80/K58 giữ cỡ của mẫu. Đổi phông (Arial) hoặc cỡ chữ cơ bản (11–14, hoặc giữ đúng cỡ trong mẫu) ở **Cài đặt → Mẫu in → Đơn vị phát hành & phông chữ**; từng đoạn chữ trong mẫu cũng chọn phông riêng được. Bản xem trước dùng đúng phông và cỡ chữ sẽ in.
+  - Tất cả chứng từ dùng chung một phông, mặc định Times New Roman, cỡ chữ cơ bản 13: chữ nhỏ hơn 13 trong mẫu được nâng lên 13, tiêu đề lớn giữ nguyên; giấy cuộn K80/K58 giữ cỡ của mẫu. Đổi phông (Arial) hoặc cỡ chữ cơ bản (11–14, hoặc giữ đúng cỡ trong mẫu) ở **Cài đặt → Mẫu in → Đơn vị phát hành & phông chữ**; từng đoạn chữ trong mẫu cũng chọn phông riêng được. Bản xem trước dùng đúng phông và cỡ chữ sẽ in.
 - **Đầu trang (header) sửa theo từng lần xuất:** trong hộp **In / xuất chứng từ**, mở **Đầu trang (header)** để đổi tên, địa chỉ, điện thoại, email, website, mã số thuế, số tài khoản, người đại diện hoặc bỏ logo cho riêng chứng từ đó. Để trống là theo đơn vị phát hành, gõ dấu "-" để bỏ dòng. Phần sửa lưu theo chứng từ, không đổi cài đặt đơn vị.
   - Phông được nhúng sẵn trong PDF, nên mở trên điện thoại, máy tính hay gửi Zalo đều đúng dấu tiếng Việt, và chữ chọn hoặc sao chép được.
-  - Hai phông này dùng giấy phép Apache 2.0, miễn phí.
+  - Phông Times New Roman nhúng trong PDF là bản của Windows (không phải bản thay thế Tinos); Arial dùng Arimo (Apache 2.0).
 - **Đây không phải hóa đơn điện tử.** "Hóa đơn bán hàng" ở đây là chứng từ nội bộ để giao cho khách, không thay hóa đơn điện tử có mã của cơ quan thuế. Hộ kinh doanh có doanh thu trên 1 tỷ đồng/năm thuộc diện phải dùng hóa đơn điện tử theo quy định hiện hành, nên hỏi lại cán bộ thuế hoặc kế toán để áp dụng cho đúng.
 
 ## 10. Màn hình tạo đơn bán (kiểu quầy)
