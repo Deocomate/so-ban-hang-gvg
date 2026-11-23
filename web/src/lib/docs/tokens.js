@@ -2,6 +2,7 @@
 // Biến nhóm "Hàng hóa" là biến theo dòng: dòng bảng nào chứa biến này sẽ được lặp lại cho từng mặt hàng.
 // Giá trị là chuỗi (in nguyên văn) hoặc { h: '<html>' } (đoạn HTML dựng sẵn: logo, bảng đối chiếu…);
 // { h, block: true } là khối lớn (bảng) — đặt riêng một dòng trong mẫu thì thay luôn cả dòng đó.
+import { specText } from '../format.js';
 import { fmtNum, phoneFmt, dateLine, moneyWords, profileFor, goodsLines, packLabel, totalKg, fmtKg, weightPerUnit, DEFAULT_TEXTS, runsOf, PER_DELIVERY, RECONCILE } from './model.js';
 
 const T = (k, label, desc) => ({ k, label, desc: desc || label });
@@ -328,7 +329,7 @@ function quoteTable(q, N) {
       const sum = g.lines.reduce((s, l) => s + l.amount, 0);
       rows.push([{ text: roman[gi] || String(gi + 1), align: 'center', b: true }, { text: g.name || '', sub: g.note || undefined, colSpan: n - 2, b: true }, { text: N(sum), align: 'right', b: true }]);
     }
-    g.lines.forEach((l, i) => rows.push([{ text: String(i + 1), align: 'center' }, { text: l.name, sub: l.note || undefined }, { text: l.spec || '' },
+    g.lines.forEach((l, i) => rows.push([{ text: String(i + 1), align: 'center' }, { text: l.name, sub: l.note || undefined }, { text: specText(l.spec) },
       l.image && /^data:image\//.test(l.image) ? { h: `<img src="${l.image}" style="width:50px">`, align: 'center' } : { text: '' },
       { text: l.measure ? `${N(l.measure)} ${mu(l.measure_unit)}` : (mosaic ? N(l.qty) : ''), align: 'center' }, ...(showNorm ? [{ text: normText(l), align: 'center' }] : []),
       ...(mosaic ? [] : [{ text: N(l.qty), align: 'right' }]), { text: l.unit || '', align: 'center' }, { text: N(l.price), align: 'right' }, { text: N(l.amount), align: 'right' }]));

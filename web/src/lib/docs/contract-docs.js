@@ -1,5 +1,6 @@
 // Chứng từ theo hợp đồng và báo giá: đề nghị tạm ứng / thanh toán, đối chiếu số lượng, đối chiếu kèm thanh toán, hợp đồng vận chuyển, báo giá.
 // Dựng cùng dạng danh sách khối như model.js để bản xem trước và tệp PDF giống hệt nhau.
+import { specText } from '../format.js';
 import { P, fmtNum, phoneFmt, dateLine, moneyWords, profileFor, goodsLines, weightPerUnit, DEFAULT_TEXTS, runsOf } from './model.js';
 
 const dmy = (iso) => { const [y, m, d] = String(iso || '').slice(0, 10).split('-'); return y ? `${d}/${m}/${y}` : ''; };
@@ -151,7 +152,7 @@ function quoteDoc(data, ds, info, prof, N) {
       const sum = g.lines.reduce((s, l) => s + l.amount, 0);
       rows.push(span([{ text: roman[gi] || String(gi + 1), align: 'center', b: true }, { text: g.name || '', sub: g.note || undefined, colSpan: n - 2, b: true }, ...Array(n - 3).fill({}), { text: N(sum), align: 'right', b: true }]));
     }
-    g.lines.forEach((l, i) => rows.push([{ text: String(i + 1), align: 'center' }, l.note ? { text: l.name, sub: l.note } : { text: l.name }, { text: l.spec || '' }, l.image ? { image: l.image } : { text: '' },
+    g.lines.forEach((l, i) => rows.push([{ text: String(i + 1), align: 'center' }, l.note ? { text: l.name, sub: l.note } : { text: l.name }, { text: specText(l.spec) }, l.image ? { image: l.image } : { text: '' },
       { text: l.measure ? `${N(l.measure)} ${l.measure_unit || ''}` : (mosaic ? N(l.qty) : ''), align: 'center' }, ...(showNorm ? [{ text: l.norm ? N(l.norm) : '', align: 'center' }] : []),
       ...(mosaic ? [] : [{ text: N(l.qty), align: 'right' }]), { text: l.unit || '', align: 'center' }, { text: N(l.price), align: 'right' }, { text: N(l.amount), align: 'right' }]));
   });

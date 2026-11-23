@@ -115,3 +115,6 @@ export function searchRank(list, q, keys, limit = Infinity) {
   scored.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
   return (limit === Infinity ? scored : scored.slice(0, limit)).map((r) => r[3]);
 }
+
+// Quy cách hàng hóa: bỏ phần trùng lặp (vd. chất liệu và màu cùng là "Gốm đỏ" → chỉ ghi một lần)
+export const specText = (s) => { const seen = new Set(); return String(s || '').split(',').filter((x) => { const k = x.trim().toLowerCase(); if (!k) return true; if (seen.has(k)) return false; seen.add(k); return true; }).join(',').trim(); };

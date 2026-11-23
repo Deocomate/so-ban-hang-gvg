@@ -2,7 +2,7 @@
 // Màn lập báo giá toàn màn hình giống màn tạo hóa đơn: ô tìm hàng ở trên, dòng hàng theo nhóm bên trái, khách và tổng tiền bên phải.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useQ, useAction } from '../lib/store.jsx';
-import { money, qty as fq, dmy, match, norm, todayVN, searchRank } from '../lib/format.js';
+import { money, qty as fq, dmy, match, norm, todayVN, searchRank, specText } from '../lib/format.js';
 import { ProductSearch } from './OrderPos.jsx';
 import { useProducts, useCustomers, priceOf, usePriceBooks, booksFor, autoBookFor, priceSourceOptions, parsePriceSource, priceSourceValue, levelTier, priceChoices } from '../lib/lookups.js';
 import { DealPriceButton } from '../components/DealPrice.jsx';
@@ -18,7 +18,7 @@ let seq = 0;
 const newLine = () => ({ key: ++seq, product_id: null, name: '', spec: '', image: '', note: '', measure: null, measure_unit: 'm2', norm: null, deduct: null, qty: null, unit: 'viên', price: 0, manual: false, deal: false });
 
 // Quy cách gộp từ danh mục: kích thước, cân nặng, chất liệu, màu sắc
-const specOf = (p) => [p.size, p.weight_per_unit ? `${fq(p.weight_per_unit)} kg` : '', p.material, p.color].filter(Boolean).join(', ');
+const specOf = (p) => specText([p.size, p.weight_per_unit ? `${fq(p.weight_per_unit)} kg` : '', p.material, p.color].filter(Boolean).join(', '));
 // Số lượng = khối lượng × định mức − phần diềm trừ đi
 const autoQty = (l) => (l.measure && l.norm ? Math.round(Number(l.measure) * Number(l.norm) - (Number(l.deduct) || 0)) : l.qty);
 
@@ -352,7 +352,7 @@ export function QuoteDetail({ id, onClose }) {
   if (!d) return <Modal title="Báo giá" onClose={onClose}>{q.error ? <ErrorBox error={q.error} /> : <Loading />}</Modal>;
   const lines = d.body.groups.flatMap((g) => g.lines);
   const noProduct = lines.filter((l) => !l.product_id).length;
-  const excel = () => exportXlsx(`bao-gia_${d.code}.xlsx`, [{ name: 'Báo giá', rows: lines, columns: [{ key: 'name', label: 'Tên sản phẩm' }, { key: 'spec', label: 'Quy cách' }, { key: 'note', label: 'Ghi chú' }, { key: 'measure', label: 'Khối lượng' }, { key: 'qty', label: 'Số lượng' }, { key: 'unit', label: 'ĐVT' }, { key: 'price', label: 'Đơn giá' }, { key: 'amount', label: 'Thành tiền' }] }]);
+  const excel = () => exportXlsx(`bao-gia_${d.code}.xlsx`, [{ name: 'Báo giá', rows: lines.map((l) => ({ ...l, spec: specText(l.spec) })), columns: [{ key: 'name', label: 'Tên sản phẩm' }, { key: 'spec', label: 'Quy cách' }, { key: 'note', label: 'Ghi chú' }, { key: 'measure', label: 'Khối lượng' }, { key: 'qty', label: 'Số lượng' }, { key: 'unit', label: 'ĐVT' }, { key: 'price', label: 'Đơn giá' }, { key: 'amount', label: 'Thành tiền' }] }]);
   return (
     <Modal title={`Báo giá ${d.code}`} subtitle={<span className="row gap-s">{dmy(d.quote_date)} · <QStatus v={d.status} /></span>} onClose={onClose} size="lg"
       footer={<>
@@ -366,7 +366,7 @@ export function QuoteDetail({ id, onClose }) {
       {noProduct > 0 && !d.order_id && <Note tone="warn">Có {noProduct} dòng tự nhập, không gắn hàng hóa trong danh mục. Khi chuyển sang đơn các dòng này sẽ bị bỏ qua.</Note>}
       <KV items={[['Kính gửi', d.customer_name], ['Địa chỉ', d.address || '—'], ['Công trình', d.site || '—'], d.order_code && ['Đơn đã lập', <a href="#" onClick={(e) => { e.preventDefault(); open('order', { id: d.order_id }); }}>{d.order_code}</a>]]} />
       <Table dense rows={lines} rowKey="name" columns={[
-        { key: 'n', label: 'Sản phẩm', render: (l) => <><div className="cell-main">{l.name}</div><div className="cell-sub">{l.spec}</div></> },
+        { key: 'n', label: 'Sản phẩm', render: (l) => <><div className="cell-main">{l.name}</div><div className="cell-sub">{specText(l.spec)}</div></> },
         { key: 'q', label: 'Số lượng', align: 'right', render: (l) => `${fq(l.qty)} ${l.unit}` }, { key: 'p', label: 'Đơn giá', align: 'right', render: (l) => money(l.price) }, { key: 'a', label: 'Thành tiền', align: 'right', render: (l) => money(l.amount) },
       ]} />
       <div className="card"><div className="totals">
