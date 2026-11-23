@@ -23,8 +23,8 @@ import { VatReminder } from '../components/VatReminder.jsx';
 import { OrderDocsPanel } from './OrderDocs.jsx';
 
 // ===================== DANH SÁCH ĐƠN BÁN =====================
-// Như KiotViet: hóa đơn gồm đơn bán ngay và đơn đặt hàng đã giao ít nhất một đợt (phiếu đặt chưa giao nằm ở trang Đặt hàng).
-// Lọc theo thời gian (mặc định Tháng này; đơn đặt tính theo ngày giao gần nhất) và trạng thái (mặc định bỏ Đã hủy).
+// Hóa đơn chỉ gồm đơn bán ngay; đơn đặt hàng (kể cả đã giao) xem riêng ở trang Đặt hàng.
+// Lọc theo thời gian (mặc định Tháng này) và trạng thái (mặc định bỏ Đã hủy).
 const INVOICE_STATUS = [
   { value: 'nhap', label: 'Phiếu tạm', test: (o) => o.status === 'nhap' },
   { value: 'cho_giao', label: 'Chờ giao', test: (o) => o.status === 'xac_nhan' && o.remaining_qty > 0 },
@@ -45,8 +45,8 @@ export function SalesPage() {
   const [search, setSearch] = useState('');
   const [channel, setChannel] = useState('');
   const [openId, setOpenId] = useState(null); // hóa đơn đang xổ chi tiết ngay trong bảng (như KiotViet)
-  const { data, error } = useQ('sales_orders', [], 'created_at desc', 5000);
-  const invoices = useMemo(() => (data || []).filter((o) => o.kind !== 'dat_hang' || o.delivery_count > 0), [data]);
+  const { data, error } = useQ('sales_orders', [['kind', 'neq', 'dat_hang']], 'created_at desc', 5000);
+  const invoices = useMemo(() => (data || []).filter((o) => o.kind !== 'dat_hang'), [data]);
   // Lọc được cả kênh đã bỏ khỏi Cài đặt nhưng còn gắn trên hóa đơn cũ
   const channelList = useMemo(() => channelOptions(settings, invoices.map((o) => o.channel)), [settings.channels, invoices]);
   const inTime = useMemo(() => invoices.filter((o) => time.inRange(invoiceDate(o))
