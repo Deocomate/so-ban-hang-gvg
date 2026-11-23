@@ -57,4 +57,9 @@ inv = await invoices(o);
 C('Còn một hóa đơn, đã thu đủ', inv.map((x) => [x.total, x.debt]), [[4000, 0]]);
 C('Tiền thu dư thành tiền trả trước của đơn đặt', (await order(o)).prepaid, 3500);
 
+G('5. Hóa đơn bán ngay chỉ có một mã HD: phiếu giao mang luôn mã hóa đơn, không sinh mã GH');
+const hd = await api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: A, kind: 'ban_san', order_date: D(0), deliver_now: true, lines: [{ product_id: P, qty: 1, unit_price: 1000 }] });
+const hdDel = (await api.q('deliveries', TH, [['order_id', 'eq', hd.id]]))[0];
+C('Mã hóa đơn HD, phiếu giao cùng mã', [hd.code.slice(0, 2), hdDel.code], ['HD', hd.code]);
+
 finish('Công nợ theo từng hóa đơn HD của đơn đặt hàng');

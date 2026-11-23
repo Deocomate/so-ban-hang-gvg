@@ -32,7 +32,7 @@ function ledgerEvents(book, cid) {
     seq[d.order_id] = (seq[d.order_id] || 0) + 1;
     // Đơn và hóa đơn cùng mã (kiểu KiotViet): chỉ một dòng, không cần chú thích
     const same = d.code === d.order_code;
-    ev.push({ key: 'dl:' + d.id, type: 'ban_hang', title: same ? '' : d.n > 1 ? `Giao đợt ${seq[d.order_id]} của đơn ${d.order_code}` : `Giao hàng đơn ${d.order_code}`,
+    ev.push({ key: 'dl:' + d.id, type: 'ban_hang', title: d.n > 1 ? `Giao đợt ${seq[d.order_id]} của đơn ${d.order_code}` : same ? '' : `Giao hàng đơn ${d.order_code}`,
       date: d.delivery_date, at: d.created_at, code: d.code, order_id: d.order_id, col: 'no',
       amount: d.revenue + roundVat(d.revenue, d.vat_rate) + d.shipping_fee });
   }
