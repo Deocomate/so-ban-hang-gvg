@@ -217,7 +217,15 @@ const successorOf = (code) => {
 
 function cancelInvoice(i) {
   const o = orderByCode(i.Code);
-  if (!o) return;   // vừa lập ở trạng thái hủy, hoặc chưa từng nạp
+  if (!o) {
+    // Hóa đơn HD lập từ đơn đặt: hủy phiếu giao (hàng về kho, tiền đã thu cho nó quay về đơn đặt rồi gắn lại theo KiotViet)
+    const dl = get(`select id from deliveries where book_id = ? and code = ?`, B, i.Code);
+    if (dl) {
+      call('cancel_delivery', { id: dl.id, reason: `Hóa đơn ${i.Code} đã hủy trên KiotViet` });
+      touched.add(i.CustomerCode || 'KL'); done.push(`${i.Code} hủy hóa đơn từ ${i.OrderCode} theo KiotViet`);
+    }
+    return;   // không có: vừa lập ở trạng thái hủy, hoặc chưa từng nạp
+  }
   if (o.status === 'huy') return createdNow.has(i.Code) ? null : skipped.push(`${i.Code}: đã hủy trong sổ`);
   for (const d of rows(`select id from deliveries where order_id = ?`, o.id)) call('cancel_delivery', { id: d.id, reason: `Hóa đơn ${i.Code} đã hủy trên KiotViet` });
   // Tiền đã thu cho bản bị hủy chuyển sang bản thay thế (như KiotViet làm khi sửa hóa đơn); phần dư thành tiền khách trả trước
@@ -254,17 +262,16 @@ function addPayment(c) {
   if (exists('payments', c.Code)) return skipped.push(`${c.Code}: phiếu thu đã có`);
   if (c.Status !== 0) throw new Error(`${c.Code}: phiếu quỹ đã hủy trên KiotViet, chưa hỗ trợ`);
   const funds = db.prepare(`select id from funds where book_id = ? order by sort`).all(B);
-  // Phiếu thu theo chứng từ: KiotViet cho biết phiếu đang thuộc chứng từ nào; không có thì đoán theo mã TTDH000068 → DH000068, TTHD… → HD…
+  // Chưa gắn vào chứng từ ở đây: linkPayments() gắn sau cùng theo chứng từ KiotViet ghi cho phiếu (payHome; không có thì đoán theo mã
+  // TTDH000068 → DH000068, TTHD… → HD…). Phiếu KiotViet không ghi chứng từ nào (trả nợ chung) để riêng như KiotViet, không tự trừ vào đơn cũ nhất.
   const docCode = payHome.get(c.Code) || (/^TT(HD|DH)/.test(c.Code) ? c.Code.slice(2).replace(/-\d+$/, '') : null);
-  const target = docCode && (orderByCode(docCode)?.id ?? get(`select order_id as id from deliveries where book_id = ? and code = ?`, B, docCode)?.id);
-  const left = target && remaining(target);
-  const a = left && left.status !== 'huy' ? Math.min(c.Amount, Math.max(left.remaining_total, 0)) : 0;
+  if (docCode && !payHome.has(c.Code)) payHome.set(c.Code, docCode);
   const r = call('create_payment', { kind: 'thu_khach', date: kvDate(c.TransDate), fund_id: c.Method === 'Cash' || !c.Method ? funds[0].id : funds[1].id,
     party_id: customerOf(c.PartnerCode), amount: c.Amount, method: c.Method === 'Transfer' ? 'Chuyển khoản' : c.Method === 'Cash' ? 'Tiền mặt' : c.Method || null,
     note: [c.Description, c.CashGroup].filter(Boolean).join(' · ') || null,
-    allocations: a > 0 ? [{ doc_type: 'don_ban', doc_id: target, amount: a }] : [], auto_allocate: !target });
+    allocations: [], auto_allocate: false });
   sql(`update payments set code = ?, created_at = ? where id = ?`, c.Code, kvIso(c.CreatedDate || c.TransDate), r.id);
-  touched.add(c.PartnerCode || 'KL'); done.push(`${c.Code} thu ${c.PartnerCode || 'khách lẻ'} ${vnd(c.Amount)}${a > 0 ? ` cho ${docCode}` : target ? ` trả trước (${docCode} còn là phiếu tạm)` : ''}`);
+  touched.add(c.PartnerCode || 'KL'); done.push(`${c.Code} thu ${c.PartnerCode || 'khách lẻ'} ${vnd(c.Amount)}${docCode ? ` cho ${docCode}` : ' (trả nợ chung, không theo chứng từ)'}`);
 }
 
 // Phiếu thu mang mã KiotViet trong sổ mà sổ công nợ KiotViet của khách không còn (KiotViet xóa tiền cọc khi hủy đặt hàng): hủy theo
@@ -283,23 +290,54 @@ function voidMissingPayments() {
   }
 }
 
-// Tiền cọc của đặt hàng (ghi là trả trước khi đơn còn là phiếu tạm) trừ vào đơn sau khi đã giao thành hóa đơn
-function applyDeposits() {
-  for (const { i, orderId } of viaOrder) {
-    const codes = [...payHome.entries()].filter(([, doc]) => doc === i.OrderCode || doc === i.Code).map(([c]) => c);
-    for (const code of codes) {
-      const p = get(`select id, amount from payments where book_id = ? and code = ? and voided = 0`, B, code);
-      if (!p) continue;
-      const used = get(`select coalesce(sum(amount), 0) s from payment_allocations where payment_id = ?`, p.id).s;
-      const m = Math.min(p.amount - used, Math.max(remaining(orderId)?.remaining_total ?? 0, 0));
-      if (m <= 0) continue;
-      sql(`insert into payment_allocations (id, payment_id, book_id, doc_type, doc_id, amount) values (lower(hex(randomblob(16))), ?, ?, 'don_ban', ?, ?)`, p.id, B, orderId, m);
-      done.push(`${code} trừ ${vnd(m)} vào ${i.Code}`);
-    }
-    const left = remaining(orderId)?.remaining_total ?? 0;
-    const kvLeft = i.Total - (i.TotalPayment || 0);
-    if (Math.abs(left - kvLeft) >= 1) throw new Error(`${i.Code}: còn nợ trong sổ ${left} khác KiotViet ${kvLeft}`);
+// Gắn tiền như KiotViet, sau khi đã lập / hủy mọi chứng từ:
+// - phiếu thu vào đúng chứng từ KiotViet ghi cho nó (payHome): hóa đơn bán thẳng, từng hóa đơn HD lập từ đơn đặt, hoặc tiền cọc của đơn đặt;
+// - tiền cọc chuyển sang hóa đơn lập từ đơn đặt theo cặp phiếu TTTU… trên hóa đơn (ghi vào tiền cọc đã trừ của phiếu giao đó).
+// Chỉ dùng phần tiền phiếu còn chưa gắn, nên chạy lại không gắn trùng.
+const deliveryByCode = (code) => get(`select id, order_id, deposit_used from deliveries where book_id = ? and code = ?`, B, code);
+function linkPayments() {
+  const homes = [...payHome.entries()].map(([code, doc]) => ({ code, doc, p: get(`select id, amount, pay_date, voided from payments where book_id = ? and code = ?`, B, code) }))
+    .filter((x) => x.p && !x.p.voided).sort((a, b) => a.p.pay_date.localeCompare(b.p.pay_date) || a.code.localeCompare(b.code));
+  for (const { code, doc, p } of homes) {
+    const free = p.amount - get(`select coalesce(sum(amount), 0) s from payment_allocations where payment_id = ?`, p.id).s;
+    if (free < 0.5) continue;
+    const o = orderByCode(doc); const dl = o ? null : deliveryByCode(doc);
+    const open = o ? get(`select remaining_total, status from v_open_docs where book_id = ? and doc_type = 'don_ban' and doc_id = ?`, B, o.id)
+      : dl ? get(`select remaining_total, status from v_open_docs where book_id = ? and doc_type = 'hoa_don' and doc_id = ?`, B, dl.id) : null;
+    const m = open && open.status !== 'huy' ? Math.min(free, Math.max(open.remaining_total, 0)) : 0;
+    if (m < 0.5) continue;
+    sql(`insert into payment_allocations (id, payment_id, book_id, doc_type, doc_id, amount, delivery_id) values (lower(hex(randomblob(16))), ?, ?, 'don_ban', ?, ?, ?)`,
+      p.id, B, o ? o.id : dl.order_id, m, dl ? dl.id : null);
+    done.push(`${code} trừ ${vnd(m)} vào ${doc}`);
   }
+  for (const { i } of viaOrder) {
+    const t = (i.Payments || []).filter((x) => /^TTTU/.test(x.Code) && x.Amount > 0).reduce((s, x) => s + x.Amount, 0);
+    const dl = deliveryByCode(i.Code);
+    if (!dl || t <= dl.deposit_used) continue;
+    const paid = get(`select paid_net from v_sales_orders where id = ?`, dl.order_id).paid_net;
+    const usedAll = get(`select coalesce(sum(deposit_used), 0) s from deliveries where order_id = ?`, dl.order_id).s;
+    const m = Math.min(t - dl.deposit_used, Math.max(paid - usedAll, 0));
+    if (m < 0.5) continue;
+    sql(`update deliveries set deposit_used = deposit_used + ? where id = ?`, m, dl.id);
+    done.push(`${i.OrderCode}: trừ cọc ${vnd(m)} vào ${i.Code}`);
+  }
+}
+
+// Mỗi hóa đơn KiotViet còn hiệu lực trong tệp phải còn nợ đúng như KiotViet (tổng − đã thu). Tiền thu bằng phiếu lập trên sổ mới
+// (mã không phải "TT…") KiotViet không có, nên cộng lại trước khi so.
+function checkInvoices() {
+  const bad = [];
+  const own = (where, id) => get(`select coalesce(sum(a.amount), 0) s from payment_allocations a join payments p on p.id = a.payment_id
+    where ${where} = ? and p.voided = 0 and p.kind = 'thu_khach' and p.code not like 'TT%'`, id).s;
+  for (const i of (K.invoices || []).filter((x) => x.Status === 1)) {
+    if (conflictCust.has(i.CustomerCode)) continue;
+    const o = orderByCode(i.Code); const dl = o ? null : deliveryByCode(i.Code);
+    const left = o ? get(`select remaining_total as v from v_open_docs where book_id = ? and doc_type = 'don_ban' and doc_id = ?`, B, o.id)?.v + own('a.doc_id', o.id)
+      : dl ? get(`select debt as v from v_order_invoices where id = ?`, dl.id)?.v + own('a.delivery_id', dl.id) : null;
+    const kv = i.Total - (i.TotalPayment || 0);
+    if (left == null || Number.isNaN(left) || Math.abs(left - kv) >= 1) bad.push(`${i.Code}: còn nợ trong sổ ${left ?? 'không có'}, KiotViet ${kv}`);
+  }
+  if (bad.length) throw new Error('Hóa đơn chưa khớp KiotViet: ' + bad.join('; '));
 }
 
 let backup = null;
@@ -314,7 +352,8 @@ try {
       try { e.run(e.x); } catch (err) { throw new Error(`${e.x.Code}: ${err.message}`); }
     }
     voidMissingPayments();
-    applyDeposits();
+    linkPayments();
+    checkInvoices();
     // Số chứng từ tiếp theo không trùng mã KiotViet cùng tiền tố (vd. DH000068.01 → bộ đếm DH ít nhất 68)
     for (const pre of ['DH', 'HD']) {
       const max = Math.max(0, ...db.prepare(`select code from sales_orders where book_id = ? and code like ? union all select code from deliveries where book_id = ? and code like ?`).all(B, pre + '%', B, pre + '%').map((x) => Number(new RegExp(`^${pre}(\\d+)`).exec(x.code)?.[1] || 0)));

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const files = ['business', 'ship-bank', 'expenses', 'expense-split-recurring', 'documents', 'seed', 'sample', 'import', 'excel', 'upgrade', 'workflow', 'stock-groups-services', 'staff', 'attendance', 'products-kiotviet', 'purchases-kiotviet', 'kiotviet-import', 'permissions', 'receivables', 'order-edit', 'order-invoices', 'costing', 'settings-features', 'detach', 'break-even', 'customer-files', 'order-docs', 'search-rank', 'http'].map((f) => path.join(here, `${f}.test.js`));
+const files = ['business', 'ship-bank', 'expenses', 'expense-split-recurring', 'documents', 'seed', 'sample', 'import', 'excel', 'upgrade', 'workflow', 'stock-groups-services', 'staff', 'attendance', 'products-kiotviet', 'purchases-kiotviet', 'kiotviet-import', 'permissions', 'receivables', 'order-edit', 'order-invoices', 'kiotviet-add-docs', 'costing', 'settings-features', 'detach', 'break-even', 'customer-files', 'order-docs', 'search-rank', 'http'].map((f) => path.join(here, `${f}.test.js`));
 let bad = 0;
 for (const f of files) {
   const r = spawnSync(process.execPath, [f], { stdio: 'inherit' });
