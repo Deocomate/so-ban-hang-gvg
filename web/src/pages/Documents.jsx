@@ -6,101 +6,124 @@ import { saveFile } from '../lib/excel.js';
 import { Btn, Loading, ErrorBox, Note, Modal, Field, Input, TextArea, Select, DateInput, NumInput, Check, Section, Tabs, ConfirmBtn } from '../components/ui.jsx';
 import { DOC_TYPES, DEFAULT_TEXTS, docSettings, loadDocData, defaults, currentInfo, editableFields, infoRef, profileFor, profileFromBook, PER_DELIVERY, RECONCILE, isCompany, HEADER_FIELDS, headerKey, BASE_SIZES, DEFAULT_BASE } from '../lib/docs/model.js';
 import { VatReminder, VatReminderPopup } from '../components/VatReminder.jsx';
-import { buildPrintDoc, templatesFor, pageSize, PAPERS, FONT_CSS, withBaseSize, applyExportOpts, EXPORT_SCALES } from '../lib/docs/templates.js';
+import { buildPrintDoc, templatesFor, PAPERS, applyExportOpts, EXPORT_SCALES } from '../lib/docs/templates.js';
 import { openTemplateEditor } from '../lib/docs/editor-link.js';
-import { colKey, dataTables, MIN_COL } from '../lib/docs/col-fit.js';
+import { colKey } from '../lib/docs/col-fit.js';
 import { sampleData } from '../lib/docs/tokens.js';
 
 import { useDocFonts } from '../lib/docs/fonts.js';
 
 const TYPES_FOR = { quote: ['bao_gia'], contract: ['de_nghi_tam_ung', 'doi_chieu_sl', 'doi_chieu_tt', 'de_nghi_tt'], order: ['hoa_don', 'don_dat_hang', 'bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen', 'yeu_cau_vat', 'cn_xuat_xuong', 'doi_chieu_tt', 'doi_chieu_sl'], delivery: ['bien_ban', 'hoa_don', 'hd_van_chuyen', 'phieu_xuat_kho', 'don_dat_hang', 'yeu_cau_vat', 'cn_xuat_xuong'], payment: ['phieu_thu'] };
 
-// ---------- Bản xem trước: chứng từ dựng từ mẫu in (HTML), đúng khổ giấy và lề ----------
+// ---------- Bản xem trước: vẽ từ chính tệp PDF sẽ tải / in, nên chia trang và xuống dòng giống hệt đầu ra ----------
+// "PDF / In": từng trang theo khổ giấy; "Ảnh": cả chứng từ trên một trang dài như khi Tải ảnh.
 // opts / setOpt (tùy chọn xuất): có thì kéo được đường kẻ giữa hai cột của bảng có viền để chỉnh độ rộng cột
+const PREVIEW_KEY = 'gomsu.preview_mode';
 export function DocPreview({ doc, opts, setOpt }) {
-  useDocFonts();
-  const size = pageSize(doc); const m = doc.margin || {};
-  // Thu nhỏ trang cho vừa khung (điện thoại, hộp thoại hẹp)
-  const ref = React.useRef(null); const [zoom, setZoom] = useState(1);
+  useDocFonts(); // phông dùng khi đo độ rộng cột
+  const [mode, setModeState] = useState(() => { try { return localStorage.getItem(PREVIEW_KEY) === 'image' ? 'image' : 'pdf'; } catch (e) { return 'pdf'; } });
+  const setMode = (v) => { setModeState(v); try { localStorage.setItem(PREVIEW_KEY, v); } catch (e) { /* bỏ qua */ } };
+  const boxRef = React.useRef(null); const geo = React.useRef({ tables: [] });
+  const [st, setSt] = useState({ busy: true, error: null, pages: 0 });
   useEffect(() => {
-    const el = ref.current; if (!el || typeof ResizeObserver === 'undefined') return undefined;
-    const ro = new ResizeObserver(() => { const w = el.clientWidth - 16; setZoom(Math.min(1, Math.max(0.3, w / (size.w * 96 / 25.4)))); });
-    ro.observe(el); return () => ro.disconnect();
-  }, [size.w]);
-  const tplRef = React.useRef(null); const guideRef = React.useRef(null);
-  const resizable = !!setOpt;
+    let alive = true; setSt((s) => ({ ...s, busy: true, error: null }));
+    // Chờ người dùng gõ xong một chút rồi mới dựng lại tệp
+    const timer = setTimeout(async () => {
+      try {
+        const [{ pdfPreview }, { pdfPages }] = await Promise.all([import('../lib/docs/pdf.js'), import('../lib/docs/image.js')]);
+        const { blob, tables } = await pdfPreview(doc, { onePage: mode === 'image' });
+        const canvases = await pdfPages(blob, () => 2);
+        if (!alive || !boxRef.current) return;
+        const sheets = canvases.map((c, i) => {
+          const w = document.createElement('div'); w.className = 'pdf-sheet'; w.dataset.page = String(i + 1);
+          w.style.width = `${(Number(c.dataset.w) * 4) / 3}px`; c.className = 'pdf-sheet-canvas'; c.setAttribute('aria-label', `Trang ${i + 1}`);
+          w.appendChild(c); return w;
+        });
+        boxRef.current.replaceChildren(...sheets);
+        geo.current = { tables };
+        setSt({ busy: false, error: null, pages: canvases.length });
+      } catch (e) { if (alive) setSt({ busy: false, error: e.message, pages: 0 }); }
+    }, 250);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [doc, mode]);
   // Lưu độ rộng (tỷ lệ) của bảng thứ ti cho loại chứng từ + mẫu + hướng giấy đang xem
   const saveRef = React.useRef(null);
   saveRef.current = (ti, ws) => {
     const key = colKey(doc); const total = ws.reduce((a, b) => a + b, 0); const all = opts?.cols || {};
     setOpt('cols', { ...all, [key]: { ...(all[key] || {}), [ti]: { n: ws.length, w: ws.map((w) => Math.round((w / total) * 10000) / 10000) } } });
   };
-  useColumnDrag(resizable, tplRef, ref, guideRef, saveRef);
+  useColumnDrag(!!setOpt, boxRef, geo, saveRef);
   return (
-    <div className={`doc-scroll${resizable ? ' doc-resizable' : ''}`} ref={ref}>
-      <div className="doc-page" style={{ fontFamily: FONT_CSS[doc.font], zoom, width: `${size.w}mm`, minHeight: size.h ? `${size.h}mm` : 'auto', padding: `${m.top}mm ${m.right}mm ${m.bottom}mm ${m.left}mm` }}>
-        <div className="tpl" ref={tplRef} style={doc.base ? { fontSize: `${doc.base}pt` } : undefined} dangerouslySetInnerHTML={{ __html: withBaseSize(doc.html, doc.base) }} />
+    <div className="doc-preview">
+      <div className="doc-preview-bar">
+        <div className="seg" role="group" aria-label="Xem như">
+          <button type="button" className={mode === 'pdf' ? 'on' : ''} onClick={() => setMode('pdf')}>PDF / In</button>
+          <button type="button" className={mode === 'image' ? 'on' : ''} onClick={() => setMode('image')}>Ảnh (1 trang)</button>
+        </div>
+        <span className="muted small">{st.busy ? 'Đang dựng bản xem trước…' : mode === 'image' ? 'Giống ảnh khi bấm Tải ảnh' : `${st.pages} trang · giống tệp PDF và bản in`}</span>
       </div>
-      {resizable && <div className="col-guide" ref={guideRef} hidden />}
+      {st.error && <ErrorBox error={'Không xem trước được: ' + st.error} />}
+      <div className={`doc-scroll pdf-sheets${st.busy ? ' is-busy' : ''}${setOpt ? ' doc-resizable' : ''}`} ref={boxRef} />
     </div>
   );
 }
 
-// Kéo đường kẻ dọc giữa hai cột: hai cột kề nhau đổi độ rộng cho nhau (tổng bảng giữ nguyên), thả chuột thì lưu
-function useColumnDrag(on, tplRef, scrollRef, guideRef, saveRef) {
+// Kéo đường kẻ dọc giữa hai cột của bảng trên trang PDF: hai cột kề nhau đổi độ rộng cho nhau (tổng bảng giữ nguyên);
+// thả chuột thì lưu và dựng lại tệp với độ rộng mới. Vị trí bảng (pt) lấy từ pdfPreview().
+const MIN_COL_PT = 12;
+function useColumnDrag(on, boxRef, geo, saveRef) {
   useEffect(() => {
-    const root = tplRef.current; const scroller = scrollRef.current;
-    if (!on || !root || !scroller) return undefined;
-    let drag = null;
-    const guide = (x, r) => {
-      const g = guideRef.current; if (!g) return;
-      if (x === null) { g.hidden = true; return; }
-      const sr = scroller.getBoundingClientRect();
-      g.hidden = false;
-      g.style.left = `${x - sr.left + scroller.scrollLeft - 1}px`; g.style.top = `${r.top - sr.top + scroller.scrollTop}px`; g.style.height = `${r.height}px`;
+    const box = boxRef.current; if (!on || !box) return undefined;
+    let drag = null; let guide = null;
+    const showGuide = (sheet, xPt, band, k) => {
+      if (!guide) { guide = document.createElement('div'); guide.className = 'col-guide'; }
+      if (guide.parentNode !== sheet) sheet.appendChild(guide);
+      guide.hidden = false;
+      guide.style.left = `${xPt * k - 1}px`; guide.style.top = `${band.top * k}px`; guide.style.height = `${(band.bottom - band.top) * k}px`;
     };
-    // Đường kẻ cột gần con trỏ (trong vòng vài px) của bảng có viền ngoài cùng
+    const hideGuide = () => { if (guide) guide.hidden = true; };
+    // Đường kẻ cột gần con trỏ trên trang đang trỏ
     const find = (e, tol) => {
-      let t = e.target.closest?.('table');
-      while (t && t.parentElement?.closest('td,th') && root.contains(t.parentElement)) t = t.parentElement.closest('table');
-      if (!t || t.getAttribute('data-border') !== '1' || !root.contains(t)) return null;
-      const cols = [...t.querySelectorAll(':scope > colgroup > col')]; const ws = cols.map((c) => parseFloat(c.style.width) || 0);
-      if (cols.length < 2 || ws.some((w) => !w)) return null;
-      const r = t.getBoundingClientRect(); const k = r.width / ws.reduce((a, b) => a + b, 0);
-      let x = r.left;
-      for (let i = 0; i < ws.length - 1; i++) { x += ws[i] * k; if (Math.abs(e.clientX - x) <= tol) return { t, cols, ws, k, i, x, r }; }
+      const sheet = e.target.closest?.('.pdf-sheet'); if (!sheet || !box.contains(sheet)) return null;
+      const c = sheet.querySelector('canvas'); const r = c.getBoundingClientRect(); const k = r.width / Number(c.dataset.w);
+      const page = Number(sheet.dataset.page); const x = (e.clientX - r.left) / k; const y = (e.clientY - r.top) / k;
+      for (const [ti, t] of geo.current.tables.entries()) {
+        const band = t.pages?.[page];
+        if (!t.cols || t.cols.length < 2 || !band || y < band.top - 4 || y > band.bottom + 4) continue;
+        let b = t.left;
+        for (let i = 0; i < t.cols.length - 1; i++) { b += t.cols[i]; if (Math.abs(x - b) * k <= tol) return { ti, t, i, b, band, k, sheet }; }
+      }
       return null;
     };
     const move = (e) => {
       if (drag) {
-        const { cols, ws, i, k, x, r } = drag; const pair = ws[i] + ws[i + 1];
-        const a = Math.min(pair - MIN_COL, Math.max(MIN_COL, ws[i] + (e.clientX - drag.x0) / k));
-        cols[i].style.width = `${a}px`; cols[i + 1].style.width = `${pair - a}px`;
-        guide(x + (a - ws[i]) * k, r); return;
+        const { t, i, b, band, k, sheet } = drag; const pair = t.cols[i] + t.cols[i + 1];
+        drag.a = Math.min(pair - MIN_COL_PT, Math.max(MIN_COL_PT, t.cols[i] + (e.clientX - drag.x0) / k));
+        showGuide(sheet, b + drag.a - t.cols[i], band, k); return;
       }
       const h = find(e, 5);
-      root.style.cursor = h ? 'col-resize' : '';
-      guide(h ? h.x : null, h?.r);
+      box.style.cursor = h ? 'col-resize' : '';
+      if (h) showGuide(h.sheet, h.b, h.band, h.k); else hideGuide();
     };
     const down = (e) => {
       if (e.button !== 0) return;
       const h = find(e, e.pointerType === 'touch' ? 12 : 5); if (!h) return;
-      e.preventDefault(); drag = { ...h, x0: e.clientX };
-      try { root.setPointerCapture(e.pointerId); } catch (x) { /* bỏ qua */ }
-      guide(h.x, h.r);
+      e.preventDefault(); drag = { ...h, x0: e.clientX, a: h.t.cols[h.i] };
+      try { box.setPointerCapture(e.pointerId); } catch (x) { /* bỏ qua */ }
+      showGuide(h.sheet, h.b, h.band, h.k);
     };
     const up = () => {
       if (!drag) return;
-      const { t, cols } = drag; drag = null; guide(null);
-      const ti = dataTables(root).indexOf(t);
-      if (ti >= 0) saveRef.current(ti, cols.map((c) => parseFloat(c.style.width) || MIN_COL));
+      const { ti, t, i, a } = drag; drag = null;
+      const ws = [...t.cols]; const pair = ws[i] + ws[i + 1]; ws[i] = a; ws[i + 1] = pair - a;
+      if (Math.abs(a - t.cols[i]) >= 0.5) saveRef.current(ti, ws); else hideGuide();
     };
-    const leave = () => { if (!drag) { root.style.cursor = ''; guide(null); } };
-    root.addEventListener('pointermove', move); root.addEventListener('pointerdown', down);
-    root.addEventListener('pointerup', up); root.addEventListener('pointercancel', up); root.addEventListener('pointerleave', leave);
+    const leave = () => { if (!drag) { box.style.cursor = ''; hideGuide(); } };
+    box.addEventListener('pointermove', move); box.addEventListener('pointerdown', down);
+    box.addEventListener('pointerup', up); box.addEventListener('pointercancel', up); box.addEventListener('pointerleave', leave);
     return () => {
-      root.removeEventListener('pointermove', move); root.removeEventListener('pointerdown', down);
-      root.removeEventListener('pointerup', up); root.removeEventListener('pointercancel', up); root.removeEventListener('pointerleave', leave);
+      box.removeEventListener('pointermove', move); box.removeEventListener('pointerdown', down);
+      box.removeEventListener('pointerup', up); box.removeEventListener('pointercancel', up); box.removeEventListener('pointerleave', leave);
     };
   }, [on]);
 }
@@ -207,7 +230,7 @@ function BatchExport({ deliveryId, pay, ds, beforeExport, company, onDone, xopts
       const { pdfBlob, printDocs } = await import('../lib/docs/pdf.js');
       if (asImage === 'print') { await printDocs(docs); onDone?.(chosen); return; }
       const { pdfToImageBlob } = asImage ? await import('../lib/docs/image.js') : {};
-      const out = async (list) => { const b = await pdfBlob(list); return asImage ? pdfToImageBlob(b) : b; };
+      const out = async (list) => { const b = await pdfBlob(list, { onePage: !!asImage }); return asImage ? pdfToImageBlob(b) : b; };
       const ext = asImage ? 'png' : 'pdf'; const what = asImage ? 'ảnh' : 'tệp PDF';
       if (merge && docs.length > 1) {
         const name = `chung-tu-giao-hang_${dd.d.code}.${ext}`;
@@ -399,7 +422,7 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
       await save();
       const [{ pdfBlob }, { pdfToImageBlob }] = await Promise.all([import('../lib/docs/pdf.js'), import('../lib/docs/image.js')]);
       const name = doc.filename.replace(/\.pdf$/i, '') + '.png';
-      if (await saveFile(name, await pdfToImageBlob(await pdfBlob(doc)))) { toast(`Đã tạo ${name}`); afterExport([type]); }
+      if (await saveFile(name, await pdfToImageBlob(await pdfBlob(doc, { onePage: true })))) { toast(`Đã tạo ${name}`); afterExport([type]); }
     } catch (e) { toast('Không tạo được ảnh: ' + e.message, 'err'); } finally { setBusy(false); }
   };
 

@@ -1,4 +1,4 @@
-// Chứng từ dựng từ mẫu HTML (templates.js) → tệp PDF bằng pdfmake, và in thẳng bằng trình duyệt.
+// Chứng từ dựng từ mẫu HTML (templates.js) → tệp PDF bằng pdfmake. Bản xem trước, In và Tải ảnh đều dùng chính tệp PDF này nên giống hệt nhau.
 // Bộ chuyển chỉ cần hiểu tập thẻ mà trình sửa mẫu tạo ra: đoạn văn, chữ đậm/nghiêng/gạch, cỡ chữ, màu, bảng (gộp ô, độ rộng cột, có / không viền),
 // ảnh, kẻ ngang, ngắt trang, danh sách. Phông Arimo (≈ Arial) và Tinos (≈ Times New Roman) – giấy phép Apache 2.0 – được nhúng nên chữ chọn / sao chép được.
 import ArimoR from '../../assets/fonts/Arimo-Regular.ttf?url';
@@ -9,7 +9,7 @@ import TinosR from '../../assets/fonts/Tinos-Regular.ttf?url';
 import TinosB from '../../assets/fonts/Tinos-Bold.ttf?url';
 import TinosI from '../../assets/fonts/Tinos-Italic.ttf?url';
 import TinosBI from '../../assets/fonts/Tinos-BoldItalic.ttf?url';
-import { pageSize, TPL_CSS, FONT_CSS, withBaseSize } from './templates.js';
+import { pageSize, withBaseSize } from './templates.js';
 
 const FONT_URLS = {
   Arimo: { normal: ArimoR, bold: ArimoB, italics: ArimoI, bolditalics: ArimoBI },
@@ -138,6 +138,9 @@ function tableOf(el, ctx, maxW) {
   while (cols.length < ncol) cols.push(null);
   cols.length = ncol;
   const padX = border ? 4 : 2; const padY = border ? 3 : 1;
+  // Bản xem trước ghi lại vị trí bảng có viền ngoài cùng (kéo đường kẻ cột trên trang PDF)
+  const track = border && ctx.track && !ctx.inCell ? ctx.track : null;
+  const ti = track ? track.tables.push({ n: ncol }) - 1 : -1;
   const fixed = cols.filter(Boolean).reduce((s, w) => s + w, 0); const flex = cols.filter((w) => !w).length;
   // Bảng luôn rộng hết trang (giống CSS width:100%): toàn cột cố định thì chia theo tỷ lệ; tổng vượt trang thì thu nhỏ
   const scale = !flex || fixed > maxW - flex * 20 ? (maxW - flex * 20) / (fixed || 1) : 1;
@@ -150,10 +153,11 @@ function tableOf(el, ctx, maxW) {
       while (ci < ncol && grid[ri][ci] !== undefined) ci++;
       if (ci >= ncol) break;
       const cs = Math.min(Number(td.getAttribute('colspan')) || 1, ncol - ci); const rs = Number(td.getAttribute('rowspan')) || 1;
-      const tc = inherit(rc, td); const tst = styleOf(td);
+      const tc = inherit(rc, td); const tst = styleOf(td); tc.inCell = true;
       if (td.tagName === 'TH') tc.bold = true;
       const stack = blocksOf(td, tc, innerW(ci, cs));
       const cell = { stack: stack.length ? stack : [{ text: '' }] };
+      if (track) markFirstLeaf(cell.stack[0], `ct${ti}:${ri}:${ci}`); // mã phải khác nhau trong cả tệp
       if (cs > 1) cell.colSpan = cs; if (rs > 1) cell.rowSpan = rs;
       // pdfmake không canh giữa theo chiều dọc: ô gộp nhiều dòng canh giữa thì đẩy xuống nửa chiều cao các dòng một hàng chữ
       if (rs > 1 && /middle/.test(tst['vertical-align'] || '')) cell.margin = [0, ((Math.min(rs, rows.length - ri) - 1) * ((tc.fontSize || 10) * 1.2 + 2 * padY)) / 2, 0, 0];
@@ -166,7 +170,15 @@ function tableOf(el, ctx, maxW) {
   // Dòng đầu toàn chữ đậm (tiêu đề cột) lặp lại khi bảng sang trang
   const first = rows[0]; const headerRows = border && rows.length > 2 && first.textContent.trim() && [...first.querySelectorAll('td,th')].every((td) => !td.textContent.trim() || td.tagName === 'TH' || td.querySelector('strong,b')) ? 1 : 0;
   const margin = marginOfEl(st, c);
+  if (track) Object.assign(track.tables[ti], { cols: widths.every((w) => typeof w === 'number') ? widths.map((w) => w + 2 * padX) : null, left: margin[0], fontSize: c.fontSize || 10 });
   return [{ table: { widths, body, dontBreakRows: true, headerRows }, layout: border ? 'tplBorder' : 'tplPlain', margin, fontSize: c.fontSize }];
+}
+
+// Gắn mã vào nút chữ / ảnh đầu tiên của ô (pdfmake chỉ ghi vị trí cho nút lá)
+function markFirstLeaf(node, id) {
+  let n = node;
+  while (n && Array.isArray(n.stack) && n.stack.length) n = n.stack[0];
+  if (n && !n.stack && !n.table && !n.ul && !n.ol && !n.canvas) n.id = id;
 }
 
 function blockOf(el, ctx, maxW) {
@@ -177,7 +189,7 @@ function blockOf(el, ctx, maxW) {
     const st = styleOf(el); const w = toPt((st['border-top'] || '').split(/\s+/)[0]) || 1;
     return [{ canvas: [{ type: 'line', x1: 0, y1: 0, x2: maxW, y2: 0, lineWidth: w, lineColor: colorOf((st['border-top'] || '').split(/\s+/)[2]) || '#000' }], margin: [0, 4, 0, 4] }];
   }
-  if (tag === 'DIV' && el.hasAttribute('data-page-break')) return [{ text: '', pageBreak: 'after' }];
+  if (tag === 'DIV' && el.hasAttribute('data-page-break')) return ctx.onePage ? [] : [{ text: '', pageBreak: 'after' }];
   if (tag === 'UL' || tag === 'OL') {
     const c = inherit(ctx, el);
     const items = [...el.children].filter((li) => li.tagName === 'LI').map((li) => { const s = blocksOf(li, inherit(c, li), maxW - 14); return s.length === 1 ? s[0] : { stack: s }; });
@@ -207,26 +219,49 @@ const LAYOUTS = {
 };
 
 // doc: { html, font, paper, orient, margin(mm), title, code } → định nghĩa pdfmake
-export function toPdfDef(doc) {
+// onePage: cả chứng từ trên một trang dài (xuất ảnh) — không chia trang, bỏ ngắt trang trong mẫu; track: ghi vị trí bảng (xem trước)
+export function toPdfDef(doc, { onePage = false, track = null } = {}) {
   const size = pageSize(doc); const m = doc.margin || {};
   const W = size.w * MM; const marg = [m.left ?? 14, m.top ?? 10, m.right ?? 14, m.bottom ?? 10].map((x) => x * MM);
   const body = new DOMParser().parseFromString(`<body>${withBaseSize(doc.html, doc.base)}</body>`, 'text/html').body;
   const fs = doc.base || 10;
-  const content = blocksOf(body, { fontSize: fs, font: doc.font || 'Tinos', lineHeight: 1.2 }, W - marg[0] - marg[2]);
+  const content = blocksOf(body, { fontSize: fs, font: doc.font || 'Tinos', lineHeight: 1.2, onePage, track }, W - marg[0] - marg[2]);
+  if (track) for (const t of track.tables) t.left = (t.left || 0) + marg[0];
   return {
-    pageSize: size.h ? { width: W, height: size.h * MM } : { width: W, height: 'auto' }, pageMargins: marg, content,
+    pageSize: size.h && !onePage ? { width: W, height: size.h * MM } : { width: W, height: 'auto' }, pageMargins: marg, content,
     info: { title: `${doc.title} ${doc.code || ''}`.trim(), creator: 'Sổ bán hàng gốm sứ' },
     defaultStyle: { font: doc.font || 'Tinos', fontSize: fs, lineHeight: 1.2 / NATURAL_LH },
   };
 }
 
 // Một hoặc nhiều chứng từ → một tệp PDF; mỗi chứng từ bắt đầu ở trang mới (khổ giấy theo chứng từ đầu)
-export async function pdfBlob(docOrList) {
+// onePage: mỗi chứng từ là một trang dài (xuất ảnh)
+export async function pdfBlob(docOrList, { onePage = false } = {}) {
   const docs = Array.isArray(docOrList) ? docOrList : [docOrList];
-  const def = toPdfDef(docs[0]);
-  for (const d of docs.slice(1)) def.content.push({ text: '', pageBreak: 'after' }, ...toPdfDef(d).content);
+  const def = toPdfDef(docs[0], { onePage });
+  for (const d of docs.slice(1)) def.content.push({ text: '', pageBreak: 'after' }, ...toPdfDef(d, { onePage }).content);
   if (docs.length > 1) def.info.title = docs.map((d) => d.title).join(', ') + ' ' + (docs[0].code || '');
   return pdfFromDef(def);
+}
+
+// Bản xem trước: tệp PDF đúng như khi tải (onePage = như ảnh) kèm vị trí các bảng có viền trên từng trang (pt):
+// tables[i] = { n, cols: [độ rộng cột kể cả lề ô], left, pages: { [số trang]: { top, bottom } } } — thứ tự như dataTables() của col-fit.js
+export async function pdfPreview(doc, { onePage = false } = {}) {
+  const track = { tables: [] };
+  const def = toPdfDef(doc, { onePage, track });
+  const rows = [];
+  // pdfmake gọi hàm này cho mọi nút sau khi dàn trang; trả false = không chèn ngắt trang
+  def.pageBreakBefore = (node) => { if (node.id && node.startPosition && String(node.id).startsWith('ct')) rows.push([node.id, node.startPosition]); return false; };
+  const blob = await pdfFromDef(def);
+  const seen = new Set();
+  for (const [id, pos] of rows) {
+    const [ti, ri] = id.slice(2).split(':').map(Number); const t = track.tables[ti]; if (!t) continue;
+    const key = `${ti}:${ri}:${pos.pageNumber}`;
+    const pg = (t.pages ||= {}); const cur = pg[pos.pageNumber] || (pg[pos.pageNumber] = { top: Infinity, bottom: 0 });
+    cur.top = Math.min(cur.top, pos.top - 3.6);
+    if (!seen.has(key)) { seen.add(key); cur.bottom = Math.max(cur.bottom, pos.top + t.fontSize * 1.25 + 3.6); }
+  }
+  return { blob, tables: track.tables };
 }
 
 // Định nghĩa pdfmake dựng sẵn (báo cáo tự vẽ) → tệp PDF, dùng chung phông Arimo / Tinos đã nhúng
@@ -238,37 +273,16 @@ export async function pdfFromDef(def, layouts = {}) {
   });
 }
 
-// ---------- In bằng trình duyệt ----------
-const abs = (u) => new URL(u, location.href).href;
-const FACES = () => [['Arimo', ArimoR, 400, 'normal'], ['Arimo', ArimoB, 700, 'normal'], ['Arimo', ArimoI, 400, 'italic'], ['Arimo', ArimoBI, 700, 'italic'],
-  ['Tinos', TinosR, 400, 'normal'], ['Tinos', TinosB, 700, 'normal'], ['Tinos', TinosI, 400, 'italic'], ['Tinos', TinosBI, 700, 'italic']]
-  .map(([f, u, w, s]) => `@font-face{font-family:"${f}";src:url("${abs(u)}") format("truetype");font-weight:${w};font-style:${s}}`).join('\n');
-// Trang HTML in được (dùng cho In / In thử): mỗi chứng từ một trang mới
-export function printableHtml(docOrList) {
-  const docs = Array.isArray(docOrList) ? docOrList : [docOrList]; const d0 = docs[0];
-  const size = pageSize(d0); const m = d0.margin || {};
-  // Giấy cuộn (K80/K58): không ép khổ, để máy in nhiệt tự cắt theo độ dài nội dung
-  const page = `${size.h ? `size: ${size.w}mm ${size.h}mm; ` : ''}margin: ${m.top}mm ${m.right}mm ${m.bottom}mm ${m.left}mm;`;
-  const body = docs.map((d, i) => `<div class="tpl" style="font-family:${FONT_CSS[d.font] || FONT_CSS.Tinos}${d.base ? `;font-size:${d.base}pt` : ''}${i ? ';break-before:page' : ''}">${withBaseSize(d.html, d.base)}</div>`).join('');
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${(d0.title + ' ' + (d0.code || '')).replace(/</g, '')}</title><style>${FACES()}
-@page { ${page} } html, body { margin: 0; background: #fff; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }${size.h ? '' : ` body { width: ${size.w - (m.left || 0) - (m.right || 0)}mm; }`}
-${TPL_CSS}</style></head><body>${body}</body></html>`;
-}
-// In qua khung ẩn (không mở cửa sổ mới); chờ phông và ảnh tải xong rồi mới gọi hộp thoại in
-export function printDocs(docOrList) {
-  return new Promise((resolve, reject) => {
+// ---------- In ----------
+// In chính tệp PDF (cùng cách chia trang với bản xem trước và tệp tải về) qua khung ẩn
+export async function printDocs(docOrList) {
+  const url = URL.createObjectURL(await pdfBlob(docOrList));
+  await new Promise((resolve, reject) => {
     const f = document.createElement('iframe');
     f.setAttribute('aria-hidden', 'true'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
-    document.body.appendChild(f);
-    const w = f.contentWindow; const d = w.document;
-    d.open(); d.write(printableHtml(docOrList)); d.close();
-    const go = async () => {
-      try {
-        await Promise.race([d.fonts?.ready, new Promise((r) => setTimeout(r, 2500))]);
-        await Promise.all([...d.images].map((im) => (im.complete ? null : new Promise((r) => { im.onload = r; im.onerror = r; }))));
-        w.focus(); w.print(); resolve();
-      } catch (e) { reject(e); } finally { setTimeout(() => f.remove(), 1500); }
-    };
-    if (d.readyState === 'complete') go(); else f.onload = go;
+    f.onload = () => setTimeout(() => { try { f.contentWindow.focus(); f.contentWindow.print(); resolve(); } catch (e) { reject(e); } }, 200);
+    f.src = url; document.body.appendChild(f);
+    // Hộp thoại in còn mở thì vẫn cần khung: dọn sau vài phút
+    setTimeout(() => { f.remove(); URL.revokeObjectURL(url); }, 300000);
   });
 }
