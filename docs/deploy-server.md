@@ -37,7 +37,7 @@ Trước khi giải nén bản mới: dừng dịch vụ và chép `gomsu.db`, `
 
 Ổ đĩa máy chủ chỉ 25 GB, dùng chung với các site khác, và mỗi bản sao lưu trước deploy nặng vài trăm MB (kèm tệp `-wal`). Ngày 23/11/2026 ổ đầy 100% làm SQLite báo `disk I/O error` và app không khởi động được. Trước mỗi lần sao lưu, chạy `df -h /` để kiểm tra; còn dưới khoảng 3 GB thì xóa bớt các thư mục sao lưu trước deploy cũ (giữ các bản hằng đêm `gomsu-YYYY-MM-DD.db`).
 
-Chép `app.tgz` lên máy chủ vào `/tmp/so-ban-hang-app.tgz`, rồi chạy trên máy chủ:
+Chép `app.tgz` lên máy chủ vào `/tmp/so-ban-hang-app.tgz`, rồi chạy trên máy chủ. `scp.exe` của Windows gọi `ssh` theo PATH, nên trong Git Bash nó chạy nhầm `ssh` của Git Bash và bị máy chủ đóng kết nối (24/11/2026). Chép bằng chính `ssh.exe`: `ssh.exe … "cat > /tmp/so-ban-hang-app.tgz" < app.tgz`, và chạy script trên máy chủ bằng `ssh.exe … "bash -s" < script.sh`.
 
 ```bash
 cd /opt/so-ban-hang-gom && rm -rf server web && tar -xzf /tmp/so-ban-hang-app.tgz && systemctl restart so-ban-hang-gom && rm /tmp/so-ban-hang-app.tgz
