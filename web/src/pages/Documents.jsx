@@ -12,6 +12,7 @@ import { colKey } from '../lib/docs/col-fit.js';
 import { sampleData } from '../lib/docs/tokens.js';
 
 import { useDocFonts } from '../lib/docs/fonts.js';
+import { TextSizeEditor, withCustomText } from '../components/TextSizeEditor.jsx';
 
 const TYPES_FOR = { quote: ['bao_gia'], contract: ['de_nghi_tam_ung', 'doi_chieu_sl', 'doi_chieu_tt', 'de_nghi_tt'], order: ['hoa_don', 'don_dat_hang', 'bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen', 'yeu_cau_vat', 'cn_xuat_xuong', 'doi_chieu_tt', 'doi_chieu_sl'], delivery: ['bien_ban', 'hoa_don', 'hd_van_chuyen', 'phieu_xuat_kho', 'don_dat_hang', 'yeu_cau_vat', 'cn_xuat_xuong'], payment: ['phieu_thu'],
   invoices: ['doi_chieu_tt', 'doi_chieu_sl'] };
@@ -22,7 +23,8 @@ const STANDALONE = ['payment', 'contract', 'quote', 'invoices'];
 // "PDF / In": từng trang theo khổ giấy; "Ảnh": cả chứng từ trên một trang dài như khi Tải ảnh.
 // opts / setOpt (tùy chọn xuất): có thì kéo được đường kẻ giữa hai cột của bảng có viền để chỉnh độ rộng cột
 const PREVIEW_KEY = 'gomsu.preview_mode';
-export function DocPreview({ doc, opts, setOpt }) {
+// extra: nút thêm ở thanh trên của bản xem trước
+export function DocPreview({ doc, opts, setOpt, extra }) {
   useDocFonts(); // phông dùng khi đo độ rộng cột
   const [mode, setModeState] = useState(() => { try { return localStorage.getItem(PREVIEW_KEY) === 'image' ? 'image' : 'pdf'; } catch (e) { return 'pdf'; } });
   const setMode = (v) => { setModeState(v); try { localStorage.setItem(PREVIEW_KEY, v); } catch (e) { /* bỏ qua */ } };
@@ -64,6 +66,7 @@ export function DocPreview({ doc, opts, setOpt }) {
           <button type="button" className={mode === 'image' ? 'on' : ''} onClick={() => setMode('image')}>Ảnh (1 trang)</button>
         </div>
         <span className="muted small">{st.busy ? 'Đang dựng bản xem trước…' : mode === 'image' ? 'Giống ảnh khi bấm Tải ảnh' : `${st.pages} trang · giống tệp PDF và bản in`}</span>
+        {extra && <><span className="grow" />{extra}</>}
       </div>
       {st.error && <ErrorBox error={'Không xem trước được: ' + st.error} />}
       <div className={`doc-scroll pdf-sheets${st.busy ? ' is-busy' : ''}${setOpt ? ' doc-resizable' : ''}`} ref={boxRef} />
@@ -401,6 +404,15 @@ export function DocDialog({ kind, id, keys, type: type0, pay, page, onClose }) {
   const saved = ready ? currentInfo(type, data) || {} : {};
   const info = ready ? { ...defaults(type, data, ds), ...saved, ...edit } : null;
   const doc = useMemo(() => { if (!ready) return null; try { return applyExportOpts(buildPrintDoc(type, data, ds, info, tplPick[type]), opts); } catch (e) { return { error: e.message }; } }, [ready, type, data, ds, JSON.stringify(info), tplPick[type], opts]);
+  // Cỡ chữ chỉnh riêng từng phần cho lần xuất này: { from: nội dung chứng từ lúc bắt đầu chỉnh, html }; chứng từ đổi nội dung thì bỏ
+  const [custom, setCustom] = useState(null); const [editText, setEditText] = useState(false);
+  const customOn = !!(custom?.html && doc && !doc.error && custom.from === doc.html);
+  useEffect(() => {
+    if (!custom || !doc || doc.error || custom.from === doc.html) return;
+    setCustom(null); setEditText(false);
+    if (custom.html) toast('Chứng từ vừa thay đổi nên phần chỉnh cỡ chữ đã được bỏ — chỉnh lại nếu cần');
+  }, [doc]);
+  const outDoc = useMemo(() => (customOn ? withCustomText(doc, custom.html) : doc), [doc, custom, customOn]);
   const tpls = templatesFor(ds, type);
   // Bảng gộp nhiều hóa đơn: ngày đối chiếu chỉ dùng cho lần xuất này (mặc định hôm nay), không lưu vào hồ sơ khách
   const localOnly = (k) => data?.kind === 'invoices' && k.startsWith('date_');
@@ -422,7 +434,7 @@ export function DocDialog({ kind, id, keys, type: type0, pay, page, onClose }) {
     try {
       await save();
       const { pdfBlob } = await import('../lib/docs/pdf.js');
-      const blob = await pdfBlob(doc);
+      const blob = await pdfBlob(outDoc);
       const ok = await saveFile(doc.filename, blob);
       if (ok) { toast(`Đã tạo ${doc.filename}`); afterExport([type]); }
     } catch (e) { toast('Không tạo được PDF: ' + e.message, 'err'); } finally { setBusy(false); }
@@ -431,7 +443,7 @@ export function DocDialog({ kind, id, keys, type: type0, pay, page, onClose }) {
   const printNow = async () => {
     if (!doc || doc.error) return;
     setBusy(true);
-    try { await save(); const { printDocs } = await import('../lib/docs/pdf.js'); await printDocs(doc); afterExport([type]); } catch (e) { toast('Không in được: ' + e.message, 'err'); } finally { setBusy(false); }
+    try { await save(); const { printDocs } = await import('../lib/docs/pdf.js'); await printDocs(outDoc); afterExport([type]); } catch (e) { toast('Không in được: ' + e.message, 'err'); } finally { setBusy(false); }
   };
 
   // Chỉ quản trị (chủ sổ) xuất được ảnh PNG để gửi khách
@@ -442,7 +454,7 @@ export function DocDialog({ kind, id, keys, type: type0, pay, page, onClose }) {
       await save();
       const [{ pdfBlob }, { pdfToImageBlob }] = await Promise.all([import('../lib/docs/pdf.js'), import('../lib/docs/image.js')]);
       const name = doc.filename.replace(/\.pdf$/i, '') + '.png';
-      if (await saveFile(name, await pdfToImageBlob(await pdfBlob(doc, { onePage: true })))) { toast(`Đã tạo ${name}`); afterExport([type]); }
+      if (await saveFile(name, await pdfToImageBlob(await pdfBlob(outDoc, { onePage: true })))) { toast(`Đã tạo ${name}`); afterExport([type]); }
     } catch (e) { toast('Không tạo được ảnh: ' + e.message, 'err'); } finally { setBusy(false); }
   };
 
@@ -511,7 +523,12 @@ export function DocDialog({ kind, id, keys, type: type0, pay, page, onClose }) {
               <div className="muted small">Đơn vị phát hành, logo, nội dung và cách trình bày: Cài đặt → Mẫu in.</div>
             </div>}
           </div>
-          <div className="doc-main">{doc && !doc.error ? <DocPreview doc={doc} opts={opts} setOpt={setOpt} /> : !doc?.error && <Loading />}</div>
+          <div className="doc-main">{doc && !doc.error ? (editText
+            ? <TextSizeEditor key={`${type}:${srcKey}`} doc={doc} value={customOn ? custom.html : null} onChange={(html) => setCustom(html ? { from: doc.html, html } : null)} onDone={() => setEditText(false)} />
+            : <DocPreview doc={outDoc} opts={customOn ? null : opts} setOpt={customOn ? null : setOpt} extra={<span className="row gap-s">
+              {customOn && <span className="small accent">Đã chỉnh cỡ chữ riêng · <button type="button" className="link-btn small" onClick={() => setCustom(null)}>Bỏ</button></span>}
+              <Btn small icon="edit" onClick={() => setEditText(true)} title="Bôi đen phần chữ rồi phóng to / thu nhỏ riêng phần đó (chỉ cho lần xuất này)">Chỉnh cỡ chữ từng phần</Btn></span>} />)
+            : !doc?.error && <Loading />}</div>
         </div>
       )}
     </>

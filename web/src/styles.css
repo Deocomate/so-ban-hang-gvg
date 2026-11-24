@@ -313,6 +313,12 @@ span.cal-title { cursor: default; }
 .tbl tr.row-late td:first-child { box-shadow: inset 3px 0 0 var(--bad); }
 .tbl tr.row-warn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 .tbl tr.row-picked td { background: color-mix(in srgb, var(--accent-2) 55%, var(--surface)); }
+.text-size-bar { flex-wrap: wrap; gap: 8px; }
+.text-size-bar select.input { width: auto; min-width: 96px; padding: 4px 8px; }
+.text-size-scroll { background: var(--surface-2); padding: 16px; }
+.text-size-page { background: #fff; margin: 0 auto; padding: 28px 32px; box-sizing: content-box; box-shadow: 0 1px 4px rgba(0,0,0,.15); user-select: text; cursor: text; }
+.text-size-page ::selection { background: #b7d3ff; }
+.text-size-page span[data-fs] { background: rgba(255, 214, 102, .25); }
 .recon-bar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 2; }
 .tbl tr.row-void td { color: var(--muted); text-decoration: line-through; }
 .cell-main { font-weight: 500; } .cell-sub { font-size: 12px; color: var(--muted); }

@@ -360,6 +360,9 @@ Có 5 loại chứng từ, xuất ra PDF khổ A4, dựng theo đúng mẫu cử
 - **Đầu trang (header) sửa theo từng lần xuất:** trong hộp **In / xuất chứng từ**, mở **Đầu trang (header)** để đổi tên, địa chỉ, điện thoại, email, website, mã số thuế, số tài khoản, người đại diện hoặc bỏ logo cho riêng chứng từ đó. Để trống là theo đơn vị phát hành, gõ dấu "-" để bỏ dòng. Phần sửa lưu theo chứng từ, không đổi cài đặt đơn vị.
   - Phông được nhúng sẵn trong PDF, nên mở trên điện thoại, máy tính hay gửi Zalo đều đúng dấu tiếng Việt, và chữ chọn hoặc sao chép được.
   - Phông Times New Roman nhúng trong PDF là bản của Windows (không phải bản thay thế Tinos); Arial dùng Arimo (Apache 2.0).
+- **Chỉnh cỡ chữ từng phần khi xuất:** trong hộp **In / xuất chứng từ**, bấm **Chỉnh cỡ chữ từng phần** trên bản xem trước. Bôi đen phần chữ cần đổi (một chữ, một dòng hay một ô bảng), rồi bấm **A−** / **A+** (mỗi lần 1 cỡ) hoặc chọn cỡ cụ thể; phần đã chỉnh có nền vàng nhạt. Bấm **Xong, xem bản in** để xem lại.
+  - Chỉ áp dụng cho chứng từ đang xem khi bấm In, Tải PDF, Tải ảnh; không đổi mẫu in và không lưu lại. Bộ hồ sơ / chứng từ giao hàng tải cùng lúc vẫn dùng cỡ chữ theo mẫu.
+  - Nên chọn hướng giấy, cỡ chữ tổng thể và thông tin trên chứng từ trước: đổi những thứ đó sau khi chỉnh thì phần chỉnh cỡ chữ bị bỏ để không in lệch nội dung. Muốn bỏ phần đã chỉnh, bấm **Bỏ** cạnh dòng "Đã chỉnh cỡ chữ riêng".
 - **Đây không phải hóa đơn điện tử.** "Hóa đơn bán hàng" ở đây là chứng từ nội bộ để giao cho khách, không thay hóa đơn điện tử có mã của cơ quan thuế. Hộ kinh doanh có doanh thu trên 1 tỷ đồng/năm thuộc diện phải dùng hóa đơn điện tử theo quy định hiện hành, nên hỏi lại cán bộ thuế hoặc kế toán để áp dụng cho đúng.
 
 ## 10. Màn hình tạo đơn bán (kiểu quầy)
