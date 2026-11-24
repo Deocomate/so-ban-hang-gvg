@@ -2,7 +2,7 @@
 // Biến nhóm "Hàng hóa" là biến theo dòng: dòng bảng nào chứa biến này sẽ được lặp lại cho từng mặt hàng.
 // Giá trị là chuỗi (in nguyên văn) hoặc { h: '<html>' } (đoạn HTML dựng sẵn: logo, bảng đối chiếu…);
 // { h, block: true } là khối lớn (bảng) — đặt riêng một dòng trong mẫu thì thay luôn cả dòng đó.
-import { specText } from '../format.js';
+import { specText, addDays } from '../format.js';
 import { fmtNum, phoneFmt, dateLine, moneyWords, profileFor, goodsLines, packLabel, totalKg, fmtKg, weightPerUnit, DEFAULT_TEXTS, runsOf, PER_DELIVERY, RECONCILE } from './model.js';
 
 const T = (k, label, desc) => ({ k, label, desc: desc || label });
@@ -39,6 +39,11 @@ export const TOKEN_GROUPS = [
     T('Ben_B_Van_Chuyen', 'Bên B (chủ xe) in hoa'), T('Dia_Chi_Ben_B', 'Địa chỉ bên B'), T('Tinh_Trang_Hang', 'Tình trạng hàng hóa'),
     T('So_Ngay_Van_Chuyen', 'Số ngày vận chuyển tối đa'), T('Can_Nang_Gia_Cuoc', 'Cân nặng và giá cước'), T('Thanh_Toan_Cuoc_Tai', 'Thanh toán cước phí tại'),
     T('Ly_Do_Xuat', 'Lý do xuất kho'), T('Chung_Tu_Kem_Theo', 'Số chứng từ gốc kèm theo'),
+    T('SDT_Dai_Dien_Ben_Giao', 'SĐT đại diện bên giao'), T('SDT_Ben_B', 'SĐT bên B (chủ xe)'), T('Thu_Van_Chuyen', 'Dòng thu cước dưới bảng hàng', '"THU VẬN CHUYỂN KHÁCH HÀNG"'),
+    T('Ngay_Bat_Dau_Van_Chuyen', 'Vận chuyển từ ngày', '"ngày 01 Tháng 12 Năm 2026"'), T('Ngay_Giao_Hang', 'Ngày giao hàng (vận chuyển đến ngày)', '"ngày 04 Tháng 12 Năm 2026"'),
+    T('Thoi_Gian_Van_Chuyen', 'Thời gian vận chuyển', '"Thời gian vận chuyển từ ngày 01 Tháng 12 Năm 2026 đến ngày 04 Tháng 12 Năm 2026"'),
+    T('Dieu_Khoan_Van_Chuyen', 'Điều II, III (hợp đồng vận chuyển)', 'Đoạn điều khoản dựng sẵn: nhận hàng, đền bù, thời gian giao, hình thức thanh toán'),
+    T('Dieu_Khoan_Cuoi_Van_Chuyen', 'Điều IV (hợp đồng vận chuyển)', 'Cam kết của hai bên, số bản hợp đồng'),
   ] },
   { id: 'hang_hoa', label: 'Hàng hóa (từng dòng)', icon: 'box', item: true, tokens: [
     T('STT', 'STT', 'Số thứ tự dòng hàng'), T('Ma_Hang', 'Mã hàng'), T('Ten_Hang', 'Tên hàng'), T('Ghi_Chu_Hang', 'Ghi chú dòng hàng'),
@@ -220,6 +225,7 @@ export function tokenValues(type, data, ds, info, sep = ',') {
     CCCD_Lai_Xe: info.id_no || '', Bien_So_Xe: info.vehicle || '', Ben_B_Van_Chuyen: upper(info.carrier_party || info.driver_name), Dia_Chi_Ben_B: info.carrier_address || '',
     Tinh_Trang_Hang: info.goods_condition || '', So_Ngay_Van_Chuyen: info.transit_days || '04', Can_Nang_Gia_Cuoc: info.freight_note || 'tính theo từng khách hàng',
     Thanh_Toan_Cuoc_Tai: info.pay_at || 'khách nhận hàng', Chung_Tu_Kem_Theo: info.attach || '',
+    ...transportValues(info, dt),
     Don_Vi_Mua_Hang: info.cert_buyer || '', Dia_Chi_Don_Vi_Mua: info.cert_address || '', Du_An: info.cert_project || '', Dia_Diem_Du_An: info.cert_site || '', Ket_Luan_Xuat_Xuong: info.cert_result || '',
     Ly_Do_Xuat: `Xuất bán theo đơn hàng ${o.code}${data.d ? `, phiếu giao ${data.d.code}` : ''}`,
     Tong_So_Luong: N(g.reduce((s, l) => s + l.qty, 0)), Tong_So_Hop: info.box_total || '0',
@@ -245,6 +251,24 @@ export function tokenValues(type, data, ds, info, sep = ',') {
     Con_Thanh_Toan: N(due), Con_Thanh_Toan_Bang_Chu: moneyWords(due),
   });
   return { v, items, due };
+}
+
+// Hợp đồng vận chuyển: SĐT hai bên, thời gian vận chuyển (đến ngày trống = từ ngày + số ngày tối đa), điều khoản dựng sẵn
+const longDate = (iso) => { const [y, m, d] = String(iso || '').slice(0, 10).split('-'); return y ? `ngày ${d} Tháng ${m} Năm ${y}` : 'ngày ..... Tháng ..... Năm .........'; };
+// Đoạn **đậm**, nhãn "Điều …" gạch chân như mẫu HĐVC của xưởng
+const termsHtml = (txt, days) => String(txt || '').replace('{days}', esc(days)).split('\n').map((ln) => `<p style="font-size:10.5pt; margin-top:3pt; line-height:1.35">${
+  richText(ln).replace(/<strong>(Điều [IVX]+)(:?)<\/strong>/, '<strong><u>$1</u></strong>$2')}</p>`).join('');
+function transportValues(info, docDay) {
+  const days = String(info.transit_days || '04');
+  const from = info.transit_from || docDay; const n = parseInt(days, 10);
+  const to = info.transit_to || (from && n > 0 ? addDays(String(from).slice(0, 10), n - 1) : '');
+  return {
+    SDT_Dai_Dien_Ben_Giao: phoneFmt(info.handover_phone), SDT_Ben_B: phoneFmt(info.carrier_phone), Thu_Van_Chuyen: info.freight_collect || '',
+    Ngay_Bat_Dau_Van_Chuyen: longDate(from), Ngay_Giao_Hang: longDate(to),
+    Thoi_Gian_Van_Chuyen: `Thời gian vận chuyển từ ${longDate(from)} đến ${longDate(to)}`,
+    Dieu_Khoan_Van_Chuyen: { h: termsHtml(DEFAULT_TEXTS.transport_terms, days), block: true },
+    Dieu_Khoan_Cuoi_Van_Chuyen: { h: termsHtml(DEFAULT_TEXTS.transport_closing, days), block: true },
+  };
 }
 
 // Phiếu yêu cầu xuất hóa đơn VAT: dòng hàng theo giá trước thuế (giá trên đơn chưa gồm VAT), thêm dòng cước vận chuyển / chiết khấu

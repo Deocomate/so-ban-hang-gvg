@@ -121,6 +121,7 @@ export function update_book_settings(p) {
   if ('price_names' in s && s.price_names.some((x) => typeof x !== 'string' || !x.trim())) fail('Tên mức giá không được để trống ở giữa');
   const unused = 'price_names' in s && one(`select max(price_tier) t from customers where book_id = ? and price_tier > ?`, b, s.price_names.length)?.t;
   if (unused) fail(`Còn khách hàng đang dùng mức giá ${unused} — hãy đổi mức giá của họ trước`);
+  if ('doc_signatures' in s) checkSignatures(s.doc_signatures);
   const cur = bookSettings(b);
   // Mẫu in lưu riêng bằng save_print_templates: lưu phần khác của "docs" (đơn vị phát hành, phông…) không được làm mất mẫu
   if (s.docs && typeof s.docs === 'object' && !('templates' in s.docs) && cur.docs?.templates) s.docs = { ...s.docs, templates: cur.docs.templates };
@@ -129,6 +130,20 @@ export function update_book_settings(p) {
   run(`update books set settings = ?, name = coalesce(?, name) where id = ?`, settings, nz(p.name), b);
   const r = one(`select settings, name from books where id = ?`, b);
   return { settings: json(r.settings), name: r.name };
+}
+
+// Mẫu chữ ký để đặt lên chứng từ: [{ id, name, img (ảnh PNG nền trong, data URL), ar (cao / rộng) }]
+function checkSignatures(list) {
+  if (!Array.isArray(list) || list.length > 20) fail('Tối đa 20 mẫu chữ ký');
+  const ids = new Set();
+  for (const x of list) {
+    if (!x || typeof x !== 'object' || !/^[A-Za-z0-9_-]{1,40}$/.test(String(x.id)) || ids.has(x.id)) fail('Mẫu chữ ký không hợp lệ');
+    ids.add(x.id);
+    if (!String(x.name ?? '').trim() || String(x.name).length > 80) fail('Tên mẫu chữ ký từ 1 đến 80 ký tự');
+    if (typeof x.img !== 'string' || !/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(x.img)) fail('Ảnh chữ ký phải là ảnh PNG');
+    if (x.img.length > 400000) fail('Ảnh chữ ký quá lớn');
+    if (!(Number(x.ar) > 0 && Number(x.ar) < 10)) fail('Tỷ lệ ảnh chữ ký không hợp lệ');
+  }
 }
 
 // ---------- Mẫu in (Cài đặt → Mẫu in) ----------

@@ -109,12 +109,12 @@ const lines = (txt, st) => String(txt || '').split('\n').map((t) => P(esc(t) || 
 function textOf(ds, type, k) { const t = ds?.types?.[type]?.text; return t && t[k] !== undefined && t[k] !== null ? t[k] : DEFAULT_TEXTS[k]; }
 
 const BUILDERS = {
-  // Giấy chứng nhận xuất xưởng (theo mẫu Excel của xưởng): đầu trang căn giữa, danh mục sản phẩm, kết luận, ký QC và giám đốc
+  // Giấy chứng nhận xuất xưởng (theo mẫu Excel của xưởng): đầu trang như biên bản bàn giao, danh mục sản phẩm, kết luận, ký QC và giám đốc
   cn_xuat_xuong() {
-    const s = 'font-size:12pt'; const c = `${center}; font-size:11pt`;
+    const s = 'font-size:12pt';
     const ln = (label, tok) => P(`${B(label)} ${tok}`, `${s}; margin-bottom:3pt`);
-    return P(B('{Ten_Phap_Ly_In_Hoa}'), `${center}; font-size:13pt`) + P('Địa chỉ: {Dia_Chi_Don_Vi}', c) + P('Điện thoại: {Dien_Thoai_Don_Vi}', c)
-      + P('Website: {Website_Don_Vi} - Email: {Email_Don_Vi}', c) + '<hr>'
+    // Đầu trang giống biên bản bàn giao: vạch kẻ, logo, tên và liên hệ đơn vị
+    return '<hr data-kind="rule">' + letterhead({ size: 10, nameSize: 10.5, compact: true, bank: false, gap: 4 })
       + P(I('Hà Nội, {Ngay_Thang_Nam_Thuong}'), `text-align:right; ${s}; margin-top:6pt`)
       + P(`<span style="font-size:18pt">${B('GIẤY CHỨNG NHẬN XUẤT XƯỞNG')}</span>`, `${center}; margin-top:10pt; margin-bottom:12pt`)
       + ln('Đơn vị sản xuất:', B('{Ten_Phap_Ly_In_Hoa}')) + ln('Địa chỉ:', '{Dia_Chi_Don_Vi}')
@@ -268,26 +268,35 @@ const BUILDERS = {
         { title: '{Nhan_Nguoi_Nop_In_Hoa}', note: '(Ký, họ tên)', name: '{Nguoi_Nop_Tien}' }, { title: 'THỦ QUỸ', note: '(Ký, họ tên)' }], { size: 9.5, space: 4, mt: 6 })
       + P('Đã nhận đủ số tiền (viết bằng chữ): {So_Tien_Bang_Chu}', 'font-size:11pt; margin-top:10pt');
   },
+  // Hợp đồng vận chuyển theo mẫu HĐVC của xưởng: tên đơn vị nhỏ bên trái, quốc hiệu bên phải; ngày canh phải;
+  // SĐT ghi cùng dòng bên phải; bảng hàng có dòng tổng hộp / tổng kg và dòng thu cước; thời gian vận chuyển; điều II–IV
   hd_van_chuyen() {
-    const s = 'font-size:10.5pt';
-    const terms = DEFAULT_TEXTS.transport_terms.replace('{days}', '{So_Ngay_Van_Chuyen}').split('\n').map((ln) => P(richText(ln), 'font-size:9.5pt; margin-top:3pt; line-height:1.25')).join('');
-    return table(['*', '*'], [[{ h: P(B('{Ten_Phap_Ly_In_Hoa}')) }, { h: P(B(NATION), center) + P(B(MOTTO), center) }]], { border: false, size: 10.5 })
-      + P(`<span style="font-size:15pt">${B('HỢP ĐỒNG VẬN CHUYỂN')}</span>`, `${center}; margin-top:10pt; margin-bottom:2pt`)
-      + P(I('Hà Nội, {Ngay_Thang_Nam_Thuong}'), `${center}; ${s}; margin-bottom:4pt`)
-      + P('Căn cứ chức năng nhiệm vụ, khả năng hàng hóa và vận chuyển của hai bên', `${s}; margin-bottom:4pt`)
-      + P(B('BÊN A: {Ten_Phap_Ly_In_Hoa}'), s) + P('Đại diện bên giao: {Dai_Dien_Ben_Giao}', s) + P('Điện thoại: {Dien_Thoai_Don_Vi}', s) + P('Địa chỉ: {Dia_Chi_Don_Vi}', s)
-      + P(B('BÊN B: {Ben_B_Van_Chuyen}'), `${s}; margin-top:4pt`) + P('Địa chỉ: {Dia_Chi_Ben_B}', s)
-      + P(B('LÁI XE: {Lai_Xe_In_Hoa}'), s)
-      + P('CCCD số: {CCCD_Lai_Xe}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Xe BKS: {Bien_So_Xe}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Điện thoại: {SDT_Lai_Xe}', `${s}; margin-bottom:4pt`)
-      + P(B('Điều I: Nhận vận chuyển số lượng hàng sau đây:'), `${s}; margin-bottom:4pt`)
-      + table([36, '*', 104, 50, 40, 52], [
+    const s = 'font-size:11pt; margin-top:3pt';
+    const two = (left, phone) => table(['*', 170], [[{ h: P(left, s) }, { h: P(`Điện thoại: ${phone}`, s) }]], { border: false });
+    // Cột quốc hiệu rộng cố định để không xuống dòng khi cỡ chữ cơ bản của sổ lớn
+    return table(['*', 300], [[{ h: P(B('{Ten_Phap_Ly_In_Hoa}'), 'font-size:7.5pt; margin-top:3pt') },
+      { h: P(B(NATION), `${center}; font-size:11pt`) + P(`<u>${MOTTO}</u>`, `${center}; font-size:9.5pt; margin-top:2pt`) }]], { border: false })
+      + P(`<span style="font-size:17pt">${B('HỢP ĐỒNG VẬN CHUYỂN')}</span>`, `${center}; margin-top:16pt`)
+      + P(I('Hà Nội, {Ngay_Thang_Nam_Thuong}'), `${right}; font-size:11pt; margin-bottom:4pt`)
+      + P('Căn cứ chức năng nhiệm vụ, khả năng hàng hóa và vận chuyển của hai bên', s)
+      + P(B('BÊN A: {Ten_Viet_Tat}'), `${s}; margin-top:6pt`)
+      + two('Đại diện bên giao: {Dai_Dien_Ben_Giao}', '{SDT_Dai_Dien_Ben_Giao}') + P('Địa chỉ: {Dia_Chi_Don_Vi}', s)
+      + P(B('BÊN B: {Ben_B_Van_Chuyen}'), `${s}; margin-top:6pt`) + two('Địa chỉ: {Dia_Chi_Ben_B}', '{SDT_Ben_B}')
+      + P(B('LÁI XE: {Lai_Xe_In_Hoa}'), `${s}; margin-top:6pt`)
+      + table(['*', 150, 170], [[{ h: P('CMT số: {CCCD_Lai_Xe}', s) }, { h: P('Xe BKS: {Bien_So_Xe}', s) }, { h: P('Điện thoại: {SDT_Lai_Xe}', s) }]], { border: false })
+      + P(`${B('<u>Điều I</u>')}: Nhận vận chuyển số lượng hàng sau đây:`, `${s}; margin-bottom:3pt`)
+      + table([30, '*', 120, 56, 44, 50], [
         head(['STT', 'Tên hàng', 'Số hộp', 'Tổng viên', 'kg/hộp', 'Tổng kg']),
-        [C('{STT}'), L('{Ten_Hang}'), C('{Quy_Cach}'), R('{So_Luong}'), R('{Kg_Moi_Hop}'), R('{Trong_Luong}')],
-        [{ h: B('Tổng cộng: {Tong_So_Hop} {Don_Vi_Dong_Goi}'), span: 5, pst: right }, R(B('{Tong_Trong_Luong_So}'))],
-      ], { size: 9.5 })
-      + P(B('Địa chỉ giao hàng: {Dia_Chi_Nhan_Hang}'), `${s}; margin-top:6pt`) + P(B('Người nhận: {Nguoi_Nhan_Kem_SDT}'), s)
-      + terms + P('Cân nặng và giá cước: {Can_Nang_Gia_Cuoc}', 'font-size:9.5pt; margin-top:2pt') + P('Thanh toán cước phí tại: {Thanh_Toan_Cuoc_Tai}', 'font-size:9.5pt; margin-top:2pt')
-      + sign([{ title: 'ĐẠI DIỆN BÊN A', name: '{Dai_Dien_Ben_Giao}' }, { title: 'LÁI XE', name: '{Lai_Xe}' }, { title: 'ĐẠI DIỆN BÊN B' }], { size: 10.5, space: 4, mt: 12 });
+        [C('{STT}'), L('{Ten_Hang}'), C('{Quy_Cach}'), C('{So_Luong}'), C('{Kg_Moi_Hop}'), C('{Trong_Luong}')],
+        ['', '', C(B('{Tong_So_Hop} {Don_Vi_Dong_Goi}')), { h: B('Tổng kg'), span: 2, pst: center }, C(B('{Tong_Trong_Luong_So}'))],
+        [{ h: B('{Thu_Van_Chuyen}'), span: 6, pst: center }],
+      ], { size: 10.5 })
+      + P(B('{Thoi_Gian_Van_Chuyen}'), 'font-size:10.5pt; margin-top:6pt')
+      + P('{Dieu_Khoan_Van_Chuyen}')
+      + P('Cân nặng và giá cước: {Can_Nang_Gia_Cuoc}', 'font-size:10.5pt; margin-top:3pt; line-height:1.35')
+      + P('Thanh toán cước phí tại: {Thanh_Toan_Cuoc_Tai}', 'font-size:10.5pt; margin-top:3pt; line-height:1.35')
+      + P('{Dieu_Khoan_Cuoi_Van_Chuyen}')
+      + sign([{ title: 'ĐẠI DIỆN BÊN A', name: '{Dai_Dien_Ben_Giao}' }, { title: 'LÁI XE', name: '{Lai_Xe}' }, { title: 'ĐẠI DIỆN BÊN B' }], { size: 11, space: 4, mt: 6 });
   },
   de_nghi_tam_ung() { return requestTpl(true); },
   de_nghi_tt() { return requestTpl(false); },

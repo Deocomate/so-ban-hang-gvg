@@ -1671,3 +1671,16 @@ body { font-size: 13px; line-height: 1.45; }
   .rp-title { display: none; }
 }
 @media print { .rp-side, .rp-title { display: none !important; } .rp { display: block; } }
+
+/* ---------- Chữ ký trên chứng từ: thư viện mẫu ở cột trái, chữ ký đặt trên trang xem trước ---------- */
+.sig-list { display: flex; flex-direction: column; gap: 6px; }
+.sig-item { display: grid; grid-template-columns: 74px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 4px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: grab; }
+.sig-item img { width: 74px; height: 34px; object-fit: contain; background: #fff; border-radius: 4px; }
+.sig-name { font-size: 13px; }
+.sig-placed { position: absolute; z-index: 3; cursor: move; touch-action: none; outline: 1px dashed transparent; }
+.sig-placed:hover, .sig-placed:active { outline-color: var(--accent); }
+.sig-placed img { width: 100%; height: 100%; display: block; pointer-events: none; user-select: none; }
+.sig-x { position: absolute; top: -9px; right: -9px; width: 18px; height: 18px; border-radius: 99px; border: 0; background: var(--accent); color: var(--accent-ink); display: none; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+.sig-resize { position: absolute; right: -5px; bottom: -5px; width: 11px; height: 11px; border-radius: 3px; background: var(--accent); cursor: nwse-resize; display: none; touch-action: none; }
+.sig-placed:hover .sig-x, .sig-placed:hover .sig-resize, .sig-placed:focus-within .sig-x { display: inline-flex; }
+@media (hover: none) { .sig-x, .sig-resize { display: inline-flex; } }

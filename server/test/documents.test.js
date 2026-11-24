@@ -77,6 +77,30 @@ api.as(owner);
 const big = 'x'.repeat(2000);
 await api.call('save_doc_info', { book_id: TH, ref_type: 'order', ref_id: o.id, data: { note: big } });
 C('Giới hạn 500 ký tự mỗi trường', (await api.call('get_doc_info', { book_id: TH, ref_type: 'order', ref_id: o.id })).note.length, 500);
+// Hợp đồng vận chuyển: SĐT hai bên, thời gian vận chuyển, dòng thu cước; chữ ký đặt trên chứng từ
+await api.call('save_doc_info', { book_id: TH, ref_type: 'delivery', ref_id: dl.id, data: { handover_phone: '0913381021', carrier_phone: '0934338887', transit_from: '2024-12-01',
+  transit_to: '2024-12-04', freight_collect: 'THU VẬN CHUYỂN KHÁCH HÀNG', signs_hd_van_chuyen: JSON.stringify([{ s: 'sA', p: 1, x: 80.25, y: 700, w: 110, extra: 1 }]) } });
+{
+  const v = await api.call('get_doc_info', { book_id: TH, ref_type: 'delivery', ref_id: dl.id });
+  C('Lưu các ô mới của hợp đồng vận chuyển', [v.handover_phone, v.carrier_phone, v.transit_from, v.transit_to, v.freight_collect], ['0913381021', '0934338887', '2024-12-01', '2024-12-04', 'THU VẬN CHUYỂN KHÁCH HÀNG']);
+  C('Vị trí chữ ký lưu gọn, bỏ trường lạ', JSON.parse(v.signs_hd_van_chuyen), [{ s: 'sA', p: 1, x: 80.3, y: 700, w: 110 }]);
+}
+await E('Vị trí chữ ký hỏng bị chặn', () => api.call('save_doc_info', { book_id: TH, ref_type: 'delivery', ref_id: dl.id, data: { signs_bien_ban: '[{"s":"a b","p":1,"x":1,"y":1,"w":50}]' } }), 'không hợp lệ');
+await api.call('save_doc_info', { book_id: TH, ref_type: 'delivery', ref_id: dl.id, data: { signs_hd_van_chuyen: '' } });
+C('Bỏ hết chữ ký trên chứng từ', (await api.call('get_doc_info', { book_id: TH, ref_type: 'delivery', ref_id: dl.id })).signs_hd_van_chuyen, null);
+// Mẫu chữ ký của sổ (chủ sổ lưu)
+{
+  const png = 'data:image/png;base64,iVBORw0KGgo=';
+  await api.call('update_book_settings', { book_id: TH, settings: { doc_signatures: [{ id: 'sA', name: 'Giám đốc', img: png, ar: 0.4 }] } });
+  const sigs = (await api.call('my_books')).find((b) => b.id === TH).settings.doc_signatures;
+  C('Lưu mẫu chữ ký vào cài đặt sổ', sigs.map((x) => [x.id, x.name]), [['sA', 'Giám đốc']]);
+  await E('Ảnh chữ ký không phải PNG bị chặn', () => api.call('update_book_settings', { book_id: TH, settings: { doc_signatures: [{ id: 'sB', name: 'X', img: 'data:image/svg+xml;base64,PHN2Zz4=', ar: 1 }] } }), 'PNG');
+  await E('Trùng mã mẫu chữ ký bị chặn', () => api.call('update_book_settings', { book_id: TH, settings: { doc_signatures: [{ id: 'sA', name: 'A', img: png, ar: 1 }, { id: 'sA', name: 'B', img: png, ar: 1 }] } }), 'không hợp lệ');
+  api.as(staff);
+  await E('Nhân viên không sửa được mẫu chữ ký', () => api.call('update_book_settings', { book_id: TH, settings: { doc_signatures: [] } }), '');
+  api.as(owner);
+  await api.call('update_book_settings', { book_id: TH, settings: { doc_signatures: [] } });
+}
 
 G('3. Mẫu chứng từ trong cài đặt sổ');
 const docs = { profiles: [{ id: 'hkd', name: 'HỘ KINH DOANH GỐM SỨ MAI HIẾU', address: 'Số 18 Thôn 2 Giang Cao - Xã Bát Tràng - Hà Nội' }], use: { hoa_don: 'hkd' }, thousand_sep: ',' };

@@ -227,7 +227,14 @@ export function toPdfDef(doc, { onePage = false, track = null } = {}) {
   const fs = doc.base || 10;
   const content = blocksOf(body, { fontSize: fs, font: doc.font || 'Tinos', lineHeight: 1.2, onePage, track }, W - marg[0] - marg[2]);
   if (track) for (const t of track.tables) t.left = (t.left || 0) + marg[0];
+  // Chữ ký kéo vào chứng từ: doc.signs = [{ img, page, x, y, w }] (pt, tính từ góc trên trái trang). Trang dài (ảnh) nối các trang
+  // liền nhau theo phần nội dung nên lùi chữ ký trang sau xuống theo chiều cao vùng nội dung.
+  const signs = (doc.signs || []).filter((x) => x.img);
+  const bodyH = size.h ? size.h * MM - marg[1] - marg[3] : 0;
+  const background = signs.length ? (page) => signs.filter((x) => onePage || x.page === page)
+    .map((x) => ({ image: x.img, width: x.w, absolutePosition: { x: x.x, y: x.y + (onePage ? (x.page - 1) * bodyH : 0) } })) : undefined;
   return {
+    background,
     pageSize: size.h && !onePage ? { width: W, height: size.h * MM } : { width: W, height: 'auto' }, pageMargins: marg, content,
     info: { title: `${doc.title} ${doc.code || ''}`.trim(), creator: 'Sổ bán hàng gốm sứ' },
     defaultStyle: { font: doc.font || 'Tinos', fontSize: fs, lineHeight: 1.2 / NATURAL_LH },
@@ -240,7 +247,8 @@ export async function pdfBlob(docOrList, { onePage = false } = {}) {
   const docs = Array.isArray(docOrList) ? docOrList : [docOrList];
   const def = toPdfDef(docs[0], { onePage });
   for (const d of docs.slice(1)) def.content.push({ text: '', pageBreak: 'after' }, ...toPdfDef(d, { onePage }).content);
-  if (docs.length > 1) def.info.title = docs.map((d) => d.title).join(', ') + ' ' + (docs[0].code || '');
+  // Gộp nhiều chứng từ: không biết trang của từng chứng từ nên không đặt chữ ký
+  if (docs.length > 1) { def.info.title = docs.map((d) => d.title).join(', ') + ' ' + (docs[0].code || ''); delete def.background; }
   return pdfFromDef(def);
 }
 

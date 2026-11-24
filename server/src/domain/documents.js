@@ -13,9 +13,24 @@ const FIELDS = ['recv_name', 'recv_phone', 'recv_address', 'driver_name', 'drive
   // Giấy chứng nhận xuất xưởng
   'date_cn_xuat_xuong', 'profile_cn_xuat_xuong', 'cert_buyer', 'cert_address', 'cert_project', 'cert_site', 'cert_result',
   // Phiếu đóng hàng
-  'date_phieu_dong_hang', 'profile_phieu_dong_hang'];
+  'date_phieu_dong_hang', 'profile_phieu_dong_hang',
+  // Hợp đồng vận chuyển: SĐT đại diện bên giao, SĐT bên B, thời gian vận chuyển, dòng thu cước dưới bảng hàng
+  'handover_phone', 'carrier_phone', 'transit_from', 'transit_to', 'freight_collect'];
 
+// Chữ ký đặt trên chứng từ: signs_<loại chứng từ> = JSON [{ s: mã mẫu chữ ký, p: trang, x, y, w (pt) }]
+const SIGNS_KEY = /^signs_[a-z_]{2,30}$/;
 const HEADER_KEY = /^hdr_[a-z_]{2,30}_(name|legal_name|address|phone|email|website|tax_code|bank_line|representative|logo)$/;
+
+function cleanSigns(v) {
+  if (v == null || v === '') return null;
+  let list; try { list = JSON.parse(String(v)); } catch (e) { fail('Vị trí chữ ký không hợp lệ'); }
+  if (!Array.isArray(list) || list.length > 12) fail('Mỗi chứng từ đặt tối đa 12 chữ ký');
+  const n = (x, lo, hi) => { const f = Number(x); if (!Number.isFinite(f) || f < lo || f > hi) fail('Vị trí chữ ký không hợp lệ'); return Math.round(f * 10) / 10; };
+  return JSON.stringify(list.map((x) => {
+    if (!x || !/^[A-Za-z0-9_-]{1,40}$/.test(String(x.s))) fail('Vị trí chữ ký không hợp lệ');
+    return { s: String(x.s), p: Math.round(n(x.p, 1, 50)), x: n(x.x, -200, 2000), y: n(x.y, -200, 5000), w: n(x.w, 10, 600) };
+  }));
+}
 
 function checkRef(book, type, id) {
   const t = REF_TABLES[type];
@@ -38,6 +53,7 @@ export function save_doc_info(p) {
   for (const k of FIELDS) if (p.data && k in p.data) d[k] = p.data[k] == null ? null : String(p.data[k]).slice(0, 500);
   // Đầu trang sửa riêng cho chứng từ: hdr_<loại chứng từ>_<trường>
   for (const k of Object.keys(p.data || {})) if (HEADER_KEY.test(k)) d[k] = p.data[k] == null ? null : String(p.data[k]).slice(0, 500);
+  for (const k of Object.keys(p.data || {})) if (SIGNS_KEY.test(k)) d[k] = cleanSigns(p.data[k]);
   const cur = json(one(`select data from doc_info where ref_type = ? and ref_id = ?`, t, p.ref_id)?.data);
   run(`insert into doc_info (book_id, ref_type, ref_id, data, updated_by, updated_at) values (?, ?, ?, ?, ?, ?)
     on conflict (ref_type, ref_id) do update set data = excluded.data, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,

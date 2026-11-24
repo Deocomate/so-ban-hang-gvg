@@ -6,13 +6,14 @@ import { saveFile } from '../lib/excel.js';
 import { Btn, Loading, ErrorBox, Note, Modal, Field, Input, TextArea, Select, DateInput, NumInput, Check, Section, Tabs, ConfirmBtn } from '../components/ui.jsx';
 import { DOC_TYPES, DEFAULT_TEXTS, docSettings, loadDocData, defaults, currentInfo, editableFields, infoRef, profileFor, profileFromBook, PER_DELIVERY, RECONCILE, isCompany, HEADER_FIELDS, headerKey, BASE_SIZES, DEFAULT_BASE } from '../lib/docs/model.js';
 import { VatReminder, VatReminderPopup } from '../components/VatReminder.jsx';
-import { buildPrintDoc, templatesFor, PAPERS, applyExportOpts, EXPORT_SCALES } from '../lib/docs/templates.js';
+import { buildPrintDoc, templatesFor, PAPERS, applyExportOpts, EXPORT_SCALES, pageSize } from '../lib/docs/templates.js';
 import { openTemplateEditor } from '../lib/docs/editor-link.js';
 import { colKey } from '../lib/docs/col-fit.js';
 import { sampleData } from '../lib/docs/tokens.js';
 
 import { useDocFonts } from '../lib/docs/fonts.js';
 import { TextSizeEditor, withCustomText } from '../components/TextSizeEditor.jsx';
+import { SignatureLibrary, SignLayers, SIGN_DRAG } from '../components/Signatures.jsx';
 
 // Thẻ xếp theo trình tự công việc: bán hàng → đóng & giao hàng → đối chiếu sau giao
 const TYPES_FOR = { quote: ['bao_gia'], contract: ['de_nghi_tam_ung', 'doi_chieu_sl', 'doi_chieu_tt', 'de_nghi_tt'],
@@ -31,12 +32,14 @@ const STANDALONE = ['payment', 'contract', 'quote', 'invoices'];
 // opts / setOpt (tùy chọn xuất): có thì kéo được đường kẻ giữa hai cột của bảng có viền để chỉnh độ rộng cột
 const PREVIEW_KEY = 'gomsu.preview_mode';
 // extra: nút thêm ở thanh trên của bản xem trước
-export function DocPreview({ doc, opts, setOpt, extra }) {
+// signs / onSign / onDropSign: chữ ký đặt trên trang (chỉ ở chế độ PDF / In) — sửa vị trí, bỏ, thả mẫu chữ ký mới vào trang
+export function DocPreview({ doc, opts, setOpt, extra, signs, onSign, onDropSign }) {
   useDocFonts(); // phông dùng khi đo độ rộng cột
   const [mode, setModeState] = useState(() => { try { return localStorage.getItem(PREVIEW_KEY) === 'image' ? 'image' : 'pdf'; } catch (e) { return 'pdf'; } });
   const setMode = (v) => { setModeState(v); try { localStorage.setItem(PREVIEW_KEY, v); } catch (e) { /* bỏ qua */ } };
   const boxRef = React.useRef(null); const geo = React.useRef({ tables: [] });
   const [st, setSt] = useState({ busy: true, error: null, pages: 0 });
+  const [sheets, setSheets] = useState([]); // { el, page, wPt } của các trang đang hiện — để gắn lớp chữ ký
   useEffect(() => {
     let alive = true; setSt((s) => ({ ...s, busy: true, error: null }));
     // Chờ người dùng gõ xong một chút rồi mới dựng lại tệp
@@ -52,6 +55,7 @@ export function DocPreview({ doc, opts, setOpt, extra }) {
           w.appendChild(c); return w;
         });
         boxRef.current.replaceChildren(...sheets);
+        setSheets(sheets.map((el, i) => ({ el, page: i + 1, wPt: Number(canvases[i].dataset.w) })));
         geo.current = { tables };
         setSt({ busy: false, error: null, pages: canvases.length });
       } catch (e) { if (alive) setSt({ busy: false, error: e.message, pages: 0 }); }
@@ -76,7 +80,18 @@ export function DocPreview({ doc, opts, setOpt, extra }) {
         {extra && <><span className="grow" />{extra}</>}
       </div>
       {st.error && <ErrorBox error={'Không xem trước được: ' + st.error} />}
-      <div className={`doc-scroll pdf-sheets${st.busy ? ' is-busy' : ''}${setOpt ? ' doc-resizable' : ''}`} ref={boxRef} />
+      <div className={`doc-scroll pdf-sheets${st.busy ? ' is-busy' : ''}${setOpt ? ' doc-resizable' : ''}`} ref={boxRef}
+        onDragOver={(e) => { if (onDropSign && mode === 'pdf' && e.dataTransfer.types.includes(SIGN_DRAG)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
+        onDrop={(e) => {
+          const id = e.dataTransfer.getData(SIGN_DRAG); const el = e.target.closest?.('.pdf-sheet');
+          if (!id || !el || !onDropSign || mode !== 'pdf') return;
+          e.preventDefault();
+          const sh = sheets.find((x) => x.el === el); if (!sh) return;
+          const r = el.getBoundingClientRect(); const k = r.width / sh.wPt;
+          onDropSign(id, sh.page, (e.clientX - r.left) / k, (e.clientY - r.top) / k);
+        }} />
+      {signs && mode === 'pdf' && !st.busy && <SignLayers sheets={sheets} signs={signs} onChange={onSign} />}
+      {signs?.length > 0 && mode !== 'pdf' && <div className="muted small">Chữ ký đã đặt có trong ảnh tải về; chuyển sang "PDF / In" để dời hoặc bỏ chữ ký.</div>}
     </div>
   );
 }
@@ -412,7 +427,23 @@ export function DocDialog({ kind, id, keys, type: type0, pay, page, onClose }) {
   const fields = ready ? editableFields(type, data) : [];
   const saved = ready ? currentInfo(type, data) || {} : {};
   const info = ready ? { ...defaults(type, data, ds), ...saved, ...edit } : null;
-  const doc = useMemo(() => { if (!ready) return null; try { return applyExportOpts(buildPrintDoc(type, data, ds, info, tplPick[type]), opts); } catch (e) { return { error: e.message }; } }, [ready, type, data, ds, JSON.stringify(info), tplPick[type], opts]);
+  // Chữ ký đặt trên chứng từ (signs_<loại>): không đưa vào phần dựng nội dung để dời chữ ký không phải dựng lại bản xem trước
+  const signKey = `signs_${type}`;
+  const docInfo = info && Object.fromEntries(Object.entries(info).filter(([k]) => !k.startsWith('signs_')));
+  const doc = useMemo(() => { if (!ready) return null; try { return applyExportOpts(buildPrintDoc(type, data, ds, docInfo, tplPick[type]), opts); } catch (e) { return { error: e.message }; } }, [ready, type, data, ds, JSON.stringify(docInfo), tplPick[type], opts]);
+  const sigLib = settings?.doc_signatures || [];
+  const placed = (() => { try { const v = JSON.parse(info?.[signKey] || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } })();
+  const signs = placed.map((p, idx) => { const g = sigLib.find((x) => x.id === p.s); return g && { ...p, idx, img: g.img, ar: g.ar }; }).filter(Boolean);
+  const setPlaced = (list) => setEdit((s) => ({ ...s, [signKey]: list.length ? JSON.stringify(list) : '' }));
+  const pagePt = doc && !doc.error ? (() => { const z = pageSize(doc); return { w: z.w * 72 / 25.4, h: (z.h || 297) * 72 / 25.4 }; })() : { w: 595, h: 842 };
+  const addSign = (id, page, cx, cy) => {
+    const g = sigLib.find((x) => x.id === id); if (!g) return;
+    const w = 110; const h = w * g.ar;
+    // Thả vào trang: tâm chữ ký ở chỗ thả; bấm "+" thì đặt ở góc dưới phải trang 1
+    const x = cx === undefined ? pagePt.w - w - 70 : cx - w / 2; const y = cy === undefined ? pagePt.h * 0.72 : cy - h / 2;
+    setPlaced([...placed, { s: id, p: page || 1, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10, w }]);
+  };
+  const changeSign = (idx, patch) => setPlaced(patch ? placed.map((p, i) => (i === idx ? { ...p, ...patch } : p)) : placed.filter((_, i) => i !== idx));
   // Cỡ chữ chỉnh riêng từng phần cho lần xuất này: { from: nội dung chứng từ lúc bắt đầu chỉnh, html }; chứng từ đổi nội dung thì bỏ
   const [custom, setCustom] = useState(null); const [editText, setEditText] = useState(false);
   const customOn = !!(custom?.html && doc && !doc.error && custom.from === doc.html);
@@ -421,7 +452,10 @@ export function DocDialog({ kind, id, keys, type: type0, pay, page, onClose }) {
     setCustom(null); setEditText(false);
     if (custom.html) toast('Chứng từ vừa thay đổi nên phần chỉnh cỡ chữ đã được bỏ — chỉnh lại nếu cần');
   }, [doc]);
-  const outDoc = useMemo(() => (customOn ? withCustomText(doc, custom.html) : doc), [doc, custom, customOn]);
+  const shownDoc = useMemo(() => (customOn ? withCustomText(doc, custom.html) : doc), [doc, custom, customOn]);
+  // Tệp tải / in / ảnh: kèm chữ ký đã đặt
+  const outDoc = useMemo(() => (shownDoc && !shownDoc.error && signs.length ? { ...shownDoc, signs: signs.map((s) => ({ img: s.img, page: s.p, x: s.x, y: s.y, w: s.w })) } : shownDoc),
+    [shownDoc, JSON.stringify(placed), sigLib]);
   const tpls = templatesFor(ds, type);
   // Bảng gộp nhiều hóa đơn: ngày đối chiếu chỉ dùng cho lần xuất này (mặc định hôm nay), không lưu vào hồ sơ khách
   const localOnly = (k) => data?.kind === 'invoices' && k.startsWith('date_');
@@ -504,6 +538,7 @@ export function DocDialog({ kind, id, keys, type: type0, pay, page, onClose }) {
               </Field>
             )}
             {ready && <ExportOpts opts={opts} set={setOpt} roll={!!PAPERS[doc?.paper]?.roll} doc={doc} />}
+            {ready && <div className="stack-s"><b className="small">Chữ ký</b><SignatureLibrary onAdd={(id) => addSign(id, 1)} placedCount={signs.length} onClear={() => setPlaced([])} /></div>}
             {ready && <HeaderEditor type={type} prof={profileFor(ds, type, { ...info, ...Object.fromEntries(HEADER_FIELDS.map(([k]) => [headerKey(type, k), ''])), [headerKey(type, 'logo')]: '' })} info={info} setEdit={setEdit} />}
             <button className="link-btn small" onClick={() => setShowForm((x) => !x)}>{showForm ? '▾' : '▸'} Thông tin trên chứng từ</button>
             {showForm && ready && <div className="stack-s">
@@ -534,7 +569,7 @@ export function DocDialog({ kind, id, keys, type: type0, pay, page, onClose }) {
           </div>
           <div className="doc-main">{doc && !doc.error ? (editText
             ? <TextSizeEditor key={`${type}:${srcKey}`} doc={doc} value={customOn ? custom.html : null} onChange={(html) => setCustom(html ? { from: doc.html, html } : null)} onDone={() => setEditText(false)} />
-            : <DocPreview doc={outDoc} opts={customOn ? null : opts} setOpt={customOn ? null : setOpt} extra={<span className="row gap-s">
+            : <DocPreview doc={shownDoc} opts={customOn ? null : opts} setOpt={customOn ? null : setOpt} signs={signs} onSign={changeSign} onDropSign={addSign} extra={<span className="row gap-s">
               {customOn && <span className="small accent">Đã chỉnh cỡ chữ riêng · <button type="button" className="link-btn small" onClick={() => setCustom(null)}>Bỏ</button></span>}
               <Btn small icon="edit" onClick={() => setEditText(true)} title="Bôi đen phần chữ rồi phóng to / thu nhỏ riêng phần đó (chỉ cho lần xuất này)">Chỉnh cỡ chữ từng phần</Btn></span>} />)
             : !doc?.error && <Loading />}</div>
