@@ -63,6 +63,15 @@
 :root[data-book="TH"][data-theme="dark"] { --bg: #08151a; --surface: #0f2026; --surface-2: #152b32; --ink: #e3eff1; --muted: #93acb1; --line: #1f3a42; --accent: #6cc3cf; --accent-2: #12343b; --accent-ink: #04151a; --action: #6cc3cf; --action-hover: #8bd2dc; --action-ink: #04151a; --gold: #e8954b; --gold-hover: #f0a865; --gold-ink: #1d1206; --mbar: #061116; --mbar-hover: #102830; --mbar-on: #030a0d; --mbar-ink: #e3eff1; --celadon: #5fb3be; }
 :root[data-book="AN"][data-theme="dark"] { --bg: #07130e; --surface: #0d1e17; --surface-2: #132a20; --ink: #e2f2e9; --muted: #92b3a4; --line: #1d392d; --accent: #5fd2a1; --accent-2: #11302a; --accent-ink: #04140d; --action: #5fd2a1; --action-hover: #7fdfb5; --action-ink: #04140d; --gold: #eac15a; --gold-hover: #f2cf74; --gold-ink: #1d1606; --mbar: #040c08; --mbar-hover: #0f2219; --mbar-on: #020604; --mbar-ink: #e2f2e9; --celadon: #55c393; }
 * { box-sizing: border-box; }
+/* Thanh cuộn mảnh, không mũi tên, nền trong suốt, bo tròn (thay thanh cuộn mặc định của Windows).
+   Chrome / Edge vẽ theo ::-webkit-scrollbar (bỏ được mũi tên); Firefox dùng scrollbar-width / scrollbar-color. */
+:root { --sb-thumb: color-mix(in srgb, var(--muted) 40%, transparent); --sb-thumb-hover: color-mix(in srgb, var(--muted) 65%, transparent); }
+::-webkit-scrollbar { width: 8px; height: 8px; background: transparent; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+::-webkit-scrollbar-thumb { background: var(--sb-thumb); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background-color: var(--sb-thumb-hover); }
+@supports (-moz-appearance: none) { * { scrollbar-width: thin; scrollbar-color: var(--sb-thumb) transparent; } }
 html, body, #root { height: 100%; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
 b, strong { font-weight: 600; }
@@ -133,6 +142,8 @@ a { color: var(--accent); }
 /* ---------- Trang danh sách: cột lọc + bảng ---------- */
 .lp { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 16px; align-items: start; }
 .lp-side { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 62px; max-height: calc(100vh - 78px); overflow-y: auto; min-width: 0; }
+/* Cột lọc: chừa sẵn chỗ cho thanh cuộn để các ô lọc không bị xô khi danh sách lọc dài ra */
+.lp-side { scrollbar-gutter: stable; }
 .lp-head { padding: 2px 2px 4px; }
 .lp-main { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 .lp-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
