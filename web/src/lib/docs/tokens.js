@@ -195,7 +195,7 @@ export function tokenValues(type, data, ds, info, sep = ',') {
         So_Tien_De_Nghi_Bang_Chu: moneyWords(isAdv ? k.advance_amount : remain),
       });
     }
-    v.Can_Cu_Doi_Chieu = k ? `THEO HỢP ĐỒNG SỐ: ${k.code}` : `THEO ĐƠN HÀNG SỐ: ${o.code}`;
+    v.Can_Cu_Doi_Chieu = data.invs ? invoiceBasis(data.invs) : k ? `THEO HỢP ĐỒNG SỐ: ${k.code}` : `THEO ĐƠN HÀNG SỐ: ${o.code}`;
     if (type === 'doi_chieu_sl') v.Bang_Doi_Chieu_So_Luong = { h: qtyTable(data, N), block: true };
     if (type === 'doi_chieu_tt') { const t = payTable(data, N); v.Bang_Doi_Chieu_Cong_No = { h: t.html, block: true }; v.Con_No_Doi_Chieu_Bang_Chu = moneyWords(t.due); }
     return { v, items };
@@ -269,50 +269,77 @@ function vatRequest(v, items, data, info, N, goods) {
   });
 }
 
+// Căn cứ của bảng gộp nhiều hóa đơn: liệt kê mã khi ít, nhiều thì ghi số hóa đơn và khoảng ngày
+function invoiceBasis(invs) {
+  if (invs.length <= 4) return `THEO HÓA ĐƠN SỐ: ${invs.map((iv) => iv.code).join(', ')}`;
+  const a = dmy(invs[0].date); const b = dmy(invs[invs.length - 1].date);
+  return `THEO ${invs.length} HÓA ĐƠN ${a === b ? `NGÀY ${a}` : `TỪ NGÀY ${a} ĐẾN NGÀY ${b}`}`;
+}
+
 // ---------- Bảng dựng sẵn ----------
-// Mỗi ngày giao một hàng, mỗi mặt hàng một cột (theo thứ tự dòng trong đơn), dòng cuối là tổng đã giao
+// Mỗi ngày giao một hàng, mỗi mặt hàng một cột (theo thứ tự dòng trong đơn), dòng cuối là tổng đã giao.
+// Gộp nhiều hóa đơn của một khách: mỗi hóa đơn một hàng (ngày và mã hóa đơn).
 function qtyTable(data, N) {
   const rows = data.allDl || [];
   const names = new Map(rows.map((r) => [r.product_id, r.product_name]));
   const order = [...new Set([...(data.lines || []).map((l) => l.product_id).filter((id) => names.has(id)), ...names.keys()])];
-  const days = [...new Set(rows.map((r) => r.delivery_date))].sort();
   const sum = (ls) => ls.reduce((s, r) => s + Number(r.qty), 0);
-  const body = days.map((day) => [{ text: dmy(day), align: 'center' }, ...order.map((pid) => { const q = sum(rows.filter((r) => r.delivery_date === day && r.product_id === pid)); return { text: q ? N(q) : '', align: 'center' }; })]);
+  const cells = (ls) => order.map((pid) => { const q = sum(ls.filter((r) => r.product_id === pid)); return { text: q ? N(q) : '', align: 'center' }; });
+  const body = data.invs
+    ? data.invs.map((iv) => [{ text: dmy(iv.date), sub: iv.code, align: 'center' }, ...cells(iv.lines)])
+    : [...new Set(rows.map((r) => r.delivery_date))].sort().map((day) => [{ text: dmy(day), align: 'center' }, ...cells(rows.filter((r) => r.delivery_date === day))]);
   body.push([{ text: 'Tổng giao hàng', b: true, align: 'center' }, ...order.map((pid) => ({ text: N(sum(rows.filter((r) => r.product_id === pid))), align: 'center', b: true }))]);
-  return htmlTable(['Ngày', ...order.map((pid) => names.get(pid))], body, [90, ...order.map(() => '*')], 11);
+  return htmlTable([data.invs ? 'Ngày / Hóa đơn' : 'Ngày', ...order.map((pid) => names.get(pid))], body, [90, ...order.map(() => '*')], 11);
 }
-// Từng đợt giao (gộp ô STT, ngày giao, tổng theo đơn), VAT, các lần thanh toán, còn phải thanh toán và dòng bằng chữ
-function payTable(data, N) {
+
+// Số liệu bảng đối chiếu công nợ: nhóm dòng hàng (đợt giao / hóa đơn), tiền hàng, VAT, cước, hàng trả, các lần thu
+function payFigures(data) {
+  const add = (f) => data.invs.reduce((s, iv) => s + f(iv), 0);
+  if (data.invs) {
+    // Ghi thuế suất khi mọi hóa đơn cùng một mức; gộp hóa đơn khác thuế suất (kể cả không VAT) thì chỉ ghi "VAT"
+    const rates = [...new Set(data.invs.map((iv) => iv.vat_rate))];
+    return {
+      groups: data.invs.map((iv) => ({ date: iv.date, sub: iv.code, lines: iv.lines })),
+      goods: add((iv) => iv.goods), vat: add((iv) => iv.vat), ship: add((iv) => iv.ship), ret: add((iv) => iv.ret), total: add((iv) => iv.total),
+      vatLabel: rates.length === 1 ? (rates[0] ? `VAT ${fmtNum(rates[0])}%` : null) : 'VAT',
+      pays: data.invs.flatMap((iv) => iv.pays.map((p) => ({ date: p.date, label: `${p.label} ${iv.code}`, amount: p.amount }))),
+    };
+  }
   const o = data.o; const rows = data.allDl || [];
-  const codes = [...new Set(rows.map((r) => r.delivery_code))];
-  const body = []; let goods = 0;
-  codes.forEach((dc, i) => {
-    const ls = rows.filter((r) => r.delivery_code === dc); const sum = ls.reduce((s, r) => s + Number(r.revenue), 0); goods += sum; const n = ls.length;
-    ls.forEach((l, j) => body.push([
-      ...(j ? [] : [{ text: String(i + 1), align: 'center', rowSpan: n, mid: true }, { text: dmy(l.delivery_date), align: 'center', rowSpan: n, mid: true }]),
+  const groups = [...new Set(rows.map((r) => r.delivery_code))].map((dc) => { const ls = rows.filter((r) => r.delivery_code === dc); return { date: ls[0].delivery_date, lines: ls }; });
+  const goods = rows.reduce((s, r) => s + Number(r.revenue), 0);
+  const vat = Number(o.vat_net) || 0; const ship = Number(o.ship_billed) || 0; const ret = Number(o.returned_value) || 0;
+  // Từng lần thu / hoàn tiền của đơn; thu trước đợt giao đầu tiên là tiền đặt cọc
+  const first = rows.length ? rows[0].delivery_date : null;
+  const pays = (data.pays || []).filter((p) => Number(p.signed_amount)).map((p) => ({ date: p.pay_date,
+    label: Number(p.signed_amount) < 0 ? 'Hoàn tiền' : !first || p.pay_date < first ? 'Đặt cọc' : 'Thanh toán', amount: Number(p.signed_amount) }));
+  return { groups, goods, vat, ship, ret, total: goods + vat + ship - ret, vatLabel: Number(o.vat_rate) ? `VAT ${fmtNum(o.vat_rate)}%` : null, pays };
+}
+// Từng đợt giao / hóa đơn (gộp ô STT, ngày, tổng), VAT, các lần thanh toán, còn phải thanh toán và dòng bằng chữ
+function payTable(data, N) {
+  const f = payFigures(data); const body = [];
+  f.groups.forEach((g, i) => {
+    const sum = g.lines.reduce((s, r) => s + Number(r.revenue), 0); const n = g.lines.length;
+    g.lines.forEach((l, j) => body.push([
+      ...(j ? [] : [{ text: String(i + 1), align: 'center', rowSpan: n, mid: true }, { text: dmy(g.date), sub: g.sub, align: 'center', rowSpan: n, mid: true }]),
       { text: l.product_name }, { text: N(l.qty), align: 'center' }, { text: l.unit, align: 'center' }, { text: N(l.unit_price_net), align: 'right' }, { text: N(l.revenue), align: 'right' },
       ...(j ? [] : [{ text: N(sum), align: 'right', b: true, rowSpan: n, mid: true }]),
     ]));
   });
   const sumRow = (label, val) => [{ text: '', colSpan: 3 }, null, null, { text: label, colSpan: 4, b: true }, null, null, null, { text: N(val), align: 'right', b: true }];
   const payRow = (left, label, val, b) => [{ text: '', colSpan: 2 }, null, { text: left, align: 'center' }, { text: label, colSpan: 4, b }, null, null, null, { text: N(val), align: 'right', b }];
-  const vat = Number(o.vat_net) || 0; const ship = Number(o.ship_billed) || 0; const ret = Number(o.returned_value) || 0;
-  const total = goods + vat + ship - ret;
-  body.push(sumRow('TỔNG TIỀN', goods));
-  if (Number(o.vat_rate)) body.push(sumRow(`VAT ${fmtNum(o.vat_rate)}%`, vat));
-  if (ship) body.push(sumRow('TIỀN VẬN CHUYỂN', ship));
-  if (ret) body.push(sumRow('HÀNG TRẢ LẠI', -ret));
-  body.push(sumRow('TỔNG THANH TOÁN (1)', total));
-  // Từng lần thu / hoàn tiền của đơn; thu trước đợt giao đầu tiên là tiền đặt cọc
-  const first = rows.length ? rows[0].delivery_date : null;
-  const pays = (data.pays || []).filter((p) => Number(p.signed_amount));
-  const paid = pays.reduce((s, p) => s + Number(p.signed_amount), 0);
+  body.push(sumRow('TỔNG TIỀN', f.goods));
+  if (f.vatLabel) body.push(sumRow(f.vatLabel, f.vat));
+  if (f.ship) body.push(sumRow('TIỀN VẬN CHUYỂN', f.ship));
+  if (f.ret) body.push(sumRow('HÀNG TRẢ LẠI', -f.ret));
+  body.push(sumRow('TỔNG THANH TOÁN (1)', f.total));
+  const paid = f.pays.reduce((s, p) => s + p.amount, 0);
   body.push(payRow('', 'ĐÃ THANH TOÁN (2)', paid, true));
-  for (const p of pays) body.push(payRow(dmy(p.pay_date), Number(p.signed_amount) < 0 ? 'Hoàn tiền' : !first || p.pay_date < first ? 'Đặt cọc' : 'Thanh toán', Number(p.signed_amount), false));
-  const due = total - paid;
+  for (const p of f.pays) body.push(payRow(dmy(p.date), p.label, p.amount, false));
+  const due = f.total - paid;
   body.push(payRow('', 'CÒN THANH TOÁN (3) = (1) - (2)', due, true));
   body.push([{ text: `Bằng chữ: ${moneyWords(due, false)}.`, colSpan: 8, align: 'center', b: true, i: true }, null, null, null, null, null, null, null]);
-  const head = ['STT', 'NGÀY GIAO', 'TÊN HÀNG', 'SỐ LƯỢNG', 'ĐVT', 'ĐƠN GIÁ', 'SỐ TIỀN', 'TỔNG THEO ĐƠN'];
+  const head = ['STT', data.invs ? 'NGÀY / HÓA ĐƠN' : 'NGÀY GIAO', 'TÊN HÀNG', 'SỐ LƯỢNG', 'ĐVT', 'ĐƠN GIÁ', 'SỐ TIỀN', data.invs ? 'TỔNG THEO HÓA ĐƠN' : 'TỔNG THEO ĐƠN'];
   return { html: htmlTable(head, body, [30, 68, '*', 54, 30, 54, 56, 64], 10, { headBg: '#d9d9d9' }), due };
 }
 function quoteTable(q, N) {

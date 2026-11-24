@@ -323,6 +323,10 @@ Có 5 loại chứng từ, xuất ra PDF khổ A4, dựng theo đúng mẫu cử
   - Đơn có hợp đồng thì ghi "THEO HỢP ĐỒNG SỐ …", chưa có hợp đồng thì ghi "THEO ĐƠN HÀNG SỐ …".
   - Khung **Bộ hồ sơ đối chiếu & giao hàng** bên trái tải một tệp PDF gồm đối chiếu công nợ, đối chiếu số lượng và biên bản bàn giao của từng đợt (theo ngày giao). Bỏ tick phần không cần, hoặc bỏ "Gộp vào một tệp PDF" để tải từng tệp.
   - Đầu bảng đối chiếu in **Tên viết tắt** của đơn vị (vd. CÔNG TY TNHH SX&TM THANH HẢI): khai ở Cài đặt → Mẫu in → Đơn vị phát hành; để trống thì in tên pháp lý.
+- **Đối chiếu nhiều hóa đơn của một khách:** Khách hàng → bấm vào khách → thẻ **Giấy tờ đơn hàng** → **Đối chiếu nhiều hóa đơn**. Lọc theo "Còn nợ" hoặc khoảng ngày, tích chọn các hóa đơn (ô tích ở đầu bảng chọn mọi hóa đơn đang hiện), rồi bấm **Đối chiếu công nợ** hoặc **Đối chiếu số lượng**: ra một bảng chung cho tất cả hóa đơn đã chọn.
+  - Mỗi hóa đơn một nhóm dòng (ngày và mã hóa đơn); phần đã thanh toán ghi từng lần thu kèm mã hóa đơn. Bảng ghi "THEO HÓA ĐƠN SỐ …" (từ 5 hóa đơn trở lên ghi số hóa đơn và khoảng ngày).
+  - Ngày đối chiếu mặc định là hôm nay và không lưu lại; đơn vị đứng tên và đầu trang sửa riêng thì lưu theo khách cho lần sau.
+  - Phần **Theo dõi giấy tờ từng đơn** (hợp đồng, biên bản, chứng nhận xuất xưởng, hóa đơn VAT) nằm ngay bên cạnh trong cùng thẻ.
 - **Giao nhanh / thu nhanh trên danh sách** mở chứng từ ở tab mới của trình duyệt. Trình duyệt chặn cửa sổ bật lên thì chứng từ mở ngay trong trang đang xem.
 
 ### Sửa đơn đã giao, đã thu và lịch sử đơn

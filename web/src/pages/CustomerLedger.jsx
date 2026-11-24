@@ -8,7 +8,7 @@ import { CustomerFiles } from './CustomerFiles.jsx';
 import { DocsBoardMini } from './OrderDocs.jsx';
 import { PaymentDetail } from './Cash.jsx';
 import { OrderDetail } from './Sales.jsx';
-import { Btn, Pill, StatusPill, DELIVERY, Field, Input, Select, DateInput, NumInput, Tabs, Loading, ErrorBox, Note, Table, Modal } from '../components/ui.jsx';
+import { Btn, Pill, StatusPill, DELIVERY, Field, Input, Select, DateInput, NumInput, Check, Tabs, Loading, ErrorBox, Note, Table, Modal } from '../components/ui.jsx';
 
 const METHODS = ['Chuyển khoản', 'Tiền mặt', 'Quẹt thẻ', 'Bù trừ'];
 
@@ -90,7 +90,7 @@ export function CustomerDetail({ id, onClose }) {
       </>}
       {tab === 'orders' && <OrdersTab id={id} usablePrepaid={L?.usable_prepaid || 0} />}
       {tab === 'ledger' && <LedgerTab id={id} />}
-      {tab === 'docs' && <DocsBoardMini params={{ customer_id: id }} showCustomer={false} />}
+      {tab === 'docs' && <CustomerDocsTab id={id} />}
       {tab === 'files' && <CustomerFiles customerId={id} customerName={c.name} />}
     </Modal>
   );
@@ -143,25 +143,33 @@ function LedgerTab({ id }) {
 // Đơn đặt hàng (DH) không phải hóa đơn nên không hiện; mỗi đợt giao của đơn đặt là một hóa đơn HD riêng (như trang Hóa đơn).
 // Mỗi hóa đơn có số đã thu / còn nợ riêng như KiotViet (v_order_invoices).
 // Đơn đã hủy không hiện. Bấm một dòng là chi tiết đơn xổ ra ngay dưới dòng.
-function OrdersTab({ id, usablePrepaid }) {
-  const { can } = useApp();
-  const { run, busy } = useAction();
-  const [only, setOnly] = useState('');
+// Hóa đơn của khách: đơn bán ngay (chính đơn là hóa đơn) và hóa đơn HD lập khi giao đơn đặt hàng; đơn đã hủy không có.
+// inv: khóa hóa đơn dùng khi lập bảng đối chiếu gộp ("o:<đơn>" / "d:<phiếu giao>").
+function useCustomerInvoices(id) {
   const q = useQ('sales_orders', [['customer_id', 'eq', id]], 'order_date desc', 5000);
   const dq = useQ('order_invoices', [['customer_id', 'eq', id]], 'delivery_date desc', 5000);
-  const rq = useQ('sales_returns', [['customer_id', 'eq', id]], 'return_date desc', 2000);
   const all = useMemo(() => {
-    if (!q.data || !dq.data) return [];
+    if (!q.data || !dq.data) return null;
     const direct = q.data.filter((o) => o.kind !== 'dat_hang' && o.status !== 'huy')
-      .map((o) => ({ ...o, key: o.id, type: 'ban', day: o.order_date, at: o.created_at, order_id: o.id }));
-    const fromOrders = dq.data.filter((d) => d.order_status !== 'huy').map((d) => ({ key: 'dl-' + d.id, type: 'ban', from_order: true, code: d.code,
+      .map((o) => ({ ...o, key: o.id, inv: `o:${o.id}`, type: 'ban', day: o.order_date, at: o.created_at, order_id: o.id }));
+    const fromOrders = dq.data.filter((d) => d.order_status !== 'huy').map((d) => ({ key: 'dl-' + d.id, inv: `d:${d.id}`, type: 'ban', from_order: true, code: d.code,
       order_code: d.order_code, order_id: d.order_id, day: d.delivery_date, at: d.created_at, staff: d.staff, net_total: d.total, paid_net: d.paid,
       receivable: d.debt, overdue_days: d.overdue_days, status: 'xac_nhan', delivery_status: 'da_giao_du', delivered_value: d.total }));
     return [...direct, ...fromOrders];
   }, [q.data, dq.data]);
+  return { all, error: q.error || dq.error };
+}
+
+function OrdersTab({ id, usablePrepaid }) {
+  const { can } = useApp();
+  const { run, busy } = useAction();
+  const [only, setOnly] = useState('');
+  const iq = useCustomerInvoices(id);
+  const rq = useQ('sales_returns', [['customer_id', 'eq', id]], 'return_date desc', 2000);
+  const all = iq.all || [];
   const owing = all.filter((o) => o.receivable > 0);
   const rows = useMemo(() => {
-    if (!q.data || !dq.data || !rq.data) return null;
+    if (!iq.all || !rq.data) return null;
     const rets = only === 'debt' ? [] : rq.data.map((r) => ({ key: r.id, type: 'tra', code: r.code, day: r.return_date, at: r.created_at, order_id: r.order_id, order_code: r.invoice_code || r.order_code, revenue: r.revenue, status: 'xac_nhan' }));
     return [...(only === 'debt' ? owing : all), ...rets].sort((a, b) => String(b.day).localeCompare(String(a.day)) || String(b.at).localeCompare(String(a.at)));
   }, [all, rq.data, only]);
@@ -178,7 +186,7 @@ function OrdersTab({ id, usablePrepaid }) {
           <Btn kind="soft" busy={busy} onClick={() => run('apply_prepaid', { customer_id: id }, (r) => `Đã trừ ${money(r.used)} đ tiền khách trả trước vào ${r.docs.join(', ')}`)}>
             Trừ {money(usablePrepaid)} đ khách trả trước vào đơn còn nợ</Btn>)}
       </div>
-      <ErrorBox error={q.error || dq.error || rq.error} />
+      <ErrorBox error={iq.error || rq.error} />
       <Table rows={rows} rowKey="key" expand={(o, close) => <OrderDetail id={o.order_id} onClose={close} />}
         rowClass={(o) => (o.overdue_days > 0 ? 'row-late' : '')}
         empty={only ? 'Không có đơn nào còn nợ' : 'Khách chưa mua hàng'}
@@ -196,6 +204,80 @@ function OrdersTab({ id, usablePrepaid }) {
             const pay = orderPayState(o);
             return <span className="row gap-s"><StatusPill map={DELIVERY} value={o.delivery_status} />{pay && <Pill tone={pay[1]}>{pay[0]}</Pill>}</span>;
           } },
+        ]} />
+    </div>
+  );
+}
+
+// ---------- Thẻ Giấy tờ đơn hàng ----------
+// Hai phần: lập bảng đối chiếu công nợ / số lượng gộp nhiều hóa đơn, và bảng theo dõi giấy tờ của từng đơn (nhớ phần xem lần trước).
+const DOCS_VIEW_KEY = 'gomsu.cust_docs_view';
+function CustomerDocsTab({ id }) {
+  const [view, setView0] = useState(() => { try { return localStorage.getItem(DOCS_VIEW_KEY) === 'track' ? 'track' : 'reconcile'; } catch (e) { return 'reconcile'; } });
+  const setView = (v) => { setView0(v); try { localStorage.setItem(DOCS_VIEW_KEY, v); } catch (e) { /* bỏ qua */ } };
+  return (
+    <div className="stack">
+      <div className="seg" role="group" aria-label="Giấy tờ đơn hàng">
+        <button type="button" className={view === 'reconcile' ? 'on' : ''} onClick={() => setView('reconcile')}>Đối chiếu nhiều hóa đơn</button>
+        <button type="button" className={view === 'track' ? 'on' : ''} onClick={() => setView('track')}>Theo dõi giấy tờ từng đơn</button>
+      </div>
+      {view === 'reconcile' ? <ReconcilePicker id={id} /> : <DocsBoardMini params={{ customer_id: id }} showCustomer={false} />}
+    </div>
+  );
+}
+
+// Chọn các hóa đơn của khách rồi lập một bảng đối chiếu công nợ / đối chiếu số lượng chung cho tất cả hóa đơn đã chọn.
+// Hóa đơn đã chọn vẫn được giữ khi đổi bộ lọc; nút lập bảng dùng mọi hóa đơn đã chọn.
+function ReconcilePicker({ id }) {
+  const { open } = useApp();
+  const iq = useCustomerInvoices(id);
+  const [only, setOnly] = useState('');
+  const [preset, setPreset] = useState('all'); const [from, setFrom] = useState(''); const [to, setTo] = useState('');
+  const [sel, setSel] = useState(() => new Set());
+  const [f, t] = preset === 'custom' ? [from || null, to || null] : presetRange(preset);
+  const all = useMemo(() => (iq.all || []).filter((o) => o.status !== 'nhap'), [iq.all]);
+  const rows = useMemo(() => (iq.all ? all.filter((o) => (!only || o.receivable > 0) && (!f || o.day >= f) && (!t || o.day <= t))
+    .sort((a, b) => String(b.day).localeCompare(String(a.day)) || String(b.at).localeCompare(String(a.at))) : null), [all, only, f, t]);
+  const chosen = all.filter((o) => sel.has(o.inv));
+  const hidden = chosen.filter((o) => !(rows || []).includes(o)).length;
+  const allOn = !!rows?.length && rows.every((o) => sel.has(o.inv));
+  const toggle = (k) => setSel((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+  const setShown = (on) => setSel((s) => { const n = new Set(s); for (const o of rows || []) if (on) n.add(o.inv); else n.delete(o.inv); return n; });
+  const sum = (k) => chosen.reduce((s, o) => s + (o[k] || 0), 0);
+  const make = (type) => open('doc', { kind: 'invoices', id, keys: chosen.map((o) => o.inv), type });
+  const owing = all.filter((o) => o.receivable > 0).length;
+  return (
+    <div className="stack">
+      <div className="row gap wrap">
+        <div className="seg" role="group" aria-label="Lọc hóa đơn">
+          <button type="button" className={only ? '' : 'on'} onClick={() => setOnly('')}>Tất cả ({all.length})</button>
+          <button type="button" className={only === 'debt' ? 'on' : ''} onClick={() => setOnly('debt')}>Còn nợ ({owing})</button>
+        </div>
+        <Select value={preset} onChange={(v) => setPreset(v || 'all')} options={[{ value: 'all', label: 'Toàn thời gian' }, ...TIME_PRESETS.filter((p) => p.value !== 'all'), { value: 'custom', label: 'Chọn ngày…' }]}
+          aria-label="Ngày hóa đơn" style={{ minWidth: 170 }} />
+        {preset === 'custom' && <><DateInput value={from} onChange={(v) => setFrom(v || '')} placeholder="Từ ngày" aria-label="Từ ngày" /><DateInput value={to} onChange={(v) => setTo(v || '')} placeholder="Đến ngày" aria-label="Đến ngày" /></>}
+      </div>
+      <div className="card recon-bar">
+        <span className="small">{chosen.length
+          ? <>Đã chọn <b>{chosen.length}</b> hóa đơn{hidden ? ` (${hidden} không hiện theo bộ lọc)` : ''} · tổng <b>{money(sum('net_total'))}</b> · đã thu {money(sum('paid_net'))} · còn nợ <b className={sum('receivable') > 0 ? 'bad' : ''}>{money(sum('receivable'))}</b>
+            {' '}<button type="button" className="link-btn small" onClick={() => setSel(new Set())}>Bỏ chọn</button></>
+          : 'Tích chọn các hóa đơn cần đối chiếu, rồi bấm lập bảng: một bảng chung cho tất cả hóa đơn đã chọn.'}</span>
+        <span className="row gap-s">
+          <Btn icon="print" disabled={!chosen.length} onClick={() => make('doi_chieu_sl')}>Đối chiếu số lượng</Btn>
+          <Btn kind="primary" icon="print" disabled={!chosen.length} onClick={() => make('doi_chieu_tt')}>Đối chiếu công nợ</Btn>
+        </span>
+      </div>
+      <ErrorBox error={iq.error} />
+      <Table dense rows={rows} rowKey="inv" onRow={(o) => toggle(o.inv)} rowClass={(o) => (sel.has(o.inv) ? 'row-picked' : '')}
+        empty={only || f || t ? 'Không có hóa đơn nào khớp bộ lọc' : 'Khách chưa có hóa đơn nào'}
+        columns={[
+          { key: 'x', width: 36, label: <span title={allOn ? 'Bỏ chọn các hóa đơn đang hiện' : 'Chọn mọi hóa đơn đang hiện'}><Check checked={allOn} disabled={!rows?.length} onChange={setShown} /></span>,
+            render: (o) => <span onClick={(e) => e.stopPropagation()}><Check checked={sel.has(o.inv)} onChange={() => toggle(o.inv)} /></span> },
+          { key: 'c', label: 'Mã hóa đơn', render: (o) => <><b>{o.code}</b>{o.from_order && <div className="cell-sub">từ đặt hàng {o.order_code}</div>}</> },
+          { key: 'dt', label: 'Ngày', className: 'nowrap', render: (o) => dmy(o.day) },
+          { key: 't', label: 'Tổng cộng', align: 'right', render: (o) => money(o.net_total) },
+          { key: 'p', label: 'Đã thu', align: 'right', render: (o) => (o.paid_net ? money(o.paid_net) : '') },
+          { key: 'd', label: 'Còn nợ', align: 'right', render: (o) => (o.receivable > 0 ? <b className={o.overdue_days > 0 ? 'bad' : ''}>{money(o.receivable)}</b> : '') },
         ]} />
     </div>
   );

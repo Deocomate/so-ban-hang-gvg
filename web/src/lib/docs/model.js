@@ -172,6 +172,7 @@ export async function loadDocData(q, rpc, src) {
     const info = await rpc('get_doc_info', { ref_type: 'payment', ref_id: src.id });
     return { kind: 'payment', p, party, info: info || {} };
   }
+  if (src.kind === 'invoices') return loadInvoices(q, rpc, src);
   if (src.kind === 'quote') {
     const [qu] = await q('quotes', [['id', 'eq', src.id]]);
     if (!qu) throw new Error('Không tìm thấy báo giá');
@@ -215,8 +216,68 @@ export async function loadDocData(q, rpc, src) {
   return { kind: src.kind, o, lines, dels, d, dlines, cust: custs[0] || null, prods: Object.fromEntries(prods.map((p) => [p.id, p])), orderInfo, delInfo, k, allDl, pays: pays || [], kInfo: kInfo || {}, driver: driver || null };
 }
 
+// ---------- Đối chiếu gộp nhiều hóa đơn của một khách ----------
+// Khóa hóa đơn: "o:<id đơn>" = đơn bán ngay (chính đơn là hóa đơn); "d:<id phiếu giao>" = hóa đơn HD lập khi giao đơn đặt hàng.
+const sumBy = (ls, f) => ls.reduce((s, x) => s + (Number(f(x)) || 0), 0);
+const payLabel = (signed, date, first) => (signed < 0 ? 'Hoàn tiền' : !first || date < first ? 'Đặt cọc' : 'Thanh toán');
+
+// src: {kind:'invoices', id: khách, keys: [khóa hóa đơn]} → mỗi hóa đơn: dòng đã giao, tiền hàng, VAT, cước, hàng trả, đã thu (từng lần thu)
+async function loadInvoices(q, rpc, src) {
+  const keys = src.keys || [];
+  if (!keys.length) throw new Error('Chưa chọn hóa đơn nào');
+  const oIds = keys.filter((k) => k.startsWith('o:')).map((k) => k.slice(2));
+  const dIds = keys.filter((k) => k.startsWith('d:')).map((k) => k.slice(2));
+  const [custs, os, ivs] = await Promise.all([q('customers', [['id', 'eq', src.id]]),
+    oIds.length ? q('sales_orders', [['id', 'in', oIds]]) : [], dIds.length ? q('order_invoices', [['id', 'in', dIds]]) : []]);
+  const cust = custs[0];
+  if (!cust) throw new Error('Không tìm thấy khách hàng');
+  // Chỉ lấy hóa đơn còn hiệu lực của đúng khách này
+  const directs = os.filter((o) => o.customer_id === cust.id && !['huy', 'nhap'].includes(o.status));
+  const dinvs = ivs.filter((d) => d.customer_id === cust.id && d.order_status !== 'huy');
+  if (!directs.length && !dinvs.length) throw new Error('Các hóa đơn đã chọn không còn hiệu lực');
+  const orderIds = [...new Set([...directs.map((o) => o.id), ...dinvs.map((d) => d.order_id)])];
+  const [dlA, dlB, pays, info] = await Promise.all([
+    directs.length ? q('delivery_lines', [['order_id', 'in', directs.map((o) => o.id)]], 'delivery_date', 5000) : [],
+    dinvs.length ? q('delivery_lines', [['delivery_id', 'in', dinvs.map((d) => d.id)]], 'delivery_date', 5000) : [],
+    q('doc_payments', [['doc_id', 'in', orderIds]], 'pay_date', 5000),
+    rpc('get_doc_info', { ref_type: 'customer', ref_id: cust.id }),
+  ]);
+  const invs = [];
+  for (const o of directs) {
+    const lines = dlA.filter((l) => l.order_id === o.id);
+    const first = lines.length ? lines.map((l) => l.delivery_date).sort()[0] : o.order_date;
+    const goods = sumBy(lines, (l) => l.revenue); const ship = Number(o.ship_billed) || 0; const ret = Number(o.returned_value) || 0; const total = Number(o.delivered_value) || 0;
+    const ps = pays.filter((p) => p.doc_id === o.id && Number(p.signed_amount)).map((p) => ({ date: p.pay_date, label: payLabel(Number(p.signed_amount), p.pay_date, first), amount: Number(p.signed_amount) }));
+    invs.push({ key: `o:${o.id}`, code: o.code, date: o.order_date, order_code: o.code, vat_rate: Number(o.vat_rate) || 0, lines, goods, ship, ret, total, vat: total - goods - ship + ret,
+      paid: Number(o.paid_net) || 0, pays: ps });
+  }
+  for (const d of dinvs) {
+    const lines = dlB.filter((l) => l.delivery_id === d.id); const rate = Number(d.vat_rate) || 0;
+    const goods = sumBy(lines, (l) => l.revenue); const ship = Number(d.shipping_fee) || 0; const total = Number(d.total) || 0;
+    const back = sumBy(lines, (l) => (Number(l.qty) ? (Number(l.returned_qty) * Number(l.revenue)) / Number(l.qty) : 0));
+    const ret = Math.round(back) + Math.round((back * rate) / 100);
+    // Đã thu của hóa đơn = cọc trừ khi giao + phiếu thu gắn thẳng vào hóa đơn + phần thu theo đơn được chia cho hóa đơn (v_order_invoices)
+    const ps = [];
+    // Ngày cọc: chỉ ghi khi đơn có đúng một lần thu theo đơn trước ngày giao
+    const dep = pays.filter((x) => x.doc_id === d.order_id && !x.delivery_id && x.kind === 'thu_khach' && x.pay_date <= d.delivery_date);
+    if (Number(d.deposit_used)) ps.push({ date: dep.length === 1 ? dep[0].pay_date : '', label: 'Đặt cọc', amount: Number(d.deposit_used) });
+    for (const p of pays.filter((x) => x.delivery_id === d.id && x.kind === 'thu_khach' && Number(x.signed_amount))) ps.push({ date: p.pay_date, label: 'Thanh toán', amount: Number(p.signed_amount) });
+    const rest = (Number(d.paid) || 0) - sumBy(ps, (p) => p.amount);
+    if (Math.abs(rest) >= 1) ps.push({ date: '', label: `Thanh toán theo đơn ${d.order_code}`, amount: rest });
+    invs.push({ key: `d:${d.id}`, code: d.code, date: d.delivery_date, order_code: d.order_code, vat_rate: rate, lines, goods, ship, ret, total, vat: total - goods - ship + ret,
+      paid: Number(d.paid) || 0, pays: ps });
+  }
+  invs.sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.code).localeCompare(String(b.code)));
+  // Dòng đã giao theo thứ tự hóa đơn, mã đợt giao = mã hóa đơn; các phiếu giao để in kèm biên bản bàn giao
+  const allDl = invs.flatMap((iv) => iv.lines.map((l) => ({ ...l, delivery_code: iv.code })));
+  const dels = [...new Map([...dlA, ...dlB].map((l) => [l.delivery_id, { id: l.delivery_id, code: l.delivery_code, delivery_date: l.delivery_date }])).values()];
+  return { kind: 'invoices', cust, invs, allDl, dels, lines: [], pays: [], prods: {}, k: null, info: info || {},
+    o: { id: null, code: cust.code, customer_name: cust.name, customer_phone: cust.phone, customer_address: cust.address } };
+}
+
 // Thông tin sửa được của chứng từ được lưu ở đâu (đơn / phiếu giao / phiếu thu)
 export function infoRef(type, data) {
+  if (data.kind === 'invoices') return { ref_type: 'customer', ref_id: data.cust.id };
   if (data.kind === 'payment') return { ref_type: 'payment', ref_id: data.p.id };
   if (data.kind === 'quote') return { ref_type: 'quote', ref_id: data.q.id };
   if (data.kind === 'contract') return { ref_type: 'contract', ref_id: data.k.id };
@@ -224,7 +285,7 @@ export function infoRef(type, data) {
   return { ref_type: 'order', ref_id: data.o.id };
 }
 export function currentInfo(type, data) {
-  if (data.kind === 'payment' || data.kind === 'quote') return data.info;
+  if (data.kind === 'payment' || data.kind === 'quote' || data.kind === 'invoices') return data.info;
   if (data.kind === 'contract') return data.kInfo;
   if (PER_DELIVERY.includes(type) && data.d) return { ...pick(data.orderInfo, ['recv_phone', 'recv_address', 'recv_name', 'recv_party']), ...data.delInfo };
   return data.orderInfo;

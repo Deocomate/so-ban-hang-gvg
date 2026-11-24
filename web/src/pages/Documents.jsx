@@ -13,7 +13,10 @@ import { sampleData } from '../lib/docs/tokens.js';
 
 import { useDocFonts } from '../lib/docs/fonts.js';
 
-const TYPES_FOR = { quote: ['bao_gia'], contract: ['de_nghi_tam_ung', 'doi_chieu_sl', 'doi_chieu_tt', 'de_nghi_tt'], order: ['hoa_don', 'don_dat_hang', 'bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen', 'yeu_cau_vat', 'cn_xuat_xuong', 'doi_chieu_tt', 'doi_chieu_sl'], delivery: ['bien_ban', 'hoa_don', 'hd_van_chuyen', 'phieu_xuat_kho', 'don_dat_hang', 'yeu_cau_vat', 'cn_xuat_xuong'], payment: ['phieu_thu'] };
+const TYPES_FOR = { quote: ['bao_gia'], contract: ['de_nghi_tam_ung', 'doi_chieu_sl', 'doi_chieu_tt', 'de_nghi_tt'], order: ['hoa_don', 'don_dat_hang', 'bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen', 'yeu_cau_vat', 'cn_xuat_xuong', 'doi_chieu_tt', 'doi_chieu_sl'], delivery: ['bien_ban', 'hoa_don', 'hd_van_chuyen', 'phieu_xuat_kho', 'don_dat_hang', 'yeu_cau_vat', 'cn_xuat_xuong'], payment: ['phieu_thu'],
+  invoices: ['doi_chieu_tt', 'doi_chieu_sl'] };
+// Chứng từ không lập theo một đơn / phiếu giao (không đổi được "Lập theo")
+const STANDALONE = ['payment', 'contract', 'quote', 'invoices'];
 
 // ---------- Bản xem trước: vẽ từ chính tệp PDF sẽ tải / in, nên chia trang và xuống dòng giống hệt đầu ra ----------
 // "PDF / In": từng trang theo khổ giấy; "Ảnh": cả chứng từ trên một trang dài như khi Tải ảnh.
@@ -174,7 +177,7 @@ export function docPageUrl({ book, kind, id, type, pay }) {
 export function readDocPage() {
   try {
     const u = new URLSearchParams(location.search); const [kind, id] = String(u.get('doc') || '').split(':');
-    return kind && id && TYPES_FOR[kind] ? { kind, id, type: u.get('type') || undefined, pay: u.get('pay') || undefined, book: u.get('book') || undefined } : null;
+    return kind && id && TYPES_FOR[kind] && kind !== 'invoices' ? { kind, id, type: u.get('type') || undefined, pay: u.get('pay') || undefined, book: u.get('book') || undefined } : null;
   } catch (e) { return null; }
 }
 // Mở sẵn tab trống ngay lúc bấm (trình duyệt chỉ cho mở tab mới trong lúc người dùng bấm),
@@ -349,13 +352,14 @@ function DriverPick({ value, drivers, onPick, onText }) {
   );
 }
 
-export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
+// kind 'invoices': bảng đối chiếu gộp các hóa đơn keys của khách id
+export function DocDialog({ kind, id, keys, type: type0, pay, page, onClose }) {
   const { q, rpc, book, settings, can, toast } = useApp();
   const ds = useMemo(() => docSettings(book, settings), [book, settings]);
   const withPay = !!pay && kind !== 'payment';
   const types = withPay ? ['phieu_thu', ...TYPES_FOR[kind]] : TYPES_FOR[kind];
   const [type, setType] = useState(type0 && types.includes(type0) ? type0 : types[0]);
-  const [src, setSrc] = useState(withPay && (type0 ? type0 === 'phieu_thu' : true) ? { kind: 'payment', id: pay } : { kind, id });
+  const [src, setSrc] = useState(withPay && (type0 ? type0 === 'phieu_thu' : true) ? { kind: 'payment', id: pay } : { kind, id, keys });
   const [data, setData] = useState(null); const [err, setErr] = useState(null);
   const [edit, setEdit] = useState({}); const [busy, setBusy] = useState(false); const [reload, setReload] = useState(0);
   const [showForm, setShowForm] = useState(true);
@@ -378,36 +382,38 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
     // Thẻ Phiếu thu đọc phiếu thu; các thẻ còn lại quay về đợt giao / đơn ban đầu
     if (withPay && type === 'phieu_thu') { if (src.kind !== 'payment') setSrc({ kind: 'payment', id: pay }); return; }
     if (withPay && src.kind === 'payment') { setSrc({ kind, id }); return; }
-    if (!data || data.srcKey !== srcKey || ['payment', 'contract', 'quote'].includes(data.kind)) return;
+    if (!data || data.srcKey !== srcKey || STANDALONE.includes(data.kind)) return;
     if (!perDelivery && src.kind === 'delivery') setSrc({ kind: 'order', id: data.o.id });
   }, [type, data]);
   useEffect(() => { setEdit({}); }, [type, src.kind, src.id]);
 
   // Đề nghị thanh toán chỉ lập sau khi đã hoàn tất đối chiếu
-  const company = !!data?.o && isCompany(data.cust, settings);
+  const company = !!data?.o && data.kind !== 'invoices' && isCompany(data.cust, settings);
   // Bảng đối chiếu chỉ lập khi đơn đã có ít nhất một đợt giao
   const delivered = (data?.dels || []).length > 0;
-  const tabTypes = types.filter((t) => (t !== 'de_nghi_tt' || data?.k?.reconciled_at) && (t !== 'yeu_cau_vat' || company) && (!RECONCILE.includes(t) || data?.kind === 'contract' || delivered));
+  const tabTypes = types.filter((t) => (t !== 'de_nghi_tt' || data?.k?.reconciled_at) && (t !== 'yeu_cau_vat' || company) && (!RECONCILE.includes(t) || ['contract', 'invoices'].includes(data?.kind) || delivered));
   // In / tải xong biên bản giao hàng của khách công ty → nhắc bước xuất hóa đơn VAT
   const afterExport = (done) => { if (company && done.includes('bien_ban')) setRemindVat(true); };
   // Chỉ dựng khi dữ liệu đã nạp khớp với thẻ đang chọn (đổi thẻ Phiếu thu ↔ Biên bản phải chờ nạp lại)
   const ready = data && data.srcKey === srcKey && (type === 'phieu_thu') === (data.kind === 'payment')
-    && (['payment', 'contract', 'quote'].includes(data.kind) || !(perDelivery ? false : src.kind === 'delivery'));
+    && (STANDALONE.includes(data.kind) || !(perDelivery ? false : src.kind === 'delivery'));
   const fields = ready ? editableFields(type, data) : [];
   const saved = ready ? currentInfo(type, data) || {} : {};
   const info = ready ? { ...defaults(type, data, ds), ...saved, ...edit } : null;
   const doc = useMemo(() => { if (!ready) return null; try { return applyExportOpts(buildPrintDoc(type, data, ds, info, tplPick[type]), opts); } catch (e) { return { error: e.message }; } }, [ready, type, data, ds, JSON.stringify(info), tplPick[type], opts]);
   const tpls = templatesFor(ds, type);
-  const dirty = Object.keys(edit).length > 0;
+  // Bảng gộp nhiều hóa đơn: ngày đối chiếu chỉ dùng cho lần xuất này (mặc định hôm nay), không lưu vào hồ sơ khách
+  const localOnly = (k) => data?.kind === 'invoices' && k.startsWith('date_');
+  const dirty = Object.keys(edit).some((k) => !localOnly(k));
   const canSave = data?.kind === 'payment' ? can('thu_chi') : can('ban_hang');
-  const subtitle = !data ? null : data.kind === 'payment' ? `Phiếu ${data.p.code}` : data.kind === 'quote' ? `Báo giá ${data.q.code} · ${data.q.customer_name}` : data.kind === 'contract' ? `Hợp đồng ${data.k.code} · ${data.o.customer_name}` : null;
+  const subtitle = !data ? null : data.kind === 'payment' ? `Phiếu ${data.p.code}` : data.kind === 'quote' ? `Báo giá ${data.q.code} · ${data.q.customer_name}` : data.kind === 'contract' ? `Hợp đồng ${data.k.code} · ${data.o.customer_name}` : data.kind === 'invoices' ? `${data.cust.name} · ${data.invs.length} hóa đơn` : null;
 
   const save = async () => {
     if (!dirty || !canSave) return true;
     const ref = infoRef(type, data);
     try {
-      await rpc('save_doc_info', { ...ref, data: Object.fromEntries(Object.entries(edit).map(([k, v]) => [k, v === null || v === undefined ? '' : String(v)])) });
-      setEdit({}); setReload((x) => x + 1); return true;
+      await rpc('save_doc_info', { ...ref, data: Object.fromEntries(Object.entries(edit).filter(([k]) => !localOnly(k)).map(([k, v]) => [k, v === null || v === undefined ? '' : String(v)])) });
+      setEdit((s) => Object.fromEntries(Object.entries(s).filter(([k]) => localOnly(k)))); setReload((x) => x + 1); return true;
     } catch (e) { toast(e.message, 'err'); return false; }
   };
   const download = async () => {
@@ -461,9 +467,10 @@ export function DocDialog({ kind, id, type: type0, pay, page, onClose }) {
         <div className="doc-wrap">
           <div className="doc-side">
             {kind === 'delivery' && <BatchExport deliveryId={id} pay={withPay ? pay : null} ds={ds} beforeExport={save} company={company} onDone={afterExport} xopts={opts} />}
-            {RECONCILE.includes(type) && delivered && (kind === 'order' || kind === 'contract') && <ReconcilePack src={{ kind, id }} dels={data.dels} ds={ds} beforeExport={save} xopts={opts} />}
+            {RECONCILE.includes(type) && delivered && ['order', 'contract', 'invoices'].includes(kind) && <ReconcilePack src={{ kind, id, keys }} dels={data.dels} ds={ds} beforeExport={save} xopts={opts} />}
+            {kind === 'invoices' && data.invs && <div className="muted small">Gộp {data.invs.length} hóa đơn: {data.invs.map((iv) => iv.code).join(', ')}.</div>}
             {RECONCILE.includes(type) && kind === 'order' && !data?.k && <div className="muted small">Đơn chưa có hợp đồng: bảng ghi "Theo đơn hàng số {data?.o?.code}".</div>}
-            {perDelivery && !['payment', 'contract', 'quote'].includes(data.kind) && (
+            {perDelivery && !STANDALONE.includes(data.kind) && (
               <Field label="Lập theo">
                 <Select value={src.kind === 'delivery' ? src.id : ''} onChange={(v) => setSrc(v ? { kind: 'delivery', id: v } : { kind: 'order', id: data.o.id })}
                   options={[{ value: '', label: 'Cả đơn (hàng còn trong đơn)' }, ...dels.map((d) => ({ value: d.id, label: `Phiếu giao ${d.code} · ${dmy(d.delivery_date)}` }))]} />

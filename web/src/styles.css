@@ -312,6 +312,8 @@ span.cal-title { cursor: default; }
 .tbl-empty { text-align: center; color: var(--muted); padding: 24px !important; }
 .tbl tr.row-late td:first-child { box-shadow: inset 3px 0 0 var(--bad); }
 .tbl tr.row-warn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+.tbl tr.row-picked td { background: color-mix(in srgb, var(--accent-2) 55%, var(--surface)); }
+.recon-bar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 2; }
 .tbl tr.row-void td { color: var(--muted); text-decoration: line-through; }
 .cell-main { font-weight: 500; } .cell-sub { font-size: 12px; color: var(--muted); }
 .thumb { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; background: var(--surface-2); display: inline-grid; place-items: center; color: var(--muted); flex: none; }

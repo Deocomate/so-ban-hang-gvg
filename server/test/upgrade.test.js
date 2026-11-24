@@ -36,7 +36,9 @@ const oldSchema = fs.readFileSync(path.join(here, '../src/db/schema.sql'), 'utf8
   .replace(/,\r?\n\s*unit_price real,\r?\n\s*discount real not null default 0\r?\n\);/, '\n);')
   .replace(/,\r?\n\s*cancelled_at text, cancel_reason text\r?\n\);/, '\n);')
   // Chấm công trước khi có nửa ngày và cờ nhân viên tự chấm
-  .replace("'di_lam','nua_ngay','nghi_phep'", "'di_lam','nghi_phep'").replace(/\r?\n\s*self_marked integer[^\n]*/, '');
+  .replace("'di_lam','nua_ngay','nghi_phep'", "'di_lam','nghi_phep'").replace(/\r?\n\s*self_marked integer[^\n]*/, '')
+  // Thông tin chứng từ trước khi lưu được bảng đối chiếu theo khách
+  .replace("'contract','quote','customer'", "'contract','quote'");
 const old = new Database(file);
 old.exec(oldSchema);
 const now = new Date().toISOString();
@@ -72,7 +74,8 @@ C('Đã sao lưu trước khi nâng cấp', fs.existsSync(`${file}.truoc-nang-ca
 const bak = new Database(`${file}.truoc-nang-cap-v1.bak`, { readonly: true });
 C('Bản sao lưu còn cấu trúc cũ', bak.prepare(`select 1 from pragma_table_info('products') where name = 'price4'`).get(), undefined);
 bak.close();
-C('Lên phiên bản mới', db.pragma('user_version', { simple: true }), 14);
+C('Lên phiên bản mới', db.pragma('user_version', { simple: true }), 15);
+C('Thông tin chứng từ nhận thêm bảng đối chiếu theo khách', /'customer'/.test(db.prepare(`select sql from sqlite_master where name = 'doc_info'`).get().sql), true);
 C('Đơn nhập kho ngay lúc lập thành phiếu nhập, đơn đặt giữ nguyên', db.prepare(`select id, mode from purchase_orders order by id`).all(), [{ id: 'po1', mode: 'nhap' }, { id: 'po2', mode: 'dat' }]);
 C('Giá trước giảm giá của dòng cũ bằng giá nhập', db.prepare(`select unit_price, discount from purchase_order_lines where id = 'pl2'`).get(), { unit_price: 120, discount: 0 });
 C('Phiếu trả cũ nhận nhà cung cấp của đơn, giá trả lại = giá nhập', db.prepare(`select r.supplier_id, l.unit_price, l.cost_value, l.value from supplier_returns r join supplier_return_lines l on l.return_id = r.id`).get(),

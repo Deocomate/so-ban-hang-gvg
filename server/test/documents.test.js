@@ -63,6 +63,9 @@ const hd = await api.call('get_doc_info', { book_id: TH, ref_type: 'order', ref_
 C('Đầu trang sửa riêng theo chứng từ; bỏ trường lạ', [hd.hdr_hoa_don_address, hd.hdr_hoa_don_website, hd.hdr_hoa_don_hack], ['Chi nhánh Hưng Yên', '-', undefined]);
 await E('Không lưu được vào chứng từ của sổ khác', () => api.call('save_doc_info', { book_id: VG, ref_type: 'order', ref_id: o.id, data: { note: 'x' } }), 'Không tìm thấy');
 await E('Loại chứng từ lạ bị chặn', () => api.call('save_doc_info', { book_id: TH, ref_type: 'xyz', ref_id: o.id, data: {} }), 'Không tìm thấy');
+await api.call('save_doc_info', { book_id: TH, ref_type: 'customer', ref_id: kh, data: { profile_doi_chieu_tt: 'p2', hdr_doi_chieu_tt_phone: '0912345678' } });
+C('Bảng đối chiếu gộp nhiều hóa đơn: lưu theo khách', await api.call('get_doc_info', { book_id: TH, ref_type: 'customer', ref_id: kh }), { profile_doi_chieu_tt: 'p2', hdr_doi_chieu_tt_phone: '0912345678' });
+await E('Không lưu được vào khách của sổ khác', () => api.call('save_doc_info', { book_id: VG, ref_type: 'customer', ref_id: kh, data: { note: 'x' } }), 'Không tìm thấy');
 api.as(staff);
 await api.call('save_doc_info', { book_id: TH, ref_type: 'order', ref_id: o.id, data: { note: 'Giao giờ hành chính' } });
 C('Nhân viên bán hàng lưu được thông tin đơn', (await api.call('get_doc_info', { book_id: TH, ref_type: 'order', ref_id: o.id })).note, 'Giao giờ hành chính');

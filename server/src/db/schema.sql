@@ -710,7 +710,7 @@ create index if not exists carrier_webhook_log_idx on carrier_webhook_log (recei
 -- ---------- THÔNG TIN RIÊNG CỦA CHỨNG TỪ IN ----------
 create table if not exists doc_info (
   book_id text not null references books(id) on delete cascade,
-  ref_type text not null check (ref_type in ('order','delivery','payment','contract','quote')),
+  ref_type text not null check (ref_type in ('order','delivery','payment','contract','quote','customer')),
   ref_id text not null,
   data text not null default '{}',
   updated_by text, updated_at text not null,

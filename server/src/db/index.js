@@ -11,7 +11,7 @@ import { addAnamtileBook, defaultDocs, VARIANTS } from '../domain/books.js';
 import { DEFAULT_ROLES } from '../lib/labels.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const SCHEMA_VERSION = 14;
+const SCHEMA_VERSION = 15;
 
 // Bảng ghi nhật ký chỉnh sửa; cột bỏ qua khi so sánh UPDATE (do hệ thống tự cập nhật)
 const AUDIT_TABLES = {
@@ -185,12 +185,13 @@ function applyBookProfiles(db) {
   }
 }
 
-// Bảng thông tin chứng từ cũ chỉ nhận order/delivery/payment; dựng lại để nhận thêm hợp đồng và báo giá
+// Bảng thông tin chứng từ cũ chỉ nhận một số loại (order/delivery/payment, rồi thêm hợp đồng, báo giá);
+// dựng lại để nhận đủ các loại hiện có, kể cả bảng đối chiếu gộp nhiều hóa đơn lưu theo khách (customer)
 function widenDocInfo(db) {
   const t = db.prepare(`select sql from sqlite_master where type = 'table' and name = 'doc_info'`).get();
-  if (t.sql.includes("'contract'")) return;
+  if (t.sql.includes("'customer'")) return;
   db.transaction(() => {
-    db.exec(t.sql.replace('doc_info', 'doc_info_new').replace("('order','delivery','payment')", "('order','delivery','payment','contract','quote')"));
+    db.exec(t.sql.replace('doc_info', 'doc_info_new').replace(/ref_type in \([^)]*\)/, "ref_type in ('order','delivery','payment','contract','quote','customer')"));
     db.exec(`insert into doc_info_new select * from doc_info; drop table doc_info; alter table doc_info_new rename to doc_info;`);
   })();
 }
