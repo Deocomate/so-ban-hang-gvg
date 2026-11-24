@@ -133,7 +133,7 @@ export function update_book_settings(p) {
 
 // ---------- Mẫu in (Cài đặt → Mẫu in) ----------
 // settings.docs.templates = { <loại chứng từ>: [{ id, name, html, paper, orient, margin:{top,right,bottom,left} (mm), sep, is_default, updated_at }] }
-const DOC_KINDS = ['hoa_don', 'don_dat_hang', 'bien_ban', 'phieu_xuat_kho', 'phieu_thu', 'hd_van_chuyen', 'de_nghi_tam_ung', 'doi_chieu_sl', 'doi_chieu_tt', 'de_nghi_tt', 'bao_gia', 'cn_xuat_xuong', 'phieu_dong_hang'];
+const DOC_KINDS = ['hoa_don', 'don_dat_hang', 'bien_ban', 'phieu_xuat_kho', 'phieu_thu', 'hd_van_chuyen', 'de_nghi_tam_ung', 'doi_chieu_sl', 'doi_chieu_tt', 'de_nghi_tt', 'bao_gia', 'yeu_cau_vat', 'cn_xuat_xuong', 'phieu_dong_hang'];
 const PAPERS = ['A4', 'A5', 'K80', 'K58'];
 const MAX_TEMPLATE = 600000; const MAX_ALL_TEMPLATES = 3000000;
 function cleanTemplate(t, i) {

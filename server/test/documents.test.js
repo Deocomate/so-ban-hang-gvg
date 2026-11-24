@@ -102,6 +102,9 @@ G('4. Mẫu in sửa trực quan');
   C('Chọn mẫu mặc định khác', (await st()).templates.bien_ban.map((t) => t.is_default), [false, true]);
   await api.call('save_print_templates', { book_id: TH, doc_type: 'bien_ban', templates: [] });
   C('Xóa hết mẫu riêng: quay về mẫu mặc định', (await st()).templates.bien_ban, undefined);
+  for (const t of ['yeu_cau_vat', 'cn_xuat_xuong', 'phieu_dong_hang']) await api.call('save_print_templates', { book_id: TH, doc_type: t, templates: [tpl('v')] });
+  { const tp = (await st()).templates; C('Lưu được mẫu riêng cho phiếu yêu cầu xuất VAT, chứng nhận xuất xưởng, phiếu đóng hàng', [tp.yeu_cau_vat?.length, tp.cn_xuat_xuong?.length, tp.phieu_dong_hang?.length], [1, 1, 1]); }
+  for (const t of ['yeu_cau_vat', 'cn_xuat_xuong', 'phieu_dong_hang']) await api.call('save_print_templates', { book_id: TH, doc_type: t, templates: [] });
   await E('Loại chứng từ lạ bị chặn', () => api.call('save_print_templates', { book_id: TH, doc_type: 'xyz', templates: [] }), 'không hợp lệ');
   await E('Mẫu trống bị chặn', () => api.call('save_print_templates', { book_id: TH, doc_type: 'hoa_don', templates: [tpl('a', { html: ' ' })] }), 'trống');
   await E('Trùng mã mẫu bị chặn', () => api.call('save_print_templates', { book_id: TH, doc_type: 'hoa_don', templates: [tpl('a'), tpl('a')] }), 'Trùng');
