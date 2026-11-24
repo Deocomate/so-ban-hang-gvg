@@ -23,7 +23,7 @@ function ledgerEvents(book, cid) {
     ev.push({ key: 'od:' + d.id, type: 'no_cu', title: owe ? 'Nợ cũ' : 'Trả trước từ sổ cũ', date: d.debt_date, at: d.created_at, code: d.code,
       note: d.note || (owe ? 'Nợ chuyển từ sổ cũ' : 'Tiền khách trả trước chuyển từ sổ cũ'), col: owe ? 'no' : 'thu', amount: d.amount });
   }
-  const dels = all(`select d.id, d.code, d.delivery_date, d.created_at, d.shipping_fee, o.id as order_id, o.code as order_code, o.vat_rate,
+  const dels = all(`select d.id, d.code, d.delivery_date, d.created_at, d.shipping_fee, o.id as order_id, o.code as order_code, o.vat_rate, o.kind,
       coalesce((select sum(x.revenue) from delivery_lines x where x.delivery_id = d.id), 0) as revenue,
       (select count(*) from deliveries d2 where d2.order_id = d.order_id) as n
     from deliveries d join sales_orders o on o.id = d.order_id where o.book_id = ? and o.customer_id = ? order by d.delivery_date, d.created_at`, book, cid);
@@ -34,9 +34,10 @@ function ledgerEvents(book, cid) {
     const same = d.code === d.order_code;
     ev.push({ key: 'dl:' + d.id, type: 'ban_hang', title: d.n > 1 ? `Giao đợt ${seq[d.order_id]} của đơn ${d.order_code}` : same ? '' : `Giao hàng đơn ${d.order_code}`,
       date: d.delivery_date, at: d.created_at, code: d.code, order_id: d.order_id, col: 'no',
+      delivery_id: d.kind === 'dat_hang' ? d.id : null,   // hóa đơn HD của đơn đặt hàng: mở chi tiết riêng hóa đơn đó
       amount: d.revenue + roundVat(d.revenue, d.vat_rate) + d.shipping_fee });
   }
-  for (const r of all(`select r.id, r.code, r.return_date, r.created_at, r.reason, o.id as order_id, o.code as order_code, o.vat_rate,
+  for (const r of all(`select r.id, r.code, r.return_date, r.created_at, r.reason, o.id as order_id, o.code as order_code, o.vat_rate, o.kind,
       coalesce((select sum(x.revenue) from sales_return_lines x where x.return_id = r.id), 0) as revenue
     from sales_returns r join sales_orders o on o.id = r.order_id where o.book_id = ? and o.customer_id = ?`, book, cid)) {
     ev.push({ key: 'rt:' + r.id, type: 'tra_hang', title: `Khách trả hàng đơn ${r.order_code}`, note: r.reason || null, date: r.return_date, at: r.created_at,

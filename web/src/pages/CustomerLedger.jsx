@@ -7,7 +7,7 @@ import { TIME_PRESETS, presetRange } from '../components/DocFilters.jsx';
 import { CustomerFiles } from './CustomerFiles.jsx';
 import { DocsBoardMini } from './OrderDocs.jsx';
 import { PaymentDetail } from './Cash.jsx';
-import { OrderDetail } from './Sales.jsx';
+import { SaleDetail } from './OrderInvoice.jsx';
 import { Btn, Pill, StatusPill, DELIVERY, Field, Input, Select, DateInput, NumInput, Check, Tabs, Loading, ErrorBox, Note, Table, Modal } from '../components/ui.jsx';
 
 const METHODS = ['Chuyển khoản', 'Tiền mặt', 'Quẹt thẻ', 'Bù trừ'];
@@ -126,7 +126,7 @@ function LedgerTab({ id }) {
       <ErrorBox error={led.error} />
       <Table rows={rows} rowKey="key" empty={filtered ? 'Không có giao dịch nào trong thời gian này' : 'Khách chưa có giao dịch nào'}
         rowClass={(r) => (r.mark ? 'row-strong' : '')}
-        expand={(r, close) => (r.payment_id ? <PaymentDetail id={r.payment_id} onClose={close} /> : r.order_id ? <OrderDetail id={r.order_id} onClose={close} /> : null)}
+        expand={(r, close) => (r.payment_id ? <PaymentDetail id={r.payment_id} onClose={close} /> : r.order_id ? <SaleDetail orderId={r.order_id} deliveryId={r.delivery_id} onClose={close} /> : null)}
         foot={L && L.rows.length ? { c: `${L.rows.length} giao dịch`, v: money(sum('debt') - sum('paid')), b: <Balance v={L.closing} /> } : null}
         columns={[
           { key: 'c', label: 'Mã phiếu', render: (r) => (r.mark ? <b>{r.mark}</b> : <b className={r.payment_id ? 'accent' : ''}>{r.code}</b>) },
@@ -152,7 +152,7 @@ function useCustomerInvoices(id) {
     if (!q.data || !dq.data) return null;
     const direct = q.data.filter((o) => o.kind !== 'dat_hang' && o.status !== 'huy')
       .map((o) => ({ ...o, key: o.id, inv: `o:${o.id}`, type: 'ban', day: o.order_date, at: o.created_at, order_id: o.id }));
-    const fromOrders = dq.data.filter((d) => d.order_status !== 'huy').map((d) => ({ key: 'dl-' + d.id, inv: `d:${d.id}`, type: 'ban', from_order: true, code: d.code,
+    const fromOrders = dq.data.filter((d) => d.order_status !== 'huy').map((d) => ({ key: 'dl-' + d.id, inv: `d:${d.id}`, delivery_id: d.id, type: 'ban', from_order: true, code: d.code,
       order_code: d.order_code, order_id: d.order_id, day: d.delivery_date, at: d.created_at, staff: d.staff, net_total: d.total, paid_net: d.paid,
       receivable: d.debt, overdue_days: d.overdue_days, status: 'xac_nhan', delivery_status: 'da_giao_du', delivered_value: d.total }));
     return [...direct, ...fromOrders];
@@ -187,7 +187,7 @@ function OrdersTab({ id, usablePrepaid }) {
             Trừ {money(usablePrepaid)} đ khách trả trước vào đơn còn nợ</Btn>)}
       </div>
       <ErrorBox error={iq.error || rq.error} />
-      <Table rows={rows} rowKey="key" expand={(o, close) => <OrderDetail id={o.order_id} onClose={close} />}
+      <Table rows={rows} rowKey="key" expand={(o, close) => <SaleDetail orderId={o.order_id} deliveryId={o.delivery_id} onClose={close} />}
         rowClass={(o) => (o.overdue_days > 0 ? 'row-late' : '')}
         empty={only ? 'Không có đơn nào còn nợ' : 'Khách chưa mua hàng'}
         foot={rows?.length ? { c: `${rows.length} chứng từ`, t: money(tot('net_total')), p: money(tot('paid_net')), d: money(tot('receivable')) } : null}

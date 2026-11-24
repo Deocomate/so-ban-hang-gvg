@@ -22,6 +22,7 @@ import {
 import { VatReminder } from '../components/VatReminder.jsx';
 import { OrderDocsPanel } from './OrderDocs.jsx';
 import { OrderDocMenu, OrderDocLauncher } from '../components/DocMenu.jsx';
+import { SaleDetail } from './OrderInvoice.jsx';
 
 // ===================== DANH SÁCH ĐƠN BÁN =====================
 // Như KiotViet: Hóa đơn gồm hóa đơn bán ngay và các hóa đơn lập khi xử lý đơn đặt hàng (mỗi đợt giao một hóa đơn HD…);
@@ -104,7 +105,7 @@ export function SalesPage() {
       </>}>
       <ErrorBox error={error || fromOrders.error} />
       <Table columns={cols} rows={data && fromOrders.data ? rows : null} rowKey="row_id" onRow={(o) => setOpenId((x) => (x === o.row_id ? null : o.row_id))} rowClass={(o) => (o.is_late || o.overdue_days > 0 ? 'row-late' : '')}
-        expandKey={openId} expand={(o) => <InlineDetail><OrderDetail id={o.from_order ? o.order_id : o.id} onClose={() => setOpenId(null)} /></InlineDetail>}
+        expandKey={openId} expand={(o) => <InlineDetail><SaleDetail orderId={o.id} deliveryId={o.from_order ? o.id : null} onClose={() => setOpenId(null)} /></InlineDetail>}
         foot={rows.length ? { code: `${rows.length} đơn`, disc: money(sum('discount')), total: money(sum('order_total')), paid: money(sum('paid_net')), due: money(sum('receivable')) } : null}
         empty={time.from ? 'Không có hóa đơn nào trong khoảng thời gian này. Chọn "Toàn thời gian" ở bộ lọc Thời gian để xem các tháng khác.' : 'Không có hóa đơn phù hợp'} />
     </ListPage>
