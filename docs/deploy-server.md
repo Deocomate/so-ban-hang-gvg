@@ -31,6 +31,8 @@ tar -czf app.tgz --exclude=web/node_modules --exclude=web/src --exclude=web/publ
 
 Đăng nhập SSH bằng mật khẩu trong `.env` (`SSH_IP`, `SSH_PORT`, `SSH_USER`, `SSH_PASSWORD`), không dùng khóa SSH. Máy Windows không có `sshpass`: đặt `SSH_ASKPASS` trỏ tới một script nhỏ in biến chứa mật khẩu, cùng `SSH_ASKPASS_REQUIRE=force` và `-o PreferredAuthentications=password`, để mật khẩu không hiện trên màn hình.
 
+Dùng `ssh.exe` / `scp.exe` có sẵn của Windows (`C:\Windows\System32\OpenSSH\`), không dùng `ssh` của Git Bash. Từ ngày 24/11/2026, kết nối từ Git Bash tới cổng SSH của máy chủ bị treo, trong khi `ssh.exe` của Windows vào bình thường. Với `ssh.exe`, `SSH_ASKPASS` phải là tệp `.cmd`, ví dụ `@powershell -NoProfile -Command "[Console]::Out.WriteLine($env:SSH_PASSWORD)"`.
+
 Trước khi giải nén bản mới: dừng dịch vụ và chép `gomsu.db`, `gomsu.db-wal`, `gomsu.db-shm` (nếu có) vào `/var/lib/so-ban-hang-gom/backups/<tên-đợt>/` (máy chủ cũng tự sao lưu khi nâng cấp cấu trúc CSDL). Đừng chép `gomsu.db*`: mẫu này khớp cả các tệp `gomsu.db.truoc-….bak` nằm cạnh CSDL, làm mỗi bản sao lưu nặng khoảng 350 MB thay vì khoảng 40 MB.
 
 Ổ đĩa máy chủ chỉ 25 GB, dùng chung với các site khác, và mỗi bản sao lưu trước deploy nặng vài trăm MB (kèm tệp `-wal`). Ngày 23/11/2026 ổ đầy 100% làm SQLite báo `disk I/O error` và app không khởi động được. Trước mỗi lần sao lưu, chạy `df -h /` để kiểm tra; còn dưới khoảng 3 GB thì xóa bớt các thư mục sao lưu trước deploy cũ (giữ các bản hằng đêm `gomsu-YYYY-MM-DD.db`).
