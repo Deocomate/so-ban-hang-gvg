@@ -95,7 +95,7 @@ export const TOKEN_GROUPS = [
 // Nhóm biến dùng được cho từng loại chứng từ
 const GOODS = ['don_vi', 'chung_tu', 'khach_hang', 'giao_nhan', 'hang_hoa', 'tong'];
 export const GROUPS_FOR = {
-  hoa_don: GOODS, don_dat_hang: GOODS, bien_ban: GOODS, phieu_xuat_kho: GOODS, hd_van_chuyen: GOODS,
+  hoa_don: GOODS, don_dat_hang: GOODS, bien_ban: GOODS, phieu_xuat_kho: GOODS, hd_van_chuyen: GOODS, phieu_dong_hang: GOODS,
   phieu_thu: ['don_vi', 'chung_tu', 'phieu'],
   de_nghi_tam_ung: ['don_vi', 'chung_tu', 'khach_hang', 'hop_dong'], de_nghi_tt: ['don_vi', 'chung_tu', 'khach_hang', 'hop_dong'],
   doi_chieu_sl: ['don_vi', 'chung_tu', 'khach_hang', 'hop_dong'], doi_chieu_tt: ['don_vi', 'chung_tu', 'khach_hang', 'hop_dong', 'tong'],

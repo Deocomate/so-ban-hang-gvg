@@ -18,6 +18,7 @@ export const DOC_TYPES = {
   bao_gia: { label: 'Báo giá', from: ['quote'], font: 'Arimo', sep: '.' },
   yeu_cau_vat: { label: 'Yêu cầu xuất hóa đơn VAT', from: ['order', 'delivery'], font: 'Tinos', sep: '.' },
   cn_xuat_xuong: { label: 'Giấy chứng nhận xuất xưởng', from: ['order', 'delivery'], font: 'Tinos', sep: '.' },
+  phieu_dong_hang: { label: 'Phiếu đóng hàng', from: ['order', 'delivery'], font: 'Tinos', sep: '.' },
 };
 
 export const DEFAULT_TEXTS = {
@@ -293,7 +294,7 @@ export function currentInfo(type, data) {
 const pick = (o, ks) => Object.fromEntries(ks.filter((k) => o && o[k]).map((k) => [k, o[k]]));
 
 // Chứng từ lập được theo từng đợt giao
-export const PER_DELIVERY = ['hoa_don', 'bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen', 'yeu_cau_vat', 'cn_xuat_xuong'];
+export const PER_DELIVERY = ['hoa_don', 'bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen', 'yeu_cau_vat', 'cn_xuat_xuong', 'phieu_dong_hang'];
 // Bảng đối chiếu: lập sau khi giao một hoặc nhiều đợt, theo hợp đồng hoặc theo đơn
 export const RECONCILE = ['doi_chieu_sl', 'doi_chieu_tt'];
 
@@ -328,6 +329,8 @@ export function editableFields(type, data) {
     { key: 'vat_note', label: 'Ghi chú cho kế toán', wide: true }];
   if (type === 'cn_xuat_xuong') return [D, { key: 'cert_buyer', label: 'Đơn vị mua hàng', wide: true }, { key: 'cert_address', label: 'Địa chỉ đơn vị mua', wide: true },
     { key: 'cert_project', label: 'Dự án', wide: true }, { key: 'cert_site', label: 'Địa điểm', wide: true }, { key: 'cert_result', label: 'Kết luận', wide: true }];
+  // Phiếu đóng hàng: cho kho soạn và đóng hàng trước khi giao
+  if (type === 'phieu_dong_hang') return [{ ...D, label: 'Ngày đóng hàng' }, { key: 'recv_party', label: 'Khách hàng', wide: true }, { key: 'box_total', label: 'Tổng số hộp', kind: 'num' }];
   if (type === 'phieu_xuat_kho') return [D, { key: 'recv_name', label: 'Người nhận hàng' }, { key: 'recv_address', label: 'Địa chỉ (bộ phận)', wide: true },
     { key: 'place', label: 'Xuất tại kho (ngăn lô)' }, { key: 'attach', label: 'Số chứng từ gốc kèm theo' }];
   return [D, { key: 'payer_name', label: data.p?.direction === 'chi' ? 'Người nhận tiền' : 'Người nộp tiền' }, { key: 'payer_address', label: 'Địa chỉ', wide: true },
@@ -349,7 +352,9 @@ export function defaults(type, data, ds) {
   const useDel = PER_DELIVERY.includes(type) && data.d;
   const g = goodsLines(type, data);
   const oldDebt = c.balance !== undefined && c.balance !== null ? Number(c.balance) - (Number(o.delivered_value || 0) - Number(o.paid_net || 0)) : 0;
-  const docDate = type === 'don_dat_hang' ? o.order_date : useDel ? data.d.delivery_date : (o.last_delivery_date || o.order_date);
+  // Phiếu đóng hàng của cả đơn: đóng hàng hôm nay (trước khi giao); theo đợt giao thì là ngày giao
+  const today = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);
+  const docDate = type === 'don_dat_hang' ? o.order_date : useDel ? data.d.delivery_date : type === 'phieu_dong_hang' ? today : (o.last_delivery_date || o.order_date);
   const x = custExtra(c);
   // Phiếu yêu cầu xuất hóa đơn: lấy thông tin xuất hóa đơn của khách; thuế suất theo đơn, đơn chưa khai VAT thì mặc định 8%
   const vat = type === 'yeu_cau_vat' ? { vat_unit: x.tax_name || o.customer_name || '', vat_tax_code: x.tax_code || '', vat_buyer: x.tax_buyer || '',

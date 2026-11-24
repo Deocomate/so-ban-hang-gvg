@@ -21,6 +21,7 @@ import {
 } from '../components/ui.jsx';
 import { VatReminder } from '../components/VatReminder.jsx';
 import { OrderDocsPanel } from './OrderDocs.jsx';
+import { OrderDocMenu, OrderDocLauncher } from '../components/DocMenu.jsx';
 
 // ===================== DANH SÁCH ĐƠN BÁN =====================
 // Như KiotViet: Hóa đơn gồm hóa đơn bán ngay và các hóa đơn lập khi xử lý đơn đặt hàng (mỗi đợt giao một hóa đơn HD…);
@@ -423,7 +424,7 @@ export function OrderDetail({ id, onClose }) {
   const canProcess = canSell && isDat && (d.status === 'nhap' || d.status === 'xac_nhan') && d.remaining_qty > 0;
   const processOrder = () => { onClose(); open('order-process', { id }); };
   const payKind = d.payment_status === 'thua_tien' ? 'hoan_khach' : 'thu_khach';
-  // Các nút như KiotViet: Hủy · Sao chép · Xuất file … Chỉnh sửa · Lưu · Trả hàng · In
+  // Các nút như KiotViet: Hủy · Sao chép · Xuất file … Chỉnh sửa · Lưu · Trả hàng · Giấy tờ (mọi chứng từ in / xuất của đơn)
   const editable = canSell && d.status !== 'huy';
   const cur = info || { note: d.note || '', staff: d.staff || '', channel: d.channel || '' };
   const dirty = !!info && (cur.note !== (d.note || '') || cur.staff !== (d.staff || '') || cur.channel !== (d.channel || ''));
@@ -459,7 +460,7 @@ export function OrderDetail({ id, onClose }) {
         {editable && <Btn kind={canProcess ? 'soft' : 'primary'} icon="edit" onClick={() => { onClose(); open('order-form', { id }); }}>Chỉnh sửa</Btn>}
         {editable && <Btn icon="check" busy={busy} disabled={!dirty} onClick={saveInfo} title="Lưu ghi chú, người bán, kênh bán vừa sửa">Lưu</Btn>}
         {canSell && d.delivered_value > 0 && <Btn icon="return" onClick={() => open('return', { order: d })}>Trả hàng</Btn>}
-        <Btn icon="print" onClick={() => open('doc', { kind: 'order', id, type: d.kind === 'dat_hang' && !d.delivery_count ? 'don_dat_hang' : 'hoa_don' })}>In</Btn>
+        <OrderDocMenu order={d} onTrack={d.status !== 'huy' && d.status !== 'nhap' ? () => setTab('docs') : null} />
       </>}>
       {askCancel && (
         <Modal title="Hủy hóa đơn" size="sm" onClose={() => setAskCancel(false)}
@@ -481,7 +482,7 @@ export function OrderDetail({ id, onClose }) {
         { value: 'pay', label: `Lịch sử thanh toán${pays.data?.length ? ` (${pays.data.length})` : ''}` },
         { value: 'ship', label: `Lịch sử bán / trả hàng${(dels.data?.length || 0) + (rets.data?.length || 0) ? ` (${(dels.data?.length || 0) + (rets.data?.length || 0)})` : ''}` },
         ...(d.kind === 'dat_hang' && can('nhap_hang') && d.status !== 'huy' ? [{ value: 'prod', label: 'Sản xuất' }] : []),
-        ...(d.status !== 'huy' && d.status !== 'nhap' ? [{ value: 'docs', label: 'Giấy tờ' }] : []),
+        ...(d.status !== 'huy' ? [{ value: 'docs', label: 'Giấy tờ' }] : []),
       ]} />
       {tab === 'info' && <>
         <div className="od-info">
@@ -613,7 +614,8 @@ export function OrderDetail({ id, onClose }) {
       )}
       </>}
       {tab === 'docs' && <>
-      {d.status !== 'huy' && d.status !== 'nhap' && <Section title="Giấy tờ đơn hàng"><OrderDocsPanel orderId={id} order={d} /></Section>}
+      <Section title="Xuất giấy tờ"><OrderDocLauncher order={d} /></Section>
+      {d.status !== 'huy' && d.status !== 'nhap' && <Section title="Theo dõi giấy tờ đã ký"><OrderDocsPanel orderId={id} order={d} /></Section>}
       </>}
     </Modal>
   );

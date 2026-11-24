@@ -191,6 +191,17 @@ const BUILDERS = {
       + lines(String(textOf(ds, 'bien_ban', 'handover_closing') || '').split('\n').filter(Boolean).join('\n'), 'font-size:11pt; margin-top:4pt; line-height:1.35')
       + sign([{ title: 'ĐẠI DIỆN BÊN GIAO', name: '{Dai_Dien_Ben_Giao}' }, { title: 'LÁI XE', name: '{Lai_Xe}' }, { title: 'ĐẠI DIỆN BÊN NHẬN' }], { size: 11, space: 4, mt: 24 });
   },
+  // Phiếu đóng hàng (cho kho): tiêu đề, khách hàng, ngày đóng hàng và bảng hàng kèm quy cách đóng gói, tổng số hộp
+  phieu_dong_hang() {
+    const s = 'font-size:12pt; margin-top:3pt';
+    return P(`<span style="font-size:18pt">${B('PHIẾU ĐÓNG HÀNG')}</span>`, `${center}; margin-bottom:12pt`)
+      + P(`Khách hàng: ${B('{Ben_Nhan_Hang}')}`, s) + P(`Ngày đóng hàng: ${B('{Ngay_Chung_Tu}')}`, `${s}; margin-bottom:10pt`)
+      + table([36, '*', 70, 46, 150], [
+        head(['STT', 'Tên hàng hoá', 'Số lượng', 'ĐVT', 'Quy cách đóng gói']),
+        [C('{STT}'), L(`{Ten_Hang}<br>${I('{Quy_Cach_Ghi_Chu}')}`), C('{So_Luong}'), C('{Don_Vi_Tinh_Thuong}'), C('{Quy_Cach}')],
+        ['', { h: '', span: 3 }, C(B('Tổng cộng: {Tong_So_Hop} {Don_Vi_Dong_Goi}'))],
+      ], { size: 11.5 });
+  },
   // Phiếu yêu cầu xuất hóa đơn GTGT: đủ các mục như trên hóa đơn VAT để kế toán gõ lại vào phần mềm hóa đơn điện tử
   yeu_cau_vat() {
     const s = 'font-size:10.5pt; margin-top:3pt';
@@ -502,7 +513,7 @@ export function unknownTokens(html) {
 // ---------- Chứng từ in hoàn chỉnh ----------
 const FILE_PREFIX = { hoa_don: 'hoa-don', don_dat_hang: 'don-dat-hang', bien_ban: 'bien-ban-ban-giao', phieu_xuat_kho: 'phieu-xuat-kho', hd_van_chuyen: 'hop-dong-van-chuyen',
   de_nghi_tam_ung: 'de-nghi-tam-ung', de_nghi_tt: 'de-nghi-thanh-toan', doi_chieu_sl: 'doi-chieu-so-luong', doi_chieu_tt: 'doi-chieu-cong-no', bao_gia: 'bao-gia',
-  yeu_cau_vat: 'yeu-cau-xuat-hoa-don', cn_xuat_xuong: 'chung-nhan-xuat-xuong' };
+  yeu_cau_vat: 'yeu-cau-xuat-hoa-don', cn_xuat_xuong: 'chung-nhan-xuat-xuong', phieu_dong_hang: 'phieu-dong-hang' };
 // Dựng chứng từ theo mẫu: { html, font, paper, orient, margin, filename, title, code, tplId }
 export function buildPrintDoc(type, data, ds, info, tplId) {
   const tpl = pickTemplate(ds, type, tplId);

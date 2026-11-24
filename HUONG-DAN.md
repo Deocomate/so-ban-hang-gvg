@@ -306,13 +306,20 @@ Hiện tại trạng thái vận đơn được cập nhật bằng tay hoặc t
 
 ## 9. Xuất chứng từ PDF cho khách
 
-Có 5 loại chứng từ, xuất ra PDF khổ A4, dựng theo đúng mẫu cửa hàng đang dùng:
+**Mọi giấy tờ của một hóa đơn ở cùng một chỗ:** mở chi tiết hóa đơn (trang Hóa đơn, Đặt hàng, hoặc hồ sơ khách → Lịch sử bán / trả hàng), bấm nút **Giấy tờ** ở cuối, hoặc vào thẻ **Giấy tờ**. Giấy tờ xếp theo trình tự công việc:
+
+- **Bán hàng:** Hóa đơn bán hàng, Đơn đặt hàng (đơn đặt), Phiếu yêu cầu xuất hóa đơn VAT (khách công ty).
+- **Đóng & giao hàng:** Phiếu đóng hàng, Biên bản bàn giao, Phiếu xuất kho, Hợp đồng vận chuyển, Giấy chứng nhận xuất xưởng.
+- **Đối chiếu sau giao hàng** (khi đơn đã giao): Đối chiếu công nợ, Đối chiếu số lượng.
+
+Thẻ **Giấy tờ** còn có phần **Theo dõi giấy tờ đã ký** (tải bản đã ký, đánh dấu có bản giấy). Trong hộp in / xuất, các thẻ chứng từ cũng xếp theo ba nhóm trên, có vạch ngăn giữa các nhóm.
 
 | Chứng từ | Mở từ đâu | Đơn vị phát hành mặc định |
 |---|---|---|
-| Hóa đơn bán hàng | Chi tiết đơn → **Xuất PDF** | Hộ kinh doanh |
-| Đơn đặt hàng | Chi tiết đơn → **Xuất PDF** → thẻ "Đơn đặt hàng" | Hộ kinh doanh |
-| Biên bản bàn giao hàng hóa | Chi tiết đơn → bấm vào một lần giao (hoặc tự mở ngay sau khi bấm Giao hàng) | Công ty (có logo) |
+| Hóa đơn bán hàng | Chi tiết đơn → **Giấy tờ** | Hộ kinh doanh |
+| Đơn đặt hàng | Chi tiết đơn → **Giấy tờ** → "Đơn đặt hàng" | Hộ kinh doanh |
+| Phiếu đóng hàng | Chi tiết đơn → **Giấy tờ** → "Phiếu đóng hàng" | Hộ kinh doanh |
+| Biên bản bàn giao hàng hóa | Chi tiết đơn → **Giấy tờ**, hoặc bấm vào một lần giao (tự mở ngay sau khi bấm Giao hàng) | Công ty (có logo) |
 | Phiếu xuất kho | Như biên bản, thẻ "Phiếu xuất kho" | Hộ kinh doanh |
 | Phiếu thu / phiếu chi | Thu chi → mở phiếu → **Xuất phiếu PDF**; tự mở khi giao hàng có tick "Thu luôn" hoặc thu tiền nhanh trên danh sách | Hộ kinh doanh |
 
@@ -353,6 +360,7 @@ Có 5 loại chứng từ, xuất ra PDF khổ A4, dựng theo đúng mẫu cử
   - Tổng thanh toán = tiền hàng + nợ cũ + tiền vận chuyển.
   - Còn thanh toán = Tổng thanh toán − đã thanh toán (gồm cả tiền cọc).
   - Số tiền bằng chữ in theo dạng "Mười ba triệu tám trăm nghìn đồng chẵn".
+- **Phiếu đóng hàng** (cho kho soạn hàng): tiêu đề PHIẾU ĐÓNG HÀNG, tên khách, ngày đóng hàng (mặc định hôm nay; lập theo một đợt giao thì là ngày giao) và bảng STT · tên hàng kèm quy cách · số lượng · ĐVT · quy cách đóng gói, dòng cuối là tổng số hộp. Sửa tên khách, ngày, tổng số hộp ở ô bên trái. Có thể tick thêm trong khung **Xuất chứng từ giao hàng** (mặc định không tick vì không gửi khách).
 - **Biên bản và phiếu xuất kho** lập theo từng lần giao. Nếu chưa giao, chọn "Cả đơn" để in trước, giao cho lái xe mang theo.
 - **Phiếu thu, phiếu chi và phiếu xuất kho** có dòng "Mẫu số … Thông tư 88/2021/TT-BTC" ở góc phải. Muốn bỏ dòng này thì sửa mẫu in và xóa ô đó. Nếu đơn vị phát hành là công ty, nên sửa dòng này theo chế độ kế toán công ty đang áp dụng (hỏi kế toán).
 - **Phông chữ:**

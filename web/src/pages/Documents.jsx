@@ -14,8 +14,15 @@ import { sampleData } from '../lib/docs/tokens.js';
 import { useDocFonts } from '../lib/docs/fonts.js';
 import { TextSizeEditor, withCustomText } from '../components/TextSizeEditor.jsx';
 
-const TYPES_FOR = { quote: ['bao_gia'], contract: ['de_nghi_tam_ung', 'doi_chieu_sl', 'doi_chieu_tt', 'de_nghi_tt'], order: ['hoa_don', 'don_dat_hang', 'bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen', 'yeu_cau_vat', 'cn_xuat_xuong', 'doi_chieu_tt', 'doi_chieu_sl'], delivery: ['bien_ban', 'hoa_don', 'hd_van_chuyen', 'phieu_xuat_kho', 'don_dat_hang', 'yeu_cau_vat', 'cn_xuat_xuong'], payment: ['phieu_thu'],
+// Thẻ xếp theo trình tự công việc: bán hàng → đóng & giao hàng → đối chiếu sau giao
+const TYPES_FOR = { quote: ['bao_gia'], contract: ['de_nghi_tam_ung', 'doi_chieu_sl', 'doi_chieu_tt', 'de_nghi_tt'],
+  order: ['hoa_don', 'don_dat_hang', 'yeu_cau_vat', 'phieu_dong_hang', 'bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen', 'cn_xuat_xuong', 'doi_chieu_tt', 'doi_chieu_sl'],
+  delivery: ['hoa_don', 'don_dat_hang', 'yeu_cau_vat', 'phieu_dong_hang', 'bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen', 'cn_xuat_xuong'], payment: ['phieu_thu'],
   invoices: ['doi_chieu_tt', 'doi_chieu_sl'] };
+// Giai đoạn của từng loại chứng từ: thẻ khác giai đoạn được tách bằng một vạch ngăn
+const TAB_STAGE = { hoa_don: 'ban', don_dat_hang: 'ban', yeu_cau_vat: 'ban', bao_gia: 'ban', phieu_thu: 'thu', phieu_dong_hang: 'giao', bien_ban: 'giao', phieu_xuat_kho: 'giao', hd_van_chuyen: 'giao',
+  cn_xuat_xuong: 'giao', doi_chieu_tt: 'doi_chieu', doi_chieu_sl: 'doi_chieu', de_nghi_tam_ung: 'hop_dong', de_nghi_tt: 'hop_dong' };
+const STAGE_LABEL = { ban: 'Bán hàng', thu: 'Sổ quỹ', giao: 'Đóng & giao hàng', doi_chieu: 'Đối chiếu sau giao hàng', hop_dong: 'Hợp đồng' };
 // Chứng từ không lập theo một đơn / phiếu giao (không đổi được "Lập theo")
 const STANDALONE = ['payment', 'contract', 'quote', 'invoices'];
 
@@ -213,14 +220,16 @@ export function DocStandalone({ link }) {
 // Sau khi giao: hợp đồng vận chuyển, hóa đơn bán hàng, biên bản giao hàng (và phiếu thu nếu thu luôn) — chọn 1 hoặc nhiều,
 // gộp vào một tệp PDF (mỗi chứng từ một trang mới) hoặc tải từng tệp. Dùng thông tin đã lưu của từng chứng từ.
 // Khách là công ty: thêm phiếu yêu cầu xuất hóa đơn VAT để gửi kế toán.
-const BATCH_TYPES = [['hd_van_chuyen', 'Hợp đồng vận chuyển'], ['hoa_don', 'Hóa đơn bán hàng'], ['bien_ban', 'Biên bản giao hàng']];
+const BATCH_TYPES = [['phieu_dong_hang', 'Phiếu đóng hàng'], ['hd_van_chuyen', 'Hợp đồng vận chuyển'], ['hoa_don', 'Hóa đơn bán hàng'], ['bien_ban', 'Biên bản giao hàng']];
+// Chưa từng chọn thì tích sẵn mọi chứng từ, trừ phiếu đóng hàng (chỉ cho kho, không gửi khách)
+const BATCH_OFF = ['phieu_dong_hang'];
 const BATCH_KEY = 'gomsu.doc_batch';
 function readBatch() { try { const v = JSON.parse(localStorage.getItem(BATCH_KEY) || 'null'); return v && typeof v === 'object' ? v : null; } catch (e) { return null; } }
 function BatchExport({ deliveryId, pay, ds, beforeExport, company, onDone, xopts }) {
   const { q, rpc, settings, toast, can } = useApp();
   const opts = [...BATCH_TYPES, ...(company ? [['yeu_cau_vat', 'Phiếu yêu cầu xuất hóa đơn VAT']] : []), ...(pay ? [['phieu_thu', 'Phiếu thu']] : [])];
   const saved = readBatch();
-  const [pick, setPick] = useState(() => Object.fromEntries(opts.map(([t]) => [t, saved?.pick?.[t] ?? true])));
+  const [pick, setPick] = useState(() => Object.fromEntries(opts.map(([t]) => [t, saved?.pick?.[t] ?? !BATCH_OFF.includes(t)])));
   const [merge, setMerge] = useState(saved?.merge ?? true);
   const [busy, setBusy] = useState(false); const [imgBusy, setImgBusy] = useState(false);
   const chosen = opts.filter(([t]) => pick[t]).map(([t]) => t);
@@ -471,7 +480,7 @@ export function DocDialog({ kind, id, keys, type: type0, pay, page, onClose }) {
   </>;
   const content = (
     <>
-      {types.length > 1 && <Tabs value={type} onChange={setType} tabs={tabTypes.map((t) => ({ value: t, label: DOC_TYPES[t].label }))} />}
+      {types.length > 1 && <Tabs value={type} onChange={setType} tabs={tabTypes.map((t, i) => ({ value: t, label: DOC_TYPES[t].label, gap: i > 0 && TAB_STAGE[t] !== TAB_STAGE[tabTypes[i - 1]], title: STAGE_LABEL[TAB_STAGE[t]] }))} />}
       <ErrorBox error={err || doc?.error} />
       {company && <VatReminder orderId={data.o.id} onShowRequest={type === 'yeu_cau_vat' ? null : () => setType('yeu_cau_vat')} />}
       {remindVat && <VatReminderPopup orderId={data?.o?.id} onShowRequest={() => setType('yeu_cau_vat')} onClose={() => setRemindVat(false)} />}
@@ -553,7 +562,7 @@ const PROFILE_FIELDS = [
 // Nhóm loại chứng từ ở cột trái (giống "Quản lý mẫu in" của KiotViet)
 const TYPE_GROUPS = [
   ['Bán hàng', ['hoa_don', 'don_dat_hang', 'bao_gia', 'yeu_cau_vat']],
-  ['Giao hàng', ['bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen', 'cn_xuat_xuong']],
+  ['Giao hàng', ['phieu_dong_hang', 'bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen', 'cn_xuat_xuong']],
   ['Đối chiếu sau giao hàng', ['doi_chieu_tt', 'doi_chieu_sl']],
   ['Hợp đồng', ['de_nghi_tam_ung', 'de_nghi_tt']],
   ['Sổ quỹ', ['phieu_thu']],

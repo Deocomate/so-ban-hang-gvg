@@ -203,7 +203,7 @@ export function Tabs({ tabs, value, onChange }) {
   return (
     <div className="tabs" role="tablist">
       {tabs.map((t) => (
-        <button key={t.value} role="tab" aria-selected={value === t.value} className={`tab${value === t.value ? ' on' : ''}`} onClick={() => onChange(t.value)}>
+        <button key={t.value} role="tab" aria-selected={value === t.value} className={`tab${value === t.value ? ' on' : ''}${t.gap ? ' tab-gap' : ''}`} title={t.title} onClick={() => onChange(t.value)}>
           {t.label}{t.count !== undefined && t.count !== null && <span className="tab-count">{t.count}</span>}
         </button>
       ))}

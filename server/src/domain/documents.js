@@ -11,7 +11,9 @@ const FIELDS = ['recv_name', 'recv_phone', 'recv_address', 'driver_name', 'drive
   // Phiếu yêu cầu xuất hóa đơn VAT; vat_skip = '1': đơn không cần xuất hóa đơn (tắt lời nhắc)
   'date_yeu_cau_vat', 'profile_yeu_cau_vat', 'vat_buyer', 'vat_unit', 'vat_tax_code', 'vat_address', 'vat_email', 'vat_pay_method', 'vat_bank', 'vat_rate', 'vat_note', 'vat_skip',
   // Giấy chứng nhận xuất xưởng
-  'date_cn_xuat_xuong', 'profile_cn_xuat_xuong', 'cert_buyer', 'cert_address', 'cert_project', 'cert_site', 'cert_result'];
+  'date_cn_xuat_xuong', 'profile_cn_xuat_xuong', 'cert_buyer', 'cert_address', 'cert_project', 'cert_site', 'cert_result',
+  // Phiếu đóng hàng
+  'date_phieu_dong_hang', 'profile_phieu_dong_hang'];
 
 const HEADER_KEY = /^hdr_[a-z_]{2,30}_(name|legal_name|address|phone|email|website|tax_code|bank_line|representative|logo)$/;
 
