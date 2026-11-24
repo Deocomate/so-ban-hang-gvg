@@ -626,7 +626,7 @@ select p.id, p.book_id, p.code, p.pay_date, p.kind,
   p.direction, p.fund_id, f.name as fund_name, p.to_fund_id, tf.name as to_fund_name, p.party_type, p.party_id,
   coalesce(c.name, s.name) as party_name, coalesce(c.code, s.code) as party_code,
   p.amount, p.fee, case when p.direction = 'thu' then p.amount - p.fee else p.amount end as cash_amount,
-  p.method, p.note, p.voided, p.void_reason, p.voided_at, p.created_at, p.ref_no, p.created_by,
+  p.method, p.note, p.voided, p.void_reason, p.voided_at, p.created_at, p.ref_no, p.created_by, p.edit_log,
   (select coalesce(m.display_name, u.name, u.email) from users u left join book_members m on m.user_id = u.id and m.book_id = p.book_id where u.id = p.created_by) as created_by_name,
   coalesce(x.allocated, 0) as allocated, p.amount - coalesce(x.allocated, 0) as unallocated, x.allocations
 from payments p join funds f on f.id = p.fund_id left join funds tf on tf.id = p.to_fund_id

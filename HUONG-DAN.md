@@ -341,7 +341,12 @@ Thẻ **Giấy tờ** còn có phần **Theo dõi giấy tờ đã ký** (tải 
 - Nút **Sửa** luôn có ở chi tiết đơn (trừ đơn đã hủy), kể cả khi đã giao đủ, đã thu đủ. Sửa giá, chiết khấu, giảm giá, phí vận chuyển thì tiền hàng đã giao tự tính lại; khách còn nợ hay trả dư hiện ngay theo số mới.
 - Dòng hàng đã giao không bỏ được, không đổi sang hàng khác và không giảm dưới số đã giao. Đơn đã có phiếu thu thì không đổi được khách. Đơn đã có hàng khách trả lại thì không đổi được tiền hàng đã giao.
 - **Giao nhầm:** ở mục "Các đợt giao hàng", bấm **Hủy đợt giao**, ghi lý do. Hàng nhập lại kho đúng giá vốn đã xuất, doanh thu đợt đó bỏ đi, đơn quay lại chờ giao, tiền đã thu thành tiền khách trả trước. Sau đó sửa đơn như đơn chưa giao.
-- **Thu nhầm:** mở phiếu thu và hủy phiếu (quyền chủ sổ).
+- **Ghi nhầm thông tin phiếu thu / chi** (ngày, số tiền, quỹ, hình thức, khách / nhà cung cấp, nội dung, mã giao dịch, phí sàn, phần trả cho từng đơn / hóa đơn): mở phiếu (Sổ quỹ, hoặc Khách hàng → lịch sử thanh toán) và bấm **Sửa phiếu**. Cần quyền thu chi; phiếu góp / rút vốn, chuyển quỹ chỉ chủ sổ sửa.
+  - Phiếu **giữ nguyên mã** (vd. PT01393). Quỹ, công nợ đơn, tiền khách trả trước tính lại giống hệt hủy phiếu rồi lập phiếu mới, với cùng các kiểm tra (không trả quá số còn nợ, tổng trả cho đơn không vượt số tiền phiếu).
+  - Không sửa được phiếu đã hủy, phiếu có ngày trong kỳ đã **khóa sổ**, cũng không dời phiếu vào kỳ đã khóa. Sổ bật "không cho đổi thời gian giao dịch thu chi" thì không đổi được ngày.
+  - Phiếu ghi tự động từ **tiền về tài khoản** hoặc **đối soát COD**: không đổi số tiền, phí, quỹ, ngày (phải khớp giao dịch gốc); vẫn sửa được khách, nội dung và phần trả cho đơn.
+  - Mỗi lần sửa ghi vào mục **Lịch sử sửa phiếu** trong phiếu (ai, lúc nào, lý do, từ bao nhiêu thành bao nhiêu) và vào **Lịch sử đơn hàng** của các đơn được trả.
+- **Thu nhầm hẳn (không có khoản tiền đó):** mở phiếu thu và hủy phiếu (quyền chủ sổ).
 - Mục **Lịch sử đơn hàng** cuối chi tiết đơn ghi mọi thao tác: ai làm, lúc nào, tạo đơn, sửa gì từ bao nhiêu thành bao nhiêu, giao, hủy đợt giao, thu / hoàn tiền, hủy phiếu, trả hàng, hủy đơn. Ai xem được đơn bán đều xem được lịch sử. Đơn lập trước bản này chỉ có lịch sử từ lúc cập nhật.
 
 - **Cài đặt một lần:** vào **Cài đặt → Mẫu in** (chỉ quản lý sổ).
@@ -396,6 +401,7 @@ Bấm **Tạo đơn bán** thì màn hình tạo đơn mở toàn màn hình. Kh
   - "Lưu nháp" và "Chỉ xác nhận, giao sau" nằm ngay phía trên hai nút.
 - **Đóng màn hình** bằng nút ✕ góc phải. Nếu đơn đang có hàng, phải bấm hai lần để tránh mất đơn do bấm nhầm.
 - **Xử lý đơn đặt hàng (như KiotViet):** ở **Đơn hàng → Đặt hàng**, bấm vào đơn rồi bấm **Xử lý đơn hàng** (hoặc menu ☰ ở màn bán hàng → Xử lý đặt hàng). Màn hình bán hàng riêng của đơn mở ra, tab mang mã `DH…`, các dòng hàng còn phải giao điền sẵn. Sửa số lượng lấy đợt này (bấm ✕ để bỏ dòng khỏi đợt này; lấy nhiều hơn số đặt thì đơn tăng theo), sửa đơn giá / chiết khấu của dòng chưa giao, thêm hàng mới bằng ô tìm kiếm (F3). Nhập **Khách thanh toán** và hình thức trả, rồi bấm **TẠO HÓA ĐƠN** (hoặc **IN** để tạo và mở luôn hóa đơn PDF). Phần mềm ghi các thay đổi vào đơn, tạo hóa đơn mã `HD…` (chung dãy số với hóa đơn bán ngay), trừ kho, ghi doanh thu, khấu trừ tiền khách đã trả trước (cọc) và lập phiếu thu; phần còn thiếu tính vào công nợ. Hóa đơn này hiện trong **Đơn hàng → Hóa đơn** kèm dòng "từ DH…". Nút **LƯU** chỉ ghi thay đổi vào đơn đặt hàng, chưa tạo hóa đơn. Đơn còn hàng chưa lấy thì xử lý tiếp lần sau. Phiếu tạm được xác nhận luôn khi tạo hóa đơn. Đổi khách hay giảm giá cả đơn thì bấm **Sửa đơn đặt hàng**.
+- **Tạo ngược đơn đặt hàng từ hóa đơn cũ:** hóa đơn bán ngay chưa có đơn đặt hàng thì không phải xóa làm lại. Mở hóa đơn, bấm **Tạo đơn đặt hàng** (hoặc ở trang **Đặt hàng** bấm **Tạo từ hóa đơn** rồi chọn khách). Phần mềm tự tìm và tích sẵn nhóm hóa đơn liên quan của khách (chung mặt hàng, ngày bán cách nhau không quá 45 ngày); các hóa đơn khác của khách xếp theo tháng để tích thêm hoặc bỏ. Bấm **Tạo đơn đặt hàng**: các hóa đơn gộp thành một đơn `DH…`. Phần đã giao của mỗi hóa đơn thành một đợt giao, giữ nguyên mã `HD…`, ngày, số tiền, tiền đã thu, tồn kho và công nợ. Phần chưa giao (hóa đơn chờ giao, phiếu tạm) thành hàng còn phải giao của đơn, tiền khách đã trả thành tiền cọc; khi giao bằng **Xử lý đơn hàng** sẽ lập hóa đơn `HD…` mới. Gộp phiếu tạm cùng hóa đơn đã xác nhận thì đơn ở trạng thái đã xác nhận; chỉ toàn phiếu tạm thì đơn vẫn là phiếu tạm. Sau đó lập được đối chiếu số lượng, đối chiếu công nợ, hợp đồng theo đơn. Chỉ gộp được hóa đơn cùng khách và cùng thuế suất VAT; các hóa đơn có tối đa một hợp đồng.
 
 ## 11. Tự chia thùng và tính tổng trọng lượng
 
@@ -446,7 +452,7 @@ Không phải đơn nào cũng cần theo dõi. Mặc định sổ chỉ theo d�
 
 **Pháp nhân.** Mỗi sổ khai 2 đơn vị đứng tên (Công ty Thanh Hải, HKD Mai Hiếu) ở **Cài đặt → Mẫu in**. Khi xuất chứng từ, đổi ở mục **Đơn vị đứng tên**.
 
-**Thuế HKD.** Hóa đơn đầu vào và đầu ra nằm chung một kho chứng từ. Trang này đối soát doanh thu trên sổ với hóa đơn đầu ra theo tháng và xuất sổ ra Excel. Số thuế là ước tính để theo dõi, không thay tờ khai.
+**Thuế HKD.** Hóa đơn đầu vào và đầu ra nằm chung một kho chứng từ. Ở **Thêm hóa đơn đầu ra**, chọn một hóa đơn bán thì số hóa đơn (vd. HD001256), bên mua, mã số thuế, tiền chưa xuất hóa đơn được điền sẵn, vẫn sửa được. **Thuế suất VAT đi theo pháp nhân**: pháp nhân có tên "Hộ kinh doanh…" ghi 0%, pháp nhân công ty lấy thuế suất của đơn (không có thì thuế suất mặc định, 8%); đổi pháp nhân thì thuế suất đổi theo, sau đó vẫn gõ lại được. Trang này đối soát doanh thu trên sổ với hóa đơn đầu ra theo tháng và xuất sổ ra Excel. Số thuế là ước tính để theo dõi, không thay tờ khai.
 
 **Nạp hàng hóa.** Tệp `mau-excel/hang-hoa-thanh-hai-2026.xlsx` được dựng sẵn từ các bảng giá 2026 của Thanh Hải. Xem trang **Ghi chú** trong tệp trước khi nhập.
 

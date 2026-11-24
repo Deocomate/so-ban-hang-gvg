@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp, useQ, useAction } from '../lib/store.jsx';
-import { money, dmy, todayVN, match, short } from '../lib/format.js';
+import { money, dmy, dmyhm, todayVN, match, short } from '../lib/format.js';
 import { useCustomers, useSuppliers, useFunds, isCashFund } from '../lib/lookups.js';
 import { exportXlsx } from '../lib/excel.js';
 import { useTimeFilter, TimeFilter, dateFilters, CheckList } from '../components/DocFilters.jsx';
@@ -23,9 +23,13 @@ export const PAY_KINDS = [
   { value: 'rut_von', label: 'Chủ rút vốn', dir: 'chi', owner: true },
   { value: 'chuyen_quy', label: 'Chuyển tiền giữa các quỹ', dir: 'chuyen', owner: true },
 ];
-const DOC_LABEL = { don_ban: 'Đơn bán', don_mua: 'Đơn nhập', chi_phi: 'Chi phí', no_dau_ky: 'Nợ đầu kỳ' };
+const DOC_LABEL = { don_ban: 'Đơn bán', hoa_don: 'Hóa đơn', don_mua: 'Đơn nhập', chi_phi: 'Chi phí', no_dau_ky: 'Nợ đầu kỳ' };
+// Khoản trả cho hóa đơn HD của đơn đặt hàng lưu vào đơn kèm phiếu giao: khi sửa phiếu gửi lại theo hóa đơn
+const allocKey = (a) => a.delivery_id || a.doc_id;
+const allocType = (a) => (a.delivery_id ? 'hoa_don' : a.doc_type);
 
-export function PaymentForm({ kind: kind0 = 'thu_khach', party_id: party0, alloc, onClose }) {
+// id: sửa phiếu đã lập (giữ mã, loại phiếu); không có id là lập phiếu mới
+export function PaymentForm({ id: editId, kind: kind0 = 'thu_khach', party_id: party0, alloc, onClose }) {
   const { can, open, toast, settings } = useApp();
   // Thu / chi bằng ngoại tệ (Thiết lập → Cửa hàng → Quản lý tiền tệ): số tiền đồng = ngoại tệ × tỷ giá
   const curs = settings.currencies || [];
@@ -42,23 +46,37 @@ export function PaymentForm({ kind: kind0 = 'thu_khach', party_id: party0, alloc
   const [al, setAl] = useState(alloc ? { [alloc.doc_id]: alloc.amount > 0 ? alloc.amount : null } : {});
   // Như KiotViet: tiền trả cho từng chứng từ tự chia theo số tiền thu, cho đến khi người dùng tự sửa một dòng
   const [manual, setManual] = useState(false);
+  const [reason, setReason] = useState('');
+  // Sửa phiếu: nạp phiếu một lần; số tiền phiếu đang trả cho từng chứng từ được cộng lại vào số còn phải trả
+  const editQ = useQ('payments', [['id', 'eq', editId || '']], null, 1, !!editId);
+  const [edit, setEdit] = useState(null);
+  useEffect(() => {
+    const x = editQ.data?.[0];
+    if (!x || edit) return;
+    const al0 = Object.fromEntries((x.allocations || []).map((a) => [allocKey(a), a.amount]));
+    setEdit({ ...x, orig: al0, types: Object.fromEntries((x.allocations || []).map((a) => [allocKey(a), allocType(a)])) });
+    setKind(x.kind); setParty(x.party_id || ''); setAmount(x.amount); setFee(x.fee || null); setFund(x.fund_id); setToFund(x.to_fund_id || '');
+    setDate(x.pay_date); setMethod(x.method || 'Tiền mặt'); setNote(x.note || ''); setRefNo(x.ref_no || ''); setAl(al0); setManual(true);
+  }, [editQ.data]);
+  const orig = edit?.orig || {};
   const def = PAY_KINDS.find((k) => k.value === kind);
   // Như KiotViet: phiếu thu / phiếu chi chỉ chọn Tiền mặt / Chuyển khoản, quỹ đi theo hình thức (không hỏi quỹ, phí sàn, mã giao dịch).
   // Chuyển tiền giữa các quỹ vẫn chọn quỹ đi, quỹ đến.
   const isThu = def?.dir === 'thu';
-  const simple = kind !== 'chuyen_quy';
+  const simple = kind !== 'chuyen_quy' && !editId;
   const allFunds = funds.data || [];
   const cashFunds = allFunds.filter(isCashFund); const bankFunds = allFunds.filter((f) => !isCashFund(f));
   const thuMethod = isCashFund(allFunds.find((f) => f.id === fund)) ? 'Tiền mặt' : 'Chuyển khoản';
   const pickThuMethod = (m) => { const list = m === 'Tiền mặt' ? cashFunds : bankFunds; if (!list.some((f) => f.id === fund)) setFund(list[0]?.id || ''); };
-  const docTypes = kind === 'thu_khach' || kind === 'hoan_khach' ? ['don_ban', 'no_dau_ky'] : kind === 'tra_ncc' || kind === 'ncc_hoan' ? ['don_mua', 'no_dau_ky', 'chi_phi'] : kind === 'chi_phi' ? ['chi_phi'] : [];
+  const docTypes = kind === 'thu_khach' || kind === 'hoan_khach' ? ['don_ban', 'no_dau_ky', ...(edit ? ['hoa_don'] : [])] : kind === 'tra_ncc' || kind === 'ncc_hoan' ? ['don_mua', 'no_dau_ky', 'chi_phi'] : kind === 'chi_phi' ? ['chi_phi'] : [];
   const docsQ = useQ('open_docs', kind === 'chi_phi' ? [['doc_type', 'eq', 'chi_phi'], ['party_id', 'is_null']] : [['party_id', 'eq', party || '00000000-0000-0000-0000-000000000000']], 'doc_date', 500, docTypes.length > 0 && (!!party || kind === 'chi_phi'));
   const refund = kind === 'hoan_khach' || kind === 'ncc_hoan';
-  const docs = useMemo(() => (docsQ.data || []).filter((d) => docTypes.includes(d.doc_type)).map((d) => ({
-    ...d, limit: refund ? (d.doc_type === 'no_dau_ky' ? -d.remaining_total : d.paid_net - d.due_now) : d.remaining_total,
-  })).filter((d) => d.limit > 0 && (refund || d.status !== 'huy') || al[d.doc_id]), [docsQ.data, kind, al]);
+  const docs = useMemo(() => (docsQ.data || []).filter((d) => docTypes.includes(d.doc_type) && (d.doc_type !== 'hoa_don' || orig[d.doc_id] != null)).map((d) => {
+    const mine = orig[d.doc_id] || 0;   // phần phiếu đang sửa đã trả cho chứng từ này
+    return { ...d, remaining_due: d.remaining_due + mine, limit: (refund ? (d.doc_type === 'no_dau_ky' ? -d.remaining_total : d.paid_net - d.due_now) : d.remaining_total) + mine };
+  }).filter((d) => d.limit > 0 && (refund || d.status !== 'huy') || al[d.doc_id]), [docsQ.data, kind, al, edit]);
   useEffect(() => { if (!fund && funds.data?.length) setFund(funds.data[0].id); }, [funds.data]);
-  useEffect(() => { if (!alloc) { setAl({}); setManual(false); } }, [kind, party]);
+  useEffect(() => { if (!alloc && !(edit && party === (edit.party_id || ''))) { setAl({}); setManual(false); } }, [kind, party]);
   const allocated = Object.values(al).reduce((s, v) => s + (Number(v) || 0), 0);
   // Chia số tiền cho các chứng từ: chứng từ đang mở (nếu mở phiếu từ một đơn) trước, rồi chứng từ cũ trước; phần dư là trả trước
   const distribute = (total) => {
@@ -97,24 +115,32 @@ export function PaymentForm({ kind: kind0 = 'thu_khach', party_id: party0, alloc
   const partyRow = partyList?.find((p) => p.id === party);
   const submit = async () => {
     if (over > 0) return;
-    const allocations = Object.entries(al).filter(([, v]) => Number(v) > 0).map(([doc_id, v]) => ({ doc_id, doc_type: docs.find((d) => d.doc_id === doc_id)?.doc_type || alloc?.doc_type, amount: Number(v) }));
+    const allocations = Object.entries(al).filter(([, v]) => Number(v) > 0).map(([doc_id, v]) => ({ doc_id, doc_type: docs.find((d) => d.doc_id === doc_id)?.doc_type || edit?.types[doc_id] || alloc?.doc_type, amount: Number(v) }));
+    if (editId) {
+      const r = await run('update_payment', { id: editId, date, fund_id: fund, to_fund_id: toFund || null, party_id: party || null, amount, fee, method, ref_no: refNo, note, reason, allocations },
+        (x) => (x.changes.length ? `Đã sửa phiếu ${x.code}` : `Phiếu ${x.code} không có gì thay đổi`));
+      if (r) onClose();
+      return;
+    }
     const fxp = fxCur ? { fx: { code: fx.code, amount: fx.amount, rate: fx.rate ?? fxCur.rate } } : {};
     const r = await run('create_payment', { kind, date, fund_id: fund, to_fund_id: toFund || null, party_id: party || null, amount,
       fee: simple ? 0 : fee, method: simple ? thuMethod : method, ref_no: simple ? null : refNo, note, allocations, ...fxp },
       (x) => `Đã lập ${def.dir === 'thu' ? 'phiếu thu' : def.dir === 'chi' ? 'phiếu chi' : 'phiếu chuyển quỹ'} ${x.code}`);
     if (r) onClose();
   };
-  const kinds = PAY_KINDS.filter((k) => !k.owner || can('owner'));
+  const kinds = PAY_KINDS.filter((k) => !k.owner || can('owner') || k.value === kind);
+  if (editId && !edit) return <Modal title="Sửa phiếu" onClose={onClose}>{editQ.error ? <ErrorBox error={editQ.error} /> : <Loading />}</Modal>;
   return (
-    <Modal title={def?.dir === 'thu' ? 'Thu tiền' : def?.dir === 'chi' ? 'Chi tiền' : 'Chuyển quỹ'} onClose={onClose} size="lg"
-      footer={<><Btn onClick={onClose}>Thôi</Btn><Btn kind="primary" busy={busy} disabled={over > 0} onClick={submit} icon={def?.dir === 'thu' ? 'in' : 'out'}>Lưu phiếu</Btn></>}>
+    <Modal title={edit ? `Sửa ${def?.dir === 'thu' ? 'phiếu thu' : def?.dir === 'chi' ? 'phiếu chi' : 'phiếu chuyển quỹ'} ${edit.code}` : def?.dir === 'thu' ? 'Thu tiền' : def?.dir === 'chi' ? 'Chi tiền' : 'Chuyển quỹ'} onClose={onClose} size="lg"
+      footer={<><Btn onClick={onClose}>Thôi</Btn><Btn kind="primary" busy={busy} disabled={over > 0} onClick={submit} icon={edit ? 'check' : def?.dir === 'thu' ? 'in' : 'out'}>{edit ? 'Lưu thay đổi' : 'Lưu phiếu'}</Btn></>}>
+      {edit && <Note>Giữ nguyên mã phiếu {edit.code}. Quỹ, công nợ và tiền trả trước được tính lại theo nội dung mới như khi hủy phiếu rồi lập lại; lần sửa được ghi vào lịch sử phiếu.</Note>}
       <div className="grid">
-        <Field label="Loại phiếu"><Select value={kind} onChange={(v) => { setKind(v); if (PAY_KINDS.find((k) => k.value === v)?.party !== def?.party) setParty(''); }}
+        <Field label="Loại phiếu"><Select disabled={!!edit} value={kind} onChange={(v) => { setKind(v); if (PAY_KINDS.find((k) => k.value === v)?.party !== def?.party) setParty(''); }}
           options={kinds.map((k) => ({ value: k.value, label: (k.dir === 'thu' ? 'Thu · ' : k.dir === 'chi' ? 'Chi · ' : '') + k.label }))} /></Field>
         {def?.party && <Field label={def.party === 'kh' ? 'Khách hàng' : 'Nhà cung cấp'} required hint={partyRow ? (def.party === 'kh' ? `Đang nợ ${money(partyRow.receivable)} · trả trước ${money(partyRow.prepaid)}` : `Mình đang nợ ${money(partyRow.payable)} · đã trả trước ${money(partyRow.prepaid)}`) : null}>
           <Picker items={partyList || []} value={party} onChange={setParty} getLabel={(p) => p.name} getSub={(p) => p.code + (p.phone ? ' · ' + p.phone : '')} />
         </Field>}
-        {curs.length > 0 && <Field label="Tiền tệ"><Select value={fx.code} onChange={(v) => { setFx({ code: v, amount: null, rate: null }); }} options={[{ value: '', label: 'VND' }, ...curs.map((c) => ({ value: c.code, label: `${c.code} · ${c.name}` }))]} /></Field>}
+        {curs.length > 0 && !edit && <Field label="Tiền tệ"><Select value={fx.code} onChange={(v) => { setFx({ code: v, amount: null, rate: null }); }} options={[{ value: '', label: 'VND' }, ...curs.map((c) => ({ value: c.code, label: `${c.code} · ${c.name}` }))]} /></Field>}
         {fxCur && <Field label={`Số tiền ${fxCur.code}`} required><NumInput money={false} min={0} value={fx.amount} onChange={(v) => { setFx((s) => ({ ...s, amount: v })); changeAmount(Math.round((Number(v) || 0) * (Number(fx.rate ?? fxCur.rate) || 0))); }} /></Field>}
         {fxCur && <Field label="Tỷ giá" hint={`Mặc định ${money(fxCur.rate)} đ/${fxCur.code}`}><NumInput min={0} value={fx.rate ?? fxCur.rate} onChange={(v) => { setFx((s) => ({ ...s, rate: v })); changeAmount(Math.round((Number(fx.amount) || 0) * (Number(v) || 0))); }} /></Field>}
         <Field label={fxCur ? 'Quy đổi ra đồng' : isThu ? 'Số tiền thu' : 'Số tiền chi'} required><NumInput value={amount} onChange={changeAmount} placeholder="0" disabled={!!fxCur} /></Field>
@@ -124,13 +150,15 @@ export function PaymentForm({ kind: kind0 = 'thu_khach', party_id: party0, alloc
               disabled={!(m === 'Tiền mặt' ? cashFunds : bankFunds).length} onClick={() => pickThuMethod(m)}>{m}</button>))}</div></Field>
           {thuMethod === 'Chuyển khoản' && bankFunds.length > 1 && <Field label={isThu ? 'Vào tài khoản' : 'Từ tài khoản'}><Select value={fund} onChange={setFund} options={bankFunds.map((f) => ({ value: f.id, label: f.name }))} /></Field>}
         </> : <>
-          <Field label="Từ quỹ"><Select value={fund} onChange={setFund} options={allFunds.map((f) => ({ value: f.id, label: `${f.name} (${money(f.balance)})` }))} /></Field>
+          <Field label={isThu ? 'Vào quỹ' : 'Từ quỹ'}><Select value={fund} onChange={(v) => { setFund(v); if (['Tiền mặt', 'Chuyển khoản'].includes(method)) setMethod(isCashFund(allFunds.find((f) => f.id === v)) ? 'Tiền mặt' : 'Chuyển khoản'); }} options={allFunds.map((f) => ({ value: f.id, label: `${f.name} (${money(f.balance)})` }))} /></Field>
           {kind === 'chuyen_quy' && <Field label="Sang quỹ"><Select value={toFund} onChange={setToFund} placeholder="Chọn quỹ nhận" options={allFunds.filter((f) => f.id !== fund).map((f) => ({ value: f.id, label: f.name }))} /></Field>}
         </>}
         <Field label="Ngày"><DateInput value={date} onChange={setDate} max={todayVN()} /></Field>
         {!simple && <Field label="Hình thức"><Select value={method} onChange={setMethod} options={['Tiền mặt', 'Chuyển khoản', 'Thẻ / POS', 'TikTok Shop', 'COD', 'Bù trừ']} /></Field>}
         {!simple && <Field label="Mã giao dịch" hint="Nếu có"><Input value={refNo} onChange={setRefNo} /></Field>}
+        {edit && kind === 'thu_khach' && <Field label="Phí sàn / thu hộ bị trừ" hint="Ghi vào chi phí, quỹ nhận số tiền trừ phí"><NumInput value={fee} onChange={setFee} placeholder="0" /></Field>}
         <Field label="Nội dung" wide><Input value={note} onChange={setNote} placeholder="vd. Đại lý chuyển khoản đợt 2" /></Field>
+        {edit && <Field label="Lý do sửa" wide hint="Ghi vào lịch sử phiếu"><Input value={reason} onChange={setReason} placeholder="vd. Ghi nhầm số tiền" /></Field>}
       </div>
       {docTypes.length > 0 && (party || kind === 'chi_phi') && (
         <Section title={refund ? 'Hoàn theo chứng từ' : 'Trả cho chứng từ nào'} actions={<Btn small onClick={autoFill}>{refund ? 'Tự chia' : 'Trả chứng từ cũ trước'}</Btn>}>
@@ -185,9 +213,25 @@ export function PaymentDetail({ id, onClose }) {
           { key: 'c', label: p.kind === 'hoan_khach' || p.kind === 'ncc_hoan' ? 'Hoàn theo chứng từ' : 'Trả cho', render: (a) => <><b>{a.doc_code}</b><div className="cell-sub">{DOC_LABEL[a.doc_type]}</div></> },
           { key: 'a', label: 'Số tiền', align: 'right', render: (a) => money(a.amount) },
         ]} />}
+      {(p.edit_log || []).length > 0 && (
+        <Section title="Lịch sử sửa phiếu">
+          {[...p.edit_log].reverse().map((h, i) => (
+            <div key={i} className="small" style={{ marginBottom: 6 }}>
+              <b>{dmyhm(h.at)}</b>{h.by_name ? ` · ${h.by_name}` : ''}{h.reason ? ` · ${h.reason}` : ''}
+              <ul style={{ margin: '2px 0 0 18px', padding: 0 }}>{(h.changes || []).map((c, j) => <li key={j}>{c}</li>)}</ul>
+            </div>
+          ))}
+        </Section>
+      )}
+      {can('thu_chi') && !p.voided && (!['gop_von', 'rut_von', 'chuyen_quy'].includes(p.kind) || can('owner')) && (
+        <Section title="Sửa phiếu">
+          <div className="muted small">Sửa ngày, số tiền, quỹ, đối tượng, nội dung hoặc phần trả cho từng đơn mà vẫn giữ mã phiếu {p.code}.</div>
+          <div className="row gap"><Btn icon="edit" onClick={() => open('payment', { id })}>Sửa phiếu</Btn></div>
+        </Section>
+      )}
       {can('owner') && !p.voided && (
         <Section title="Hủy phiếu">
-          <div className="muted small">Phiếu hủy vẫn giữ trong lịch sử, chỉ không còn tính vào quỹ và công nợ. Ghi nhầm thì hủy rồi lập phiếu mới.</div>
+          <div className="muted small">Phiếu hủy vẫn giữ trong lịch sử, chỉ không còn tính vào quỹ và công nợ. Tiền không thu / chi thật thì hủy; ghi nhầm thông tin thì dùng Sửa phiếu.</div>
           <div className="row gap"><ConfirmBtn kind="danger" busy={busy} onConfirm={async () => { if (await run('void_payment', { id }, 'Đã hủy phiếu ' + p.code)) onClose(); }}>Hủy phiếu</ConfirmBtn></div>
         </Section>
       )}

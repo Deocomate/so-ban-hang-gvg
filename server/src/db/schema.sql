@@ -535,7 +535,8 @@ create table if not exists payments (
   void_reason text,
   voided_at text,
   created_by text, created_at text not null,
-  ref_no text                    -- mã giao dịch ngân hàng / ví (nếu có)
+  ref_no text,                   -- mã giao dịch ngân hàng / ví (nếu có)
+  edit_log text not null default '[]'  -- lịch sử sửa phiếu: [{at, by, changes[], reason}]
 );
 create index if not exists payments_book_date_idx on payments (book_id, pay_date);
 

@@ -53,8 +53,9 @@ export function suggestAlloc(book, ptype, party, amount) {
   return res;
 }
 
-export function doPayment(book, p) {
-  const k = p.kind;
+// prev: phiếu đang sửa (giữ mã, loại phiếu); các khoản phân bổ cũ bị xóa rồi ghi lại như lập phiếu mới
+export function doPayment(book, p, prev = null) {
+  const k = prev ? prev.kind : p.kind;
   const dir = ['thu_khach', 'ncc_hoan', 'thu_khac', 'gop_von'].includes(k) ? 'thu'
     : ['hoan_khach', 'tra_ncc', 'chi_phi', 'chi_khac', 'rut_von'].includes(k) ? 'chi' : k === 'chuyen_quy' ? 'chuyen' : null;
   if (!dir) fail('Loại phiếu thu/chi không hợp lệ');
@@ -76,10 +77,16 @@ export function doPayment(book, p) {
   if (pt === 'ncc' && (!pid || !one(`select 1 from suppliers where id = ? and book_id = ?`, pid, book))) fail('Chưa chọn nhà cung cấp');
   if (!pt) pid = null;
 
-  const code = nextCode(book, dir === 'thu' ? 'PT' : dir === 'chi' ? 'PC' : 'CQ');
-  const payId = uuid();
-  insert('payments', { id: payId, book_id: book, code, pay_date: d, kind: k, direction: dir, fund_id: fid, to_fund_id: tfid, party_type: pt, party_id: pid,
-    amount: amt, fee, method: p.method ?? null, note: p.note ?? null, ref_no: trimNz(p.ref_no), created_by: ctx.uid, created_at: nowIso() });
+  const code = prev ? prev.code : nextCode(book, dir === 'thu' ? 'PT' : dir === 'chi' ? 'PC' : 'CQ');
+  const payId = prev ? prev.id : uuid();
+  if (prev) {
+    run(`update payments set pay_date = ?, fund_id = ?, to_fund_id = ?, party_id = ?, amount = ?, fee = ?, method = ?, note = ?, ref_no = ? where id = ?`,
+      d, fid, tfid, pid, amt, fee, p.method ?? null, p.note ?? null, trimNz(p.ref_no), payId);
+    run(`delete from payment_allocations where payment_id = ?`, payId);
+  } else {
+    insert('payments', { id: payId, book_id: book, code, pay_date: d, kind: k, direction: dir, fund_id: fid, to_fund_id: tfid, party_type: pt, party_id: pid,
+      amount: amt, fee, method: p.method ?? null, note: p.note ?? null, ref_no: trimNz(p.ref_no), created_by: ctx.uid, created_at: nowIso() });
+  }
 
   let al = Array.isArray(p.allocations) ? p.allocations : [];
   if (!al.length && bool(p.auto_allocate) === true &&['thu_khach', 'tra_ncc'].includes(k)) al = suggestAlloc(book, pt, pid, amt);
@@ -105,7 +112,7 @@ export function doPayment(book, p) {
     const orderId = insertAlloc(book, payId, dt, a.doc_id, aa);
     if (orderId) {
       const fund = one(`select name from funds where id = ?`, fid)?.name;
-      logOrder(orderId, k === 'hoan_khach' ? 'hoan_tien' : 'thu_tien', `${k === 'hoan_khach' ? 'Hoàn tiền cho khách' : 'Thu tiền'} – phiếu ${code}${dt === 'hoa_don' ? ` cho hóa đơn ${doc.code}` : ''}: ${vnd(aa)}`,
+      logOrder(orderId, prev ? 'sua_phieu' : k === 'hoan_khach' ? 'hoan_tien' : 'thu_tien', `${prev ? 'Sửa phiếu' : k === 'hoan_khach' ? 'Hoàn tiền cho khách' : 'Thu tiền'} – phiếu ${code}${dt === 'hoa_don' ? ` cho hóa đơn ${doc.code}` : ''}: ${vnd(aa)}`,
         [fund ? `${k === 'hoan_khach' ? 'Chi từ' : 'Vào'} quỹ: ${fund}` : null, aa !== amt ? `Phiếu ${vnd(amt)}, phần cho đơn này ${vnd(aa)}` : null, trimNz(p.note) ? `Ghi chú: ${p.note}` : null].filter(Boolean));
     }
     tot += aa;
@@ -113,7 +120,12 @@ export function doPayment(book, p) {
   if (tot > amt) fail(`Số tiền trả cho các chứng từ (${vnd(tot)}) nhiều hơn số tiền phiếu (${vnd(amt)}). Hãy bớt tiền ở từng chứng từ hoặc tăng số tiền phiếu lên ${vnd(tot)}.`);
   if (k === 'chi_phi' && tot !== amt) fail('Phiếu chi phí phải gắn đủ vào khoản chi phí. Khoản chi không có chứng từ hãy chọn "Chi khác".');
 
-  if (fee > 0) {
+  // Phí sàn: một khoản chi phí đã trả theo phiếu; sửa phiếu thì sửa khoản đó (phí về 0 thì hủy khoản)
+  const feeExp = prev ? one(`select id from expenses where settled_payment_id = ? and voided = 0`, payId) : null;
+  if (feeExp) {
+    if (fee > 0) run(`update expenses set exp_date = ?, amount = ? where id = ?`, d, fee, feeExp.id);
+    else run(`update expenses set voided = 1, void_reason = ? where id = ?`, 'Bỏ phí khi sửa phiếu ' + code, feeExp.id);
+  } else if (fee > 0) {
     insertExpense(book, { exp_date: d, category: nz(p.fee_category) || setting(book, 'fee_category') || 'Phí sàn TMĐT',
       description: nz(p.fee_note) || 'Phí sàn / thu hộ trừ vào phiếu ' + code, amount: fee, settled_payment_id: payId });
   }
@@ -137,6 +149,56 @@ export function create_payment(p) {
   requirePerm(b, 'thu_chi');
   if (['gop_von', 'rut_von', 'chuyen_quy'].includes(p.kind)) requirePerm(b, 'owner');
   return once(p, b, 'create_payment', () => { checkTxnDate(b, 'thu_chi', asDate(p.date) || today()); return doPayment(b, withFx(b, p)); });
+}
+
+// Sửa phiếu thu / chi: giữ mã phiếu, ghi lại ngày, số tiền, quỹ, đối tượng, nội dung và phần trả cho từng chứng từ.
+// Quỹ, công nợ, tiền trả trước tính lại như khi hủy phiếu rồi lập phiếu mới (cùng kiểm tra), lịch sử sửa lưu vào phiếu.
+const PAY_FIELDS = [['pay_date', 'Ngày'], ['amount', 'Số tiền', vnd], ['fee', 'Phí sàn', vnd], ['fund_id', 'Quỹ'], ['to_fund_id', 'Sang quỹ'], ['party_id', 'Đối tượng'],
+  ['method', 'Hình thức'], ['note', 'Nội dung'], ['ref_no', 'Mã giao dịch']];
+function paySnapshot(id) {
+  const x = one(`select p.*, f.name as fund_name, tf.name as to_fund_name, coalesce(c.name, s.name) as party_name from payments p join funds f on f.id = p.fund_id
+    left join funds tf on tf.id = p.to_fund_id left join customers c on p.party_type = 'kh' and c.id = p.party_id
+    left join suppliers s on p.party_type = 'ncc' and s.id = p.party_id where p.id = ?`, id);
+  const allocs = json(one(`select allocations from v_payments where id = ?`, id)?.allocations, []) || [];
+  return { ...x, alloc_text: allocs.map((a) => `${a.doc_code} ${vnd(a.amount)}`).sort().join(', ') || 'trả trước' };
+}
+function payChanges(a, b) {
+  const show = (r, k, f) => (k === 'fund_id' ? r.fund_name : k === 'to_fund_id' ? r.to_fund_name : k === 'party_id' ? r.party_name : f ? f(r[k] ?? 0) : r[k]) || 'trống';
+  const out = PAY_FIELDS.filter(([k]) => (a[k] ?? null) !== (b[k] ?? null)).map(([k, l, f]) => `${l}: ${show(a, k, f)} → ${show(b, k, f)}`);
+  if (a.alloc_text !== b.alloc_text) out.push(`Trả cho: ${a.alloc_text} → ${b.alloc_text}`);
+  return out;
+}
+
+export function update_payment(p) {
+  const pay = one(`select * from payments where id = ?`, p.id);
+  if (!pay) fail('Không tìm thấy phiếu');
+  const b = pay.book_id;
+  requirePerm(b, 'thu_chi');
+  if (['gop_von', 'rut_von', 'chuyen_quy'].includes(pay.kind)) requirePerm(b, 'owner');
+  if (pay.voided) fail(`Phiếu ${pay.code} đã hủy — không sửa được`);
+  const d = asDate(p.date) || pay.pay_date;
+  checkDate(b, pay.pay_date);
+  checkTxnDate(b, 'thu_chi', d, pay.pay_date);
+  // Phiếu sinh ra từ giao dịch ngân hàng / đối soát COD: số tiền, phí, quỹ, ngày phải khớp chứng từ gốc
+  const bank = one(`select 1 from bank_txns where book_id = ? and exists (select 1 from json_each(payment_ids) where value = ?)`, b, pay.id);
+  const cod = one(`select 1 from shipments where book_id = ? and exists (select 1 from json_each(cod_payment_ids) where value = ?)`, b, pay.id);
+  if (bank || cod) {
+    const amt = rnd(num(p.amount)); const src = bank ? 'giao dịch ngân hàng' : 'đối soát tiền thu hộ (COD)';
+    if (amt !== pay.amount || (p.fund_id ?? pay.fund_id) !== pay.fund_id || d !== pay.pay_date || (rnd(num(p.fee)) ?? 0) !== pay.fee) {
+      fail(`Phiếu ${pay.code} ghi từ ${src} — không đổi được số tiền, phí, quỹ hay ngày. Chỉ sửa đối tượng, nội dung và phần trả cho chứng từ; ghi sai thì hủy phiếu.`);
+    }
+  }
+  const before = paySnapshot(pay.id);
+  doPayment(b, { ...p, kind: pay.kind, date: d, fund_id: p.fund_id ?? pay.fund_id }, pay);
+  const after = paySnapshot(pay.id);
+  const changes = payChanges(before, after);
+  if (changes.length) {
+    const log = json(pay.edit_log, []);
+    const by = one(`select coalesce(m.display_name, u.name, u.email) as n from users u left join book_members m on m.user_id = u.id and m.book_id = ? where u.id = ?`, b, ctx.uid)?.n;
+    log.push({ at: nowIso(), by: ctx.uid, by_name: by || null, changes, reason: trimNz(p.reason) });
+    run(`update payments set edit_log = ? where id = ?`, JSON.stringify(log), pay.id);
+  }
+  return { id: pay.id, code: pay.code, changes };
 }
 
 export function void_payment(p) {

@@ -82,6 +82,7 @@ const ADDED_COLUMNS = [
   ['goods_receipts', 'extra_costs', "text not null default '[]'"],
   ['goods_receipt_lines', 'extra_cost', 'real not null default 0'],
   ['payments', 'ref_no', 'text'],
+  ['payments', 'edit_log', "text not null default '[]'"],
   ['sales_returns', 'fee', 'real not null default 0 check (fee >= 0)'],
   ['sales_return_lines', 'fee', 'real not null default 0 check (fee >= 0)'],
   ['products', 'pack_weight', 'real check (pack_weight is null or pack_weight >= 0)'],

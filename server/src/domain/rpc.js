@@ -48,7 +48,7 @@ export const RPC = {
   ...pick(books, ['bootstrap', 'my_books', 'update_book_settings', 'save_print_templates', 'upsert_member', 'remove_member', 'save_bank_account', 'export_book']),
   ...pick(catalog, ['save_product', 'create_product_variants', 'delete_product', 'save_party', 'save_prices', 'save_fund', 'save_opening_debt', 'delete_opening_debt', 'import_parties']),
   ...pick(stock, ['adjust_stock', 'save_production', 'import_products']),
-  ...pick(cash, ['create_payment', 'void_payment', 'save_expense', 'void_expense']),
+  ...pick(cash, ['create_payment', 'update_payment', 'void_payment', 'save_expense', 'void_expense']),
   ...pick(recurring, ['save_recurring', 'delete_recurring', 'run_recurring']),
   ...pick(receivables, ['customer_ledger', 'preview_receipt', 'record_receipt', 'apply_prepaid']),
   ...pick(sales, ['save_sales_order', 'confirm_sales_order', 'update_order_info', 'cancel_sales_order', 'cancel_remaining', 'deliver', 'cancel_delivery', 'sales_return']),

@@ -12,6 +12,9 @@ import { Attachments } from './Contracts.jsx';
 const LABEL = { vao: 'Hóa đơn đầu vào', ra: 'Hóa đơn đầu ra' };
 
 const notVoided = [['voided', 'eq', 'false']];
+// Thuế suất VAT theo pháp nhân: hộ kinh doanh nộp thuế theo tỷ lệ trên doanh thu nên hóa đơn ghi 0%, công ty theo thuế suất đơn / mặc định
+export const isHouseholdProfile = (p) => /hộ kinh doanh/i.test(`${p?.legal_name || ''} ${p?.name || ''}`);
+const profileVat = (p, rate) => (isHouseholdProfile(p) ? 0 : rate);
 const sameNo = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
 
 // Nguồn để điền nhanh hóa đơn: đầu ra lấy từ hóa đơn bán (Đơn hàng › Hóa đơn), đầu vào lấy từ phiếu nhập hàng / mua dịch vụ có ghi số hóa đơn đầu vào.
@@ -35,7 +38,7 @@ function useInvoiceSources(direction, enabled) {
           fill: async () => {
             const [c] = o.customer_id ? await q('customers', [['id', 'eq', o.customer_id]]) : [];
             const x = custExtra(c);
-            return { order_id: o.id, party_name: x.tax_name || o.customer_name || '', party_tax: x.tax_code || '', amount: left || null, ...(Number(o.vat_rate) > 0 ? { vat_rate: Number(o.vat_rate) } : {}), note: `Hóa đơn bán ${o.code}` };
+            return { order_id: o.id, inv_no: o.code, party_name: x.tax_name || o.customer_name || '', party_tax: x.tax_code || '', amount: left || null, ...(Number(o.vat_rate) > 0 ? { vat_rate: Number(o.vat_rate) } : {}), note: `Hóa đơn bán ${o.code}` };
           } };
       });
     }
@@ -60,11 +63,15 @@ export function TaxInvoiceForm({ direction, preset, onClose }) {
   const suppliers = useSuppliers();
   const { run, busy } = useAction();
   const ds = useMemo(() => docSettings(book, settings), [book, settings]);
-  const [f, setF] = useState({ inv_no: '', inv_date: todayVN(), party_name: '', party_tax: '', profile_id: ds.profiles[0].id, amount: null, vat_rate: settings.default_vat ?? 8, supplier_id: '', category: '', note: '',
-    ...(preset ? { order_id: preset.order_id, party_name: preset.party_name || '', party_tax: preset.party_tax || '', amount: preset.amount ?? null, vat_rate: Number(preset.vat_rate) > 0 ? Number(preset.vat_rate) : (settings.default_vat ?? 8) } : {}) });
+  const vao = direction === 'vao';
+  const defVat = settings.default_vat ?? 8;
+  const profileOf = (id) => ds.profiles.find((p) => p.id === id);
+  // Thuế suất của chứng từ nguồn (đơn bán) được giữ lại khi đổi pháp nhân từ hộ kinh doanh sang công ty
+  const [srcVat, setSrcVat] = useState(Number(preset?.vat_rate) > 0 ? Number(preset.vat_rate) : defVat);
+  const [f, setF] = useState({ inv_no: '', inv_date: todayVN(), party_name: '', party_tax: '', profile_id: ds.profiles[0].id, amount: null, vat_rate: vao ? defVat : profileVat(ds.profiles[0], srcVat), supplier_id: '', category: '', note: '',
+    ...(preset ? { order_id: preset.order_id, inv_no: preset.inv_no || '', party_name: preset.party_name || '', party_tax: preset.party_tax || '', amount: preset.amount ?? null } : {}) });
   const [saved, setSaved] = useState(null);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
-  const vao = direction === 'vao';
   if (saved) return <Modal title="Đính kèm hóa đơn" onClose={onClose} footer={<Btn kind="primary" onClick={onClose}>Xong</Btn>}><Attachments refType="tax_invoice" refId={saved} /></Modal>;
   return (
     <Modal title={`Thêm ${LABEL[direction].toLowerCase()}`} onClose={onClose}
@@ -74,7 +81,10 @@ export function TaxInvoiceForm({ direction, preset, onClose }) {
         <Field label={vao ? 'Lấy từ phiếu nhập hàng / mua dịch vụ' : 'Lấy từ hóa đơn bán (Đơn hàng › Hóa đơn)'}
           hint={src ? 'Đã điền sẵn từ chứng từ đã chọn. Kiểm tra lại tiền trước thuế và thuế suất cho đúng hóa đơn.' : vao ? 'Chỉ hiện phiếu có ghi số hóa đơn đầu vào và chưa ghi nhận ở đây.' : 'Chọn đơn để điền sẵn bên mua, mã số thuế và tiền chưa xuất hóa đơn.'}>
           <Picker items={sources} value={src} getLabel={(x) => x.label} getSub={(x) => x.sub} placeholder={vao ? 'Tìm số hóa đơn, phiếu, nhà cung cấp…' : 'Tìm mã đơn, khách hàng…'}
-            onChange={async (id, x) => { setSrc(id); const v = await x.fill(); setF((s) => ({ ...s, order_id: undefined, ...v })); }} />
+            onChange={async (id, x) => {
+              setSrc(id); const { vat_rate: r, ...v } = await x.fill(); const rate = Number(r) > 0 ? Number(r) : defVat; setSrcVat(rate);
+              setF((s) => ({ ...s, order_id: undefined, ...v, ...(vao ? (r != null ? { vat_rate: r } : {}) : { vat_rate: profileVat(profileOf(s.profile_id), rate) }) }));
+            }} />
         </Field>
       )}
       <div className="grid">
@@ -83,9 +93,9 @@ export function TaxInvoiceForm({ direction, preset, onClose }) {
         {vao && <Field label="Nhà cung cấp"><Select value={f.supplier_id} onChange={(v) => { const s = suppliers.data?.find((x) => x.id === v); setF((x) => ({ ...x, supplier_id: v, party_name: s?.name || x.party_name })); }} options={(suppliers.data || []).map((s) => ({ value: s.id, label: s.name }))} placeholder="Chọn nếu có" /></Field>}
         <Field label={vao ? 'Bên bán' : 'Bên mua'}><Input value={f.party_name} onChange={(v) => set('party_name', v)} /></Field>
         <Field label="Mã số thuế"><Input value={f.party_tax} onChange={(v) => set('party_tax', v)} /></Field>
-        <Field label="Pháp nhân"><Select value={f.profile_id} onChange={(v) => set('profile_id', v)} options={ds.profiles.map((p) => ({ value: p.id, label: p.legal_name || p.name }))} /></Field>
+        <Field label="Pháp nhân"><Select value={f.profile_id} onChange={(v) => setF((s) => ({ ...s, profile_id: v, ...(vao ? {} : { vat_rate: profileVat(profileOf(v), srcVat) }) }))} options={ds.profiles.map((p) => ({ value: p.id, label: p.legal_name || p.name }))} /></Field>
         <Field label="Tiền trước thuế"><NumInput value={f.amount} onChange={(v) => set('amount', v)} /></Field>
-        <Field label="Thuế suất VAT"><NumInput money={false} min={0} max={100} suffix="%" value={f.vat_rate} onChange={(v) => set('vat_rate', v)} /></Field>
+        <Field label="Thuế suất VAT" hint={!vao && isHouseholdProfile(profileOf(f.profile_id)) ? 'Hộ kinh doanh: 0%' : null}><NumInput money={false} min={0} max={100} suffix="%" value={f.vat_rate} onChange={(v) => set('vat_rate', v)} /></Field>
         <Field label="Ghi chú" wide><Input value={f.note} onChange={(v) => set('note', v)} /></Field>
       </div>
     </Modal>
@@ -154,7 +164,7 @@ function Ledgers() {
 export function TaxPage(nav) {
   const { book, settings } = useApp();
   const ds = useMemo(() => docSettings(book, settings), [book, settings]);
-  const hkd = ds.profiles.find((p) => /hộ kinh doanh/i.test(p.legal_name || p.name)) || ds.profiles[0];
+  const hkd = ds.profiles.find(isHouseholdProfile) || ds.profiles[0];
   const [profile, setProfile] = useState(hkd.id);
   const [tab, setTab] = usePageTab(nav, 'tong');
   return (
