@@ -609,6 +609,11 @@ export function OrderDetail({ id, onClose }) {
       </>}
       {tab === 'prod' && <>
       {d.kind === 'dat_hang' && can('nhap_hang') && d.status !== 'huy' && (
+        <Section title="Cần sản xuất">
+          <ProductionNeed lines={lines.data} pos={pos.data} />
+        </Section>
+      )}
+      {d.kind === 'dat_hang' && can('nhap_hang') && d.status !== 'huy' && (
         <Section title="Sản xuất / đặt nhà cung cấp">
           {d.status === 'nhap' && <Note>Xác nhận đơn trước khi đặt xưởng.</Note>}
           {d.status === 'xac_nhan' && unlinked.length > 0 && <QuickSource order={d} lines={unlinked} />}
@@ -625,6 +630,34 @@ export function OrderDetail({ id, onClose }) {
       {d.status !== 'huy' && d.status !== 'nhap' && <Section title="Theo dõi giấy tờ đã ký"><OrderDocsPanel orderId={id} order={d} /></Section>}
       </>}
     </Modal>
+  );
+}
+
+// Số còn phải sản xuất của đơn đặt hàng theo từng mặt hàng: đặt − đã giao (− đã hủy) = còn phải giao; trừ tiếp phần đã đặt xưởng / nhà cung cấp
+// cho đơn này mà chưa về (đơn nhập chưa hủy) thì ra số còn cần sản xuất thêm.
+function ProductionNeed({ lines, pos }) {
+  const poIds = (pos || []).filter((p) => p.status !== 'huy').map((p) => p.id);
+  const pl = useQ('purchase_order_lines', [['po_id', 'in', poIds]], 'line_no', 2000, poIds.length > 0);
+  if (!lines || (poIds.length && !pl.data)) return <Loading />;
+  const rows = [];
+  for (const l of lines.filter((x) => !x.is_kit && x.product_type !== 'dich_vu')) {
+    let r = rows.find((x) => x.product_id === l.product_id);
+    if (!r) rows.push(r = { product_id: l.product_id, sku: l.sku, name: l.product_name, unit: l.unit, ordered: 0, delivered: 0, remaining: 0, pending: 0 });
+    r.ordered += l.eff_qty; r.delivered += l.delivered_qty; r.remaining += l.remaining_qty;
+  }
+  for (const x of pl.data || []) { const r = rows.find((y) => y.product_id === x.product_id); if (r) r.pending += x.remaining_qty; }
+  for (const r of rows) r.need = Math.max(r.remaining - r.pending, 0);
+  const sum = (k) => rows.reduce((s, r) => s + r[k], 0);
+  return (
+    <Table dense rows={rows} rowKey="product_id" empty="Đơn chưa có hàng" columns={[
+      { key: 'sku', label: 'Mã hàng', render: (r) => r.sku },
+      { key: 'n', label: 'Tên hàng', render: (r) => <>{r.name}{r.unit ? ` (${r.unit})` : ''}</> },
+      { key: 'o', label: 'Đặt', align: 'right', render: (r) => fq(r.ordered) },
+      { key: 'd', label: 'Đã giao', align: 'right', render: (r) => fq(r.delivered) },
+      { key: 'r', label: 'Còn phải giao', align: 'right', render: (r) => (r.remaining > 0 ? fq(r.remaining) : '—') },
+      { key: 'p', label: 'Đã đặt xưởng, chờ về', align: 'right', render: (r) => (r.pending > 0 ? fq(r.pending) : '—') },
+      { key: 'x', label: 'Còn cần sản xuất', align: 'right', render: (r) => (r.need > 0 ? <b className="warn">{fq(r.need)}</b> : <span className="good">Đủ</span>) },
+    ]} foot={rows.length ? { sku: `${rows.length} mặt hàng`, o: fq(sum('ordered')), d: fq(sum('delivered')), r: fq(sum('remaining')), p: fq(sum('pending')), x: <b>{fq(sum('need'))}</b> } : null} />
   );
 }
 
