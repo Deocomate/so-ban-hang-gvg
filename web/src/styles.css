@@ -1684,3 +1684,14 @@ body { font-size: 13px; line-height: 1.45; }
 .sig-resize { position: absolute; right: -5px; bottom: -5px; width: 11px; height: 11px; border-radius: 3px; background: var(--accent); cursor: nwse-resize; display: none; touch-action: none; }
 .sig-placed:hover .sig-x, .sig-placed:hover .sig-resize, .sig-placed:focus-within .sig-x { display: inline-flex; }
 @media (hover: none) { .sig-x, .sig-resize { display: inline-flex; } }
+
+/* Tạo đơn đặt hàng từ hóa đơn: nhóm hóa đơn liên quan và danh sách theo tháng */
+.i2o-group { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; }
+.i2o-month { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.i2o-mhead { padding: 6px 12px; background: var(--surface-2); }
+.i2o-row { display: grid; grid-template-columns: 22px 120px 90px minmax(0, 1fr) 110px 130px; gap: 10px; align-items: center; padding: 6px 12px; border-top: 1px solid var(--line); cursor: pointer; }
+.i2o-row:first-of-type { border-top: 0; }
+.i2o-row:hover { background: var(--surface-2); }
+.i2o-prod { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.i2o-row .r { text-align: right; }
+@media (max-width: 640px) { .i2o-row { grid-template-columns: 22px minmax(0, 1fr) auto; } .i2o-row .i2o-prod, .i2o-row > :nth-child(3) { display: none; } .i2o-row > :last-child { grid-column: 2 / -1; } }

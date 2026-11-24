@@ -38,6 +38,7 @@ import * as recurring from './expense-recurring.js';
 import * as customerFiles from './customer-files.js';
 import * as reminders from './reminders.js';
 import * as orderDocs from './order-docs.js';
+import * as invoiceToOrder from './invoice-to-order.js';
 
 const pick = (mod, names) => Object.fromEntries(names.map((n) => {
   if (typeof mod[n] !== 'function') throw new Error(`Thiếu hàm ${n}`);
@@ -52,6 +53,7 @@ export const RPC = {
   ...pick(recurring, ['save_recurring', 'delete_recurring', 'run_recurring']),
   ...pick(receivables, ['customer_ledger', 'preview_receipt', 'record_receipt', 'apply_prepaid']),
   ...pick(sales, ['save_sales_order', 'confirm_sales_order', 'update_order_info', 'cancel_sales_order', 'cancel_remaining', 'deliver', 'cancel_delivery', 'sales_return']),
+  ...pick(invoiceToOrder, ['invoice_merge_candidates', 'make_order_from_invoices']),
   ...pick(purchases, ['save_purchase_order', 'confirm_purchase_order', 'update_po_info', 'cancel_purchase_order', 'cancel_po_remaining', 'set_prod_step', 'receive', 'supplier_return', 'cancel_receipt', 'cancel_supplier_return']),
   ...pick(reports, ['rpt_end_of_day', 'rpt_overview', 'rpt_drill', 'rpt_monthly', 'rpt_products', 'rpt_groups', 'rpt_stock', 'rpt_expenses', 'rpt_dashboard', 'rpt_factory', 'rpt_break_even', 'rpt_brands']),
   ...pick(query, ['q']),

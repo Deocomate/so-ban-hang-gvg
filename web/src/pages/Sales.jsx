@@ -308,6 +308,7 @@ export function SpecialPage() {
   // Báo giá là bước đầu tiên trước khi khách chốt; khách đã chốt thì tạo đơn thẳng
   const createBtn = can('ban_hang') && <>
     <Btn icon="quote" onClick={() => open('quote-form', {})} title="Lập báo giá gửi khách trước, khách chốt thì bấm Chuyển sang đơn">Tạo báo giá</Btn>
+    <Btn icon="invoice" onClick={() => open('invoice-to-order', {})} title="Gộp các hóa đơn cũ của khách thành một đơn đặt hàng, không phải xóa làm lại">Tạo từ hóa đơn</Btn>
     <Btn kind="primary" icon="plus" onClick={() => open('order-form', { kind: 'dat_hang' })}>Tạo đơn đặt hàng</Btn>
   </>;
   if (view === 'list') {
@@ -459,6 +460,8 @@ export function OrderDetail({ id, onClose }) {
         {canProcess && <Btn kind="primary" icon="bag" onClick={processOrder}>Xử lý đơn hàng</Btn>}
         {editable && <Btn kind={canProcess ? 'soft' : 'primary'} icon="edit" onClick={() => { onClose(); open('order-form', { id }); }}>Chỉnh sửa</Btn>}
         {editable && <Btn icon="check" busy={busy} disabled={!dirty} onClick={saveInfo} title="Lưu ghi chú, người bán, kênh bán vừa sửa">Lưu</Btn>}
+        {canSell && !isDat && d.status !== 'huy' && <Btn icon="order" onClick={() => { onClose(); open('invoice-to-order', { invoice_id: id }); }}
+          title="Hóa đơn cũ chưa có đơn đặt hàng: gộp hóa đơn này (và các hóa đơn liên quan của khách) thành một đơn đặt hàng để lập đối chiếu, hợp đồng">Tạo đơn đặt hàng</Btn>}
         {canSell && d.delivered_value > 0 && <Btn icon="return" onClick={() => open('return', { order: d })}>Trả hàng</Btn>}
         <OrderDocMenu order={d} onTrack={d.status !== 'huy' && d.status !== 'nhap' ? () => setTab('docs') : null} />
       </>}>
