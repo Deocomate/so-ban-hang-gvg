@@ -1640,3 +1640,34 @@ body { font-size: 13px; line-height: 1.45; }
 @media (max-width: 640px) { .doc-launch-row { grid-template-columns: 1fr; gap: 4px; } }
 .tab.tab-gap { margin-left: 10px; position: relative; }
 .tab.tab-gap::before { content: ''; position: absolute; left: -7px; top: 25%; bottom: 25%; border-left: 1px solid var(--line); }
+
+/* ---------- Báo cáo: cột trái chọn nhanh báo cáo, ghim, thứ tự thời gian ---------- */
+.rp-side .search { width: 100%; }
+.rp-side .fbox-title { display: flex; align-items: center; gap: 6px; }
+.rp-order { display: flex; }
+.rp-order button { flex: 1; padding: 6px 8px; font-size: 12.5px; }
+.rp-nav { display: flex; flex-direction: column; gap: 12px; }
+.rp-group { display: flex; flex-direction: column; gap: 1px; }
+.rp-gtitle { font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; padding: 0 8px 4px; }
+.rp-item { display: flex; align-items: center; border-radius: 8px; }
+.rp-item:hover { background: var(--surface-2); }
+.rp-item.on { background: var(--accent-2); }
+.rp-go { flex: 1; min-width: 0; text-align: left; border: 0; background: none; font: inherit; font-size: 13.5px; color: var(--ink); padding: 7px 8px; cursor: pointer; border-radius: 8px; }
+.rp-item.on .rp-go { color: var(--accent); font-weight: 600; }
+.rp-pin { border: 0; background: none; padding: 6px; margin-right: 2px; color: var(--muted); cursor: pointer; border-radius: 6px; display: inline-flex; opacity: 0; }
+.rp-item:hover .rp-pin, .rp-pin:focus-visible, .rp-pin.on { opacity: 1; }
+.rp-pin.on { color: var(--gold); }
+.rp-pin.on svg { fill: currentColor; }
+.rp-title { font-family: var(--font-display); font-size: 20px; font-weight: 600; margin: 2px 0 0; }
+@media (max-width: 860px) {
+  .rp-nav { flex-direction: row; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+  .rp-group { flex-direction: row; gap: 6px; flex: none; }
+  .rp-gtitle { display: none; }
+  .rp-item { flex: none; border: 1px solid var(--line); background: var(--surface); border-radius: 99px; }
+  .rp-item.on { background: var(--accent); border-color: var(--accent); }
+  .rp-item.on .rp-go { color: var(--accent-ink); }
+  .rp-go { white-space: nowrap; padding: 5px 4px 5px 12px; }
+  .rp-pin { opacity: 1; }
+  .rp-title { display: none; }
+}
+@media print { .rp-side, .rp-title { display: none !important; } .rp { display: block; } }

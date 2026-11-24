@@ -1,6 +1,7 @@
 // Kho hóa đơn đầu vào / đầu ra, trang Thuế HKD và báo cáo đơn đặt xưởng.
 import React, { useMemo, useState } from 'react';
 import { useApp, useQ, useRpcData, useAction } from '../lib/store.jsx';
+import { useNewestFirst, timeCols } from '../components/report-order.jsx';
 import { money, qty as fq, dmy, match, todayVN, monthLabel } from '../lib/format.js';
 import { useSuppliers } from '../lib/lookups.js';
 import { docSettings, custExtra } from '../lib/docs/model.js';
@@ -173,9 +174,10 @@ export function TaxPage(nav) {
 export function FactoryReport() {
   const { open } = useApp();
   const { data, error } = useRpcData('rpt_factory', {});
+  const newest = useNewestFirst();
   if (error) return <ErrorBox error={error} />;
   if (!data) return <Loading />;
-  const days = data.days; let last = null;
+  const days = timeCols(data.days, newest); let last = null;
   const flat = data.lines.map((l) => ({ ...l, ...Object.fromEntries(days.map((d) => [`d_${d}`, l.moves[d] || 0])) }));
   const exportIt = () => exportXlsx('don-dat-xuong.xlsx', [{ name: 'Đơn đặt xưởng', rows: flat, columns: [{ key: 'customer_name', label: 'Tên KH' }, { key: 'product_name', label: 'Tên sản phẩm' }, { key: 'qty', label: 'Số lượng đặt' }, { key: 'unit', label: 'ĐVT' }, ...days.map((d) => ({ key: `d_${d}`, label: dmy(d).slice(0, 5) })), { key: 'remaining', label: 'Còn SX' }, { key: 'due_date', label: 'Ngày trả dự kiến', type: 'date' }] }]);
   return (

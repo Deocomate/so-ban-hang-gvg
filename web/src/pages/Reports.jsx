@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useApp, useRpcData, useQ } from '../lib/store.jsx';
-import { money, qty as fq, pct, monthLabel, todayVN, monthStart, addMonths, monthEnd, dmy } from '../lib/format.js';
+import { money, qty as fq, pct, monthLabel, todayVN, monthStart, addMonths, monthEnd, dmy, match } from '../lib/format.js';
 import { exportXlsx } from '../lib/excel.js';
 import { cats as expCats } from '../lib/expenseCats.js';
-import { Btn, Tabs, usePageTab, ErrorBox, Note, Table, Pill, MonthInput, DateInput, Section } from '../components/ui.jsx';
+import { Btn, usePageTab, ErrorBox, Note, Table, Pill, MonthInput, DateInput, Section, Search, Icon } from '../components/ui.jsx';
+import { ReportOrderCtx, useNewestFirst, byTime, timeCols } from '../components/report-order.jsx';
 import { PeriodPicker, usePeriod } from '../components/Period.jsx';
 import { StockReport } from './Inventory.jsx';
 import { FactoryReport } from './Tax.jsx';
@@ -13,22 +14,56 @@ import { PnlReport } from './PnlReport.jsx';
 import { HoverCard } from '../components/HoverCard.jsx';
 import { DebtQuickPay, overdueDays, agingText } from './DebtQuickPay.jsx';
 
+// Danh mục báo cáo theo nhóm như menu Báo cáo: Lãi lỗ & tài chính → Bán hàng → Mua hàng & kho
+const REPORT_GROUPS = [
+  { title: 'Lãi lỗ & tài chính', items: [{ v: 'pl', label: 'Lãi lỗ (P&L)' }, { v: 'exp', label: 'Chi phí', cost: true }, { v: 'debt', label: 'Công nợ' },
+    { v: 'be', label: 'Hòa vốn & kịch bản giá', cost: true }, { v: 'brands', label: 'So sánh thương hiệu', cost: true }] },
+  { title: 'Bán hàng', items: [{ v: 'eod', label: 'Cuối ngày' }, { v: 'prod', label: 'Theo sản phẩm' }, { v: 'grp', label: 'Theo kênh / khách / nhóm' },
+    { v: 'orders', label: 'Đặt hàng' }, { v: 'staff', label: 'Nhân viên' }] },
+  { title: 'Mua hàng & kho', items: [{ v: 'factory', label: 'Đơn đặt xưởng' }, { v: 'stock', label: 'Nhập – xuất – tồn' }] },
+];
+const PINS_KEY = 'gomsu.report.pins';
+const ORDER_KEY = 'gomsu.report.order';
+const readLS = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } };
+const writeLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* bỏ qua */ } };
+
 export function ReportsPage(nav) {
   const { can } = useApp();
   const cost = can('xem_gia_von');
-  const [tab, setTab] = usePageTab(nav, 'pl', ['pl', ...(cost ? ['exp'] : []), 'debt', ...(cost ? ['be', 'brands'] : []), 'eod', 'prod', 'grp', 'orders', 'staff', 'factory', 'stock']);
-  // Thứ tự tab theo nhóm như menu Báo cáo: Lãi lỗ & tài chính → Bán hàng → Mua hàng & kho
+  const groups = REPORT_GROUPS.map((g) => ({ ...g, items: g.items.filter((x) => !x.cost || cost) }));
+  const all = groups.flatMap((g) => g.items);
+  const [tab, setTab] = usePageTab(nav, 'pl', all.map((x) => x.v));
+  const [q, setQ] = useState('');
+  const [pins, setPins] = useState(() => readLS(PINS_KEY, []));
+  const [order, setOrder] = useState(() => readLS(ORDER_KEY, 'new'));
+  const togglePin = (v) => setPins((p) => { const n = p.includes(v) ? p.filter((x) => x !== v) : [...p, v]; writeLS(PINS_KEY, n); return n; });
+  const pickOrder = (o) => { setOrder(o); writeLS(ORDER_KEY, o); };
+  const hit = (x) => !q || match(x.label, q);
+  const pinned = pins.map((v) => all.find((x) => x.v === v)).filter((x) => x && hit(x));
+  const shown = groups.map((g) => ({ ...g, items: g.items.filter(hit) })).filter((g) => g.items.length);
+  const item = (x) => (
+    <div key={x.v} className={`rp-item${tab === x.v ? ' on' : ''}`}>
+      <button type="button" className="rp-go" aria-current={tab === x.v ? 'page' : undefined} onClick={() => setTab(x.v)}>{x.label}</button>
+      <button type="button" className={`rp-pin${pins.includes(x.v) ? ' on' : ''}`} onClick={() => togglePin(x.v)}
+        title={pins.includes(x.v) ? 'Bỏ ghim' : 'Ghim lên đầu'} aria-label={`${pins.includes(x.v) ? 'Bỏ ghim' : 'Ghim'} ${x.label}`}><Icon name="star" size={14} /></button>
+    </div>
+  );
   return (
-    <>
-      <div className="page-head"><div className="grow"><h1 className="page-title">Báo cáo</h1>
-</div></div>
-      <Tabs value={tab} onChange={setTab} tabs={[
-        { value: 'pl', label: 'Lãi lỗ (P&L)' }, ...(cost ? [{ value: 'exp', label: 'Chi phí' }] : []), { value: 'debt', label: 'Công nợ' },
-        ...(cost ? [{ value: 'be', label: 'Hòa vốn & kịch bản giá' }, { value: 'brands', label: 'So sánh thương hiệu' }] : []),
-        { value: 'eod', label: 'Cuối ngày' }, { value: 'prod', label: 'Theo sản phẩm' }, { value: 'grp', label: 'Theo kênh / khách / nhóm' },
-        { value: 'orders', label: 'Đặt hàng' }, { value: 'staff', label: 'Nhân viên' },
-        { value: 'factory', label: 'Đơn đặt xưởng' }, { value: 'stock', label: 'Nhập – xuất – tồn' },
-      ]} />
+    <ReportOrderCtx.Provider value={order === 'new'}>
+    <div className="lp rp">
+      <aside className="lp-side rp-side">
+        <div className="lp-head"><h1 className="page-title">Báo cáo</h1></div>
+        <Search value={q} onChange={setQ} placeholder="Tìm báo cáo…" />
+        <div className="fbox"><div className="fbox-title"><Icon name="sort" size={14} /> Thứ tự thời gian</div>
+          <div className="seg rp-order"><button className={order === 'new' ? 'on' : ''} onClick={() => pickOrder('new')}>Mới nhất trước</button><button className={order === 'old' ? 'on' : ''} onClick={() => pickOrder('old')}>Cũ nhất trước</button></div></div>
+        <nav className="rp-nav" aria-label="Danh sách báo cáo">
+          {pinned.length > 0 && <div className="rp-group"><div className="rp-gtitle">Đã ghim</div>{pinned.map(item)}</div>}
+          {shown.map((g) => <div key={g.title} className="rp-group"><div className="rp-gtitle">{g.title}</div>{g.items.map(item)}</div>)}
+          {shown.length === 0 && <div className="muted small">Không có báo cáo khớp “{q}”</div>}
+        </nav>
+      </aside>
+      <div className="lp-main">
+      <h2 className="rp-title">{all.find((x) => x.v === tab)?.label}</h2>
       {tab === 'eod' && <EndOfDayReport />}
       {tab === 'orders' && <OrdersReport />}
       {tab === 'staff' && <StaffReport />}
@@ -41,7 +76,9 @@ export function ReportsPage(nav) {
       {tab === 'exp' && <ExpenseReport />}
       {tab === 'be' && <BreakEvenReport />}
       {tab === 'brands' && <BrandsReport />}
-    </>
+      </div>
+    </div>
+    </ReportOrderCtx.Provider>
   );
 }
 
@@ -50,7 +87,9 @@ export function EndOfDayReport() {
   const { open, can } = useApp();
   const [d, setD] = useState(todayVN());
   const q = useRpcData('rpt_end_of_day', { date: d });
-  const r = q.data; const s = r?.summary; const cost = can('xem_gia_von');
+  const newest = useNewestFirst();
+  const r = q.data && { ...q.data, sales: byTime(q.data.sales, 'code', newest), returns: byTime(q.data.returns, 'code', newest), payments: byTime(q.data.payments, 'code', newest) };
+  const s = r?.summary; const cost = can('xem_gia_von');
   return (
     <div className="stack">
       <div className="row gap"><span className="small">Ngày</span><DateInput value={d} onChange={(v) => v && setD(v)} max={todayVN()} /><span className="grow" />
@@ -92,7 +131,8 @@ function OrdersReport() {
   const { open } = useApp();
   const [period, setPeriod] = usePeriod('month');
   const q = useQ('sales_orders', [['kind', 'eq', 'dat_hang'], ['status', 'neq', 'huy'], ['order_date', 'gte', period.from], ['order_date', 'lte', period.to]], 'order_date desc', 5000);
-  const rows = q.data || [];
+  const newest = useNewestFirst();
+  const rows = byTime(q.data, ['order_date', 'code'], newest);
   const sum = (k, f = () => true) => rows.filter(f).reduce((s, o) => s + (o[k] || 0), 0);
   const waiting = (o) => o.status === 'xac_nhan' && o.remaining_qty > 0;
   return (
@@ -108,7 +148,7 @@ function OrdersReport() {
         <div className="kpi"><span className="kpi-label">Trễ hẹn</span><span className={`kpi-value ${rows.some((o) => o.is_late) ? 'bad' : ''}`}>{rows.filter((o) => o.is_late).length}</span></div>
         <div className="kpi"><span className="kpi-label">Đã thu (cọc + thanh toán)</span><span className="kpi-value">{money(sum('paid_net'))}</span></div>
       </div>}
-      <Table rows={q.data} empty="Không có đơn đặt hàng trong kỳ" onRow={(o) => open('order', { id: o.id })} columns={[
+      <Table rows={q.data ? rows : null} empty="Không có đơn đặt hàng trong kỳ" onRow={(o) => open('order', { id: o.id })} columns={[
         { key: 'c', label: 'Đơn', render: (o) => <><b>{o.code}</b><div className="cell-sub">{dmy(o.order_date)}{o.due_date ? ` · hẹn ${dmy(o.due_date)}` : ''}</div></> },
         { key: 'k', label: 'Khách hàng', render: (o) => o.customer_name },
         { key: 't', label: 'Giá trị', align: 'right', render: (o) => money(o.order_total) },
@@ -181,11 +221,13 @@ function DebtReport() {
   const { open, can } = useApp();
   const [type, setType] = useState('kh');
   const isKh = type === 'kh';
-  const q = useQ('open_docs', [['party_type', 'eq', type]], 'due_date', 2000);
+  const q = useQ('open_docs', [['party_type', 'eq', type]], 'doc_date desc', 2000);
   const parties = useQ(isKh ? 'customers' : 'suppliers', [], 'name', 5000);
   const names = Object.fromEntries((parties.data || []).map((c) => [c.id, c.name]));
   // Chỉ phần ĐÃ giao/nhận mà chưa trả mới là nợ (phần chưa giao không phải nợ)
-  const rows = (q.data || []).filter((d) => d.remaining_due > 0 && d.status !== 'huy').map((d) => ({ ...d, party_name: names[d.party_id] || '' }));
+  // Xếp theo ngày chứng từ (mới nhất trước theo lựa chọn ở cột trái)
+  const newest = useNewestFirst();
+  const rows = byTime((q.data || []).filter((d) => d.remaining_due > 0 && d.status !== 'huy').map((d) => ({ ...d, party_name: names[d.party_id] || '' })), ['doc_date', 'code'], newest);
   const sum = (k) => rows.reduce((s, x) => s + Number(x[k] || 0), 0);
   const t = todayVN();
   const bucket = (d) => { if (!d.due_date || d.due_date >= t) return 'Chưa đến hạn'; const n = Math.round((new Date(t) - new Date(d.due_date)) / 864e5); return n <= 30 ? 'Quá hạn 1–30 ngày' : n <= 60 ? 'Quá hạn 31–60 ngày' : 'Quá hạn trên 60 ngày'; };
@@ -237,7 +279,9 @@ function ExpenseReport() {
     itemRows.push({ ...x, id: x.grp + '|' + x.name });
   }
   // Theo tháng: bảng nhóm × tháng
-  const months = []; for (let m = range.from.slice(0, 7) + '-01'; m <= range.to && months.length < 36; m = addMonths(m, 1)) months.push(m);
+  const newest = useNewestFirst();
+  const asc = []; for (let m = range.from.slice(0, 7) + '-01'; m <= range.to && asc.length < 36; m = addMonths(m, 1)) asc.push(m);
+  const months = timeCols(asc, newest);
   const tree = expCats(settings).map((g) => g.group);
   const present = [...new Set(rows.map((x) => x.grp))];
   const groups = [...tree.filter((g) => present.includes(g)), ...present.filter((g) => !tree.includes(g) && g !== 'Hao hụt kho'), ...(present.includes('Hao hụt kho') ? ['Hao hụt kho'] : [])];

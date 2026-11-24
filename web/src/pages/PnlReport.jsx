@@ -2,6 +2,7 @@
 // Toàn bộ số liệu lấy thật từ sổ (rpt_monthly + chi phí theo nhóm × tháng); thuế GTGT và TNCN là ước tính theo thuế suất của sổ.
 import React, { useState } from 'react';
 import { useApp, useRpcData } from '../lib/store.jsx';
+import { useNewestFirst, timeCols } from '../components/report-order.jsx';
 import { money, pct, short, monthLabel, todayVN, monthStart, monthEnd, addMonths } from '../lib/format.js';
 import { exportXlsx } from '../lib/excel.js';
 import { cats as expCats } from '../lib/expenseCats.js';
@@ -101,10 +102,13 @@ export function PnlReport({ onGo }) {
   const prev = useRpcData('rpt_monthly', { from: addMonths(range.from, -12), to: monthEnd(addMonths(range.to, -12)) });
   const exp = useRpcData('rpt_expenses', { ...range, by: 'month' }, cost);
   const pitRate = Number(settings.pit_rate || 0);
+  const newest = useNewestFirst();
   const ready = cur.data && (!cost || exp.data);
   const model = ready ? buildModel(cur.data, exp.data, settings, pitRate) : null;
   const specs = model ? rowSpec(model.sellG, model.adminG, cost) : [];
   const T = model?.total;
+  // Cột tháng trong bảng P&L theo thứ tự thời gian chọn ở cột trái; biểu đồ xu hướng vẫn đi từ trái sang phải theo thời gian
+  const cols = model ? timeCols(model.rows, newest) : [];
   const prevSum = (k) => (prev.data ? prev.data.reduce((s, m) => s + n0(m[k]), 0) : null);
 
   const fmt = (v) => (v === null || v === undefined ? '—' : unit === 'tr' ? nfTr.format(v / 1e6) : money(v));
@@ -121,7 +125,7 @@ export function PnlReport({ onGo }) {
       label: s.label, ...Object.fromEntries(model.rows.map((m) => [m.month, valOf(s, m)])), total: valOf(s, T),
       share: s.type === 'ratio' ? null : div(valOf(s, T), T.revenue_net),
     })),
-    columns: [{ key: 'label', label: 'Khoản mục (đồng)' }, ...model.rows.map((m) => ({ key: m.month, label: monthLabel(m.month) })), { key: 'total', label: 'Tổng kỳ' }, { key: 'share', label: '% DT thuần' }],
+    columns: [{ key: 'label', label: 'Khoản mục (đồng)' }, ...cols.map((m) => ({ key: m.month, label: monthLabel(m.month) })), { key: 'total', label: 'Tổng kỳ' }, { key: 'share', label: '% DT thuần' }],
   }]);
 
   const doPrint = () => {
@@ -181,14 +185,14 @@ export function PnlReport({ onGo }) {
             <table className="tbl dense pnl-table">
               <thead><tr>
                 <th>Khoản mục · đơn vị {unit === 'tr' ? 'triệu đồng' : 'đồng'}</th>
-                {model.rows.map((m) => <th key={m.month} className="r"><button className="pnl-month-btn" title="Xem riêng tháng này" onClick={() => setCustom({ from: m.month, to: monthEnd(m.month) })}>{monthLabel(m.month)}</button></th>)}
+                {cols.map((m) => <th key={m.month} className="r"><button className="pnl-month-btn" title="Xem riêng tháng này" onClick={() => setCustom({ from: m.month, to: monthEnd(m.month) })}>{monthLabel(m.month)}</button></th>)}
                 <th className="r pnl-tot">Tổng kỳ</th>{cost && <th className="r">% DT thuần</th>}
               </tr></thead>
               <tbody>{specs.map((s) => (s.group
                 ? <tr key={s.group} className="pnl-grp"><td colSpan={model.rows.length + (cost ? 3 : 2)}>{s.group}</td></tr>
                 : <tr key={s.k} className={s.type ? `pnl-${s.type}` : ''}>
                   <td>{s.label}</td>
-                  {[...model.rows, T].map((r) => {
+                  {[...cols, T].map((r) => {
                     const v = valOf(s, r);
                     return <td key={r.month} className={`r num${r === T ? ' pnl-tot' : ''}${v < 0 ? ' bad' : ''}${s.drill && v ? ' click' : ''}`}
                       title={s.type === 'ratio' || v === null ? undefined : `${money(v)} đ`} onClick={s.drill && v ? () => drill(s, r) : undefined}>
