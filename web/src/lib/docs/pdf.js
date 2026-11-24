@@ -174,6 +174,18 @@ function tableOf(el, ctx, maxW) {
   return [{ table: { widths, body, dontBreakRows: true, headerRows }, layout: border ? 'tplBorder' : 'tplPlain', margin, fontSize: c.fontSize }];
 }
 
+// Gắn mã vào nút lá cuối cùng của một khối (đoạn, nhóm, bảng: ô đầu của hàng cuối)
+function markLastLeaf(node, id) {
+  let n = node;
+  for (;;) {
+    if (Array.isArray(n?.stack) && n.stack.length) n = n.stack[n.stack.length - 1];
+    else if (n?.table?.body?.length) n = n.table.body[n.table.body.length - 1].find((c) => c && c.stack) || null;
+    else break;
+  }
+  if (!n || n.table || n.ul || n.ol || n.canvas) return null;
+  if (!n.id) n.id = id;
+  return n.id;
+}
 // Gắn mã vào nút chữ / ảnh đầu tiên của ô (pdfmake chỉ ghi vị trí cho nút lá)
 function markFirstLeaf(node, id) {
   let n = node;
@@ -218,14 +230,67 @@ const LAYOUTS = {
   tplPlain: { hLineWidth: () => 0, vLineWidth: () => 0, paddingLeft: () => 2, paddingRight: () => 2, paddingTop: () => 1, paddingBottom: () => 1 },
 };
 
+// ---------- Khối chữ ký ----------
+// Khối chữ ký là bảng không viền một hàng, ô có từ hai đoạn trống trở lên (chỗ ký). Hàng bảng không được ngắt nên khối thiếu chỗ một chút
+// là cả khối sang trang mới, còn dòng "Hà Nội, ngày…" ngay trên bị bỏ lại trang trước. Gói dòng ngày (đoạn văn ngay trước) cùng khối chữ ký
+// thành một khối không ngắt, rồi khi dàn trang thấy khối bị đẩy sang trang mới thì bớt dần dòng trống để ký (còn ít nhất một dòng; lề dưới
+// trang vẫn còn chỗ ký) cho vừa trang trước. Bớt hết mà vẫn không vừa thì giữ nguyên số dòng trống và sang trang mới cả khối.
+// Đoạn trống được dựng thành một khoảng trắng (dấu cách hoặc khoảng trắng không ngắt) để vẫn chiếm một dòng
+const isBlank = (n) => n && typeof n.text === 'string' && !n.text.trim() && !n.stack;
+// fit = { seq: số khối đã gặp, ks: số dòng trống muốn giữ của từng khối (theo thứ tự) }
+function keepSignTogether(content, fit) {
+  for (let i = content.length - 1; i >= 0; i--) {
+    const t = content[i];
+    const body = t?.table?.body;
+    if (!body || t.layout !== 'tplPlain' || body.length !== 1) continue;
+    const cells = body[0].filter((c) => Array.isArray(c?.stack));
+    const most = Math.max(0, ...cells.map((c) => c.stack.filter(isBlank).length));
+    if (most < 2) continue;
+    const n = fit.seq++; const id = `sgn${n}`; const k = Math.min(fit.ks[n] ?? most, most);
+    // Giữ k đoạn trống đầu tiên của mỗi ô (theo thứ tự), bỏ phần còn lại
+    for (const c of cells) { let m = 0; c.stack = c.stack.filter((x) => !isBlank(x) || ++m <= k); }
+    const prev = content[i - 1];
+    const withDate = prev && !prev.table && !prev.pageBreak && (prev.text !== undefined || prev.stack);
+    markFirstLeaf(withDate ? prev : cells[0]?.stack[0], id);
+    // Nội dung ngay trước khối: khối nằm ở trang sau trang của nội dung này nghĩa là bị đẩy sang trang mới
+    const before = content[withDate ? i - 2 : i - 1];
+    const prevId = before ? markLastLeaf(before, `sgp${n}`) : null;
+    content.splice(withDate ? i - 1 : i, withDate ? 2 : 1, { stack: withDate ? [prev, t] : [t], unbreakable: true });
+    fit.found.push({ id, n, blanks: most, k, prevId });
+    return;
+  }
+}
+// Dựng tệp; khối chữ ký nào bị đẩy sang đầu trang mới thì bớt một dòng trống rồi dựng lại (pdfmake sửa định nghĩa khi dàn trang nên mỗi lần
+// dựng lại định nghĩa từ đầu). make(fit) → định nghĩa; onNode: ghi vị trí các nút (bản xem trước); reset: xóa ghi của lần dựng trước
+async function renderFitted(make, { onNode, reset } = {}) {
+  const ks = []; const done = new Set();
+  for (;;) {
+    const fit = { seq: 0, ks, found: [] };
+    const def = make(fit); const at = {};
+    reset?.();
+    def.pageBreakBefore = (node) => { if (node.id && node.startPosition) at[node.id] = node.startPosition.pageNumber; onNode?.(node); return false; };
+    const blob = await pdfFromDef(def);
+    let again = false;
+    for (const g of fit.found) {
+      const p = at[g.id]; const q = at[g.prevId]; if (done.has(g.n) || !p || !q) continue;
+      if (p <= q) { done.add(g.n); continue; }
+      // Bớt hết mà vẫn không vừa: trả lại đủ dòng trống, cả khối sang trang mới
+      if (g.k > 1) ks[g.n] = g.k - 1; else { ks[g.n] = g.blanks; done.add(g.n); }
+      again = true;
+    }
+    if (!again) return blob;
+  }
+}
+
 // doc: { html, font, paper, orient, margin(mm), title, code } → định nghĩa pdfmake
 // onePage: cả chứng từ trên một trang dài (xuất ảnh) — không chia trang, bỏ ngắt trang trong mẫu; track: ghi vị trí bảng (xem trước)
-export function toPdfDef(doc, { onePage = false, track = null } = {}) {
+export function toPdfDef(doc, { onePage = false, track = null, fit = null } = {}) {
   const size = pageSize(doc); const m = doc.margin || {};
   const W = size.w * MM; const marg = [m.left ?? 14, m.top ?? 10, m.right ?? 14, m.bottom ?? 10].map((x) => x * MM);
   const body = new DOMParser().parseFromString(`<body>${withBaseSize(doc.html, doc.base)}</body>`, 'text/html').body;
   const fs = doc.base || 10;
   const content = blocksOf(body, { fontSize: fs, font: doc.font || 'Tinos', lineHeight: 1.2, onePage, track }, W - marg[0] - marg[2]);
+  if (fit && !onePage && size.h) keepSignTogether(content, fit);
   if (track) for (const t of track.tables) t.left = (t.left || 0) + marg[0];
   // Chữ ký kéo vào chứng từ: doc.signs = [{ img, page, x, y, w }] (pt, tính từ góc trên trái trang). Trang dài (ảnh) nối các trang
   // liền nhau theo phần nội dung nên lùi chữ ký trang sau xuống theo chiều cao vùng nội dung.
@@ -245,22 +310,23 @@ export function toPdfDef(doc, { onePage = false, track = null } = {}) {
 // onePage: mỗi chứng từ là một trang dài (xuất ảnh)
 export async function pdfBlob(docOrList, { onePage = false } = {}) {
   const docs = Array.isArray(docOrList) ? docOrList : [docOrList];
-  const def = toPdfDef(docs[0], { onePage });
-  for (const d of docs.slice(1)) def.content.push({ text: '', pageBreak: 'after' }, ...toPdfDef(d, { onePage }).content);
-  // Gộp nhiều chứng từ: không biết trang của từng chứng từ nên không đặt chữ ký
-  if (docs.length > 1) { def.info.title = docs.map((d) => d.title).join(', ') + ' ' + (docs[0].code || ''); delete def.background; }
-  return pdfFromDef(def);
+  return renderFitted((fit) => {
+    const def = toPdfDef(docs[0], { onePage, fit });
+    for (const d of docs.slice(1)) def.content.push({ text: '', pageBreak: 'after' }, ...toPdfDef(d, { onePage, fit }).content);
+    // Gộp nhiều chứng từ: không biết trang của từng chứng từ nên không đặt chữ ký
+    if (docs.length > 1) { def.info.title = docs.map((d) => d.title).join(', ') + ' ' + (docs[0].code || ''); delete def.background; }
+    return def;
+  });
 }
 
 // Bản xem trước: tệp PDF đúng như khi tải (onePage = như ảnh) kèm vị trí các bảng có viền trên từng trang (pt):
 // tables[i] = { n, cols: [độ rộng cột kể cả lề ô], left, pages: { [số trang]: { top, bottom } } } — thứ tự như dataTables() của col-fit.js
 export async function pdfPreview(doc, { onePage = false } = {}) {
-  const track = { tables: [] };
-  const def = toPdfDef(doc, { onePage, track });
+  let track = null;
   const rows = [];
-  // pdfmake gọi hàm này cho mọi nút sau khi dàn trang; trả false = không chèn ngắt trang
-  def.pageBreakBefore = (node) => { if (node.id && node.startPosition && String(node.id).startsWith('ct')) rows.push([node.id, node.startPosition]); return false; };
-  const blob = await pdfFromDef(def);
+  // pdfmake gọi hàm này cho mọi nút sau khi dàn trang (mỗi lần dựng lại thì ghi lại từ đầu)
+  const blob = await renderFitted((fit) => { track = { tables: [] }; return toPdfDef(doc, { onePage, track, fit }); }, { reset: () => { rows.length = 0; },
+    onNode: (node) => { if (node.id && node.startPosition && String(node.id).startsWith('ct')) rows.push([node.id, node.startPosition]); } });
   const seen = new Set();
   for (const [id, pos] of rows) {
     const [ti, ri] = id.slice(2).split(':').map(Number); const t = track.tables[ti]; if (!t) continue;
