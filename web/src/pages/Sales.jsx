@@ -427,8 +427,8 @@ export function OrderDetail({ id, onClose }) {
   const payKind = d.payment_status === 'thua_tien' ? 'hoan_khach' : 'thu_khach';
   // Các nút như KiotViet: Hủy · Sao chép · Xuất file … Chỉnh sửa · Lưu · Trả hàng · Giấy tờ (mọi chứng từ in / xuất của đơn)
   const editable = canSell && d.status !== 'huy';
-  const cur = info || { note: d.note || '', staff: d.staff || '', channel: d.channel || '' };
-  const dirty = !!info && (cur.note !== (d.note || '') || cur.staff !== (d.staff || '') || cur.channel !== (d.channel || ''));
+  const cur = info || { note: d.note || '', staff: d.staff || '', channel: d.channel || '', order_date: d.order_date };
+  const dirty = !!info && (cur.note !== (d.note || '') || cur.staff !== (d.staff || '') || cur.channel !== (d.channel || '') || cur.order_date !== d.order_date);
   const setCur = (k, v) => setInfo({ ...cur, [k]: v });
   const saveInfo = async () => { if (await run('update_order_info', { id, ...cur }, 'Đã lưu thông tin hóa đơn')) setInfo(null); };
   const exportOrder = () => exportXlsx(`${d.code}.xlsx`, [{ name: d.code, rows: lines.data || [], columns: [
@@ -460,8 +460,9 @@ export function OrderDetail({ id, onClose }) {
         {canProcess && <Btn kind="primary" icon="bag" onClick={processOrder}>Xử lý đơn hàng</Btn>}
         {editable && <Btn kind={canProcess ? 'soft' : 'primary'} icon="edit" onClick={() => { onClose(); open('order-form', { id }); }}>Chỉnh sửa</Btn>}
         {editable && <Btn icon="check" busy={busy} disabled={!dirty} onClick={saveInfo} title="Lưu ghi chú, người bán, kênh bán vừa sửa">Lưu</Btn>}
-        {canSell && !isDat && d.status !== 'huy' && <Btn icon="order" onClick={() => { onClose(); open('invoice-to-order', { invoice_id: id }); }}
-          title="Hóa đơn cũ chưa có đơn đặt hàng: gộp hóa đơn này (và các hóa đơn liên quan của khách) thành một đơn đặt hàng để lập đối chiếu, hợp đồng">Tạo đơn đặt hàng</Btn>}
+        {canSell && d.status !== 'huy' && <Btn icon="order" onClick={() => { onClose(); open('invoice-to-order', isDat ? { order_id: id } : { invoice_id: id }); }}
+          title={isDat ? 'Gắn các hóa đơn đã lập trước của khách vào đơn này: hàng đã giao trừ vào phần còn phải giao'
+            : 'Hóa đơn chưa có đơn đặt hàng: gắn vào đơn đặt hàng có sẵn của khách, hoặc gộp với các hóa đơn liên quan thành đơn mới'}>{isDat ? 'Gắn hóa đơn' : 'Liên kết đơn đặt hàng'}</Btn>}
         {canSell && d.delivered_value > 0 && <Btn icon="return" onClick={() => open('return', { order: d })}>Trả hàng</Btn>}
         <OrderDocMenu order={d} onTrack={d.status !== 'huy' && d.status !== 'nhap' ? () => setTab('docs') : null} />
       </>}>
@@ -492,7 +493,7 @@ export function OrderDetail({ id, onClose }) {
           <label><span>Người tạo</span><b>{(history.data || []).find((e) => e.action === 'tao')?.user_name || '—'}</b></label>
           <label><span>Người bán</span>{editable ? <><Input value={cur.staff} onChange={(v) => setCur('staff', v)} placeholder="Người bán" list="od-staff-list" aria-label="Người bán" />
             <datalist id="od-staff-list">{[...new Set([...(employees.data || []).map((e) => e.name), ...(settings.staff_names || [])].filter(Boolean))].map((x) => <option key={x} value={x} />)}</datalist></> : <b>{d.staff || '—'}</b>}</label>
-          <label><span>Ngày bán</span><b>{dmy(invoiceDate(d))}</b></label>
+          <label><span>{isDat ? 'Ngày đặt' : 'Ngày bán'}</span>{editable ? <DateInput value={cur.order_date} onChange={(v) => v && setCur('order_date', v)} max={todayVN()} aria-label={isDat ? 'Ngày đặt' : 'Ngày bán'} /> : <b>{dmy(invoiceDate(d))}</b>}</label>
           <label><span>Kênh bán</span>{editable ? <ChannelSelect value={cur.channel} onChange={(v) => setCur('channel', v || '')} extra={[d.channel]} placeholder="Chọn kênh bán" aria-label="Kênh bán" /> : <b>{d.channel || '—'}</b>}</label>
           <label><span>Bảng giá</span><b>{(priceBooks.data || []).find((b) => b.id === d.price_book_id)?.name || (d.price_level === 'cost' ? 'Giá vốn' : (settings.price_names || [])[(Number(d.price_level) || d.price_tier || 1) - 1] || 'Bảng giá chung')}</b></label>
           <label><span>Khách hàng</span><a href="#" onClick={(e) => { e.preventDefault(); open('party-detail', { type: 'kh', id: d.customer_id }); }}>{d.customer_name}{d.customer_code ? ` (${d.customer_code})` : ''}</a></label>
@@ -561,6 +562,8 @@ export function OrderDetail({ id, onClose }) {
           {canSell && d.status === 'xac_nhan' && d.remaining_qty > 0 && (isDat ? <Btn small icon="plus" onClick={processOrder}>Xử lý đơn hàng</Btn> : <Btn small icon="plus" onClick={() => open('deliver', { order: d })}>Tạo đợt giao tiếp theo</Btn>)}</div>}>
           <Table dense rows={dels.data} empty="Chưa giao" columns={[
             { key: 'c', label: 'Đợt', render: (r) => <><b>Đợt {dels.data.indexOf(r) + 1}</b><div className="cell-sub">{r.code} · {dmy(r.delivery_date)}</div></> },
+            ...(editable ? [{ key: 'dt', label: 'Ngày hóa đơn', render: (r) => <DateInput value={r.delivery_date} max={todayVN()} aria-label={`Ngày hóa đơn ${r.code}`}
+              onChange={(v) => v && v !== r.delivery_date && run('set_delivery_date', { id: r.id, date: v }, `Đã đổi ngày hóa đơn ${r.code} sang ${dmy(v)}`)} /> }] : []),
             { key: 'v', label: 'Tiền đợt này', align: 'right', render: (r) => money(r.total) },
             { key: 'g', label: 'Giá vốn', align: 'right', render: (r) => (r.cogs === null || r.cogs === undefined ? '—' : money(r.cogs)) },
             { key: 'p', label: 'Chứng từ', render: (r) => <div className="row gap-s">{[['hoa_don', 'Hóa đơn'], ['bien_ban', 'Biên bản'], ['hd_van_chuyen', 'HĐVC']].map(([t, l]) => <Btn small key={t} onClick={() => open('doc', { kind: 'delivery', id: r.id, type: t })}>{l}</Btn>)}{canSell && <Btn small onClick={() => open('trip', { order_id: id, delivery_id: r.id })}>Lái xe</Btn>}

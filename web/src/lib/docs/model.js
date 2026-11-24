@@ -239,11 +239,12 @@ async function loadInvoices(q, rpc, src) {
   const dinvs = ivs.filter((d) => d.customer_id === cust.id && d.order_status !== 'huy');
   if (!directs.length && !dinvs.length) throw new Error('Các hóa đơn đã chọn không còn hiệu lực');
   const orderIds = [...new Set([...directs.map((o) => o.id), ...dinvs.map((d) => d.order_id)])];
-  const [dlA, dlB, pays, info] = await Promise.all([
+  const [dlA, dlB, pays, info, olines] = await Promise.all([
     directs.length ? q('delivery_lines', [['order_id', 'in', directs.map((o) => o.id)]], 'delivery_date', 5000) : [],
     dinvs.length ? q('delivery_lines', [['delivery_id', 'in', dinvs.map((d) => d.id)]], 'delivery_date', 5000) : [],
     q('doc_payments', [['doc_id', 'in', orderIds]], 'pay_date', 5000),
     rpc('get_doc_info', { ref_type: 'customer', ref_id: cust.id }),
+    q('sales_order_lines', [['order_id', 'in', orderIds]], 'line_no', 5000),
   ]);
   const invs = [];
   for (const o of directs) {
@@ -274,7 +275,8 @@ async function loadInvoices(q, rpc, src) {
   // Dòng đã giao theo thứ tự hóa đơn, mã đợt giao = mã hóa đơn; các phiếu giao để in kèm biên bản bàn giao
   const allDl = invs.flatMap((iv) => iv.lines.map((l) => ({ ...l, delivery_code: iv.code })));
   const dels = [...new Map([...dlA, ...dlB].map((l) => [l.delivery_id, { id: l.delivery_id, code: l.delivery_code, delivery_date: l.delivery_date }])).values()];
-  return { kind: 'invoices', cust, invs, allDl, dels, lines: [], pays: [], prods: {}, k: null, info: info || {},
+  // Dòng hàng của các đơn liên quan (đơn bán ngay và đơn đặt hàng của các hóa đơn): số đặt và còn phải giao trên bảng đối chiếu số lượng
+  return { kind: 'invoices', cust, invs, allDl, dels, lines: olines, pays: [], prods: {}, k: null, info: info || {},
     o: { id: null, code: cust.code, customer_name: cust.name, customer_phone: cust.phone, customer_address: cust.address } };
 }
 
@@ -299,6 +301,22 @@ const pick = (o, ks) => Object.fromEntries(ks.filter((k) => o && o[k]).map((k) =
 export const PER_DELIVERY = ['hoa_don', 'bien_ban', 'phieu_xuat_kho', 'hd_van_chuyen', 'yeu_cau_vat', 'cn_xuat_xuong', 'phieu_dong_hang'];
 // Bảng đối chiếu: lập sau khi giao một hoặc nhiều đợt, theo hợp đồng hoặc theo đơn
 export const RECONCILE = ['doi_chieu_sl', 'doi_chieu_tt'];
+
+// Số liệu bảng đối chiếu số lượng: cột theo mặt hàng (thứ tự dòng trong đơn, rồi hàng chỉ có trong hóa đơn), nhóm dòng theo ngày giao
+// (gộp hóa đơn: theo hóa đơn), số đặt / đã giao / còn phải giao từng mặt hàng. Số đặt và còn phải giao lấy theo dòng hàng của các đơn liên quan.
+export function qtyFigures(data) {
+  const rows = data.allDl || []; const lines = data.lines || [];
+  const names = new Map([...lines.map((l) => [l.product_id, l.product_name]), ...rows.map((r) => [r.product_id, r.product_name])]);
+  const pids = [...new Set([...lines.map((l) => l.product_id), ...rows.map((r) => r.product_id)])];
+  const sum = (ls, k) => ls.reduce((s, r) => s + (Number(r[k]) || 0), 0);
+  const cols = pids.map((pid) => ({ pid, name: names.get(pid), ordered: sum(lines.filter((l) => l.product_id === pid), 'eff_qty'),
+    delivered: sum(rows.filter((r) => r.product_id === pid), 'qty'), remaining: sum(lines.filter((l) => l.product_id === pid), 'remaining_qty') }));
+  const at = (ls) => (pid) => sum(ls.filter((r) => r.product_id === pid), 'qty');
+  const groups = data.invs
+    ? data.invs.map((iv) => ({ date: iv.date, sub: iv.code, qty: at(iv.lines) }))
+    : [...new Set(rows.map((r) => r.delivery_date))].sort().map((day) => ({ date: day, sub: '', qty: at(rows.filter((r) => r.delivery_date === day)) }));
+  return { cols, groups, hasOrder: lines.length > 0 };
+}
 
 // Thông tin xuất hóa đơn khai ở hồ sơ khách (thẻ "Thông tin xuất hóa đơn")
 export const custExtra = (c) => { const x = c?.extra; if (!x) return {}; if (typeof x === 'string') { try { return JSON.parse(x) || {}; } catch (e) { return {}; } } return x; };

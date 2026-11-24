@@ -319,12 +319,57 @@ export function update_order_info(p) {
   requirePerm(o.book_id, 'ban_hang');
   if (o.status === 'huy') fail('Đơn đã hủy, không thể sửa');
   const next = { note: trimNz(p.note), staff: trimNz(p.staff), channel: trimNz(p.channel) };
-  const label = { note: 'Ghi chú', staff: 'Người bán', channel: 'Kênh bán' };
+  const label = { note: 'Ghi chú', staff: 'Người bán', channel: 'Kênh bán', order_date: o.kind === 'dat_hang' ? 'Ngày đặt' : 'Ngày bán' };
+  if (p.order_date !== undefined) next.order_date = asDate(p.order_date) || fail('Ngày không hợp lệ');
   const ch = Object.keys(next).filter((k) => (o[k] ?? null) !== next[k]);
   if (!ch.length) return { ok: true, changed: 0 };
+  const moved = [];
+  if (ch.includes('order_date')) {
+    checkDateChange(o.book_id, o.order_date, next.order_date);
+    // Hóa đơn bán ngay: các đợt giao cùng ngày bán cũ (giao ngay lúc bán) đổi ngày theo; đợt giao ngày khác giữ nguyên
+    if (o.kind === 'ban_san') {
+      for (const d of all(`select * from deliveries where order_id = ? and delivery_date = ?`, o.id, o.order_date)) { moveDeliveryDate(d, next.order_date); moved.push(d.code); }
+    }
+  }
   run(`update sales_orders set ${ch.map((k) => `${k} = ?`).join(', ')} where id = ?`, ...ch.map((k) => next[k]), o.id);
-  logOrder(o.id, 'sua', 'Sửa thông tin hóa đơn', ch.map((k) => `${label[k]}: ${o[k] || '—'} → ${next[k] || '—'}`));
+  const fmt = (k, x) => (k === 'order_date' ? x.split('-').reverse().join('/') : x);
+  logOrder(o.id, 'sua', 'Sửa thông tin hóa đơn', [...ch.map((k) => `${label[k]}: ${o[k] ? fmt(k, o[k]) : '—'} → ${next[k] ? fmt(k, next[k]) : '—'}`),
+    ...(moved.length ? [`Đổi ngày giao ${moved.join(', ')} theo ngày bán`] : [])]);
   return { ok: true, changed: ch.length };
+}
+
+// Đổi ngày chứng từ đã ghi: không vào kỳ đã khóa (cả ngày cũ lẫn ngày mới), không sang ngày tương lai, tôn trọng thiết lập khóa thời gian giao dịch
+function checkDateChange(b, oldDate, date) {
+  if (date > today()) fail('Ngày không được ở tương lai');
+  checkDate(b, oldDate); checkDate(b, date);
+  checkTxnDate(b, 'ban_hang', date, oldDate);
+}
+
+// Đổi ngày một đợt giao (hóa đơn HD): sổ kho, điểm tích lũy theo ngày mới. Sổ kho tính giá vốn theo thứ tự ghi nên giá vốn không đổi.
+function moveDeliveryDate(d, date) {
+  const ret = one(`select min(r.return_date) as d from sales_returns r join sales_return_lines rl on rl.return_id = r.id
+    join delivery_lines x on x.id = rl.delivery_line_id where x.delivery_id = ?`, d.id)?.d;
+  if (ret && date > ret) fail(`Phiếu giao ${d.code} đã có hàng trả ngày ${ret.split('-').reverse().join('/')} — ngày giao không được sau ngày trả`);
+  run(`update deliveries set delivery_date = ? where id = ?`, date, d.id);
+  run(`update stock_moves set move_date = ? where doc_id = ? and doc_type = 'giao'`, date, d.id);
+  run(`update point_moves set move_date = ? where doc_id = ?`, date, d.id);
+}
+
+// Sửa ngày của một hóa đơn HD (đợt giao). Hóa đơn bán ngay có một đợt giao mang chính mã hóa đơn thì ngày bán đổi theo.
+export function set_delivery_date(p) {
+  const d = one(`select * from deliveries where id = ?`, p.id);
+  if (!d) fail('Không tìm thấy hóa đơn / phiếu giao');
+  const o = one(`select * from sales_orders where id = ?`, d.order_id);
+  requirePerm(o.book_id, 'ban_hang');
+  if (o.status === 'huy') fail('Đơn đã hủy, không thể sửa');
+  const date = asDate(p.date) || fail('Ngày không hợp lệ');
+  if (date === d.delivery_date) return { ok: true, changed: 0 };
+  checkDateChange(o.book_id, d.delivery_date, date);
+  moveDeliveryDate(d, date);
+  const solo = o.kind === 'ban_san' && d.code === o.code && one(`select count(*) as n from deliveries where order_id = ?`, o.id).n === 1;
+  if (solo) run(`update sales_orders set order_date = ? where id = ?`, date, o.id);
+  logOrder(o.id, 'sua', `Sửa ngày hóa đơn ${d.code}`, [`${d.delivery_date.split('-').reverse().join('/')} → ${date.split('-').reverse().join('/')}`]);
+  return { ok: true, changed: 1 };
 }
 
 export function cancel_sales_order(p) {

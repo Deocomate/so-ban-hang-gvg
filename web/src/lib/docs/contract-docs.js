@@ -1,7 +1,7 @@
 // Chứng từ theo hợp đồng và báo giá: đề nghị tạm ứng / thanh toán, đối chiếu số lượng, đối chiếu kèm thanh toán, hợp đồng vận chuyển, báo giá.
 // Dựng cùng dạng danh sách khối như model.js để bản xem trước và tệp PDF giống hệt nhau.
 import { specText } from '../format.js';
-import { P, fmtNum, phoneFmt, dateLine, moneyWords, profileFor, goodsLines, weightPerUnit, DEFAULT_TEXTS, runsOf } from './model.js';
+import { P, fmtNum, phoneFmt, dateLine, moneyWords, profileFor, goodsLines, weightPerUnit, DEFAULT_TEXTS, runsOf, qtyFigures } from './model.js';
 
 const dmy = (iso) => { const [y, m, d] = String(iso || '').slice(0, 10).split('-'); return y ? `${d}/${m}/${y}` : ''; };
 const NATION = 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM'; const MOTTO = 'Độc lập – Tự do – Hạnh phúc';
@@ -58,14 +58,16 @@ function requestDoc(type, data, ds, info, prof, N) {
 
 // Bảng đối chiếu số lượng: mỗi ngày giao một hàng, mỗi mặt hàng một cột
 function qtyReconcile(data, ds, info, prof, N, code) {
-  const blocks = []; const rows = data.allDl;
+  const blocks = [];
   reconcileHead(blocks, 'BẢNG ĐỐI CHIẾU SỐ LƯỢNG GIAO HÀNG', prof, data, code);
-  const prods = [...new Map(rows.map((r) => [r.product_id, r.product_name])).entries()];
-  const days = [...new Set(rows.map((r) => r.delivery_date))].sort();
-  const qty = (day, pid) => rows.filter((r) => r.delivery_date === day && r.product_id === pid).reduce((s, r) => s + Number(r.qty), 0);
-  const body = days.map((day) => [{ text: dmy(day), align: 'center' }, ...prods.map(([pid]) => ({ text: qty(day, pid) ? N(qty(day, pid)) : '', align: 'center' }))]);
-  body.push([{ text: 'Tổng giao hàng', b: true }, ...prods.map(([pid]) => ({ text: N(rows.filter((r) => r.product_id === pid).reduce((s, r) => s + Number(r.qty), 0)), align: 'center', b: true }))]);
-  blocks.push({ t: 'table', widths: [80, ...prods.map(() => '*')], head: [{ text: 'Ngày', b: true, align: 'center' }, ...prods.map(([, n]) => ({ text: n, b: true, align: 'center' }))], body, size: 10, pad: 4 });
+  const t = qtyFigures(data);
+  const val = (q, b = false) => ({ text: q ? N(q) : '', align: 'center', b });
+  const body = [];
+  if (t.hasOrder) body.push([{ text: 'Số lượng đặt hàng', b: true }, ...t.cols.map((c) => val(c.ordered, true))]);
+  for (const g of t.groups) body.push([{ text: dmy(g.date), align: 'center' }, ...t.cols.map((c) => val(g.qty(c.pid)))]);
+  body.push([{ text: 'Tổng đã giao', b: true }, ...t.cols.map((c) => ({ text: N(c.delivered), align: 'center', b: true }))]);
+  if (t.hasOrder) body.push([{ text: 'Còn phải giao', b: true }, ...t.cols.map((c) => ({ text: N(c.remaining), align: 'center', b: true }))]);
+  blocks.push({ t: 'table', widths: [80, ...t.cols.map(() => '*')], head: [{ text: 'Ngày', b: true, align: 'center' }, ...t.cols.map((c) => ({ text: c.name, b: true, align: 'center' }))], body, size: 10, pad: 4 });
   blocks.push(...signPair(`Hà Nội, ${dateLine(info.date_doi_chieu_sl, false)}`));
   return { blocks, filename: `doi-chieu-so-luong_${data.k.code.replace(/\//g, '-')}.pdf`, title: 'Đối chiếu số lượng', code: data.k.code };
 }

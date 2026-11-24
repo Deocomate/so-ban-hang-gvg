@@ -3,7 +3,7 @@
 // Giá trị là chuỗi (in nguyên văn) hoặc { h: '<html>' } (đoạn HTML dựng sẵn: logo, bảng đối chiếu…);
 // { h, block: true } là khối lớn (bảng) — đặt riêng một dòng trong mẫu thì thay luôn cả dòng đó.
 import { specText, addDays } from '../format.js';
-import { fmtNum, phoneFmt, dateLine, moneyWords, profileFor, goodsLines, packLabel, totalKg, fmtKg, weightPerUnit, DEFAULT_TEXTS, runsOf, PER_DELIVERY, RECONCILE } from './model.js';
+import { fmtNum, phoneFmt, dateLine, moneyWords, profileFor, goodsLines, packLabel, totalKg, fmtKg, weightPerUnit, DEFAULT_TEXTS, runsOf, PER_DELIVERY, RECONCILE, qtyFigures } from './model.js';
 
 const T = (k, label, desc) => ({ k, label, desc: desc || label });
 
@@ -301,19 +301,17 @@ function invoiceBasis(invs) {
 }
 
 // ---------- Bảng dựng sẵn ----------
-// Mỗi ngày giao một hàng, mỗi mặt hàng một cột (theo thứ tự dòng trong đơn), dòng cuối là tổng đã giao.
-// Gộp nhiều hóa đơn của một khách: mỗi hóa đơn một hàng (ngày và mã hóa đơn).
+// Mỗi ngày giao một hàng, mỗi mặt hàng một cột (theo thứ tự dòng trong đơn). Gộp nhiều hóa đơn của một khách: mỗi hóa đơn một hàng (ngày và mã hóa đơn).
+// Có dòng hàng của đơn: thêm hàng "Số lượng đặt hàng" ở đầu và "Còn phải giao" ở cuối, để khách thấy đã giao bao nhiêu, còn bao nhiêu.
 function qtyTable(data, N) {
-  const rows = data.allDl || [];
-  const names = new Map(rows.map((r) => [r.product_id, r.product_name]));
-  const order = [...new Set([...(data.lines || []).map((l) => l.product_id).filter((id) => names.has(id)), ...names.keys()])];
-  const sum = (ls) => ls.reduce((s, r) => s + Number(r.qty), 0);
-  const cells = (ls) => order.map((pid) => { const q = sum(ls.filter((r) => r.product_id === pid)); return { text: q ? N(q) : '', align: 'center' }; });
-  const body = data.invs
-    ? data.invs.map((iv) => [{ text: dmy(iv.date), sub: iv.code, align: 'center' }, ...cells(iv.lines)])
-    : [...new Set(rows.map((r) => r.delivery_date))].sort().map((day) => [{ text: dmy(day), align: 'center' }, ...cells(rows.filter((r) => r.delivery_date === day))]);
-  body.push([{ text: 'Tổng giao hàng', b: true, align: 'center' }, ...order.map((pid) => ({ text: N(sum(rows.filter((r) => r.product_id === pid))), align: 'center', b: true }))]);
-  return htmlTable([data.invs ? 'Ngày / Hóa đơn' : 'Ngày', ...order.map((pid) => names.get(pid))], body, [90, ...order.map(() => '*')], 11);
+  const t = qtyFigures(data);
+  const val = (q, b = false) => ({ text: q ? N(q) : '', align: 'center', b });
+  const body = [];
+  if (t.hasOrder) body.push([{ text: 'Số lượng đặt hàng', b: true, align: 'center' }, ...t.cols.map((c) => val(c.ordered, true))]);
+  for (const g of t.groups) body.push([{ text: dmy(g.date), sub: g.sub, align: 'center' }, ...t.cols.map((c) => val(g.qty(c.pid)))]);
+  body.push([{ text: 'Tổng đã giao', b: true, align: 'center' }, ...t.cols.map((c) => ({ text: N(c.delivered), align: 'center', b: true }))]);
+  if (t.hasOrder) body.push([{ text: 'Còn phải giao', b: true, align: 'center' }, ...t.cols.map((c) => ({ text: N(c.remaining), align: 'center', b: true }))]);
+  return htmlTable([data.invs ? 'Ngày / Hóa đơn' : 'Ngày', ...t.cols.map((c) => c.name)], body, [90, ...t.cols.map(() => '*')], 11);
 }
 
 // Số liệu bảng đối chiếu công nợ: nhóm dòng hàng (đợt giao / hóa đơn), tiền hàng, VAT, cước, hàng trả, các lần thu

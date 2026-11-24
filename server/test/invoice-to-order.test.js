@@ -90,4 +90,47 @@ const d6 = await api.call('save_sales_order', { book_id: TH, request_id: rid(), 
 const r6 = await api.call('make_order_from_invoices', { book_id: TH, request_id: rid(), invoice_ids: [d6.id] });
 C('Chỉ có phiếu tạm: đơn đặt hàng vẫn là phiếu tạm', (await api.one('sales_orders', TH, [['id', 'eq', r6.id]])).status, 'nhap');
 
+G('6. Lập hóa đơn trước, đặt đơn sau: gắn hóa đơn vào đơn đặt hàng có sẵn');
+const K = (await api.call('save_party', { book_id: TH, type: 'kh', name: 'Anh Hoàn' })).id;
+const sellK = (date, lines, extra = {}) => api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: K, kind: 'ban_san', status: 'xac_nhan',
+  deliver_now: true, order_date: date, lines, ...extra });
+const k1 = await sellK(D(15), [{ product_id: P.NGOI, qty: 40, unit_price: 1000 }]);
+await api.call('create_payment', { book_id: TH, request_id: rid(), kind: 'thu_khach', date: D(15), fund_id: TM, party_id: K, amount: 40000,
+  allocations: [{ doc_type: 'don_ban', doc_id: k1.id, amount: 40000 }] });
+const k2 = await sellK(D(8), [{ product_id: P.NGOI, qty: 30, unit_price: 1100 }, { product_id: P.LO, qty: 2, unit_price: 400 }]);
+const dh = await api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: K, kind: 'dat_hang', status: 'xac_nhan', order_date: D(1),
+  lines: [{ product_id: P.NGOI, qty: 100, unit_price: 1000 }, { product_id: P.DIEM, qty: 20, unit_price: 800 }] });
+const kBefore = await api.one('customers', TH, [['id', 'eq', K]]);
+const c6 = await api.call('invoice_merge_candidates', { book_id: TH, invoice_id: k1.id });
+C('Gợi ý gắn vào đơn có sẵn của khách', [c6.target, c6.orders.length], [dh.id, 1]);
+const c6b = await api.call('invoice_merge_candidates', { book_id: TH, order_id: dh.id });
+C('Mở từ đơn: chọn sẵn các hóa đơn có mặt hàng chung', [c6b.target, [...c6b.picked].sort()], [dh.id, [k1.id, k2.id].sort()]);
+const r6b = await api.call('make_order_from_invoices', { book_id: TH, request_id: rid(), invoice_ids: [k1.id, k2.id], order_id: dh.id });
+C('Gắn vào đúng đơn, giữ mã đơn', [r6b.id, r6b.code, r6b.attached], [dh.id, dh.code, true]);
+const odh = await api.one('sales_orders', TH, [['id', 'eq', dh.id]]);
+const ldh = await api.q('sales_order_lines', TH, [['order_id', 'eq', dh.id]], 'line_no');
+const byP = (pid, k) => ldh.filter((l) => l.product_id === pid).reduce((s, l) => s + l[k], 0);
+C('Ngói: đặt 100, đã giao 70 (hai hóa đơn), còn 30', [byP(P.NGOI, 'eff_qty'), byP(P.NGOI, 'delivered_qty'), byP(P.NGOI, 'remaining_qty')], [100, 70, 30]);
+C('Diềm chưa giao vẫn còn 20; lọ hoa lấy thêm ngoài đơn', [byP(P.DIEM, 'remaining_qty'), byP(P.LO, 'eff_qty'), byP(P.LO, 'remaining_qty')], [20, 2, 0]);
+C('Đơn có 2 hóa đơn, giữ mã HD', (await api.q('order_invoices', TH, [['order_id', 'eq', dh.id]], 'delivery_date')).map((x) => x.code), [k1.code, k2.code]);
+C('Tổng đơn = phần còn lại theo giá đặt + hai hóa đơn theo giá đã bán', odh.order_total, 30 * 1000 + 20 * 800 + 40000 + 30 * 1100 + 800);
+C('Đã giao, đã thu đúng như hai hóa đơn', [odh.delivered_value, odh.paid_net], [40000 + 33000 + 800, 40000]);
+const kAfter = await api.one('customers', TH, [['id', 'eq', K]]);
+C('Công nợ khách không đổi', [kAfter.balance, kAfter.delivered], [kBefore.balance, kBefore.delivered]);
+const k3 = await sellK(D(1), [{ product_id: P.LO, qty: 1, unit_price: 400 }], { vat_rate: 8 });
+await E('Khác thuế suất với đơn', () => api.call('make_order_from_invoices', { book_id: TH, request_id: rid(), invoice_ids: [k3.id], order_id: dh.id }), /thuế suất/);
+
+G('7. Sửa ngày bán của hóa đơn');
+const s7 = await sellK(D(3), [{ product_id: P.LO, qty: 1, unit_price: 400 }]);
+await api.call('update_order_info', { book_id: TH, id: s7.id, order_date: D(6) });
+const o7 = await api.one('sales_orders', TH, [['id', 'eq', s7.id]]);
+const d7 = (await api.q('deliveries', TH, [['order_id', 'eq', s7.id]]))[0];
+C('Hóa đơn bán ngay: ngày bán và ngày giao đổi theo', [o7.order_date, d7.delivery_date], [D(6), D(6)]);
+const mv7 = await api.q('stock_moves', TH, [['doc_id', 'eq', d7.id]]);
+C('Thẻ kho đổi ngày theo', [...new Set(mv7.map((m) => m.move_date))], [D(6)]);
+const hd = (await api.q('order_invoices', TH, [['order_id', 'eq', dh.id]], 'delivery_date'))[1];
+await api.call('set_delivery_date', { book_id: TH, id: hd.id, date: D(9) });
+C('Hóa đơn HD của đơn đặt hàng đổi ngày', (await api.one('order_invoices', TH, [['id', 'eq', hd.id]])).delivery_date, D(9));
+await E('Không đổi sang ngày tương lai', () => api.call('set_delivery_date', { book_id: TH, id: hd.id, date: '2999-01-01' }), /tương lai/);
+
 finish('Tạo đơn đặt hàng từ hóa đơn');
