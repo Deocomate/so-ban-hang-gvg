@@ -116,9 +116,9 @@ export function CustomerDocsWorkspace({ customerId }) {
       <ErrorBox error={b.error} />
       <div className="cdocs-list">
         <div className="seg" role="group" aria-label="Lọc đơn theo giấy tờ">
-          <button type="button" className={st === 'need' ? 'on' : ''} onClick={() => setSt('need')}>Còn thiếu ({cnt.need})</button>
-          <button type="button" className={st === 'done' ? 'on' : ''} onClick={() => setSt('done')}>Đủ ({cnt.done})</button>
-          <button type="button" className={st === 'off' ? 'on' : ''} onClick={() => setSt('off')}>Không theo dõi ({cnt.off})</button>
+          <button type="button" title="Đơn còn thiếu giấy tờ" className={st === 'need' ? 'on' : ''} onClick={() => setSt('need')}>Thiếu ({cnt.need})</button>
+          <button type="button" title="Đơn đã đủ giấy tờ" className={st === 'done' ? 'on' : ''} onClick={() => setSt('done')}>Đủ ({cnt.done})</button>
+          <button type="button" title="Đơn không theo dõi giấy tờ" className={st === 'off' ? 'on' : ''} onClick={() => setSt('off')}>Bỏ qua ({cnt.off})</button>
           <button type="button" className={st === 'all' ? 'on' : ''} onClick={() => setSt('all')}>Tất cả ({all.length})</button>
         </div>
         <Search value={search} onChange={setSearch} placeholder="Tìm mã đơn, số hợp đồng…" />
@@ -132,7 +132,6 @@ export function CustomerDocsWorkspace({ customerId }) {
               <span className="row gap-xs wrap">{DOC_KEYS.map((k) => <span key={k} className={`dslot ds-${slotTone(r.slots[k])}`} title={`${DOC_LABEL[k]}${r.slots[k].skip ? ': không cần' : ''}`}>{DOC_SHORT[k]}</span>)}</span>
             </button>))}
         </div>
-        <Legend />
       </div>
       <div className="cdocs-detail">
         {cur ? <>
