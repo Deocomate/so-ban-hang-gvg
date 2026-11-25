@@ -31,6 +31,9 @@ export function CustomerGroupsPage() {
   const board = useRpcData('order_docs_board', { track: 'on' }, can('xem_ban_hang'));
   const [seg, setSeg] = useState('*cty'); const [by, setBy] = useState('mua'); const [view, setView] = useState('list'); const [search, setSearch] = useState('');
   const [docsOf, setDocsOf] = useState(null); const [manage, setManage] = useState(false);
+  // Khách không còn dữ liệu sau khi ngắt dữ liệu: mặc định ẩn; nhóm không còn khách nào cũng ẩn theo
+  const [showDormant, setShowDormant] = useState(false);
+  const nDormant = (customers.data || []).filter((c) => c.dormant).length;
   const allTime = !time.from && !time.to;
   // Đơn trong kỳ theo khách (bỏ đơn nháp, đã hủy)
   const stats = useMemo(() => {
@@ -44,7 +47,7 @@ export function CustomerGroupsPage() {
   // Giấy tờ của các đơn đang theo dõi, trong kỳ
   const docRows = useMemo(() => (board.data || []).filter((r) => time.inRange(r.order_date)), [board.data, time.from, time.to]);
   const docsBy = useMemo(() => { const m = {}; for (const r of docRows) { const x = m[r.customer_id] || (m[r.customer_id] = { n: 0, miss: 0 }); x.n++; if (r.missing) x.miss++; } return m; }, [docRows]);
-  const people = useMemo(() => (customers.data || []).map((c) => ({ ...c, company: isCompany(c, settings), mst: custExtra(c).tax_code || '', st: stats[c.id] || { n: 0, total: 0 }, docs: docsBy[c.id] })), [customers.data, settings, stats, docsBy]);
+  const people = useMemo(() => (customers.data || []).filter((c) => showDormant || !c.dormant).map((c) => ({ ...c, company: isCompany(c, settings), mst: custExtra(c).tax_code || '', st: stats[c.id] || { n: 0, total: 0 }, docs: docsBy[c.id] })), [customers.data, settings, stats, docsBy, showDormant]);
   const groups = groupNames(settings, customers.data);
   const isCompanySeg = (v) => v === '*cty' || isCompanyGroup(settings, v);
   const inSeg = (c, v) => (v === '*' ? true : v === '*cty' ? c.company : v === '-' ? !c.kind : c.kind === v);
@@ -65,10 +68,11 @@ export function CustomerGroupsPage() {
       filters={<>
         <FilterBox title="Nhóm"><RadioList value={seg} onChange={(v) => { setSeg(v); if (!isCompanySeg(v)) setView('list'); }} options={[
           { value: '*cty', label: 'Tất cả khách công ty', count: count('*cty') },
-          ...groups.map((g) => ({ value: g, label: groupLabel(settings, g), count: count(g) })),
+          ...groups.map((g) => ({ value: g, label: groupLabel(settings, g), count: count(g) })).filter((x) => x.count > 0 || x.value === seg),
           { value: '-', label: 'Chưa có nhóm', count: count('-') },
           { value: '*', label: 'Tất cả', count: inTime.length }]} /></FilterBox>
         <TimeFilter filter={time} />
+        {nDormant > 0 && <FilterBox title="Dữ liệu bán hàng"><Check checked={showDormant} onChange={setShowDormant}>Hiện cả {nDormant} khách không còn dữ liệu (sau khi ngắt)</Check></FilterBox>}
         {!allTime && <FilterBox title="Khách trong kỳ"><RadioList value={by} onChange={setBy} options={[{ value: 'mua', label: 'Có mua hàng trong kỳ' }, { value: 'moi', label: 'Khách mới tạo trong kỳ' }]} /></FilterBox>}
       </>}
       search={<Search value={search} onChange={setSearch} placeholder="Tìm tên, mã, SĐT, mã số thuế…" />}

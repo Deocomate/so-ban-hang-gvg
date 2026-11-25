@@ -523,13 +523,18 @@ with od as (
     coalesce(od.overdue, 0) + coalesce(so.overdue, 0) as overdue_raw,
     max(coalesce(od.max_overdue, 0), coalesce(so.max_overdue, 0)) as max_overdue_days,
     coalesce(so.open_orders, 0) as open_orders, coalesce(so.open_value, 0) as open_value,
-    coalesce(so.total_bought, 0) as total_bought, so.last_order_date
+    coalesce(so.total_bought, 0) as total_bought, so.last_order_date,
+    -- Không còn dữ liệu sau khi ngắt dữ liệu: khách tạo trước lần ngắt gần nhất mà sổ không còn đơn, phiếu thu / chi, nợ đầu kỳ, báo giá nào.
+    -- Ẩn ở trang Khách hàng / Nhóm khách, vẫn chọn được khi lập đơn, báo giá, phiếu thu…
+    case when so.customer_id is null and pay.party_id is null and od.party_id is null
+      and not exists (select 1 from quotes q where q.customer_id = c.id)
+      and exists (select 1 from data_archives a where a.book_id = c.book_id and a.created_at >= c.created_at) then 1 else 0 end as dormant
   from customers c left join od on od.party_id = c.id left join so on so.customer_id = c.id left join pay on pay.party_id = c.id
 )
 select id, book_id, code, name, phone, address, contact, kind, price_tier, credit_days, credit_limit, note, active, created_at, extra, stage,
   opening, delivered, paid, balance, max(balance, 0) as receivable, max(-balance, 0) as prepaid,
   min(overdue_raw, max(balance, 0)) as overdue, max_overdue_days, open_orders, open_value, total_bought, last_order_date,
-  owner_ids, supplier_id, coalesce((select sum(pm.points) from point_moves pm where pm.customer_id = t.id), 0) as points
+  owner_ids, supplier_id, coalesce((select sum(pm.points) from point_moves pm where pm.customer_id = t.id), 0) as points, dormant
 from t;
 
 create view v_expenses as

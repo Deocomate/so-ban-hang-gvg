@@ -21,6 +21,9 @@ const old = D(400); const cut = D(300);
 // Đơn cũ đã giao nhưng chưa ghi thu tiền (nợ ảo), và một khoản nợ đầu kỳ cũ của cùng khách
 const so = await api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: A, order_date: old, deliver_now: true, lines: [{ product_id: P.id, qty: 3, unit_price: 1000000 }] });
 await api.call('save_opening_debt', { book_id: TH, party_type: 'kh', party_id: A, amount: 500000, debt_date: old });
+// Khách chỉ có đơn cũ: sau khi ngắt không còn dữ liệu nào (ẩn ở trang Khách hàng)
+const Z = (await api.call('save_party', { book_id: TH, type: 'kh', name: 'Khách Chỉ Có Đơn Cũ', phone: '0900000097' })).id;
+await api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: Z, order_date: old, deliver_now: true, lines: [{ product_id: P.id, qty: 1, unit_price: 100000 }] });
 // Đơn mới sau ngày ngắt: phải giữ nguyên
 const so2 = await api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: A, order_date: T, deliver_now: true, lines: [{ product_id: P.id, qty: 1, unit_price: 200000 }] });
 
@@ -57,6 +60,13 @@ C('Tồn kho số lượng và giá trị từng mã giữ nguyên', JSON.string
 C('Tồn thực tế từng mã giữ nguyên', JSON.stringify(onHand()), JSON.stringify(h0));
 C('Số dư từng quỹ giữ nguyên', JSON.stringify(funds()), JSON.stringify(f0));
 C('Báo cáo kỳ đã ngắt không còn doanh thu', calcPl(TH, D(500), cut).revenue, 0);
+const dormant = async (id) => (await api.one('customers', TH, [['id', 'eq', id]])).dormant;
+C('Khách không còn dữ liệu được đánh dấu, khách còn đơn mới thì không', [await dormant(Z), await dormant(A)], [1, 0]);
+const N = (await api.call('save_party', { book_id: TH, type: 'kh', name: 'Khách Mới Sau Ngắt' })).id;
+C('Khách mới thêm sau khi ngắt luôn hiện', await dormant(N), 0);
+C('Vẫn chọn được khách không còn dữ liệu khi lập đơn', !!(await api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: Z, kind: 'ban_san',
+  order_date: T, lines: [{ product_id: P.id, qty: 1, unit_price: 1000 }] })).id, true);
+C('Có đơn mới thì khách hiện lại', await dormant(Z), 0);
 
 G('Bản lưu trữ');
 const list = await api.call('data_archives', { book_id: TH });

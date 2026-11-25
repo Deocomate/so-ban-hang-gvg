@@ -36,12 +36,16 @@ export function PartiesPage({ type }) {
   const isKh = type === 'kh';
   const [search, setSearch] = useState(''); const [only, setOnly] = useState(''); const [tier, setTier] = useState(''); const [grp, setGrp] = useState('');
   const [status, setStatus] = useState('on');
+  // Khách không còn dữ liệu sau khi ngắt dữ liệu: mặc định ẩn (vẫn chọn được khi lập đơn, báo giá, phiếu thu…)
+  const [dataSt, setDataSt] = useState('live');
   const [od, setOd] = useState(''); const [odFrom, setOdFrom] = useState(''); const [odTo, setOdTo] = useState('');
   const [debtR, setDebtR] = useState([null, null]); const [soldR, setSoldR] = useState([null, null]);
   const lastTx = useTimeFilter('all'); const created = useTimeFilter('all');
   const q = useQ(isKh ? 'customers' : 'suppliers', [], 'name', 5000);
   const pn = settings.price_names || [];
-  const all = q.data || [];
+  const everyone = q.data || [];
+  const nDormant = isKh ? everyone.filter((c) => c.dormant).length : 0;
+  const all = useMemo(() => (isKh && dataSt !== 'all' ? everyone.filter((c) => !c.dormant === (dataSt === 'live')) : everyone), [everyone, dataSt, isKh]);
   const debtKey = isKh ? 'receivable' : 'payable';
   const soldKey = isKh ? 'total_bought' : 'received';
   const today = todayVN();
@@ -69,8 +73,8 @@ export function PartiesPage({ type }) {
   const groups = isKh ? groupNames(settings, all) : [];
   const tot = (k) => rows.reduce((s, c) => s + (c[k] || 0), 0);
   const allTime = { mode: 'preset', preset: 'all', from: '', to: '' };
-  const clearAll = () => { setOnly(''); setTier(''); setGrp(''); setStatus('on'); setOd(''); setOdFrom(''); setOdTo(''); setDebtR([null, null]); setSoldR([null, null]); lastTx.setTime(allTime); created.setTime(allTime); };
-  const filtered = only || tier || grp || status !== 'on' || od || [...debtR, ...soldR].some((v) => v !== null && v !== undefined) || lastTx.from || lastTx.to || created.from || created.to;
+  const clearAll = () => { setDataSt('live'); setOnly(''); setTier(''); setGrp(''); setStatus('on'); setOd(''); setOdFrom(''); setOdTo(''); setDebtR([null, null]); setSoldR([null, null]); lastTx.setTime(allTime); created.setTime(allTime); };
+  const filtered = dataSt !== 'live' || only || tier || grp || status !== 'on' || od || [...debtR, ...soldR].some((v) => v !== null && v !== undefined) || lastTx.from || lastTx.to || created.from || created.to;
   const who = isKh ? 'khách' : 'nhà cung cấp';
   return (
     <ListPage title={isKh ? 'Khách hàng' : 'Nhà cung cấp / xưởng'}
@@ -89,13 +93,18 @@ export function PartiesPage({ type }) {
         </FilterBox>
         <RangeBox title={isKh ? 'Nợ hiện tại' : 'Mình còn nợ'} value={debtR} onChange={setDebtR} />
         {isKh && groups.length > 0 && <FilterBox title="Nhóm khách"><RadioList value={grp} onChange={setGrp} options={[{ value: '', label: 'Tất cả' },
-          ...groups.map((g) => ({ value: g, label: g, count: all.filter((c) => c.kind === g).length })), { value: '-', label: 'Chưa có nhóm', count: all.filter((c) => !c.kind).length }]} /></FilterBox>}
+          // Nhóm không còn khách nào (vd. mọi khách của nhóm đã hết dữ liệu sau khi ngắt) thì ẩn, trừ nhóm đang chọn
+          ...groups.map((g) => ({ value: g, label: g, count: all.filter((c) => c.kind === g).length })).filter((x) => x.count > 0 || x.value === grp),
+          { value: '-', label: 'Chưa có nhóm', count: all.filter((c) => !c.kind).length }]} /></FilterBox>}
         <TimeFilter filter={lastTx} title={isKh ? 'Lần mua gần nhất' : 'Lần nhập gần nhất'} />
         <RangeBox title={isKh ? 'Tổng bán' : 'Tổng nhận'} value={soldR} onChange={setSoldR} />
         {isKh && pn.length > 0 && <FilterBox title="Mức giá"><RadioList value={tier} onChange={setTier} options={[{ value: '', label: 'Tất cả' }, ...pn.map((n, i) => ({ value: String(i + 1), label: n }))]} /></FilterBox>}
         <TimeFilter filter={created} title="Ngày tạo" />
         <FilterBox title="Trạng thái"><RadioList value={status} onChange={setStatus} options={[{ value: 'on', label: 'Đang giao dịch', count: all.filter(isActive).length },
           { value: 'off', label: 'Ngừng giao dịch', count: all.filter((c) => !isActive(c)).length }, { value: 'all', label: 'Tất cả' }]} /></FilterBox>
+        {nDormant > 0 && <FilterBox title="Dữ liệu bán hàng"><RadioList value={dataSt} onChange={setDataSt} options={[
+          { value: 'live', label: 'Còn dữ liệu', count: everyone.length - nDormant },
+          { value: 'dormant', label: 'Không còn dữ liệu (sau khi ngắt)', count: nDormant }, { value: 'all', label: 'Tất cả' }]} /></FilterBox>}
         {filtered && <button type="button" className="link-btn small" onClick={clearAll}>Xóa bộ lọc</button>}
       </>}
       search={<Search value={search} onChange={setSearch} placeholder="Tìm tên, mã, số điện thoại…" />}
@@ -112,7 +121,7 @@ export function PartiesPage({ type }) {
       </>}>
       <ErrorBox error={q.error} />
       <Table rows={q.data ? rows : null} expand={(c, close) => <PartyDetail type={type} id={c.id} onClose={close} />} rowClass={(c) => (c.overdue > 0 ? 'row-late' : '')}
-        empty={all.length ? `Không có ${who} nào khớp bộ lọc` : `Chưa có ${who} nào`}
+        empty={all.length ? `Không có ${who} nào khớp bộ lọc` : everyone.length ? `Không có ${who} nào còn dữ liệu bán hàng` : `Chưa có ${who} nào`}
         foot={rows.length ? { n: `${money(rows.length)} ${who}`, d: money(tot(debtKey)), o: money(tot('overdue')), s: money(tot(soldKey)) } : null} columns={[
         { key: 'c', label: isKh ? 'Mã KH' : 'Mã NCC', width: 96, className: 'nowrap', render: (c) => c.code },
         { key: 'n', label: isKh ? 'Tên khách hàng' : 'Tên nhà cung cấp', className: 'col-fill', render: (c) => <span title={[c.name, c.address].filter(Boolean).join(' · ')}>{c.name}</span> },

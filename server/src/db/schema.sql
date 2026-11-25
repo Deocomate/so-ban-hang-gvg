@@ -271,6 +271,7 @@ create table if not exists sales_orders (
   price_book_id text
 );
 create unique index if not exists sales_orders_code_uq on sales_orders (book_id, code);
+create index if not exists sales_orders_customer_idx on sales_orders (customer_id);
 
 create table if not exists sales_order_lines (
   id text primary key,
@@ -539,6 +540,7 @@ create table if not exists payments (
   edit_log text not null default '[]'  -- lịch sử sửa phiếu: [{at, by, changes[], reason}]
 );
 create index if not exists payments_book_date_idx on payments (book_id, pay_date);
+create index if not exists payments_party_idx on payments (party_id);
 
 create table if not exists payment_allocations (
   id text primary key,
