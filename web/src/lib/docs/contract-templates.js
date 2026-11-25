@@ -201,7 +201,7 @@ function goodsTable(data) {
   const disc = Math.max(0, goods - Number(o.goods_total || 0));
   const td = (h, st = '') => `<td style="vertical-align:middle${st ? '; ' + st : ''}"><p style="font-size:11pt${st.includes('right') ? '; text-align:right' : st.includes('center') ? '; text-align:center' : ''}">${h}</p></td>`;
   const head = ['STT', 'Tên sản phẩm', 'Số lượng', 'ĐVT', 'Đơn giá', 'Thành tiền'].map((x) => td(B(x), 'text-align:center')).join('');
-  const rows = g.map((l, i) => `<tr>${td(String(i + 1), 'text-align:center')}${td(esc(l.name))}${td(N(l.qty), 'text-align:center')}${td(esc(l.unit || ''), 'text-align:center')}${td(N(l.price), 'text-align:right')}${td(N(l.total), 'text-align:right')}</tr>`).join('');
+  const rows = g.map((l, i) => `<tr>${td(String(i + 1), 'text-align:center')}${td(esc(l.name) + (l.sub ? `<br>${I(esc(l.sub).replace(/\n/g, '<br>'))}` : ''))}${td(N(l.qty), 'text-align:center')}${td(esc(l.unit || ''), 'text-align:center')}${td(N(l.price), 'text-align:right')}${td(N(l.total), 'text-align:right')}</tr>`).join('');
   const sum = (label, v) => `<tr>${td('')}${td('')}<td colspan="3" style="vertical-align:middle"><p style="font-size:11pt; text-align:center">${B(label)}</p></td>${td(B(N(v)), 'text-align:right')}</tr>`;
   const words = `<tr><td colspan="6"><p style="font-size:11pt">${B(I(`Bằng chữ: ${esc(moneyWords(total, true))}./.`))}</p></td></tr>`;
   return `<table data-border="1" style="font-size:11pt; margin-top:4pt"><colgroup><col style="width:40px"><col><col style="width:80px"><col style="width:52px"><col style="width:80px"><col style="width:104px"></colgroup><tbody>
