@@ -122,12 +122,14 @@ export function PartiesPage({ type }) {
       <ErrorBox error={q.error} />
       <Table rows={q.data ? rows : null} expand={(c, close) => <PartyDetail type={type} id={c.id} onClose={close} />} rowClass={(c) => (c.overdue > 0 ? 'row-late' : '')}
         empty={all.length ? `Không có ${who} nào khớp bộ lọc` : everyone.length ? `Không có ${who} nào còn dữ liệu bán hàng` : `Chưa có ${who} nào`}
-        foot={rows.length ? { n: `${money(rows.length)} ${who}`, d: money(tot(debtKey)), o: money(tot('overdue')), s: money(tot(soldKey)) } : null} columns={[
+        foot={rows.length ? { n: `${money(rows.length)} ${who}`, d: money(tot(debtKey)), p: money(tot('prepaid')), o: money(tot('overdue')), s: money(tot(soldKey)) } : null} columns={[
         { key: 'c', label: isKh ? 'Mã KH' : 'Mã NCC', width: 96, className: 'nowrap', render: (c) => c.code },
         { key: 'n', label: isKh ? 'Tên khách hàng' : 'Tên nhà cung cấp', className: 'col-fill', render: (c) => <span title={[c.name, c.address].filter(Boolean).join(' · ')}>{c.name}</span> },
         { key: 'ph', label: 'Điện thoại', width: 116, className: 'nowrap', render: (c) => c.phone || '' },
         ...(isKh ? [{ key: 'g', label: 'Nhóm khách', width: 120, className: 'col-clip', render: (c) => <span title={c.kind || ''}>{c.kind || ''}</span> }] : []),
-        { key: 'd', label: isKh ? 'Nợ hiện tại' : 'Còn phải trả', align: 'right', width: 124, render: (c) => (c[debtKey] > 0 ? <b>{money(c[debtKey])}</b> : c.prepaid > 0 ? <span className="good" title="Trả trước">−{money(c.prepaid)}</span> : '0') },
+        { key: 'd', label: isKh ? 'Nợ hiện tại' : 'Còn phải trả', align: 'right', width: 124, render: (c) => (c[debtKey] > 0 ? <b>{money(c[debtKey])}</b> : '0') },
+        // Tiền khách gửi trước / cọc là tiền mình đang giữ, không phải nợ âm: tách cột riêng
+        { key: 'p', label: isKh ? 'Trả trước / cọc' : 'Đã trả trước', align: 'right', width: 124, render: (c) => (c.prepaid > 0 ? <span className="good">{money(c.prepaid)}</span> : '') },
         { key: 'o', label: 'Quá hạn', align: 'right', width: 120, render: (c) => (c.overdue > 0 ? <span className="bad strong" title={`Lâu nhất ${c.max_overdue_days} ngày, từ ${dmy(overdueSince(c))}`}>{money(c.overdue)}</span> : '') },
         { key: 's', label: isKh ? 'Tổng bán' : 'Tổng nhận', align: 'right', width: 128, render: (c) => money(c[soldKey] || 0) },
         { key: 'l', label: isKh ? 'Mua gần nhất' : 'Nhập gần nhất', width: 104, className: 'nowrap', render: (c) => (c.last_order_date ? dmy(c.last_order_date) : '') },
