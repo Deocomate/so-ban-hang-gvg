@@ -7,7 +7,7 @@ import { fmtNum, phoneFmt, dateLine, moneyWords, profileFor, goodsLines, packLab
 
 const T = (k, label, desc) => ({ k, label, desc: desc || label });
 
-// Phần ghi chú, điều khoản (dưới bảng kê, trên chữ ký) in nhỏ cố định, không theo cỡ chữ cơ bản của sổ.
+// Phần ghi chú hóa đơn bán hàng (dưới bảng kê, trên chữ ký) in nhỏ cố định, không theo cỡ chữ cơ bản của sổ.
 // Dấu --tpl-note nằm ngay trong style nên trình sửa mẫu (chỉ giữ style của đoạn) không làm mất; withBaseSize() bỏ qua đoạn có dấu này.
 export const NOTE_PT = 9;
 export const NOTE_ST = `font-size:${NOTE_PT}pt; --tpl-note:1`;
@@ -261,7 +261,7 @@ export function tokenValues(type, data, ds, info, sep = ',') {
 // Hợp đồng vận chuyển: SĐT hai bên, thời gian vận chuyển (đến ngày trống = từ ngày + số ngày tối đa), điều khoản dựng sẵn
 const longDate = (iso) => { const [y, m, d] = String(iso || '').slice(0, 10).split('-'); return y ? `ngày ${d} Tháng ${m} Năm ${y}` : 'ngày ..... Tháng ..... Năm .........'; };
 // Đoạn **đậm**, nhãn "Điều …" gạch chân như mẫu HĐVC của xưởng
-const termsHtml = (txt, days) => String(txt || '').replace('{days}', esc(days)).split('\n').map((ln) => `<p style="${NOTE_ST}; margin-top:3pt; line-height:1.35">${
+const termsHtml = (txt, days) => String(txt || '').replace('{days}', esc(days)).split('\n').map((ln) => `<p style="font-size:10.5pt; margin-top:3pt; line-height:1.35">${
   richText(ln).replace(/<strong>(Điều [IVX]+)(:?)<\/strong>/, '<strong><u>$1</u></strong>$2')}</p>`).join('');
 function transportValues(info, docDay) {
   const days = String(info.transit_days || '04');
@@ -409,8 +409,8 @@ function quoteTable(q, N) {
   return htmlTable(head, rows, widths, 8.5);
 }
 function quoteTerms(terms) {
-  const lines = String(terms).split('\n').map((ln) => `<p style="${NOTE_ST}; line-height:1.25${/^\s/.test(ln) ? '; margin-left:10pt' : ''}">${richText(ln.trim()) || '&nbsp;'}</p>`);
-  return `<p style="${NOTE_ST}; margin-top:8pt; margin-bottom:2pt"><strong>LƯU Ý:</strong></p>${lines.join('')}`;
+  const lines = String(terms).split('\n').map((ln) => `<p style="font-size:9.5pt; line-height:1.25${/^\s/.test(ln) ? '; margin-left:10pt' : ''}">${richText(ln.trim()) || '&nbsp;'}</p>`);
+  return `<p style="font-size:10pt; margin-top:8pt; margin-bottom:2pt"><strong>LƯU Ý:</strong></p>${lines.join('')}`;
 }
 
 // ---------- Dữ liệu mẫu cho trình sửa mẫu ----------

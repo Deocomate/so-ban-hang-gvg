@@ -171,7 +171,7 @@ const BUILDERS = {
         [{ h: B(I('Bằng chữ: {Con_Thanh_Toan_Bang_Chu}.')), span: 6 }],
         [{ h: B(I('Ghi chú: {Ghi_Chu}')), span: 6 }],
       ], { size: 9.5 })
-      + (ft ? P(B(I(esc(ft))), `${center}; ${NOTE_ST}; margin-top:18pt`) : '');
+      + (ft ? P(B(I(esc(ft))), `${center}; font-size:9.5pt; margin-top:18pt`) : '');
   },
   bien_ban(ds) {
     const s = 'font-size:11pt; margin-top:3pt';
@@ -190,7 +190,7 @@ const BUILDERS = {
       + P(B('Địa chỉ giao hàng: {Dia_Chi_Nhan_Hang}'), 'font-size:11pt; margin-top:6pt')
       + P(B('SĐT nhận hàng: {SDT_Kem_Nguoi_Nhan}'), 'font-size:11pt; margin-top:4pt')
       + P('Tình trạng hàng hóa: {Tinh_Trang_Hang}', 'font-size:11pt; margin-top:4pt')
-      + lines(String(textOf(ds, 'bien_ban', 'handover_closing') || '').split('\n').filter(Boolean).join('\n'), `${NOTE_ST}; margin-top:4pt; line-height:1.35`)
+      + lines(String(textOf(ds, 'bien_ban', 'handover_closing') || '').split('\n').filter(Boolean).join('\n'), 'font-size:11pt; margin-top:4pt; line-height:1.35')
       + sign([{ title: 'ĐẠI DIỆN BÊN GIAO', name: '{Dai_Dien_Ben_Giao}' }, { title: 'LÁI XE', name: '{Lai_Xe}' }, { title: 'ĐẠI DIỆN BÊN NHẬN' }], { size: 11, space: 4, mt: 24 });
   },
   // Phiếu đóng hàng (cho kho): tiêu đề, khách hàng, ngày đóng hàng và bảng hàng kèm quy cách đóng gói, tổng số hộp
@@ -226,7 +226,7 @@ const BUILDERS = {
         sumRow('Tổng tiền thanh toán:', '{Tong_Tien_Thanh_Toan_VAT}', true),
         [{ h: `Số tiền viết bằng chữ: ${B(I('{Tong_Tien_VAT_Bang_Chu}'))}`, span: 6 }],
       ], { size: 10 })
-      + P(`${B('Ghi chú:')} {Ghi_Chu_Xuat_HD}`, `${NOTE_ST}; margin-top:6pt`)
+      + P(`${B('Ghi chú:')} {Ghi_Chu_Xuat_HD}`, 'font-size:10.5pt; margin-top:6pt')
       + sign([{ title: 'NGƯỜI ĐỀ NGHỊ', note: '(Ký, ghi rõ họ tên)' }, { title: 'KẾ TOÁN', note: '(Ký, ghi rõ họ tên)' }], { size: 10.5, space: 4, mt: 14 })
       + P(I('Phần kế toán ghi sau khi xuất: Hóa đơn số .................... Ký hiệu .................... Ngày ...../...../.........'), 'font-size:10pt; margin-top:14pt');
   },
@@ -295,8 +295,8 @@ const BUILDERS = {
       ], { size: 10.5 })
       + P(B('{Thoi_Gian_Van_Chuyen}'), 'font-size:10.5pt; margin-top:6pt')
       + P('{Dieu_Khoan_Van_Chuyen}')
-      + P('Cân nặng và giá cước: {Can_Nang_Gia_Cuoc}', `${NOTE_ST}; margin-top:3pt; line-height:1.35`)
-      + P('Thanh toán cước phí tại: {Thanh_Toan_Cuoc_Tai}', `${NOTE_ST}; margin-top:3pt; line-height:1.35`)
+      + P('Cân nặng và giá cước: {Can_Nang_Gia_Cuoc}', 'font-size:10.5pt; margin-top:3pt; line-height:1.35')
+      + P('Thanh toán cước phí tại: {Thanh_Toan_Cuoc_Tai}', 'font-size:10.5pt; margin-top:3pt; line-height:1.35')
       + P('{Dieu_Khoan_Cuoi_Van_Chuyen}')
       + sign([{ title: 'ĐẠI DIỆN BÊN A', name: '{Dai_Dien_Ben_Giao}' }, { title: 'LÁI XE', name: '{Lai_Xe}' }, { title: 'ĐẠI DIỆN BÊN B' }], { size: 11, space: 4, mt: 6 });
   },
