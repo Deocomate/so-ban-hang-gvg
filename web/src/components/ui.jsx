@@ -291,7 +291,7 @@ export function Table({ columns, rows, onRow, empty = 'Chưa có dữ liệu', r
 const InlineCtx = React.createContext(false);
 export const InlineDetail = ({ children }) => <InlineCtx.Provider value>{children}</InlineCtx.Provider>;
 
-export function Modal({ title, onClose, children, footer, size = 'md', subtitle }) {
+export function Modal({ title, onClose, children, footer, size = 'md', subtitle, className }) {
   const ref = useRef(null);
   const inline = useContext(InlineCtx);
   useEffect(() => {
@@ -318,7 +318,7 @@ export function Modal({ title, onClose, children, footer, size = 'md', subtitle 
   }
   return createPortal(
     <div className="overlay" ref={ref} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
-      <div className={`modal modal-${size}`} role="dialog" aria-modal="true" aria-label={title}>
+      <div className={`modal modal-${size}${className ? ` ${className}` : ''}`} role="dialog" aria-modal="true" aria-label={title}>
         <div className="modal-head">
           <div><div className="modal-title">{title}</div>{subtitle && <div className="modal-sub">{subtitle}</div>}</div>
           <button className="icon-btn" onClick={onClose} aria-label="Đóng"><Icon name="x" /></button>

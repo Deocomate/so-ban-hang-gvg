@@ -31,14 +31,26 @@ const STANDALONE = ['payment', 'contract', 'quote', 'invoices'];
 // "PDF / In": từng trang theo khổ giấy; "Ảnh": cả chứng từ trên một trang dài như khi Tải ảnh.
 // opts / setOpt (tùy chọn xuất): có thì kéo được đường kẻ giữa hai cột của bảng có viền để chỉnh độ rộng cột
 const PREVIEW_KEY = 'gomsu.preview_mode';
+const ZOOM_KEY = 'gomsu.preview_zoom';
+const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+// Bề rộng trang trên màn hình: khổ thật (pt → px) nhân tỷ lệ; vừa khung thì không vượt bề rộng khung xem
+function applyZoom(el, zoom) {
+  const px = Number(el.dataset.px) || 794;
+  el.style.width = `${zoom === 'fit' ? px : px * zoom}px`; el.style.maxWidth = zoom === 'fit' ? '100%' : 'none';
+}
 // extra: nút thêm ở thanh trên của bản xem trước
 // signs / onSign / onDropSign: chữ ký đặt trên trang (chỉ ở chế độ PDF / In) — sửa vị trí, bỏ, thả mẫu chữ ký mới vào trang
 export function DocPreview({ doc, opts, setOpt, extra, signs, onSign, onDropSign }) {
   useDocFonts(); // phông dùng khi đo độ rộng cột
   const [mode, setModeState] = useState(() => { try { return localStorage.getItem(PREVIEW_KEY) === 'image' ? 'image' : 'pdf'; } catch (e) { return 'pdf'; } });
   const setMode = (v) => { setModeState(v); try { localStorage.setItem(PREVIEW_KEY, v); } catch (e) { /* bỏ qua */ } };
-  const boxRef = React.useRef(null); const geo = React.useRef({ tables: [] });
+  const boxRef = React.useRef(null); const zoomRef = React.useRef('fit'); const geo = React.useRef({ tables: [] });
   const [st, setSt] = useState({ busy: true, error: null, pages: 0 });
+  // Thu phóng: 'fit' = vừa khung (không to hơn khổ thật), số = tỷ lệ so với khổ thật
+  const [zoom, setZoomState] = useState(() => { try { const v = Number(localStorage.getItem(ZOOM_KEY)); return ZOOMS.includes(v) ? v : 'fit'; } catch (e) { return 'fit'; } });
+  const setZoom = (v) => { setZoomState(v); try { localStorage.setItem(ZOOM_KEY, String(v)); } catch (e) { /* bỏ qua */ } };
+  const zi = zoom === 'fit' ? -1 : ZOOMS.indexOf(zoom);
+  const stepZoom = (d) => setZoom(ZOOMS[Math.min(ZOOMS.length - 1, Math.max(0, (zi < 0 ? ZOOMS.indexOf(1) : zi) + d))]);
   const [sheets, setSheets] = useState([]); // { el, page, wPt } của các trang đang hiện — để gắn lớp chữ ký
   useEffect(() => {
     let alive = true; setSt((s) => ({ ...s, busy: true, error: null }));
@@ -51,9 +63,11 @@ export function DocPreview({ doc, opts, setOpt, extra, signs, onSign, onDropSign
         if (!alive || !boxRef.current) return;
         const sheets = canvases.map((c, i) => {
           const w = document.createElement('div'); w.className = 'pdf-sheet'; w.dataset.page = String(i + 1);
-          w.style.width = `${(Number(c.dataset.w) * 4) / 3}px`; c.className = 'pdf-sheet-canvas'; c.setAttribute('aria-label', `Trang ${i + 1}`);
+          w.dataset.px = String((Number(c.dataset.w) * 4) / 3); if (canvases.length > 1) w.dataset.label = `Trang ${i + 1} / ${canvases.length}`;
+          c.className = 'pdf-sheet-canvas'; c.setAttribute('aria-label', `Trang ${i + 1}`);
           w.appendChild(c); return w;
         });
+        for (const w of sheets) applyZoom(w, zoomRef.current);
         boxRef.current.replaceChildren(...sheets);
         setSheets(sheets.map((el, i) => ({ el, page: i + 1, wPt: Number(canvases[i].dataset.w) })));
         geo.current = { tables };
@@ -62,6 +76,8 @@ export function DocPreview({ doc, opts, setOpt, extra, signs, onSign, onDropSign
     }, 250);
     return () => { alive = false; clearTimeout(timer); };
   }, [doc, mode]);
+  zoomRef.current = zoom;
+  useEffect(() => { for (const sh of sheets) applyZoom(sh.el, zoom); }, [sheets, zoom]);
   // Lưu độ rộng (tỷ lệ) của bảng thứ ti cho loại chứng từ + mẫu + hướng giấy đang xem
   const saveRef = React.useRef(null);
   saveRef.current = (ti, ws) => {
@@ -73,14 +89,19 @@ export function DocPreview({ doc, opts, setOpt, extra, signs, onSign, onDropSign
     <div className="doc-preview">
       <div className="doc-preview-bar">
         <div className="seg" role="group" aria-label="Xem như">
-          <button type="button" className={mode === 'pdf' ? 'on' : ''} onClick={() => setMode('pdf')}>PDF / In</button>
-          <button type="button" className={mode === 'image' ? 'on' : ''} onClick={() => setMode('image')}>Ảnh (1 trang)</button>
+          <button type="button" className={mode === 'pdf' ? 'on' : ''} onClick={() => setMode('pdf')} title="Từng trang theo khổ giấy, giống tệp PDF và bản in">PDF / In</button>
+          <button type="button" className={mode === 'image' ? 'on' : ''} onClick={() => setMode('image')} title="Cả chứng từ trên một trang dài, giống ảnh khi bấm Tải ảnh">Ảnh</button>
         </div>
-        <span className="muted small">{st.busy ? 'Đang dựng bản xem trước…' : mode === 'image' ? 'Giống ảnh khi bấm Tải ảnh' : `${st.pages} trang · giống tệp PDF và bản in`}</span>
+        <div className="zoom-ctl" role="group" aria-label="Thu phóng">
+          <button type="button" className="icon-btn" onClick={() => stepZoom(-1)} disabled={zi === 0} aria-label="Thu nhỏ" title="Thu nhỏ">−</button>
+          <button type="button" className="zoom-val" onClick={() => setZoom(zoom === 'fit' ? 1 : 'fit')} title={zoom === 'fit' ? 'Xem đúng khổ thật (100%)' : 'Vừa khung xem'}>{zoom === 'fit' ? 'Vừa khung' : `${Math.round(zoom * 100)}%`}</button>
+          <button type="button" className="icon-btn" onClick={() => stepZoom(1)} disabled={zi === ZOOMS.length - 1} aria-label="Phóng to" title="Phóng to">+</button>
+        </div>
+        <span className="muted small doc-preview-status">{st.busy ? <><span className="spin-dot" aria-hidden="true" />Đang dựng…</> : mode === 'image' ? 'Một trang dài' : `${st.pages} trang`}</span>
         {extra && <><span className="grow" />{extra}</>}
       </div>
       {st.error && <ErrorBox error={'Không xem trước được: ' + st.error} />}
-      <div className={`doc-scroll pdf-sheets${st.busy ? ' is-busy' : ''}${setOpt ? ' doc-resizable' : ''}`} ref={boxRef}
+      <div className={`doc-scroll pdf-sheets${zoom === 'fit' ? '' : ' is-zoomed'}${st.busy ? ' is-busy' : ''}${setOpt ? ' doc-resizable' : ''}`} ref={boxRef}
         onDragOver={(e) => { if (onDropSign && mode === 'pdf' && e.dataTransfer.types.includes(SIGN_DRAG)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
         onDrop={(e) => {
           const id = e.dataTransfer.getData(SIGN_DRAG); const el = e.target.closest?.('.pdf-sheet');
@@ -345,22 +366,28 @@ function ReconcilePack({ src, dels, ds, beforeExport, xopts }) {
 // ---------- Đầu trang (header) sửa riêng cho chứng từ này ----------
 // Mỗi lần xuất có thể cần đầu trang khác (địa chỉ chi nhánh, SĐT người phụ trách…): sửa ở đây, lưu theo chứng từ, không đổi cài đặt đơn vị.
 function HeaderEditor({ type, prof, info, setEdit }) {
-  const [open, setOpen] = useState(false);
   const keys = [...HEADER_FIELDS.map(([k]) => k), 'logo'];
   const changed = keys.filter((k) => info[headerKey(type, k)]).length;
   const set = (k, v) => setEdit((s) => ({ ...s, [headerKey(type, k)]: v }));
   return (
-    <div className="stack-s">
-      <button className="link-btn small" onClick={() => setOpen((x) => !x)}>{open ? '▾' : '▸'} Đầu trang (header){changed ? ` · đã sửa ${changed} dòng` : ''}</button>
-      {open && <div className="stack-s">
+    <SideGroup title="Đầu trang (header)" badge={changed ? `đã sửa ${changed}` : null}>
         <div className="muted small">Chỉ đổi đầu trang của chứng từ này. Để trống = theo đơn vị phát hành; gõ dấu "-" để bỏ dòng đó.</div>
         {HEADER_FIELDS.map(([k, label]) => (
           <Field key={k} label={label}><Input value={info[headerKey(type, k)] || ''} placeholder={prof[k] || '(trống)'} onChange={(v) => set(k, k === 'name' ? v.toUpperCase() : v)} maxLength={500} /></Field>
         ))}
         {prof.logo && <Check checked={info[headerKey(type, 'logo')] === '-'} onChange={(v) => set('logo', v ? '-' : '')}>Không in logo</Check>}
         {changed > 0 && <button className="link-btn small" onClick={() => setEdit((s) => ({ ...s, ...Object.fromEntries(keys.map((k) => [headerKey(type, k), ''])) }))}>Dùng lại đầu trang theo đơn vị phát hành</button>}
-      </div>}
-    </div>
+    </SideGroup>
+  );
+}
+
+// Một nhóm thu gọn được ở cột tùy chọn bên trái của hộp thoại in
+function SideGroup({ title, badge, open = false, children }) {
+  return (
+    <details className="doc-group" open={open}>
+      <summary><span className="grow">{title}</span>{badge && <span className="doc-group-badge">{badge}</span>}</summary>
+      <div className="doc-group-body">{children}</div>
+    </details>
   );
 }
 
@@ -389,7 +416,6 @@ export function DocDialog({ kind, id, keys, type: type0, pay, page, onClose }) {
   const [src, setSrc] = useState(withPay && (type0 ? type0 === 'phieu_thu' : true) ? { kind: 'payment', id: pay } : { kind, id, keys });
   const [data, setData] = useState(null); const [err, setErr] = useState(null);
   const [edit, setEdit] = useState({}); const [busy, setBusy] = useState(false); const [reload, setReload] = useState(0);
-  const [showForm, setShowForm] = useState(true);
   const [drivers, setDrivers] = useState([]);   // lái xe khai ở module vận chuyển, để chọn thay vì gõ tay
   useEffect(() => { q('drivers', [], 'name').then((r) => setDrivers((r || []).filter((x) => x.active !== 0 && x.active !== false))).catch(() => {}); }, []);
   const [remindVat, setRemindVat] = useState(false);   // hộp nhắc xuất hóa đơn VAT sau khi in biên bản giao hàng
@@ -513,10 +539,12 @@ export function DocDialog({ kind, id, keys, type: type0, pay, page, onClose }) {
     <Btn kind="primary" icon="dl" busy={busy} disabled={!doc || !!doc?.error} onClick={download}>Tải PDF</Btn>
   </>;
   const content = (
-    <>
+    <div className="doc-shell">
       {types.length > 1 && <Tabs value={type} onChange={setType} tabs={tabTypes.map((t, i) => ({ value: t, label: DOC_TYPES[t].label, gap: i > 0 && TAB_STAGE[t] !== TAB_STAGE[tabTypes[i - 1]], title: STAGE_LABEL[TAB_STAGE[t]] }))} />}
-      <ErrorBox error={err || doc?.error} />
-      {company && <VatReminder orderId={data.o.id} onShowRequest={type === 'yeu_cau_vat' ? null : () => setType('yeu_cau_vat')} />}
+      <div className="doc-alerts">
+        <ErrorBox error={err || doc?.error} />
+        {company && <VatReminder orderId={data.o.id} onShowRequest={type === 'yeu_cau_vat' ? null : () => setType('yeu_cau_vat')} />}
+      </div>
       {remindVat && <VatReminderPopup orderId={data?.o?.id} onShowRequest={() => setType('yeu_cau_vat')} onClose={() => setRemindVat(false)} />}
       {!data ? !err && <Loading /> : (
         <div className="doc-wrap">
@@ -525,23 +553,13 @@ export function DocDialog({ kind, id, keys, type: type0, pay, page, onClose }) {
             {RECONCILE.includes(type) && delivered && ['order', 'contract', 'invoices'].includes(kind) && <ReconcilePack src={{ kind, id, keys }} dels={data.dels} ds={ds} beforeExport={save} xopts={opts} />}
             {kind === 'invoices' && data.invs && <div className="muted small">Gộp {data.invs.length} hóa đơn: {data.invs.map((iv) => iv.code).join(', ')}.</div>}
             {RECONCILE.includes(type) && kind === 'order' && !data?.k && <div className="muted small">Đơn chưa có hợp đồng: bảng ghi "Theo đơn hàng số {data?.o?.code}".</div>}
-            {perDelivery && !STANDALONE.includes(data.kind) && (
-              <Field label="Lập theo">
-                <Select value={src.kind === 'delivery' ? src.id : ''} onChange={(v) => setSrc(v ? { kind: 'delivery', id: v } : { kind: 'order', id: data.o.id })}
-                  options={[{ value: '', label: 'Cả đơn (hàng còn trong đơn)' }, ...dels.map((d) => ({ value: d.id, label: `Phiếu giao ${d.code} · ${dmy(d.delivery_date)}` }))]} />
-              </Field>
-            )}
-            {ready && (tpls.length > 1 || can('owner')) && (
-              <Field label="Mẫu in">
-                {tpls.length > 1 && <Select value={doc?.tplId || ''} onChange={(v) => pickTpl(type, v)} options={tpls.map((t) => ({ value: t.id, label: `${t.name}${t.is_default ? ' (mặc định)' : ''}` }))} />}
-                {can('owner') && <button className="link-btn small" onClick={() => openTemplateEditor({ book: book.id, type, tpl: (ds.templates[type] || []).length ? doc?.tplId : '' })}>Sửa mẫu in này (mở tab mới)</button>}
-              </Field>
-            )}
-            {ready && <ExportOpts opts={opts} set={setOpt} roll={!!PAPERS[doc?.paper]?.roll} doc={doc} />}
-            {ready && <div className="stack-s"><b className="small">Chữ ký</b><SignatureLibrary onAdd={(id) => addSign(id, 1)} placedCount={signs.length} onClear={() => setPlaced([])} /></div>}
-            {ready && <HeaderEditor type={type} prof={profileFor(ds, type, { ...info, ...Object.fromEntries(HEADER_FIELDS.map(([k]) => [headerKey(type, k), ''])), [headerKey(type, 'logo')]: '' })} info={info} setEdit={setEdit} />}
-            <button className="link-btn small" onClick={() => setShowForm((x) => !x)}>{showForm ? '▾' : '▸'} Thông tin trên chứng từ</button>
-            {showForm && ready && <div className="stack-s">
+            {ready && <SideGroup title="Thông tin trên chứng từ" open badge={dirty ? 'chưa lưu' : null}>
+              {perDelivery && !STANDALONE.includes(data.kind) && (
+                <Field label="Lập theo">
+                  <Select value={src.kind === 'delivery' ? src.id : ''} onChange={(v) => setSrc(v ? { kind: 'delivery', id: v } : { kind: 'order', id: data.o.id })}
+                    options={[{ value: '', label: 'Cả đơn (hàng còn trong đơn)' }, ...dels.map((d) => ({ value: d.id, label: `Phiếu giao ${d.code} · ${dmy(d.delivery_date)}` }))]} />
+                </Field>
+              )}
               {ds.profiles.length > 1 && (
                 <Field label="Đơn vị đứng tên">
                   <Select value={profileFor(ds, type, info).id} onChange={(v) => setEdit((s) => ({ ...s, [`profile_${type}`]: v }))}
@@ -565,20 +583,33 @@ export function DocDialog({ kind, id, keys, type: type0, pay, page, onClose }) {
               {!canSave && <div className="muted small">Bạn không có quyền lưu thay đổi; nội dung sửa ở đây chỉ dùng cho lần tải này.</div>}
               {type === 'yeu_cau_vat' && <div className="muted small">Thông tin bên mua lấy từ thẻ "Thông tin xuất hóa đơn" của khách. Đơn giá là giá trước thuế; cước vận chuyển và chiết khấu của đơn được thêm thành dòng riêng.</div>}
               {type === 'hoa_don' && <div className="muted small">Nợ cũ tự tính = công nợ hiện tại của khách trừ phần của đơn này. Tổng số hộp tự tính từ quy cách đóng gói của sản phẩm (hộp lẻ tính 1 hộp).</div>}
+            </SideGroup>}
+            {ready && <SideGroup title="Mẫu in & khổ giấy" badge={opts.orient || opts.scale !== 1 ? 'đã chỉnh' : null}>
+              {(tpls.length > 1 || can('owner')) && (
+                <Field label="Mẫu in">
+                  {tpls.length > 1 && <Select value={doc?.tplId || ''} onChange={(v) => pickTpl(type, v)} options={tpls.map((t) => ({ value: t.id, label: `${t.name}${t.is_default ? ' (mặc định)' : ''}` }))} />}
+                  {can('owner') && <button className="link-btn small" onClick={() => openTemplateEditor({ book: book.id, type, tpl: (ds.templates[type] || []).length ? doc?.tplId : '' })}>Sửa mẫu in này (mở tab mới)</button>}
+                </Field>
+              )}
+              <ExportOpts opts={opts} set={setOpt} roll={!!PAPERS[doc?.paper]?.roll} doc={doc} />
               <div className="muted small">Đơn vị phát hành, logo, nội dung và cách trình bày: Cài đặt → Mẫu in.</div>
-            </div>}
+            </SideGroup>}
+            {ready && <SideGroup title="Chữ ký" badge={signs.length ? `${signs.length} đã đặt` : null} open={signs.length > 0}>
+              <SignatureLibrary onAdd={(id) => addSign(id, 1)} placedCount={signs.length} onClear={() => setPlaced([])} />
+            </SideGroup>}
+            {ready && <HeaderEditor type={type} prof={profileFor(ds, type, { ...info, ...Object.fromEntries(HEADER_FIELDS.map(([k]) => [headerKey(type, k), ''])), [headerKey(type, 'logo')]: '' })} info={info} setEdit={setEdit} />}
           </div>
           <div className="doc-main">{doc && !doc.error ? (editText
             ? <TextSizeEditor key={`${type}:${srcKey}`} doc={doc} value={customOn ? custom.html : null} onChange={(html) => setCustom(html ? { from: doc.html, html } : null)} onDone={() => setEditText(false)} />
             : <DocPreview doc={shownDoc} opts={customOn ? null : opts} setOpt={customOn ? null : setOpt} signs={signs} onSign={changeSign} onDropSign={addSign} extra={<span className="row gap-s">
               {customOn && <span className="small accent">Đã chỉnh cỡ chữ riêng · <button type="button" className="link-btn small" onClick={() => setCustom(null)}>Bỏ</button></span>}
-              <Btn small icon="edit" onClick={() => setEditText(true)} title="Bôi đen phần chữ rồi phóng to / thu nhỏ riêng phần đó (chỉ cho lần xuất này)">Chỉnh cỡ chữ từng phần</Btn></span>} />)
+              <Btn small icon="edit" onClick={() => setEditText(true)} title="Bôi đen phần chữ rồi phóng to / thu nhỏ riêng phần đó (chỉ cho lần xuất này)">Cỡ chữ từng phần</Btn></span>} />)
             : !doc?.error && <Loading />}</div>
         </div>
       )}
-    </>
+    </div>
   );
-  if (!page) return <Modal title={title} subtitle={sub} onClose={onClose} size="xl" footer={footer}>{content}</Modal>;
+  if (!page) return <Modal title={title} subtitle={sub} onClose={onClose} size="xl" className="modal-doc" footer={footer}>{content}</Modal>;
   return (
     <div className="doc-pageview">
       <div className="doc-pageview-head"><div className="modal-title">{title}</div>{sub && <div className="modal-sub">{sub}</div>}</div>

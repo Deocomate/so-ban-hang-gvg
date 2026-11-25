@@ -556,10 +556,9 @@ code { font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-r
 .link-btn { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; text-align: left; font: inherit; }
 .link-btn.small { font-size: 13px; }
 /* Chứng từ mở ở tab riêng: khung sửa + xem trước chiếm cả trang, thanh nút dính dưới đáy */
-.doc-pageview { max-width: 1240px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; background: var(--surface); }
-.doc-pageview-head { padding: 16px 20px 8px; }
-.doc-pageview-body { flex: 1; padding: 8px 20px 16px; display: flex; flex-direction: column; gap: 12px; }
-.doc-pageview-body .doc-scroll { max-height: none; }
+.doc-pageview { max-width: 1480px; margin: 0 auto; height: 100vh; display: flex; flex-direction: column; background: var(--surface); border-inline: 1px solid var(--line); }
+.doc-pageview-head { padding: 14px 20px 6px; }
+.doc-pageview-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .doc-pageview-foot { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 20px; border-top: 1px solid var(--line); background: var(--surface); }
 @media (max-width: 600px) { .doc-pageview-head, .doc-pageview-body, .doc-pageview-foot { padding-left: 16px; padding-right: 16px; } }
 .doc-wrap { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 16px; align-items: start; }
@@ -576,10 +575,44 @@ code { font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-r
 /* Bản xem trước vẽ từ tệp PDF: từng trang (hoặc một trang dài khi xem như ảnh) */
 .doc-preview { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .doc-preview-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.pdf-sheets { min-height: 240px; transition: opacity .15s; }
+.doc-preview-status { display: inline-flex; align-items: center; gap: 6px; }
+.spin-dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+.zoom-ctl { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.zoom-ctl .icon-btn { width: 30px; height: 30px; padding: 0; font-size: 17px; line-height: 1; color: var(--ink); }
+.zoom-ctl .icon-btn:disabled { opacity: .35; cursor: default; }
+.zoom-val { border: 0; background: none; min-width: 78px; padding: 0 4px; height: 30px; cursor: pointer; font: inherit; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--ink); border-inline: 1px solid var(--line); }
+.pdf-sheets { min-height: 240px; transition: opacity .15s; background: color-mix(in srgb, var(--ink) 10%, var(--surface-2)); }
 .pdf-sheets.is-busy { opacity: .6; }
-.pdf-sheet { position: relative; max-width: 100%; margin: 0 auto; background: #fff; box-shadow: 0 2px 12px rgba(0,0,0,.18); touch-action: pan-y; }
-.pdf-sheet + .pdf-sheet { margin-top: 14px; }
+.pdf-sheets.is-zoomed { display: grid; justify-content: safe center; align-content: start; }
+.pdf-sheet { position: relative; max-width: 100%; margin: 0 auto; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.12), 0 6px 20px rgba(0,0,0,.14); touch-action: pan-y; }
+.pdf-sheet + .pdf-sheet { margin-top: 30px; }
+.pdf-sheet[data-label]::after { content: attr(data-label); position: absolute; left: 0; right: 0; top: 100%; padding-top: 6px; text-align: center; font-size: 11px; color: var(--muted); pointer-events: none; }
+.pdf-sheets:has(.pdf-sheet[data-label]) { padding-bottom: 30px; }
+/* Hộp thoại in: cao vừa màn hình, cột tùy chọn và khung xem trước cuộn riêng (không cuộn lồng nhau) */
+.modal-doc { max-width: 1480px; height: calc(100vh - 32px); }
+.modal-doc .modal-body { flex: 1; min-height: 0; padding: 0; gap: 0; overflow: hidden; }
+.modal-body > .doc-shell { flex: 1 1 auto; }
+.doc-shell { min-height: 0; display: flex; flex-direction: column; }
+.doc-shell > .tabs { flex-shrink: 0; padding: 0 14px; }
+.doc-alerts { display: flex; flex-direction: column; gap: 8px; padding: 10px 16px 0; }
+.doc-alerts:empty { display: none; }
+.doc-shell > .doc-wrap { flex: 1 1 auto; min-height: 0; grid-template-columns: 340px minmax(0, 1fr); gap: 0; align-items: stretch; }
+.doc-shell .doc-side { position: static; overflow-y: auto; padding: 14px 14px 20px; border-right: 1px solid var(--line); background: var(--surface-2); gap: 10px; scrollbar-gutter: stable; }
+.doc-shell .doc-main { display: flex; flex-direction: column; min-height: 0; }
+.doc-shell .doc-main > .doc-preview { flex: 1; min-height: 0; gap: 0; }
+.doc-shell .doc-preview-bar { padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.doc-shell .doc-scroll { flex: 1; min-height: 0; max-height: none; border-radius: 0; padding: 20px; }
+.doc-shell .doc-main > :not(.doc-preview) { overflow: auto; padding: 14px; }
+.doc-shell .doc-batch { background: var(--surface); }
+/* Nhóm thu gọn ở cột tùy chọn */
+.doc-group { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); flex-shrink: 0; }
+.doc-group > summary { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; font-weight: 600; font-size: 14px; list-style: none; user-select: none; }
+.doc-group > summary::-webkit-details-marker { display: none; }
+.doc-group > summary::before { content: ''; width: 7px; height: 7px; border: solid var(--muted); border-width: 0 2px 2px 0; transform: rotate(-45deg); transition: transform .15s; margin-right: 2px; }
+.doc-group[open] > summary::before { transform: rotate(45deg); margin-top: -3px; }
+.doc-group[open] > summary { border-bottom: 1px solid var(--line); }
+.doc-group-badge { font-size: 11px; font-weight: 500; padding: 1px 8px; border-radius: 99px; background: var(--accent-2); color: var(--accent); white-space: nowrap; }
+.doc-group-body { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
 .pdf-sheet-canvas { display: block; width: 100%; height: auto; }
 /* Kéo đường kẻ giữa hai cột của bảng trên bản xem trước để đổi độ rộng cột */
 .col-guide { position: absolute; width: 3px; background: var(--accent, #1f6feb); opacity: .7; pointer-events: none; border-radius: 2px; z-index: 2; }
@@ -592,7 +625,16 @@ code { font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-r
 .doc-table thead td { font-weight: 600; text-align: center; vertical-align: middle; }
 .doc-sign { display: flex; text-align: center; }
 .doc-sign > div { flex: 1; }
-@media (max-width: 860px) { .doc-wrap { grid-template-columns: minmax(0, 1fr); } .doc-scroll { padding: 8px; } .doc-side { position: static; } .doc-scroll { max-height: none; } }
+@media (max-width: 860px) {
+  .doc-wrap { grid-template-columns: minmax(0, 1fr); } .doc-scroll { padding: 8px; } .doc-side { position: static; } .doc-scroll { max-height: none; }
+  /* Màn hẹp: cả hộp thoại cuộn một lượt (tùy chọn ở trên, bản xem trước ở dưới) */
+  .modal-doc { height: auto; } .modal-doc .modal-body { overflow-y: auto; }
+  .doc-pageview { height: auto; min-height: 100vh; } .doc-shell, .doc-shell > .doc-wrap { flex: none; }
+  .doc-shell > .doc-wrap { grid-template-columns: minmax(0, 1fr); }
+  .doc-shell .doc-side { overflow: visible; border-right: 0; border-bottom: 1px solid var(--line); }
+  .doc-shell .doc-preview-bar { position: sticky; top: 0; z-index: 3; }
+  .doc-shell .doc-scroll { padding: 10px; }
+}
 
 /* ---------- Màn hình tạo đơn kiểu quầy (toàn màn hình) ---------- */
 .pos-overlay { position: fixed; inset: 0; z-index: 100; background: var(--bg); display: flex; flex-direction: column; padding-top: env(safe-area-inset-top, 0px); }
