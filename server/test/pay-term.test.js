@@ -4,7 +4,7 @@
 import { freshDb, makeApi, suite, finish, rid, daysAgo as D } from './harness.js';
 import { progressStatement, invoiceMoney, tripDue } from '../../web/src/lib/pay-term.js';
 import { tokenValues } from '../../web/src/lib/docs/tokens.js';
-import { docSettings } from '../../web/src/lib/docs/model.js';
+import { docSettings, defaults } from '../../web/src/lib/docs/model.js';
 
 freshDb();
 const api = makeApi();
@@ -117,5 +117,23 @@ const over = tokenValues('doi_chieu_tt', { ...docData, payBase: { ...docData.pay
 C('Biên bản ghi "Khách đã thanh toán dư" 50 triệu', /KHÁCH ĐÃ THANH TOÁN DƯ/.test(over) && over.includes('50,000,000'), true);
 await api.call('delete_order_adjustment', { book_id: TH, id: q1.id });
 C('Xóa đợt quyết toán: chưa đến hạn trở lại 240 triệu', (await ledger(big.id, D(0))).notDue / M, 240);
+
+G('6. Nợ cũ trên hóa đơn một chuyến của đơn giao nhiều chuyến (cọc của đơn + phiếu thu không gắn đơn)');
+const B = (await api.call('save_party', { book_id: TH, type: 'kh', name: 'Khách nhiều chuyến' })).id;
+const mo = await api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: B, kind: 'dat_hang', status: 'xac_nhan', order_date: D(30),
+  lines: [{ product_id: P, qty: 1100000, unit_price: 1000 }] });
+const ml = (await api.q('sales_order_lines', TH, [['order_id', 'eq', mo.id]]))[0];
+await pay(mo.id, 'coc', 500 * M, D(29));
+await api.call('deliver', { book_id: TH, request_id: rid(), order_id: mo.id, date: D(20), lines: [{ order_line_id: ml.id, qty: 900000 }] });
+await api.call('create_payment', { book_id: TH, request_id: rid(), kind: 'thu_khach', date: D(15), fund_id: TM, party_id: B, amount: 300 * M });
+const g2 = await api.call('deliver', { book_id: TH, request_id: rid(), order_id: mo.id, date: D(10), lines: [{ order_line_id: ml.id, qty: 200000 }] });
+const cb = await api.one('customers', TH, [['id', 'eq', B]]);
+const dv = await api.one('deliveries', TH, [['id', 'eq', g2.id]]);
+const dd = { kind: 'delivery', o: await order(mo.id), d: dv, dlines: await api.q('delivery_lines', TH, [['delivery_id', 'eq', g2.id]]), lines: [], prods: {}, cust: cb, pays: await api.q('doc_payments', TH, [['doc_id', 'eq', mo.id]]) };
+const info2 = defaults('hoa_don', dd, ds);
+C('Khách còn nợ 300 triệu (giao 1.100, đã trả 800)', cb.balance / M, 300);
+C('Nợ cũ của hóa đơn chuyến 2 = công nợ khách − nợ của chính hóa đơn này (100 triệu, không phải −300)', Number(info2.old_debt) / M, 100);
+const v2 = tokenValues('hoa_don', dd, ds, info2).v;
+C('Còn phải thanh toán trên hóa đơn = công nợ hiện tại của khách', v2.Con_Thanh_Toan, '300,000,000');
 
 finish('Phương thức thanh toán của đơn hàng');

@@ -1,4 +1,5 @@
 import { buildExtraDoc } from './contract-docs.js';
+import { invoiceMoney } from '../pay-term.js';
 
 // Chứng từ xuất cho khách: hóa đơn bán hàng, đơn đặt hàng, biên bản bàn giao, phiếu xuất kho, phiếu thu/chi.
 // Mỗi chứng từ được dựng thành một danh sách "khối" (blocks) trung gian; cùng một danh sách đó
@@ -401,7 +402,12 @@ export function defaults(type, data, ds) {
   const o = data.o; const c = data.cust || {};
   const useDel = PER_DELIVERY.includes(type) && data.d;
   const g = goodsLines(type, data);
-  const oldDebt = c.balance !== undefined && c.balance !== null ? Number(c.balance) - (Number(o.delivered_value || 0) - Number(o.paid_net || 0)) : 0;
+  // Nợ cũ = công nợ hiện tại của khách trừ phần nợ của chính chứng từ này. Hóa đơn một chuyến chỉ trừ chuyến đó (giá trị − tiền tính trên
+  // hóa đơn), không trừ cả đơn: trừ cả đơn thì các chuyến khác và tiền cọc của đơn bị bỏ ra, nợ cũ ra số âm sai.
+  const whole = !useDel || (o.pay_term !== 'don_lon' && Number(o.delivery_count) === 1);
+  const own = useDel ? Number(data.d.total || 0) - invoiceMoney(data.pays, { whole, deliveryId: data.d.id }).total
+    : Number(o.delivered_value || 0) - Number(o.paid_net || 0);
+  const oldDebt = c.balance !== undefined && c.balance !== null ? Number(c.balance) - own : 0;
   // Phiếu đóng hàng của cả đơn: đóng hàng hôm nay (trước khi giao); theo đợt giao thì là ngày giao
   const today = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);
   const docDate = type === 'don_dat_hang' ? o.order_date : useDel ? data.d.delivery_date : type === 'phieu_dong_hang' ? today : (o.last_delivery_date || o.order_date);
