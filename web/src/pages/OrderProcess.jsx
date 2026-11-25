@@ -4,6 +4,7 @@
 // - LƯU: chỉ ghi các thay đổi vào đơn đặt hàng, chưa tạo hóa đơn;
 // - TẠO HÓA ĐƠN / IN: ghi thay đổi (nếu có), tạo hóa đơn HD… (trừ kho, ghi doanh thu), khấu trừ tiền khách đã trả trước
 //   và lập phiếu thu phần khách thanh toán. Đơn còn hàng chưa lấy thì lần sau xử lý tiếp.
+import { depositForDelivery, payTermLabel } from '../lib/pay-term.js';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useAction, useQ } from '../lib/store.jsx';
 import { money, qty as fq, todayVN } from '../lib/format.js';
@@ -93,7 +94,9 @@ export function OrderProcess({ id, onClose }) {
   const total = goods + vat + shipAmt;
   const qtySum = rows.reduce((t, r) => t + (Number(r.qty) || 0), 0);
   const prepaid = Math.max(0, d.paid_net - d.delivered_value); // khách đã trả trước (cọc) chưa trừ vào hóa đơn nào
-  const used = Math.max(0, Math.min(prepaid, d.paid_net - (d.deposit_used || 0), total));
+  // Cọc khấu trừ đợt này theo hình thức thanh toán của đơn (mặc định trừ thẳng; đơn hàng lớn chỉ trừ phần ngoài % khách trả mỗi đợt)
+  const depositLeft = Math.max(0, Math.min(prepaid, d.paid_net - (d.deposit_used || 0)));
+  const used = depositForDelivery({ term: d.pay_term, ratio: d.pay_ratio, value: total, deposit: depositLeft, remaining: (d.order_total || 0) - (d.delivered_value || 0) });
   const due = Math.max(0, total - used);
   const payAmt = Number(pay.amount) || 0;
   const debt = due - payAmt;
@@ -151,7 +154,7 @@ export function OrderProcess({ id, onClose }) {
         try {
           try { localStorage.setItem(QUICK_FUND_KEY, pay.fund_id); } catch (e) { /* bỏ qua */ }
           const p = await rpc('create_payment', { request_id: rid(), kind: 'thu_khach', date, fund_id: pay.fund_id, party_id: d.customer_id,
-            amount: amt, method: pay.method, allocations: [{ doc_type: 'don_ban', doc_id: id, amount: amt }], note: `Thu tiền hóa đơn ${r.code} (đơn ${d.code})` });
+            amount: amt, method: pay.method, allocations: [{ doc_type: 'hoa_don', doc_id: r.id, amount: amt }], note: `Thu tiền hóa đơn ${r.code} (đơn ${d.code})` });
           toast(`Đã thu ${money(amt)} đ – phiếu ${p.code}${payAmt > due ? ` · trả lại khách ${money(payAmt - due)} đ` : ''}`);
         } catch (e) { toast('Đã tạo hóa đơn nhưng chưa thu được tiền: ' + e.message, 'err'); }
       }
@@ -250,7 +253,9 @@ export function OrderProcess({ id, onClose }) {
             <span>Giảm giá</span><b className="r">{money(discount)}</b>
             {vat > 0 && <><span>VAT {fq(d.vat_rate)}%</span><b className="r">{money(vat)}</b></>}
             <span>Thu khác (vận chuyển)</span><NumInput suffix={false} min={0} value={ship} onChange={setShip} className="pos-uline" aria-label="Phí vận chuyển" />
-            <span>Khách đã trả</span><b className="r">{money(used)}</b>
+            {d.pay_term === 'don_lon'
+              ? <><span title={payTermLabel(d)}>Trừ tiền cọc<div className="cell-sub">Đơn hàng lớn · trả {fq(d.pay_ratio)}% mỗi đợt · cọc còn {money(depositLeft - used)}</div></span><b className="r">{money(used)}</b></>
+              : <><span>Khách đã trả</span><b className="r">{money(used)}</b></>}
             <b>Khách cần trả</b><b className="r pos-due-amt">{money(due)}</b>
           </div>
           {canPay && (

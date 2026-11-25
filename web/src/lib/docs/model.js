@@ -216,7 +216,17 @@ export async function loadDocData(q, rpc, src) {
   const prods = ids.length ? await q('products', [['id', 'in', ids]]) : [];
   const orderInfo = (await rpc('get_doc_info', { ref_type: 'order', ref_id: orderId })) || {};
   const delInfo = d ? (await rpc('get_doc_info', { ref_type: 'delivery', ref_id: d.id })) || {} : null;
-  return { kind: src.kind, o, lines, dels, d, dlines, cust: custs[0] || null, prods: Object.fromEntries(prods.map((p) => [p.id, p])), orderInfo, delInfo, k, allDl, pays: pays || [], kInfo: kInfo || {}, driver: driver || null };
+  const schedule = (src.kind === 'order' || src.kind === 'contract') && o.pay_term === 'don_lon' ? await paySchedule(q, o) : null;
+  return { kind: src.kind, o, lines, dels, d, dlines, schedule, cust: custs[0] || null, prods: Object.fromEntries(prods.map((p) => [p.id, p])), orderInfo, delInfo, k, allDl, pays: pays || [], kInfo: kInfo || {}, driver: driver || null };
+}
+
+// Đơn hàng lớn: từng đợt giao (hóa đơn HD) với giá trị đợt, phần trừ cọc, phần khách trả bằng tiền; cọc còn lại quyết toán ở các đợt cuối
+async function paySchedule(q, o, only = null) {
+  const invs = (await q('order_invoices', [['order_id', 'eq', o.id]], 'delivery_date', 500)).filter((x) => !only || only.includes(x.id));
+  return { ratio: Number(o.pay_ratio) || 70, order_code: o.code,
+    rows: invs.map((x) => ({ date: x.delivery_date, code: x.code, total: Number(x.total) || 0, deposit: Number(x.deposit_used) || 0, paid: Number(x.paid) || 0 })),
+    // Cọc còn lại = tiền khách trả theo đơn chưa trừ vào đợt nào (tiền đã vào hóa đơn gồm phần trừ cọc và phiếu thu gắn thẳng hóa đơn)
+    depositLeft: Math.max(0, (Number(o.paid_net) || 0) - invs.reduce((t, x) => t + (Number(x.paid) || 0), 0)) };
 }
 
 // ---------- Đối chiếu gộp nhiều hóa đơn của một khách ----------
@@ -279,8 +289,14 @@ async function loadInvoices(q, rpc, src) {
   // Dòng đã giao theo thứ tự hóa đơn, mã đợt giao = mã hóa đơn; các phiếu giao để in kèm biên bản bàn giao
   const allDl = invs.flatMap((iv) => iv.lines.map((l) => ({ ...l, delivery_code: iv.code })));
   const dels = [...new Map([...dlA, ...dlB].map((l) => [l.delivery_id, { id: l.delivery_id, code: l.delivery_code, delivery_date: l.delivery_date }])).values()];
+  // Mọi hóa đơn thuộc một đơn đặt hàng thanh toán kiểu đơn hàng lớn: thêm bảng thanh toán theo đợt
+  let schedule = null;
+  if (!directs.length && dOrders.length === 1 && whole) {
+    const [so] = await q('sales_orders', [['id', 'eq', dOrders[0]]]);
+    if (so?.pay_term === 'don_lon') schedule = await paySchedule(q, so, dinvs.map((x) => x.id));
+  }
   // Dòng hàng của các đơn liên quan (đơn bán ngay và đơn đặt hàng của các hóa đơn): số đặt và còn phải giao trên bảng đối chiếu số lượng
-  return { kind: 'invoices', cust, invs, allDl, dels, lines: olines, pays: whole ? pays : [], wholeOrders: whole, prods: {}, k: null, info: info || {},
+  return { kind: 'invoices', schedule, cust, invs, allDl, dels, lines: olines, pays: whole ? pays : [], wholeOrders: whole, prods: {}, k: null, info: info || {},
     o: { id: null, code: cust.code, customer_name: cust.name, customer_phone: cust.phone, customer_address: cust.address } };
 }
 

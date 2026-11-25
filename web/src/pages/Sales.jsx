@@ -23,6 +23,7 @@ import { VatReminder } from '../components/VatReminder.jsx';
 import { OrderDocsPanel } from './OrderDocs.jsx';
 import { OrderDocMenu, OrderDocLauncher } from '../components/DocMenu.jsx';
 import { SaleDetail } from './OrderInvoice.jsx';
+import { PAY_TERMS, payTermLabel } from '../lib/pay-term.js';
 
 // ===================== DANH SÁCH ĐƠN BÁN =====================
 // Như KiotViet: Hóa đơn gồm hóa đơn bán ngay và các hóa đơn lập khi xử lý đơn đặt hàng (mỗi đợt giao một hóa đơn HD…);
@@ -431,8 +432,9 @@ export function OrderDetail({ id, onClose }) {
   const payKind = d.payment_status === 'thua_tien' ? 'hoan_khach' : 'thu_khach';
   // Các nút như KiotViet: Hủy · Sao chép · Xuất file … Chỉnh sửa · Lưu · Trả hàng · Giấy tờ (mọi chứng từ in / xuất của đơn)
   const editable = canSell && d.status !== 'huy';
-  const cur = info || { note: d.note || '', staff: d.staff || '', channel: d.channel || '', order_date: d.order_date };
-  const dirty = !!info && (cur.note !== (d.note || '') || cur.staff !== (d.staff || '') || cur.channel !== (d.channel || '') || cur.order_date !== d.order_date);
+  const cur = info || { note: d.note || '', staff: d.staff || '', channel: d.channel || '', order_date: d.order_date, pay_term: d.pay_term || 'mac_dinh', pay_ratio: d.pay_ratio || 70 };
+  const dirty = !!info && (cur.note !== (d.note || '') || cur.staff !== (d.staff || '') || cur.channel !== (d.channel || '') || cur.order_date !== d.order_date
+    || cur.pay_term !== (d.pay_term || 'mac_dinh') || Number(cur.pay_ratio) !== Number(d.pay_ratio || 70));
   const setCur = (k, v) => setInfo({ ...cur, [k]: v });
   const saveInfo = async () => { if (await run('update_order_info', { id, ...cur }, 'Đã lưu thông tin hóa đơn')) setInfo(null); };
   const exportOrder = () => exportXlsx(`${d.code}.xlsx`, [{ name: d.code, rows: lines.data || [], columns: [
@@ -498,6 +500,10 @@ export function OrderDetail({ id, onClose }) {
           <label><span>Người bán</span>{editable ? <><Input value={cur.staff} onChange={(v) => setCur('staff', v)} placeholder="Người bán" list="od-staff-list" aria-label="Người bán" />
             <datalist id="od-staff-list">{[...new Set([...(employees.data || []).map((e) => e.name), ...(settings.staff_names || [])].filter(Boolean))].map((x) => <option key={x} value={x} />)}</datalist></> : <b>{d.staff || '—'}</b>}</label>
           <label><span>{isDat ? 'Ngày đặt' : 'Ngày bán'}</span>{editable ? <DateInput value={cur.order_date} onChange={(v) => v && setCur('order_date', v)} max={todayVN()} aria-label={isDat ? 'Ngày đặt' : 'Ngày bán'} /> : <b>{dmy(invoiceDate(d))}</b>}</label>
+          {isDat && <label><span>Thanh toán</span>{editable
+            ? <span className="row gap-s"><Select value={cur.pay_term} onChange={(v) => setCur('pay_term', v || 'mac_dinh')} options={PAY_TERMS} aria-label="Hình thức thanh toán" />
+              {cur.pay_term === 'don_lon' && <NumInput money={false} suffix="%" min={1} max={100} value={cur.pay_ratio} onChange={(v) => setCur('pay_ratio', v)} style={{ width: 84 }} aria-label="Tỷ lệ trả mỗi đợt" />}</span>
+            : <b>{payTermLabel(d)}</b>}</label>}
           <label><span>Kênh bán</span>{editable ? <ChannelSelect value={cur.channel} onChange={(v) => setCur('channel', v || '')} extra={[d.channel]} placeholder="Chọn kênh bán" aria-label="Kênh bán" /> : <b>{d.channel || '—'}</b>}</label>
           <label><span>Bảng giá</span><b>{(priceBooks.data || []).find((b) => b.id === d.price_book_id)?.name || (d.price_level === 'cost' ? 'Giá vốn' : (settings.price_names || [])[(Number(d.price_level) || d.price_tier || 1) - 1] || 'Bảng giá chung')}</b></label>
           <label><span>Khách hàng</span><a href="#" onClick={(e) => { e.preventDefault(); open('party-detail', { type: 'kh', id: d.customer_id }); }}>{d.customer_name}{d.customer_code ? ` (${d.customer_code})` : ''}</a></label>

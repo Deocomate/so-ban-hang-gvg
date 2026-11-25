@@ -167,7 +167,8 @@ export function save_sales_order(p) {
     const st = deliverNow || p.status === 'xac_nhan' ? 'xac_nhan' : 'nhap';
     const head = { customer_id: cust.id, channel: p.channel ?? null, order_date: d, due_date: asDate(p.due_date), staff: p.staff ?? null,
       discount: rnd(num(p.discount) ?? 0), shipping_fee: rnd(num(p.shipping_fee) ?? 0), note: p.note ?? null, vat_rate: vat,
-      price_book_id: checkPriceBook(b, nz(p.price_book_id), cust, d, (p.lines || []).map((l) => l.product_id)), price_level: priceLevel(b, p.price_level) };
+      price_book_id: checkPriceBook(b, nz(p.price_book_id), cust, d, (p.lines || []).map((l) => l.product_id)), price_level: priceLevel(b, p.price_level),
+      ...payTermOf(p, nz(p.id) ? one(`select pay_term, pay_ratio from sales_orders where id = ? and book_id = ?`, p.id, b) : null) };
     let o; let wasConfirmed = false; let delivered = false; let before = null; let redo = null; const notices = [];
     if (!nz(p.id)) {
       const id = uuid();
@@ -318,8 +319,8 @@ export function update_order_info(p) {
   if (!o) fail('Không tìm thấy đơn hàng');
   requirePerm(o.book_id, 'ban_hang');
   if (o.status === 'huy') fail('Đơn đã hủy, không thể sửa');
-  const next = { note: trimNz(p.note), staff: trimNz(p.staff), channel: trimNz(p.channel) };
-  const label = { note: 'Ghi chú', staff: 'Người bán', channel: 'Kênh bán', order_date: o.kind === 'dat_hang' ? 'Ngày đặt' : 'Ngày bán' };
+  const next = { note: trimNz(p.note), staff: trimNz(p.staff), channel: trimNz(p.channel), ...payTermOf(p, o) };
+  const label = { note: 'Ghi chú', staff: 'Người bán', channel: 'Kênh bán', order_date: o.kind === 'dat_hang' ? 'Ngày đặt' : 'Ngày bán', pay_term: 'Hình thức thanh toán', pay_ratio: 'Tỷ lệ trả mỗi đợt (%)' };
   if (p.order_date !== undefined) next.order_date = asDate(p.order_date) || fail('Ngày không hợp lệ');
   const ch = Object.keys(next).filter((k) => (o[k] ?? null) !== next[k]);
   if (!ch.length) return { ok: true, changed: 0 };
@@ -332,7 +333,7 @@ export function update_order_info(p) {
     }
   }
   run(`update sales_orders set ${ch.map((k) => `${k} = ?`).join(', ')} where id = ?`, ...ch.map((k) => next[k]), o.id);
-  const fmt = (k, x) => (k === 'order_date' ? x.split('-').reverse().join('/') : x);
+  const fmt = (k, x) => (k === 'order_date' ? x.split('-').reverse().join('/') : k === 'pay_term' ? (x === 'don_lon' ? 'Đơn hàng lớn' : 'Mặc định') : x);
   logOrder(o.id, 'sua', 'Sửa thông tin hóa đơn', [...ch.map((k) => `${label[k]}: ${o[k] ? fmt(k, o[k]) : '—'} → ${next[k] ? fmt(k, next[k]) : '—'}`),
     ...(moved.length ? [`Đổi ngày giao ${moved.join(', ')} theo ngày bán`] : [])]);
   return { ok: true, changed: ch.length };
@@ -370,6 +371,15 @@ export function set_delivery_date(p) {
   if (solo) run(`update sales_orders set order_date = ? where id = ?`, date, o.id);
   logOrder(o.id, 'sua', `Sửa ngày hóa đơn ${d.code}`, [`${d.delivery_date.split('-').reverse().join('/')} → ${date.split('-').reverse().join('/')}`]);
   return { ok: true, changed: 1 };
+}
+
+// Hình thức thanh toán gửi lên (không gửi thì giữ như cũ / mặc định): 'mac_dinh' trừ cọc thẳng, 'don_lon' mỗi đợt trả pay_ratio %
+function payTermOf(p, o = null) {
+  const term = p.pay_term === undefined ? (o?.pay_term ?? 'mac_dinh') : p.pay_term;
+  if (!['mac_dinh', 'don_lon'].includes(term)) fail('Hình thức thanh toán không hợp lệ');
+  const ratio = p.pay_ratio === undefined || p.pay_ratio === null || p.pay_ratio === '' ? (o?.pay_ratio ?? 70) : num(p.pay_ratio);
+  if (!(ratio > 0 && ratio <= 100)) fail('Tỷ lệ thanh toán mỗi đợt phải từ 1 đến 100%');
+  return { pay_term: term, pay_ratio: ratio };
 }
 
 export function cancel_sales_order(p) {

@@ -216,7 +216,7 @@ create view v_sales_orders as
 select o.id, o.book_id, o.code, o.kind, o.status, o.customer_id, c.code as customer_code, c.name as customer_name,
   c.phone as customer_phone, c.address as customer_address, c.price_tier,
   o.channel, o.order_date, o.due_date, o.staff, o.discount, o.shipping_fee, o.note, o.cancel_reason,
-  o.created_at, o.confirmed_at, o.cancelled_at, o.vat_rate, o.price_book_id, o.price_level, v.vat_total, v.vat_net, v.deposit_used,
+  o.created_at, o.confirmed_at, o.cancelled_at, o.vat_rate, o.price_book_id, o.price_level, o.pay_term, o.pay_ratio, v.vat_total, v.vat_net, v.deposit_used,
   v.goods_gross, v.goods_total, v.order_total, v.eff_qty, v.delivered_qty, v.returned_qty, v.remaining_qty, v.line_count,
   v.delivered_value, v.returned_value, v.ship_billed, v.paid_net, v.last_pay_date, v.last_delivery_date, v.first_delivery_date, v.delivery_count,
   v.order_total - v.returned_value as net_total,
@@ -303,11 +303,12 @@ with dv as (
     row_number() over (partition by dv.order_id order by dv.delivery_date desc, dv.created_at desc, dv.id desc) as rn_last
   from dv join sales_orders o on o.id = dv.order_id
 ), t2 as (
-  select t.*, so.delivered_value, so.paid_net as order_paid, t.deposit_used + t.paid_direct as direct,
+  select t.*, so.delivered_value, so.paid_net as order_paid, so.pay_term, t.deposit_used + t.paid_direct as direct,
     t.raw_total + case when t.rn_last = 1 then so.delivered_value - sum(t.raw_total) over (partition by t.order_id) else 0 end as total
   from t join v_sales_orders so on so.id = t.order_id
 ), t3 as (
-  select t2.*, t2.order_paid - sum(t2.direct) over (partition by t2.order_id) as pool,
+  -- Đơn hàng lớn: tiền khách trả theo đơn là tiền cọc, chỉ vào hóa đơn khi được khấu trừ ở từng đợt (không tự rải vào các hóa đơn)
+  select t2.*, case when t2.pay_term = 'don_lon' then 0 else t2.order_paid - sum(t2.direct) over (partition by t2.order_id) end as pool,
     coalesce(sum(max(t2.total - t2.direct, 0)) over (partition by t2.order_id order by t2.delivery_date, t2.created_at, t2.id
       rows between unbounded preceding and 1 preceding), 0) as need_before
   from t2

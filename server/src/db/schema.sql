@@ -268,7 +268,11 @@ create table if not exists sales_orders (
   created_by text, created_at text not null,
   confirmed_at text, cancelled_at text,
   vat_rate real not null default 0 check (vat_rate >= 0 and vat_rate <= 100),
-  price_book_id text
+  price_book_id text,
+  -- Hình thức thanh toán của đơn đặt hàng: 'mac_dinh' trừ cọc thẳng vào đợt giao; 'don_lon' mỗi đợt khách trả pay_ratio % giá trị đợt,
+  -- phần còn lại trừ cọc, cọc quyết toán ở các đợt giao cuối
+  pay_term text not null default 'mac_dinh' check (pay_term in ('mac_dinh','don_lon')),
+  pay_ratio real not null default 70 check (pay_ratio > 0 and pay_ratio <= 100)
 );
 create unique index if not exists sales_orders_code_uq on sales_orders (book_id, code);
 create index if not exists sales_orders_customer_idx on sales_orders (customer_id);

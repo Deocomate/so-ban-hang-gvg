@@ -377,10 +377,37 @@ function payTable(data, N) {
   body.push(payRow('', 'ĐÃ THANH TOÁN (2)', paid, true));
   for (const p of f.pays) body.push(payRow(dmy(p.date), p.label, p.amount, false));
   const due = f.total - paid;
-  body.push(payRow('', 'CÒN THANH TOÁN (3) = (1) - (2)', due, true));
-  body.push([{ text: `Bằng chữ: ${moneyWords(due, false)}.`, colSpan: 8, align: 'center', b: true, i: true }, null, null, null, null, null, null, null]);
+  // Đơn hàng lớn: đã trả nhiều hơn tiền hàng đã giao là tiền cọc chưa quyết toán, không phải số âm phải thanh toán
+  // Đơn hàng lớn: tách phần khách còn phải trả theo các đợt đã giao và tiền cọc chưa trừ (quyết toán ở các đợt cuối) thay cho một số bù trừ
+  const sched = data.schedule;
+  const owe = sched ? sched.rows.reduce((t, r) => t + Math.max(0, r.total - r.deposit - Math.max(0, r.paid - r.deposit)), 0) : due;
+  if (sched) {
+    body.push(payRow('', 'CÒN PHẢI THANH TOÁN THEO ĐỢT (3)', owe, true));
+    body.push(payRow('', 'TIỀN CỌC CÒN LẠI (4) (quyết toán ở các đợt giao cuối)', sched.depositLeft, true));
+  } else body.push(payRow('', 'CÒN THANH TOÁN (3) = (1) - (2)', due, true));
+  body.push([{ text: `Bằng chữ${sched ? ' (3)' : ''}: ${moneyWords(owe, false)}.`, colSpan: 8, align: 'center', b: true, i: true }, null, null, null, null, null, null, null]);
   const head = ['STT', data.invs ? 'NGÀY / HÓA ĐƠN' : 'NGÀY GIAO', 'TÊN HÀNG', 'SỐ LƯỢNG', 'ĐVT', 'ĐƠN GIÁ', 'SỐ TIỀN', data.invs ? 'TỔNG THEO HÓA ĐƠN' : 'TỔNG THEO ĐƠN'];
-  return { html: htmlTable(head, body, [34, 72, '*', 62, 38, 50, 68, 72], 10, { headBg: '#d9d9d9' }), due };
+  const html = htmlTable(head, body, [34, 72, '*', 58, 38, 50, 80, 84], 10, { headBg: '#d9d9d9' });
+  return { html: sched ? html + scheduleTable(sched, N) : html, due: owe };
+}
+
+// Đơn hàng lớn: bảng thanh toán theo đợt giao — mỗi đợt khách trả theo tỷ lệ, phần còn lại trừ cọc; cọc còn lại quyết toán ở các đợt cuối
+function scheduleTable(sc, N) {
+  const sum = (k) => sc.rows.reduce((t, r) => t + r[k], 0);
+  const cash = (r) => Math.max(0, r.total - r.deposit);                // phần khách trả bằng tiền của đợt
+  const paidCash = (r) => Math.min(cash(r), Math.max(0, r.paid - r.deposit));
+  const body = sc.rows.map((r, i) => [{ text: String(i + 1), align: 'center' }, { text: dmy(r.date), sub: r.code, align: 'center' },
+    { text: N(r.total), align: 'right' }, { text: r.deposit ? N(r.deposit) : '', align: 'right' }, { text: N(cash(r)), align: 'right' },
+    { text: N(paidCash(r)), align: 'right' }, { text: N(cash(r) - paidCash(r)), align: 'right', b: cash(r) - paidCash(r) > 0 }]);
+  const tc = sc.rows.reduce((t, r) => t + cash(r), 0); const tp = sc.rows.reduce((t, r) => t + paidCash(r), 0);
+  body.push([{ text: 'Cộng', colSpan: 2, b: true, align: 'center' }, null, { text: N(sum('total')), align: 'right', b: true }, { text: N(sum('deposit')), align: 'right', b: true },
+    { text: N(tc), align: 'right', b: true }, { text: N(tp), align: 'right', b: true }, { text: N(tc - tp), align: 'right', b: true }]);
+  const used = sum('deposit');
+  body.push([{ text: `Tiền cọc đã nhận ${N(used + sc.depositLeft)} · đã trừ vào các đợt ${N(used)} · còn lại ${N(sc.depositLeft)} quyết toán ở các đợt giao cuối`, colSpan: 7, i: true, align: 'center' },
+    null, null, null, null, null, null]);
+  const title = `<p style="text-align:center; margin-top:10pt; margin-bottom:4pt"><strong>THANH TOÁN THEO ĐỢT GIAO</strong><br><em>(Đơn hàng lớn: mỗi đợt khách thanh toán ${fmtNum(sc.ratio)}% giá trị đợt, phần còn lại trừ vào tiền cọc; tiền cọc được quyết toán ở các đợt giao cuối)</em></p>`;
+  return title + htmlTable(['ĐỢT', 'NGÀY / HÓA ĐƠN', 'GIÁ TRỊ ĐỢT', 'TRỪ TIỀN CỌC', `KHÁCH TRẢ (${fmtNum(sc.ratio)}%)`, 'ĐÃ TRẢ', 'CÒN PHẢI TRẢ'], body,
+    [40, 80, '*', '*', '*', '*', '*'], 10, { headBg: '#d9d9d9' });
 }
 function quoteTable(q, N) {
   const b = q.body || { groups: [] }; const mosaic = q.template === 'mosaic'; const showNorm = !mosaic && b.show_norm;

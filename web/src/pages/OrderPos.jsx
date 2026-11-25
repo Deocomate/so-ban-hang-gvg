@@ -1,6 +1,7 @@
 // Màn hình tạo / sửa đơn bán kiểu quầy (toàn màn hình):
 // gõ tên hoặc mã vào ô tìm kiếm → chọn là có ngay một dòng hàng, không cần bấm "Thêm dòng".
 // Mỗi dòng có ô ghi chú riêng (đặc điểm hàng, men, yêu cầu đóng gói…) và được in lên hóa đơn.
+import { PAY_TERMS } from '../lib/pay-term.js';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useAction, useQ } from '../lib/store.jsx';
 import { money, qty as fq, todayVN, match, searchRank } from '../lib/format.js';
@@ -92,7 +93,7 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
   const [source, setSource] = useState({ kind: '', supplier_id: '', expected_date: '' });
   const [f, setF] = useState({
     kind: kind0 || 'ban_san', customer_id: cust0 || '', channel: (settings.channels || [])[0] || '', order_date: todayVN(), due_date: '',
-    staff: lsGet('gomsu.staff'), note: '', discount: 0, shipping_fee: 0, vat_rate: 0, transport: null, lines: [], price_book_id: '', price_level: '',
+    staff: lsGet('gomsu.staff'), note: '', discount: 0, shipping_fee: 0, vat_rate: 0, transport: null, lines: [], price_book_id: '', price_level: '', pay_term: 'mac_dinh', pay_ratio: 70,
     pay: { amount: null, fund_id: '', method: 'Tiền mặt', fee: null },
   });
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
@@ -123,7 +124,7 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
       setPromos(op.map((x) => (x.kind === 'promo' ? { kind: 'promo', id: x.ref_id } : x.kind === 'points' ? { kind: 'points', points: x.points } : { kind: x.kind, code: x.code })));
       const promoSum = op.reduce((t, x) => t + x.amount, 0);
       setF((s) => ({ ...s, kind: o.kind, customer_id: o.customer_id, channel: o.channel || '', order_date: o.order_date, due_date: o.due_date || '', staff: o.staff || '',
-        note: o.note || '', discount: Math.max(0, (o.discount || 0) - promoSum), shipping_fee: o.shipping_fee, vat_rate: o.vat_rate || 0, price_book_id: o.price_book_id || '', price_level: o.price_level || '', transport: trip ? { driver_id: trip.driver_id, amount: trip.amount, payer: trip.payer, collect: trip.collect, note: trip.note || '' } : null, status0: o.status, code: o.code, delivery_count: o.delivery_count || 0, paid_net: o.paid_net || 0, customer0: o.customer_id,
+        note: o.note || '', discount: Math.max(0, (o.discount || 0) - promoSum), shipping_fee: o.shipping_fee, vat_rate: o.vat_rate || 0, price_book_id: o.price_book_id || '', price_level: o.price_level || '', pay_term: o.pay_term || 'mac_dinh', pay_ratio: o.pay_ratio || 70, transport: trip ? { driver_id: trip.driver_id, amount: trip.amount, payer: trip.payer, collect: trip.collect, note: trip.note || '' } : null, status0: o.status, code: o.code, delivery_count: o.delivery_count || 0, paid_net: o.paid_net || 0, customer0: o.customer_id,
         delivered0: ls.filter((l) => l.delivered_qty > 0).map((l) => ({ id: l.id, sku: l.sku, product_id: l.product_id, delivered: l.delivered_qty })),
         lines: ls.filter((l) => l.qty - (l.cancelled_qty || 0) > 0 || l.delivered_qty > 0).map((l) => { const c = l.unit_conv || 1; return { key: ++seq, id: l.id, product_id: l.product_id,
           qty: (l.qty - (l.cancelled_qty || 0)) / c, unit_price: l.unit_price * c, unit: l.unit_name || l.unit, conv: c, delivered: l.delivered_qty || 0,
@@ -284,6 +285,7 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
       id: id || null, kind: f.kind, customer_id: f.customer_id, channel: f.channel, order_date: f.order_date, due_date: f.due_date || null, staff: f.staff,
       note: f.note, discount: Number(f.discount) || 0, ...(promoOn ? { promos } : {}), shipping_fee: Number(f.shipping_fee) || 0, vat_rate: Number(f.vat_rate) || 0, transport: f.transport, quote_id: quote_id || null,
       price_book_id: f.price_book_id || null, price_level: f.price_level || null,
+      ...(f.kind === 'dat_hang' ? { pay_term: f.pay_term, pay_ratio: Number(f.pay_ratio) || 70 } : {}),
       status: mode === 'draft' ? 'nhap' : 'xac_nhan', deliver_now: mode === 'deliver',
       lines: lines.map((l) => ({ id: l.id || null, product_id: l.product_id, qty: baseQty(l), unit_price: (Number(l.unit_price) || 0) / (l.conv || 1),
         unit_name: (l.conv || 1) !== 1 ? l.unit : null, discount_pct: Number(l.discount_pct) || 0,
@@ -444,6 +446,17 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
             <ChannelSelect value={f.channel} onChange={(v) => set('channel', v)} aria-label="Kênh bán" />
             <label className="pos-due"><span className="muted small">Hẹn giao</span><DateInput value={f.due_date} onChange={(v) => set('due_date', v)} /></label>
           </div>
+          {isDat && (
+            <div className="pos-payterm">
+              <span className="muted small">Hình thức thanh toán</span>
+              <div className="row gap-s">
+                <Select value={f.pay_term} onChange={(v) => set('pay_term', v || 'mac_dinh')} options={PAY_TERMS} aria-label="Hình thức thanh toán" />
+                {f.pay_term === 'don_lon' && <label className="row gap-s nowrap"><span className="small">Mỗi đợt trả</span>
+                  <NumInput money={false} suffix="%" min={1} max={100} value={f.pay_ratio} onChange={(v) => set('pay_ratio', v)} style={{ width: 84 }} aria-label="Tỷ lệ trả mỗi đợt" /></label>}
+              </div>
+              {f.pay_term === 'don_lon' && <span className="muted small">Mỗi đợt giao khách trả {Number(f.pay_ratio) || 70}% giá trị đợt, phần còn lại trừ vào cọc; cọc quyết toán ở các đợt giao cuối.</span>}
+            </div>
+          )}
           {isDat && can('nhap_hang') && (
             <div className="pos-source src-pick">
               <span className="muted small">Sản xuất / đặt nhà cung cấp{editing ? ' (cho hàng chưa đặt)' : ''}</span>

@@ -1695,3 +1695,7 @@ body { font-size: 13px; line-height: 1.45; }
 .i2o-prod { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .i2o-row .r { text-align: right; }
 @media (max-width: 640px) { .i2o-row { grid-template-columns: 22px minmax(0, 1fr) auto; } .i2o-row .i2o-prod, .i2o-row > :nth-child(3) { display: none; } .i2o-row > :last-child { grid-column: 2 / -1; } }
+
+/* Hình thức thanh toán của đơn đặt hàng (màn lập đơn) */
+.pos-payterm { display: grid; gap: 4px; margin-top: 6px; }
+.pos-payterm .sel, .pos-payterm select { min-width: 0; }

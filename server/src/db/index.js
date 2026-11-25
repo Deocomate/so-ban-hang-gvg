@@ -11,7 +11,7 @@ import { addAnamtileBook, defaultDocs, VARIANTS } from '../domain/books.js';
 import { DEFAULT_ROLES } from '../lib/labels.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const SCHEMA_VERSION = 15;
+const SCHEMA_VERSION = 16;
 
 // Bảng ghi nhật ký chỉnh sửa; cột bỏ qua khi so sánh UPDATE (do hệ thống tự cập nhật)
 const AUDIT_TABLES = {
@@ -121,6 +121,8 @@ const ADDED_COLUMNS = [
   ['products', 'images', "text not null default '[]'"],
   ['sales_orders', 'price_book_id', 'text'],
   ['sales_orders', 'price_level', 'text'],
+  ['sales_orders', 'pay_term', "text not null default 'mac_dinh' check (pay_term in ('mac_dinh','don_lon'))"],
+  ['sales_orders', 'pay_ratio', 'real not null default 70 check (pay_ratio > 0 and pay_ratio <= 100)'],
   ['sales_order_lines', 'unit_name', 'text'],
   ['sales_order_lines', 'unit_conv', 'real not null default 1'],
   ['sales_order_lines', 'custom_price', 'integer not null default 0'],
