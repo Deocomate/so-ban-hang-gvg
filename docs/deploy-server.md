@@ -21,7 +21,9 @@ Bản chạy thật: https://so-ban-hang-thceramics.admirable.site
 
 ## Cập nhật bản mới
 
-Trên máy Windows, trong thư mục dự án:
+Cách nhanh (dùng hằng ngày): commit xong rồi chạy `npm run deploy` (tức `bash scripts/deploy.sh`) trong Git Bash ở thư mục dự án. Script đẩy HEAD lên GitHub, đóng gói từ một worktree sạch của HEAD, chép lên máy chủ qua `ssh.exe`, sao lưu `gomsu.db` (+ `-wal`, `-shm`) vào `backups/truoc-deploy-<thời điểm>/` (chỉ giữ 3 bản gần nhất, dừng nếu ổ còn dưới 1,5 GB), giữ mã cũ ở `/opt/so-ban-hang-gom/.prev`, khởi động và chờ `/api/health`; không lên thì tự quay về mã cũ và in nhật ký. Các bước làm tay bên dưới chỉ để hiểu hoặc khi script lỗi.
+
+Làm tay, trên máy Windows, trong thư mục dự án:
 
 ```bash
 npm --prefix web run build

@@ -9,6 +9,7 @@
     "start": "node scripts/start.js",
     "panel": "node scripts/control-panel.js",
     "seed:sample": "npm --prefix server run seed:sample",
-    "test": "npm --prefix server test"
+    "test": "npm --prefix server test",
+    "deploy": "bash scripts/deploy.sh"
   }
 }
