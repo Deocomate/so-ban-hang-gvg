@@ -399,6 +399,8 @@ function OrderWeight({ lines }) {
 }
 
 // ===================== CHI TIẾT ĐƠN BÁN =====================
+// Mỗi phiếu thu / hoàn tiền một dòng đủ số tiền trả cho đơn, theo ngày (phiếu trả cho nhiều hóa đơn của đơn không bị tách thành nhiều dòng)
+const byReceipt = (rows) => rows && [...rows.reduce((m, r) => { const x = m.get(r.payment_id); if (x) x.signed_amount += r.signed_amount; else m.set(r.payment_id, { ...r }); return m; }, new Map()).values()];
 export function OrderDetail({ id, onClose }) {
   const { open, can, settings, book } = useApp();
   const o = useQ('sales_orders', [['id', 'eq', id]]);
@@ -420,6 +422,7 @@ export function OrderDetail({ id, onClose }) {
   const d = o.data?.[0];
   if (!d) return <Modal title="Đơn hàng" onClose={onClose} size="lg">{o.error ? <ErrorBox error={o.error} /> : <Loading />}</Modal>;
   const canSell = can('ban_hang');
+  const payRows = byReceipt(pays.data);
   const unlinked = (lines.data || []).filter((l) => !l.po_line_id && l.remaining_qty > 0 && !l.is_kit);
   // Đơn đặt hàng: tạo hóa đơn ở màn hình bán hàng riêng của đơn (như KiotViet), không giao ngay trong chi tiết
   const isDat = d.kind === 'dat_hang';
@@ -484,7 +487,7 @@ export function OrderDetail({ id, onClose }) {
       )}
       <Tabs value={tab} onChange={setTab} tabs={[
         { value: 'info', label: 'Thông tin' },
-        { value: 'pay', label: `Lịch sử thanh toán${pays.data?.length ? ` (${pays.data.length})` : ''}` },
+        { value: 'pay', label: `Lịch sử thanh toán${payRows?.length ? ` (${payRows.length})` : ''}` },
         { value: 'ship', label: `Lịch sử bán / trả hàng${(dels.data?.length || 0) + (rets.data?.length || 0) ? ` (${(dels.data?.length || 0) + (rets.data?.length || 0)})` : ''}` },
         ...(d.kind === 'dat_hang' && can('nhap_hang') && d.status !== 'huy' ? [{ value: 'prod', label: 'Sản xuất' }] : []),
         ...(d.status !== 'huy' ? [{ value: 'docs', label: 'Giấy tờ' }] : []),
@@ -541,8 +544,13 @@ export function OrderDetail({ id, onClose }) {
       </>}
       {tab === 'pay' && <>
         <Section title="Thanh toán & đặt cọc">
-          {d.paid_net > 0 && <div className="totals"><span>Đã nhận</span><span className="r">{money(d.paid_net)}</span><span>Đã khấu trừ vào hóa đơn</span><span className="r">{money(d.deposit_used)}</span><span className="strong">Cọc còn lại</span><span className="r strong good">{money(Math.max(d.paid_net - d.deposit_used, 0))}</span></div>}
-          <Table dense rows={pays.data} rowKey="payment_id" empty="Chưa có khoản thu" onRow={(r) => open('pay-detail', { id: r.payment_id })} columns={[
+          {d.paid_net > 0 && (() => {
+            // Đã trừ vào hóa đơn = cọc khấu trừ khi giao + phiếu thu trả thẳng cho từng hóa đơn HD; phần còn lại mới là cọc
+            const direct = (pays.data || []).filter((r) => r.delivery_id).reduce((t, r) => t + r.signed_amount, 0);
+            const used = d.deposit_used + direct;
+            return <div className="totals"><span>Đã nhận</span><span className="r">{money(d.paid_net)}</span><span>Đã trả / khấu trừ vào hóa đơn</span><span className="r">{money(used)}</span><span className="strong">Cọc còn lại</span><span className="r strong good">{money(Math.max(d.paid_net - used, 0))}</span></div>;
+          })()}
+          <Table dense rows={payRows} rowKey="payment_id" empty="Chưa có khoản thu" onRow={(r) => open('pay-detail', { id: r.payment_id })} columns={[
             { key: 'c', label: 'Phiếu thu', render: (r) => <><b>{r.code}</b><div className="cell-sub">{dmy(r.pay_date)} · {r.fund_name}{r.ref_no ? ' · ' + r.ref_no : ''}</div></> },
             { key: 'k', label: 'Loại', render: (r) => (r.kind === 'hoan_khach' ? <Pill tone="warn">Hoàn tiền</Pill> : d.delivery_count === 0 || r.pay_date < (d.last_delivery_date || '9999') ? 'Cọc / trả trước' : 'Thu tiền') },
             { key: 'a', label: 'Trả cho đơn này', align: 'right', render: (r) => <span className={r.signed_amount < 0 ? 'bad' : ''}>{money(r.signed_amount)}</span> },

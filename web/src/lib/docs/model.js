@@ -239,13 +239,17 @@ async function loadInvoices(q, rpc, src) {
   const dinvs = ivs.filter((d) => d.customer_id === cust.id && d.order_status !== 'huy');
   if (!directs.length && !dinvs.length) throw new Error('Các hóa đơn đã chọn không còn hiệu lực');
   const orderIds = [...new Set([...directs.map((o) => o.id), ...dinvs.map((d) => d.order_id)])];
-  const [dlA, dlB, pays, info, olines] = await Promise.all([
+  const dOrders = [...new Set(dinvs.map((d) => d.order_id))];
+  const [dlA, dlB, pays, info, olines, odels] = await Promise.all([
     directs.length ? q('delivery_lines', [['order_id', 'in', directs.map((o) => o.id)]], 'delivery_date', 5000) : [],
     dinvs.length ? q('delivery_lines', [['delivery_id', 'in', dinvs.map((d) => d.id)]], 'delivery_date', 5000) : [],
     q('doc_payments', [['doc_id', 'in', orderIds]], 'pay_date', 5000),
     rpc('get_doc_info', { ref_type: 'customer', ref_id: cust.id }),
     q('sales_order_lines', [['order_id', 'in', orderIds]], 'line_no', 5000),
+    dOrders.length ? q('deliveries', [['order_id', 'in', dOrders]], 'created_at', 5000) : [],
   ]);
+  // Mọi hóa đơn của các đơn liên quan đều có trong bảng: liệt kê tiền đã trả theo từng phiếu thu, đúng như khách trả
+  const whole = odels.every((x) => dinvs.some((d) => d.id === x.id));
   const invs = [];
   for (const o of directs) {
     const lines = dlA.filter((l) => l.order_id === o.id);
@@ -276,7 +280,7 @@ async function loadInvoices(q, rpc, src) {
   const allDl = invs.flatMap((iv) => iv.lines.map((l) => ({ ...l, delivery_code: iv.code })));
   const dels = [...new Map([...dlA, ...dlB].map((l) => [l.delivery_id, { id: l.delivery_id, code: l.delivery_code, delivery_date: l.delivery_date }])).values()];
   // Dòng hàng của các đơn liên quan (đơn bán ngay và đơn đặt hàng của các hóa đơn): số đặt và còn phải giao trên bảng đối chiếu số lượng
-  return { kind: 'invoices', cust, invs, allDl, dels, lines: olines, pays: [], prods: {}, k: null, info: info || {},
+  return { kind: 'invoices', cust, invs, allDl, dels, lines: olines, pays: whole ? pays : [], wholeOrders: whole, prods: {}, k: null, info: info || {},
     o: { id: null, code: cust.code, customer_name: cust.name, customer_phone: cust.phone, customer_address: cust.address } };
 }
 
