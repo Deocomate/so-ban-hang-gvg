@@ -15,7 +15,9 @@ const FIELDS = ['recv_name', 'recv_phone', 'recv_address', 'driver_name', 'drive
   // Phiếu đóng hàng
   'date_phieu_dong_hang', 'profile_phieu_dong_hang',
   // Hợp đồng vận chuyển: SĐT đại diện bên giao, SĐT bên B, thời gian vận chuyển, dòng thu cước dưới bảng hàng
-  'handover_phone', 'carrier_phone', 'transit_from', 'transit_to', 'freight_collect'];
+  'handover_phone', 'carrier_phone', 'transit_from', 'transit_to', 'freight_collect',
+  // Bảng đối chiếu công nợ: hình thức thanh toán chọn trên hộp in (trống = theo đơn hàng), tỷ lệ khách trả mỗi đợt của đơn hàng lớn
+  'pay_term', 'pay_ratio'];
 
 // Chữ ký đặt trên chứng từ: signs_<loại chứng từ> = JSON [{ s: mã mẫu chữ ký, p: trang, x, y, w (pt) }]
 const SIGNS_KEY = /^signs_[a-z_]{2,30}$/;

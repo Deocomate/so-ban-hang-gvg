@@ -556,7 +556,8 @@ export function DocDialog({ kind, id, keys, type: type0, pay, page, onClose }) {
                     {f.kind === 'driver' ? <DriverPick value={v || ''} drivers={drivers} onPick={(d) => setEdit((s) => ({ ...s, driver_name: d.name, driver_phone: d.phone || '', vehicle: d.plate || '', id_no: d.id_no || '' }))} onText={set} />
                       : f.kind === 'date' ? <DateInput value={v || ''} onChange={set} />
                       : f.kind === 'money' ? <NumInput value={v === '' || v === undefined ? null : Number(v)} onChange={(x) => set(x === null ? '0' : String(x))} />
-                      : f.kind === 'num' ? <Input value={v} onChange={(x) => set(x.replace(/[^\d]/g, ''))} inputMode="numeric" />
+                      : f.kind === 'select' ? <Select value={v || ''} onChange={(x) => set(x || '')} options={f.options} aria-label={f.label} />
+                      : f.kind === 'num' ? <Input value={v} onChange={(x) => set(x.replace(/[^\d]/g, ''))} inputMode="numeric" placeholder={f.placeholder} />
                       : <Input value={v} onChange={set} maxLength={500} />}
                   </Field>
                 );
