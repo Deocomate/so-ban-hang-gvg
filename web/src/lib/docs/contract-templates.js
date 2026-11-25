@@ -3,7 +3,7 @@
 // Chọn loại → các trường cần điền hiện ra (đã điền sẵn từ đơn, khách và đơn vị đứng tên) → dựng HTML in được, xem trước và xuất PDF như mọi chứng từ khác.
 // Trường nhiều dòng viết đơn giản: dòng bắt đầu "- " là gạch đầu dòng, "+ " là ý con, "# " là tiêu đề in đậm.
 import { fmtNum, phoneFmt, moneyWords, goodsLines, custExtra, isCompany } from './model.js';
-import { esc } from './tokens.js';
+import { esc, NOTE_ST } from './tokens.js';
 import { sanitizeHtml } from './templates.js';
 
 export const CONTRACT_KINDS = {
@@ -237,7 +237,8 @@ export function contractHtml(kind, f, data) {
     + (at ? P(`${today} tại ${esc(at)},`) : '') + P('Chúng tôi gồm:')
     + party('BÊN A ( Bên mua )', f, 'a', kind) + party('BÊN B ( Bên bán )', f, 'b', kind)
     + P(I(B(`Hai bên thỏa thuận ký kết hợp đồng kinh tế mua bán: ${esc(f.chu_de || '')}`)), 'margin-top:6pt')
-    + article('Điều 1: KHỐI LƯỢNG, ĐƠN GIÁ, QUY CÁCH HÀNG HÓA:', goodsTable(data) + (String(f.ghi_chu_gia || '').trim() ? P(B(I('Ghi chú :')), 'margin-top:4pt') + block(f.ghi_chu_gia).replace(/<p style="/g, '<p style="font-style:italic; ') : ''))
+    + article('Điều 1: KHỐI LƯỢNG, ĐƠN GIÁ, QUY CÁCH HÀNG HÓA:', goodsTable(data) + (String(f.ghi_chu_gia || '').trim()
+      ? (P(B(I('Ghi chú :')), 'margin-top:4pt') + block(f.ghi_chu_gia)).replaceAll(`<p style="${S}; line-height:1.5`, `<p style="font-style:italic; ${NOTE_ST}; line-height:1.3`) : ''))
     + article('Điều 2. CHẤT LƯỢNG HÀNG HÓA:', block(f.chat_luong))
     + article('Điều 3. THỜI GIAN – PHƯƠNG THỨC GIAO HÀNG:', block(f.giao_hang))
     + article('Điều 4. ĐIỀU KIỆN ĐỔI TRẢ:', block(f.doi_tra))

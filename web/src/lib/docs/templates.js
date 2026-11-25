@@ -3,7 +3,7 @@
 // - Mẫu riêng lưu ở settings.docs.templates[loại] = [{ id, name, html, paper, orient, margin, sep, is_default }].
 // - renderTemplate(): lặp dòng hàng hóa, ẩn dòng có biến trống, thay biến bằng dữ liệu.
 import { DOC_TYPES, DEFAULT_TEXTS } from './model.js';
-import { ALL_TOKENS, ITEM_TOKENS, esc, richText, tokenValues } from './tokens.js';
+import { ALL_TOKENS, ITEM_TOKENS, NOTE_ST, esc, richText, tokenValues } from './tokens.js';
 import { fitColumns, colKey } from './col-fit.js';
 
 // ---------- Khổ giấy ----------
@@ -41,9 +41,11 @@ export const TPL_CSS = `
 `;
 
 // Cỡ chữ cơ bản: chữ trong mẫu nhỏ hơn `base` (pt) được nâng lên bằng `base`; tiêu đề lớn hơn giữ nguyên. base = 0: giữ nguyên mẫu.
+// Đoạn ghi chú (style có --tpl-note) giữ cỡ nhỏ của nó.
 export function withBaseSize(html, base) {
   if (!base) return String(html || '');
-  return String(html || '').replace(/font-size:\s*([\d.]+)\s*(pt|px)/gi, (m, n, u) => ((u.toLowerCase() === 'px' ? Number(n) * 0.75 : Number(n)) < base ? `font-size:${base}pt` : m));
+  const raise = (s) => s.replace(/font-size:\s*([\d.]+)\s*(pt|px)/gi, (m, n, u) => ((u.toLowerCase() === 'px' ? Number(n) * 0.75 : Number(n)) < base ? `font-size:${base}pt` : m));
+  return String(html || '').replace(/style="[^"]*"/gi, (st) => (st.includes('--tpl-note') ? st : raise(st)));
 }
 // Cỡ chữ cơ bản của một chứng từ: giấy cuộn (K80/K58) giữ cỡ nhỏ của mẫu
 export const baseFor = (ds, tpl) => (PAPERS[tpl?.paper]?.roll ? 0 : ds?.base ?? 0);
@@ -132,9 +134,9 @@ const BUILDERS = {
     const s = 'font-size:9.5pt';
     const sumRow = (label, tok, bold) => ['', { h: bold ? B(label) : label, span: 4, pst: right }, { h: bold ? B(tok) : tok, pst: right }];
     const notes = textOf(ds, 'hoa_don', 'invoice_notes');
-    const noteHtml = notes && notes.trim() ? P(B('GHI CHÚ:'), 'font-size:11pt; margin-top:14pt; margin-bottom:2pt') + notes.split('\n').map((ln) => {
+    const noteHtml = notes && notes.trim() ? P(B('GHI CHÚ:'), `${NOTE_ST}; margin-top:14pt; margin-bottom:2pt`) + notes.split('\n').map((ln) => {
       const lead = ln.match(/^\s*/)[0].length;
-      return P(richText(ln.trim()) || '&nbsp;', `font-size:8.2pt; line-height:1.1${lead >= 4 ? '; margin-left:10pt' : lead >= 2 ? '; margin-left:4pt' : ''}`);
+      return P(richText(ln.trim()) || '&nbsp;', `${NOTE_ST}; line-height:1.15${lead >= 4 ? '; margin-left:10pt' : lead >= 2 ? '; margin-left:4pt' : ''}`);
     }).join('') : '';
     return letterhead({ size: 10.5, gap: 2.5 })
       + P(`<span style="font-size:18pt">${B('HÓA ĐƠN BÁN HÀNG')}</span>`, `${center}; margin-top:8pt; margin-bottom:2pt`)
@@ -169,7 +171,7 @@ const BUILDERS = {
         [{ h: B(I('Bằng chữ: {Con_Thanh_Toan_Bang_Chu}.')), span: 6 }],
         [{ h: B(I('Ghi chú: {Ghi_Chu}')), span: 6 }],
       ], { size: 9.5 })
-      + (ft ? P(B(I(esc(ft))), `${center}; font-size:9.5pt; margin-top:18pt`) : '');
+      + (ft ? P(B(I(esc(ft))), `${center}; ${NOTE_ST}; margin-top:18pt`) : '');
   },
   bien_ban(ds) {
     const s = 'font-size:11pt; margin-top:3pt';
@@ -188,7 +190,7 @@ const BUILDERS = {
       + P(B('Địa chỉ giao hàng: {Dia_Chi_Nhan_Hang}'), 'font-size:11pt; margin-top:6pt')
       + P(B('SĐT nhận hàng: {SDT_Kem_Nguoi_Nhan}'), 'font-size:11pt; margin-top:4pt')
       + P('Tình trạng hàng hóa: {Tinh_Trang_Hang}', 'font-size:11pt; margin-top:4pt')
-      + lines(String(textOf(ds, 'bien_ban', 'handover_closing') || '').split('\n').filter(Boolean).join('\n'), 'font-size:11pt; margin-top:4pt; line-height:1.35')
+      + lines(String(textOf(ds, 'bien_ban', 'handover_closing') || '').split('\n').filter(Boolean).join('\n'), `${NOTE_ST}; margin-top:4pt; line-height:1.35`)
       + sign([{ title: 'ĐẠI DIỆN BÊN GIAO', name: '{Dai_Dien_Ben_Giao}' }, { title: 'LÁI XE', name: '{Lai_Xe}' }, { title: 'ĐẠI DIỆN BÊN NHẬN' }], { size: 11, space: 4, mt: 24 });
   },
   // Phiếu đóng hàng (cho kho): tiêu đề, khách hàng, ngày đóng hàng và bảng hàng kèm quy cách đóng gói, tổng số hộp
@@ -224,7 +226,7 @@ const BUILDERS = {
         sumRow('Tổng tiền thanh toán:', '{Tong_Tien_Thanh_Toan_VAT}', true),
         [{ h: `Số tiền viết bằng chữ: ${B(I('{Tong_Tien_VAT_Bang_Chu}'))}`, span: 6 }],
       ], { size: 10 })
-      + P(`${B('Ghi chú:')} {Ghi_Chu_Xuat_HD}`, 'font-size:10.5pt; margin-top:6pt')
+      + P(`${B('Ghi chú:')} {Ghi_Chu_Xuat_HD}`, `${NOTE_ST}; margin-top:6pt`)
       + sign([{ title: 'NGƯỜI ĐỀ NGHỊ', note: '(Ký, ghi rõ họ tên)' }, { title: 'KẾ TOÁN', note: '(Ký, ghi rõ họ tên)' }], { size: 10.5, space: 4, mt: 14 })
       + P(I('Phần kế toán ghi sau khi xuất: Hóa đơn số .................... Ký hiệu .................... Ngày ...../...../.........'), 'font-size:10pt; margin-top:14pt');
   },
@@ -293,8 +295,8 @@ const BUILDERS = {
       ], { size: 10.5 })
       + P(B('{Thoi_Gian_Van_Chuyen}'), 'font-size:10.5pt; margin-top:6pt')
       + P('{Dieu_Khoan_Van_Chuyen}')
-      + P('Cân nặng và giá cước: {Can_Nang_Gia_Cuoc}', 'font-size:10.5pt; margin-top:3pt; line-height:1.35')
-      + P('Thanh toán cước phí tại: {Thanh_Toan_Cuoc_Tai}', 'font-size:10.5pt; margin-top:3pt; line-height:1.35')
+      + P('Cân nặng và giá cước: {Can_Nang_Gia_Cuoc}', `${NOTE_ST}; margin-top:3pt; line-height:1.35`)
+      + P('Thanh toán cước phí tại: {Thanh_Toan_Cuoc_Tai}', `${NOTE_ST}; margin-top:3pt; line-height:1.35`)
       + P('{Dieu_Khoan_Cuoi_Van_Chuyen}')
       + sign([{ title: 'ĐẠI DIỆN BÊN A', name: '{Dai_Dien_Ben_Giao}' }, { title: 'LÁI XE', name: '{Lai_Xe}' }, { title: 'ĐẠI DIỆN BÊN B' }], { size: 11, space: 4, mt: 6 });
   },
