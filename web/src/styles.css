@@ -80,7 +80,7 @@ h1, h2, h3, h4 { margin: 0; text-wrap: balance; }
 a { color: var(--accent); }
 .muted { color: var(--muted); } .small { font-size: 12.5px; } .num, .r { font-variant-numeric: tabular-nums; }
 .r { text-align: right; } .c { text-align: center; }
-.row { display: flex; align-items: center; flex-wrap: wrap; } .gap-s { gap: 6px; } .gap { gap: 12px; } .gap-l { gap: 20px; }
+.row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; } .gap-s { gap: 6px; } .gap { gap: 12px; } .gap-l { gap: 20px; }
 .grow { flex: 1 1 auto; min-width: 0; } .stack { display: flex; flex-direction: column; gap: 12px; } .stack-l { display: flex; flex-direction: column; gap: 20px; } .stack-s { display: flex; flex-direction: column; gap: 10px; }
 .good { color: var(--good); } .bad { color: var(--bad); } .warn { color: var(--warn); } .strong { font-weight: 500; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
