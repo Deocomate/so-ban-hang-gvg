@@ -5,6 +5,7 @@ import { useApp, useQ, useAction } from '../lib/store.jsx';
 import { money, qty as fq, dmy, todayVN } from '../lib/format.js';
 import { Btn, Pill, ErrorBox, Loading, Table, Modal, DateInput, ConfirmBtn } from '../components/ui.jsx';
 import { OrderDetail } from './Sales.jsx';
+import { invoiceMoney } from '../lib/pay-term.js';
 
 export function OrderInvoiceDetail({ id, onClose }) {
   const { open, can } = useApp();
@@ -12,6 +13,8 @@ export function OrderInvoiceDetail({ id, onClose }) {
   const lq = useQ('delivery_lines', [['delivery_id', 'eq', id]], 'id', 500);
   const { run, busy } = useAction();
   const inv = iq.data?.[0];
+  const oq = useQ('sales_orders', [['id', 'eq', inv?.order_id]], 'id', 1, !!inv);
+  const pq = useQ('doc_payments', [['doc_id', 'eq', inv?.order_id]], 'pay_date', 2000, !!inv);
   if (!inv) return <Modal title="Hóa đơn" onClose={onClose} size="lg">{iq.error ? <ErrorBox error={iq.error} /> : <Loading />}</Modal>;
   const lines = lq.data || [];
   const live = inv.order_status !== 'huy';
@@ -20,6 +23,9 @@ export function OrderInvoiceDetail({ id, onClose }) {
   const back = lines.reduce((s, l) => s + (l.qty ? (l.returned_qty * l.revenue) / l.qty : 0), 0);
   const vat = Math.max(0, inv.total - goods - inv.shipping_fee + Math.round(back) + Math.round((back * (inv.vat_rate || 0)) / 100));
   const openOrder = () => { onClose(); open('order', { id: inv.order_id }); };
+  // Tiền cọc đã nhận và các đợt thanh toán trên hóa đơn: hóa đơn duy nhất của đơn thanh toán trên hóa đơn tính mọi khoản của đơn
+  const o = oq.data?.[0];
+  const m = invoiceMoney(pq.data, { whole: !!o && o.pay_term !== 'don_lon' && o.delivery_count === 1, deliveryId: id });
   return (
     <Modal title={inv.customer_name} onClose={onClose} size="xl"
       subtitle={<span className="row gap-s">{inv.code} · Hóa đơn của đơn đặt hàng {inv.order_code}
@@ -58,9 +64,11 @@ export function OrderInvoiceDetail({ id, onClose }) {
           {inv.shipping_fee > 0 && <><span>Phí vận chuyển</span><span className="r">{money(inv.shipping_fee)}</span></>}
           {inv.vat_rate > 0 && <><span>VAT {fq(inv.vat_rate)}%</span><span className="r">{money(vat)}</span></>}
           {back > 0 && <><span>Khách trả lại hàng</span><span className="r">{money(Math.round(back))}</span></>}
-          <span>Khách cần trả</span><span className="r strong">{money(inv.total)}</span>
-          <span>Khách đã trả{inv.deposit_used > 0 ? ` (trừ cọc ${money(inv.deposit_used)})` : ''}</span><span className="r strong">{money(inv.paid)}</span>
-          {inv.debt > 0 && <><span className="strong bad">Khách còn nợ</span><span className="r strong bad">{money(inv.debt)}</span></>}
+          <span>Tổng giá trị hóa đơn</span><span className="r strong">{money(inv.total)}</span>
+          {m.deposit !== 0 && <><span>Tiền cọc đã nhận</span><span className="r">{money(m.deposit)}</span></>}
+          {m.payments.map((p, i) => <React.Fragment key={p.payment_id}><span>{m.payments.length > 1 ? `Thanh toán đợt ${i + 1}` : 'Thanh toán'} ({dmy(p.date)} · {p.code})</span><span className="r">{money(p.amount)}</span></React.Fragment>)}
+          {m.total === 0 && <><span>Khách đã trả</span><span className="r strong">{money(inv.paid)}</span></>}
+          {inv.debt > 0 && <><span className="strong bad">Còn phải thanh toán</span><span className="r strong bad">{money(inv.debt)}</span></>}
           {inv.overdue_days > 0 && <><span className="bad">Quá hạn thanh toán</span><span className="r bad">{inv.overdue_days} ngày</span></>}
         </div>
       </div>

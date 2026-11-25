@@ -199,7 +199,8 @@ export async function loadDocData(q, rpc, src) {
     [d] = await q('deliveries', [['id', 'eq', src.id]]);
     if (!d) throw new Error('Không tìm thấy phiếu giao');
     orderId = d.order_id;
-    dlines = await q('delivery_lines', [['delivery_id', 'eq', src.id]]);
+    // Tiền của đơn: hóa đơn bán hàng ghi tiền cọc đã nhận và các đợt thanh toán
+    [dlines, pays] = await Promise.all([q('delivery_lines', [['delivery_id', 'eq', src.id]]), q('doc_payments', [['doc_id', 'eq', orderId]], 'pay_date', 2000)]);
   }
   const [o] = await q('sales_orders', [['id', 'eq', orderId]]);
   if (!o) throw new Error('Không tìm thấy đơn hàng');
@@ -220,18 +221,15 @@ export async function loadDocData(q, rpc, src) {
   return { kind: src.kind, o, lines, dels, d, dlines, payBase, cust: custs[0] || null, prods: Object.fromEntries(prods.map((p) => [p.id, p])), orderInfo, delInfo, k, allDl, pays: pays || [], kInfo: kInfo || {}, driver: driver || null };
 }
 
-// Số liệu gốc để lập bảng thanh toán theo đợt của đơn hàng lớn (bảng tính lúc dựng chứng từ, theo hình thức chọn trên hộp in):
-// các đợt giao (hóa đơn HD) với giá trị và tiền khách đã trả cho chính hóa đơn đó; tiền cọc = tiền khách trả theo đơn, không gắn hóa đơn nào;
-// giá trị cả đơn để biết phần hàng chưa giao. term / ratio: hình thức đã chọn ở đơn (đơn duy nhất), dùng khi hộp in để "Theo đơn hàng".
+// Số liệu gốc của biên bản đối chiếu theo tiến độ giao hàng (chỉ lập cho đúng một đơn đặt hàng): các chuyến giao (hóa đơn HD),
+// tiền của đơn (cọc / khách chuyển thêm), các khoản cấn trừ cọc và quyết toán. term / ratio: phương thức đã chọn ở đơn, dùng khi hộp in
+// để "Theo đơn hàng". Gộp nhiều đơn thì không có (biên bản theo bảng tổng hợp).
 async function payBaseOf(q, orders, pays, only = null) {
-  const ids = orders.map((o) => o.id);
-  const invs = (await q('order_invoices', [['order_id', 'in', ids]], 'delivery_date', 2000)).filter((x) => !only || only.includes(x.id))
-    .sort((a, b) => String(a.delivery_date).localeCompare(String(b.delivery_date)) || String(a.code).localeCompare(String(b.code)));
-  const one1 = orders.length === 1 ? orders[0] : null;
-  return { term: one1?.pay_term || 'mac_dinh', ratio: Number(one1?.pay_ratio) || 70,
-    total: orders.reduce((t, o) => t + (Number(o.order_total) || 0), 0),
-    deposit: (pays || []).filter((p) => ids.includes(p.doc_id) && !p.delivery_id).reduce((t, p) => t + (Number(p.signed_amount) || 0), 0),
-    rows: invs.map((x) => ({ date: x.delivery_date, code: x.code, total: Number(x.total) || 0, paid: Number(x.paid) || 0 })) };
+  if (orders.length !== 1) return null;
+  const o = orders[0];
+  const [invs, adjs] = await Promise.all([q('order_invoices', [['order_id', 'eq', o.id]], 'delivery_date', 2000), q('order_adjustments', [['order_id', 'eq', o.id]], 'adj_date', 2000)]);
+  return { term: o.pay_term || 'mac_dinh', ratio: Number(o.pay_ratio) || 70, total: Number(o.order_total) || 0, order_code: o.code,
+    invoices: invs.filter((x) => !only || only.includes(x.id)), pays: (pays || []).filter((p) => p.doc_id === o.id), adjustments: adjs };
 }
 
 // ---------- Đối chiếu gộp nhiều hóa đơn của một khách ----------
@@ -364,10 +362,10 @@ export function editableFields(type, data) {
     { key: 'transit_days', label: 'Số ngày vận chuyển tối đa' }, { key: 'freight_note', label: 'Cân nặng và giá cước', wide: true }, { key: 'pay_at', label: 'Thanh toán cước phí tại' }];
   // Bảng đối chiếu công nợ của đơn đặt hàng: chọn hình thức thanh toán ngay trên hộp in (trống = theo đơn hàng)
   if (type === 'doi_chieu_tt' && data.payBase) {
-    const own = data.payBase.term === 'don_lon' ? `Đơn hàng lớn ${data.payBase.ratio}%` : 'Mặc định';
-    return [D, { key: 'pay_term', label: 'Hình thức thanh toán', kind: 'select', options: [{ value: '', label: `Theo đơn hàng (${own})` },
-      { value: 'mac_dinh', label: 'Mặc định – trừ cọc vào tổng nợ' }, { value: 'don_lon', label: 'Đơn hàng lớn – mỗi đợt trả theo %' }] },
-      { key: 'pay_ratio', label: 'Đơn hàng lớn: mỗi đợt khách trả (%)', kind: 'num', placeholder: String(data.payBase.ratio) }];
+    const own = data.payBase.term === 'don_lon' ? `theo tiến độ ${data.payBase.ratio}%` : 'trên hóa đơn';
+    return [{ ...D, label: 'Ngày chốt (lũy kế đến hết ngày này)' }, { key: 'pay_term', label: 'Phương thức thanh toán', kind: 'select', options: [{ value: '', label: `Theo đơn hàng (${own})` },
+      { value: 'mac_dinh', label: 'Thanh toán trên hóa đơn – bảng tổng hợp' }, { value: 'don_lon', label: 'Thanh toán theo tiến độ giao hàng' }] },
+      { key: 'pay_ratio', label: 'Theo tiến độ: mỗi chuyến đến hạn (%)', kind: 'num', placeholder: String(data.payBase.ratio) }];
   }
   if (data.kind === 'contract' || type === 'bao_gia' || RECONCILE.includes(type)) return type === 'bao_gia' ? [] : [D];
   if (type === 'don_dat_hang') return [D, { key: 'recv_phone', label: 'SĐT nhận hàng' }, { key: 'recv_address', label: 'Địa chỉ nhận hàng', wide: true }, { key: 'note', label: 'Ghi chú', wide: true }];

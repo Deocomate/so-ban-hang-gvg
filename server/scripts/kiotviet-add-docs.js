@@ -322,7 +322,9 @@ function checkInvoices() {
     if (conflictCust.has(i.CustomerCode)) continue;
     const o = orderByCode(i.Code); const dl = o ? null : deliveryByCode(i.Code);
     const left = o ? get(`select remaining_total as v from v_open_docs where book_id = ? and doc_type = 'don_ban' and doc_id = ?`, B, o.id)?.v + own('a.doc_id', o.id)
-      : dl ? get(`select debt as v from v_order_invoices where id = ?`, dl.id)?.v + own('a.delivery_id', dl.id) : null;
+      // Nợ riêng của hóa đơn theo tiền thu cho đúng hóa đơn đó (như KiotViet), không theo cách sổ trừ cọc trên hóa đơn duy nhất của đơn
+      : dl ? get(`select max(x.total - coalesce((select sum(a.amount) from payment_allocations a join payments p on p.id = a.payment_id and p.voided = 0
+          and p.kind = 'thu_khach' where a.delivery_id = x.id), 0), 0) as v from v_order_invoices x where x.id = ?`, dl.id)?.v + own('a.delivery_id', dl.id) : null;
     const tu = dl ? (i.Payments || []).filter((x) => /^TTTU/.test(x.Code) && x.Amount > 0).reduce((s, x) => s + x.Amount, 0) : 0;
     const kv = i.Total - (i.TotalPayment || 0) + tu;
     if (left == null || Number.isNaN(left) || Math.abs(left - kv) >= 1) bad.push(`${i.Code}: còn nợ trong sổ ${left ?? 'không có'}, KiotViet ${kv}`);

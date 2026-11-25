@@ -54,7 +54,7 @@ C('Tổng công nợ khách giảm 2.000', (await api.call('customer_ledger', { 
 G('4. Hủy hóa đơn đợt 2: tiền đã thu cho nó quay về đơn đặt');
 await api.call('cancel_delivery', { book_id: TH, request_id: rid(), id: g2.id });
 inv = await invoices(o);
-C('Còn một hóa đơn, cọc không tự trừ vào nó', inv.map((x) => [x.total, x.debt]), [[4000, 4000]]);
+C('Còn một hóa đơn (đơn thanh toán trên hóa đơn): hóa đơn trừ thẳng mọi tiền của đơn', inv.map((x) => [x.total, x.debt]), [[4000, 0]]);
 C('Tiền đã thu cho hóa đơn hủy thành tiền trả trước của đơn đặt', (await order(o)).prepaid, 1500);
 
 G('5. Hóa đơn bán ngay chỉ có một mã HD: phiếu giao mang luôn mã hóa đơn, không sinh mã GH');

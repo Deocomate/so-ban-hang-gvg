@@ -30,14 +30,16 @@ export function insertExpense(book, e, prefix = 'CP') {
 
 // Ghi một khoản phân bổ. Hóa đơn HD lập từ đơn đặt hàng (doc_type 'hoa_don', doc_id là phiếu giao) lưu vào đơn đặt
 // kèm delivery_id, để tiền đã thu của đơn không đổi mà vẫn biết khoản thu trừ vào hóa đơn nào (như KiotViet).
-export function insertAlloc(book, paymentId, docType, docId, amount) {
+// purpose (chỉ tiền của đơn bán): 'coc' tiền đặt cọc / 'thanh_toan' khách chuyển thêm; trống = suy theo ngày như dữ liệu cũ
+export function insertAlloc(book, paymentId, docType, docId, amount, purpose = null) {
+  const pur = purpose === 'coc' || purpose === 'thanh_toan' ? purpose : null;
   if (docType === 'hoa_don') {
     const d = one(`select order_id from deliveries where id = ? and book_id = ?`, docId, book);
     if (!d) fail('Không tìm thấy hóa đơn cần thanh toán');
-    insert('payment_allocations', { id: uuid(), payment_id: paymentId, book_id: book, doc_type: 'don_ban', doc_id: d.order_id, delivery_id: docId, amount });
+    insert('payment_allocations', { id: uuid(), payment_id: paymentId, book_id: book, doc_type: 'don_ban', doc_id: d.order_id, delivery_id: docId, amount, purpose: pur });
     return d.order_id;
   }
-  insert('payment_allocations', { id: uuid(), payment_id: paymentId, book_id: book, doc_type: docType, doc_id: docId, amount });
+  insert('payment_allocations', { id: uuid(), payment_id: paymentId, book_id: book, doc_type: docType, doc_id: docId, amount, purpose: docType === 'don_ban' ? pur : null });
   return docType === 'don_ban' ? docId : null;
 }
 
@@ -78,10 +80,15 @@ export function doPayment(book, p, prev = null) {
   if (!pt) pid = null;
 
   const code = prev ? prev.code : nextCode(book, dir === 'thu' ? 'PT' : dir === 'chi' ? 'PC' : 'CQ');
+  const keptPurpose = new Map();
   const payId = prev ? prev.id : uuid();
   if (prev) {
     run(`update payments set pay_date = ?, fund_id = ?, to_fund_id = ?, party_id = ?, amount = ?, fee = ?, method = ?, note = ?, ref_no = ? where id = ?`,
       d, fid, tfid, pid, amt, fee, p.method ?? null, p.note ?? null, trimNz(p.ref_no), payId);
+    // Sửa phiếu: giữ phân loại cọc / thanh toán của từng chứng từ khi gửi lên không nói rõ
+    for (const a of all(`select doc_type, doc_id, delivery_id, purpose from payment_allocations where payment_id = ? and purpose is not null`, payId)) {
+      keptPurpose.set(`${a.doc_id}|${a.delivery_id || ''}`, a.purpose);
+    }
     run(`delete from payment_allocations where payment_id = ?`, payId);
   } else {
     insert('payments', { id: payId, book_id: book, code, pay_date: d, kind: k, direction: dir, fund_id: fid, to_fund_id: tfid, party_type: pt, party_id: pid,
@@ -109,7 +116,8 @@ export function doPayment(book, p, prev = null) {
       const lim = dt === 'no_dau_ky' ? -doc.remaining_total : doc.paid_net - doc.due_now;
       if (aa > lim) fail(`Số tiền hoàn cho ${doc.code} (${aa}) vượt số đã trả dư (${Math.max(lim, 0)})`);
     }
-    const orderId = insertAlloc(book, payId, dt, a.doc_id, aa);
+    const keyOf = dt === 'hoa_don' ? `${one(`select order_id from deliveries where id = ?`, a.doc_id)?.order_id}|${a.doc_id}` : `${a.doc_id}|`;
+    const orderId = insertAlloc(book, payId, dt, a.doc_id, aa, a.purpose ?? keptPurpose.get(keyOf) ?? null);
     if (orderId) {
       const fund = one(`select name from funds where id = ?`, fid)?.name;
       logOrder(orderId, prev ? 'sua_phieu' : k === 'hoan_khach' ? 'hoan_tien' : 'thu_tien', `${prev ? 'Sửa phiếu' : k === 'hoan_khach' ? 'Hoàn tiền cho khách' : 'Thu tiền'} – phiếu ${code}${dt === 'hoa_don' ? ` cho hóa đơn ${doc.code}` : ''}: ${vnd(aa)}`,

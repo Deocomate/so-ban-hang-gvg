@@ -4,7 +4,7 @@
 // - LƯU: chỉ ghi các thay đổi vào đơn đặt hàng, chưa tạo hóa đơn;
 // - TẠO HÓA ĐƠN / IN: ghi thay đổi (nếu có), tạo hóa đơn HD… (trừ kho, ghi doanh thu), khấu trừ tiền khách đã trả trước
 //   và lập phiếu thu phần khách thanh toán. Đơn còn hàng chưa lấy thì lần sau xử lý tiếp.
-import { depositForDelivery, payTermLabel } from '../lib/pay-term.js';
+import { tripDue, isProgress, payRatio, payTermLabel } from '../lib/pay-term.js';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useAction, useQ } from '../lib/store.jsx';
 import { money, qty as fq, todayVN } from '../lib/format.js';
@@ -93,12 +93,13 @@ export function OrderProcess({ id, onClose }) {
   const shipAmt = Number(ship) || 0;
   const total = goods + vat + shipAmt;
   const qtySum = rows.reduce((t, r) => t + (Number(r.qty) || 0), 0);
-  // Tiền cọc ghi riêng ở đơn, chỉ trừ vào tổng công nợ khách, không khấu trừ vào hóa đơn: khách cần trả đủ giá trị hóa đơn.
-  const deposit = Math.max(0, d.paid_net - d.delivered_value); // khách đã trả trước (cọc) vượt giá trị hàng đã giao
-  // Đơn hàng lớn: gợi ý số khách trả đợt này theo tỷ lệ (phần còn lại đã có cọc bù vào tổng công nợ)
-  const suggest = d.pay_term === 'don_lon'
-    ? total - depositForDelivery({ term: d.pay_term, ratio: d.pay_ratio, value: total, deposit, remaining: (d.order_total || 0) - (d.delivered_value || 0) }) : null;
-  const due = total;
+  // Đơn thanh toán trên hóa đơn giao một lần (đợt này lấy hết, chưa có hóa đơn nào): hóa đơn trừ thẳng tiền cọc và các khoản khách đã trả cho đơn.
+  // Còn lại tiền của đơn ghi riêng, không trừ vào hóa đơn này: khách cần trả đủ giá trị hóa đơn.
+  const single = !isProgress(d) && !d.delivery_count && rows.every((r) => r.isNew || (Number(r.qty) || 0) >= r.rem - 1e-9);
+  const prepaid = single ? Math.max(0, d.paid_net || 0) : Math.max(0, d.paid_net - d.delivered_value);
+  // Theo tiến độ giao hàng: chuyến này đến hạn tỷ lệ % giá trị thực giao (tiền cọc chỉ dùng khi chủ sổ cấn trừ)
+  const suggest = isProgress(d) ? tripDue(total, payRatio(d)) : null;
+  const due = single ? Math.max(0, total - prepaid) : total;
   const payAmt = Number(pay.amount) || 0;
   const debt = due - payAmt;
   const takes = rows.filter((r) => (Number(r.qty) || 0) > 0);
@@ -254,9 +255,11 @@ export function OrderProcess({ id, onClose }) {
             <span>Giảm giá</span><b className="r">{money(discount)}</b>
             {vat > 0 && <><span>VAT {fq(d.vat_rate)}%</span><b className="r">{money(vat)}</b></>}
             <span>Thu khác (vận chuyển)</span><NumInput suffix={false} min={0} value={ship} onChange={setShip} className="pos-uline" aria-label="Phí vận chuyển" />
+            {single && prepaid > 0 && <><span>Giá trị hóa đơn</span><b className="r">{money(total)}</b>
+              <span>Trừ tiền cọc / đã thanh toán của đơn</span><b className="r">{money(-prepaid)}</b></>}
             <b>Khách cần trả</b><b className="r pos-due-amt">{money(due)}</b>
-            {deposit > 0 && <><span className="muted small">Tiền cọc của đơn (ghi riêng, không trừ vào hóa đơn)</span><span className="r muted small">{money(deposit)}</span></>}
-            {suggest !== null && <><span className="small" title={payTermLabel(d)}>Đơn hàng lớn · gợi ý trả {fq(d.pay_ratio)}%</span><b className="r">{money(suggest)}</b></>}
+            {!single && prepaid > 0 && <><span className="muted small">Tiền cọc của đơn (ghi riêng, không trừ vào hóa đơn)</span><span className="r muted small">{money(prepaid)}</span></>}
+            {suggest !== null && <><span className="small" title={payTermLabel(d)}>Theo tiến độ · chuyến này đến hạn {fq(payRatio(d))}%</span><b className="r">{money(suggest)}</b></>}
           </div>
           {canPay && (
             <div className="pos-pay">

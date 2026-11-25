@@ -47,7 +47,8 @@ G('1. Phiếu thu của hóa đơn lập từ đơn đặt gắn như KiotViet, 
 C('Công cụ ghi xong', /Đã ghi vào CSDL/.test(out), true);
 const inv = await api.one('order_invoices', TH, [['code', 'eq', 'HD000900']]);
 C('Hóa đơn HD000900: tổng 10 triệu, cọc không trừ vào hóa đơn', [inv.total, inv.deposit_used], [10000000, 0]);
-C('Hóa đơn chỉ tính 3 triệu thu cho chính nó, còn nợ 7 triệu (cọc 5 triệu ghi riêng ở đơn)', [inv.paid, inv.debt], [3000000, 7000000]);
+// Đơn thanh toán trên hóa đơn, giao một lần: hóa đơn duy nhất trừ thẳng cọc 5 triệu và 3 triệu thu cho chính nó
+C('Hóa đơn duy nhất của đơn trừ cọc 5 triệu và 3 triệu đã thu, còn 2 triệu', [inv.paid, inv.debt], [8000000, 2000000]);
 const pay = async (code) => api.one('payments', TH, [['code', 'eq', code]]);
 C('Phiếu TTHD000900 gắn vào chính hóa đơn HD000900', (await pay('TTHD000900')).allocations.map((a) => a.doc_code), ['HD000900']);
 C('Phiếu cọc TTDH000900 gắn vào đơn đặt', (await pay('TTDH000900')).allocations.map((a) => a.doc_code), ['DH000900']);

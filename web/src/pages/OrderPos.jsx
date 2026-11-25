@@ -448,13 +448,15 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
           </div>
           {isDat && (
             <div className="pos-payterm">
-              <span className="muted small">Hình thức thanh toán</span>
+              <span className="muted small">Phương thức thanh toán</span>
               <div className="row gap-s">
-                <Select value={f.pay_term} onChange={(v) => set('pay_term', v || 'mac_dinh')} options={PAY_TERMS} aria-label="Hình thức thanh toán" />
-                {f.pay_term === 'don_lon' && <label className="row gap-s nowrap"><span className="small">Mỗi đợt trả</span>
-                  <NumInput money={false} suffix="%" min={1} max={100} value={f.pay_ratio} onChange={(v) => set('pay_ratio', v)} style={{ width: 84 }} aria-label="Tỷ lệ trả mỗi đợt" /></label>}
+                <Select value={f.pay_term} onChange={(v) => set('pay_term', v || 'mac_dinh')} options={PAY_TERMS} aria-label="Phương thức thanh toán" />
+                {f.pay_term === 'don_lon' && <label className="row gap-s nowrap"><span className="small">Mỗi chuyến đến hạn</span>
+                  <NumInput money={false} suffix="%" min={1} max={100} value={f.pay_ratio} onChange={(v) => set('pay_ratio', v)} style={{ width: 84 }} aria-label="Tỷ lệ đến hạn mỗi chuyến" /></label>}
               </div>
-              {f.pay_term === 'don_lon' && <span className="muted small">Khi xử lý đơn, gợi ý mỗi đợt khách trả {Number(f.pay_ratio) || 70}% giá trị đợt. Tiền cọc ghi riêng, không trừ vào hóa đơn.</span>}
+              <span className="muted small">{f.pay_term === 'don_lon'
+                ? `Đơn giá trị cao giao nhiều chuyến: mỗi chuyến đến hạn ${Number(f.pay_ratio) || 70}% giá trị thực giao; tiền cọc chỉ trừ khi bạn cấn trừ trong sổ công nợ của đơn.`
+                : 'Đơn giao một lần: hóa đơn bán hàng trừ thẳng tiền cọc và các đợt khách đã thanh toán.'}</span>
             </div>
           )}
           {isDat && can('nhap_hang') && (

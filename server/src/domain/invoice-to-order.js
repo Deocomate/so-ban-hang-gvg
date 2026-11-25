@@ -101,7 +101,7 @@ function moveInvoice(o, baseId, lineNo) {
   for (const l of all(`select id from sales_order_lines where order_id = ? order by line_no`, o.id)) {
     run(`update sales_order_lines set order_id = ?, line_no = ? where id = ?`, baseId, ++lineNo, l.id);
   }
-  for (const t of ['deliveries', 'sales_returns', 'shipments', 'driver_trips', 'quotes', 'contracts', 'order_doc_files', 'tax_invoices', 'bank_txns', 'order_promos', 'order_events']) {
+  for (const t of ['deliveries', 'sales_returns', 'shipments', 'driver_trips', 'quotes', 'contracts', 'order_doc_files', 'tax_invoices', 'bank_txns', 'order_promos', 'order_events', 'order_adjustments']) {
     run(`update ${t} set order_id = ? where order_id = ?`, baseId, o.id);
   }
   run(`update purchase_orders set sales_order_id = ? where sales_order_id = ?`, baseId, o.id);

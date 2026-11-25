@@ -22,6 +22,7 @@ drop view if exists v_shipments;
 drop view if exists v_open_docs;
 drop view if exists v_order_invoices;
 drop view if exists v_doc_payments;
+drop view if exists v_order_adjustments;
 drop view if exists v_payments;
 drop view if exists v_funds;
 drop view if exists v_fund_moves;
@@ -289,6 +290,8 @@ left join (select delivery_id, sum(revenue) as revenue, sum(cogs) as cogs from d
 -- Hóa đơn HD lập từ đơn đặt hàng (mỗi phiếu giao một hóa đơn, như KiotViet), mỗi hóa đơn có số đã thu / còn nợ riêng.
 -- Đã thu của hóa đơn chỉ gồm tiền thu cho đúng hóa đơn đó (payment_allocations.delivery_id, vd. khách trả lúc lập hóa đơn).
 -- Tiền cọc của đơn và phiếu thu của khách ghi riêng, chỉ trừ vào tổng công nợ khách, không tự trừ vào hóa đơn nào.
+-- Riêng đơn thanh toán trên hóa đơn bán hàng (pay_term 'mac_dinh') giao một lần: hóa đơn duy nhất của đơn trừ thẳng tiền cọc
+-- và mọi đợt khách đã trả cho đơn (còn phải thanh toán = giá trị hóa đơn − tiền cọc − các đợt thanh toán).
 -- Giá trị hóa đơn đã trừ hàng khách trả; phần chênh do làm tròn VAT theo cả đơn dồn vào hóa đơn mới nhất.
 create view v_order_invoices as
 with dv as (
@@ -303,7 +306,7 @@ with dv as (
     row_number() over (partition by dv.order_id order by dv.delivery_date desc, dv.created_at desc, dv.id desc) as rn_last
   from dv join sales_orders o on o.id = dv.order_id
 ), t2 as (
-  select t.*, t.paid_direct as paid,
+  select t.*, case when so.pay_term = 'mac_dinh' and so.delivery_count = 1 then so.paid_net else t.paid_direct end as paid,
     t.raw_total + case when t.rn_last = 1 then so.delivered_value - sum(t.raw_total) over (partition by t.order_id) else 0 end as total
   from t join v_sales_orders so on so.id = t.order_id
 )
@@ -641,10 +644,20 @@ left join (select a.payment_id, sum(a.amount) as allocated, json_group_array(jso
    group by a.payment_id) x on x.payment_id = p.id;
 
 -- Các khoản thanh toán gắn với 1 chứng từ (để xem trong chi tiết đơn)
+-- purpose: tiền của đơn là đặt cọc ('coc') hay khách chuyển thêm ('thanh_toan'). Khoản ghi trước khi có phân loại:
+-- gắn hóa đơn HD hoặc thu từ ngày giao đầu tiên trở đi là thanh toán, thu trước đó là đặt cọc.
 create view v_doc_payments as
 select a.book_id, a.doc_id, a.doc_type, a.payment_id, p.code, p.pay_date, p.kind, a.amount, a.signed_amount, f.name as fund_name, p.method, p.note, p.ref_no,
-  a.delivery_id, (select d.code from deliveries d where d.id = a.delivery_id) as invoice_code
+  a.delivery_id, (select d.code from deliveries d where d.id = a.delivery_id) as invoice_code,
+  coalesce(a.purpose, case when a.delivery_id is not null or a.doc_type <> 'don_ban' then 'thanh_toan'
+    when p.pay_date < coalesce((select min(d.delivery_date) from deliveries d where d.order_id = a.doc_id), '9999-12-31') then 'coc'
+    else 'thanh_toan' end) as purpose
 from v_alloc_signed a join payments p on p.id = a.payment_id join funds f on f.id = p.fund_id;
+
+-- Cấn trừ tiền cọc / quyết toán của đơn thanh toán theo tiến độ giao hàng
+create view v_order_adjustments as
+select x.*, case x.kind when 'can_tru_coc' then 'Cấn trừ tiền cọc' else 'Quyết toán' end as kind_label, u.name as created_by_name
+from order_adjustments x left join users u on u.id = x.created_by;
 
 -- Chứng từ còn mở của 1 đối tượng (gợi ý phân bổ khi thu/chi)
 create view v_open_docs as

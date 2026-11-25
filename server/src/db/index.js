@@ -11,14 +11,14 @@ import { addAnamtileBook, defaultDocs, VARIANTS } from '../domain/books.js';
 import { DEFAULT_ROLES } from '../lib/labels.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const SCHEMA_VERSION = 16;
+const SCHEMA_VERSION = 17;
 
 // Bảng ghi nhật ký chỉnh sửa; cột bỏ qua khi so sánh UPDATE (do hệ thống tự cập nhật)
 const AUDIT_TABLES = {
   books: '', book_members: '', products: 'on_hand,stock_value,last_cost', customers: '', suppliers: '', funds: '', opening_debts: '',
   sales_orders: '', sales_order_lines: 'delivered_qty,returned_qty', deliveries: '', sales_returns: '', purchase_orders: '',
   purchase_order_lines: 'received_qty,returned_qty', goods_receipts: '', supplier_returns: '', stock_adjustments: '', productions: '', payments: '',
-  payment_allocations: '', expenses: '', expense_recurring: '', drivers: '', driver_trips: '', quotes: '', contracts: '', tax_invoices: '', employees: '', paysheets: '', commission_tables: '',
+  payment_allocations: '', order_adjustments: '', expenses: '', expense_recurring: '', drivers: '', driver_trips: '', quotes: '', contracts: '', tax_invoices: '', employees: '', paysheets: '', commission_tables: '',
   shipments: 'status,status_at,status_detail,last_sync_at,tracking_registered_at,cod_status,cod_settled_at,cod_payment_ids',
   bank_txns: '', product_units: '', price_books: '', warranty_claims: '', promotions: '', vouchers: '', coupons: '', cash_shifts: '',
 };
@@ -102,6 +102,7 @@ const ADDED_COLUMNS = [
   ['sales_orders', 'vat_rate', 'real not null default 0 check (vat_rate >= 0 and vat_rate <= 100)'],
   ['deliveries', 'deposit_used', 'real not null default 0 check (deposit_used >= 0)'],
   ['payment_allocations', 'delivery_id', 'text'], // hóa đơn HD (phiếu giao của đơn đặt hàng) mà khoản thu trừ vào
+  ['payment_allocations', 'purpose', "text check (purpose in ('coc','thanh_toan'))"], // tiền đặt cọc / khách chuyển thêm của đơn
   ['stock_adjustments', 'purpose', 'text'],
   ['expenses', 'invoice_no', 'text'],
   ['expenses', 'pl_amount', 'real'],

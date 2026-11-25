@@ -3,7 +3,7 @@
 // - Mẫu riêng lưu ở settings.docs.templates[loại] = [{ id, name, html, paper, orient, margin, sep, is_default }].
 // - renderTemplate(): lặp dòng hàng hóa, ẩn dòng có biến trống, thay biến bằng dữ liệu.
 import { DOC_TYPES, DEFAULT_TEXTS } from './model.js';
-import { ALL_TOKENS, ITEM_TOKENS, NOTE_ST, esc, richText, tokenValues } from './tokens.js';
+import { ALL_TOKENS, ITEM_TOKENS, PAY_TOKENS, NOTE_ST, esc, richText, tokenValues } from './tokens.js';
 import { fitColumns, colKey } from './col-fit.js';
 
 // ---------- Khổ giấy ----------
@@ -147,8 +147,8 @@ const BUILDERS = {
         [C('{STT}'), L(`{Ten_Hang}<br>${I('{Quy_Cach_Ghi_Chu}')}`), C('{So_Luong}'), C('{Don_Vi_Tinh}'), R('{Don_Gia}'), R('{Thanh_Tien}')],
         [{ h: B('Tổng cộng: {Tong_So_Hop} {Don_Vi_Dong_Goi}'), span: 6 }],
         sumRow('Tổng tiền hàng:', '{Tong_Tien_Hang}', true), sumRow('Chiết khấu:', '{Chiet_Khau}'), sumRow('Nợ cũ:', '{No_Cu}'), sumRow('{Ten_VAT}', '{Tien_VAT}'),
-        sumRow('Tiền vận chuyển', '{Phi_Van_Chuyen}'), sumRow('Hàng trả lại', '{Hang_Tra_Lai}'), sumRow('Tổng thanh toán', '{Tong_Thanh_Toan}'),
-        sumRow('{Nhan_Da_Thanh_Toan}', '{Da_Thanh_Toan}'), sumRow('Còn thanh toán', '{Con_Thanh_Toan}', true),
+        sumRow('Tiền vận chuyển', '{Phi_Van_Chuyen}'), sumRow('Hàng trả lại', '{Hang_Tra_Lai}'), sumRow('Tổng giá trị hóa đơn', '{Tong_Thanh_Toan}'),
+        sumRow('Tiền cọc đã nhận', '{Tien_Coc_Da_Nhan}'), sumRow('{Nhan_Dot_Thanh_Toan}', '{Tien_Dot_Thanh_Toan}'), sumRow('Còn phải thanh toán', '{Con_Thanh_Toan}', true),
         [{ h: `${B(I('Bằng chữ:'))}&nbsp; ${I('{Con_Thanh_Toan_Bang_Chu}')}`, span: 6 }],
       ], { size: 9.5 })
       + noteHtml + sign([{ title: 'Người mua hàng' }, { title: 'Người bán hàng' }], { size: 9.5, space: 2, mt: 10 });
@@ -360,7 +360,7 @@ export const SUGGESTED = {
       + table(['*', 60], [[{ h: B('Mặt hàng') }, { h: B('T.Tiền'), pst: right }], [{ h: `{Ten_Hang}<br>{So_Luong} {Don_Vi_Tinh} x {Don_Gia}` }, { h: '{Thanh_Tien}', pst: right }]], { border: false, size: 8.5 })
       + '<hr>'
       + table(['*', 70], [sum('Tổng tiền hàng', '{Tong_Tien_Hang}', true), sum('Chiết khấu', '{Chiet_Khau}'), sum('{Ten_VAT}', '{Tien_VAT}'), sum('Phí vận chuyển', '{Phi_Van_Chuyen}'),
-        sum('Hàng trả lại', '{Hang_Tra_Lai}'), sum('Nợ cũ', '{No_Cu}'), sum('Tổng thanh toán', '{Tong_Thanh_Toan}', true), sum('{Nhan_Da_Thanh_Toan}', '{Da_Thanh_Toan}'), sum('Còn thanh toán', '{Con_Thanh_Toan}', true)], { border: false, size: 8.5 })
+        sum('Hàng trả lại', '{Hang_Tra_Lai}'), sum('Nợ cũ', '{No_Cu}'), sum('Tổng giá trị hóa đơn', '{Tong_Thanh_Toan}', true), sum('Tiền cọc đã nhận', '{Tien_Coc_Da_Nhan}'), sum('{Nhan_Dot_Thanh_Toan}', '{Tien_Dot_Thanh_Toan}'), sum('Còn phải thanh toán', '{Con_Thanh_Toan}', true)], { border: false, size: 8.5 })
       + P(I('({Con_Thanh_Toan_Bang_Chu})'), `${s}; margin-top:2pt`) + P('STK: {So_Tai_Khoan_Don_Vi}', `${s}; margin-top:4pt`) + P(I('Cảm ơn quý khách!'), `${center}; ${s}; margin-top:6pt`);
   } }],
   phieu_thu: [{ id: 'k80', name: 'Phiếu thu giấy cuộn K80', paper: 'K80', orient: 'portrait', margin: ROLL, html: () => {
@@ -506,8 +506,18 @@ export function renderTemplate(html, vals) {
     }
     tr.remove();
   }
+  // Dòng bảng chứa biến đợt thanh toán: nhân bản theo từng đợt (không có đợt nào thì bỏ dòng)
+  for (const tr of [...box.querySelectorAll('tr')]) {
+    if (!tokensIn(tr).some((k) => PAY_TOKENS.has(k))) continue;
+    for (const it of vals.pays || []) {
+      const row = tr.cloneNode(true); tr.parentNode.insertBefore(row, tr);
+      const get = (k) => (PAY_TOKENS.has(k) ? it[k] : vals.v[k]);
+      hideEmptyIn(row, get); fill(row, get, doc);
+    }
+    tr.remove();
+  }
   // Biến hàng hóa đặt ngoài bảng: lấy dòng đầu tiên
-  const get = (k) => (ITEM_TOKENS.has(k) ? vals.items[0]?.[k] ?? '' : docGet(k));
+  const get = (k) => (ITEM_TOKENS.has(k) ? vals.items[0]?.[k] ?? '' : PAY_TOKENS.has(k) ? vals.pays?.[0]?.[k] ?? '' : docGet(k));
   hideEmpty(box, get); fill(box, get, doc); tidy(box); sanitizeInto(box);
   return box.innerHTML;
 }

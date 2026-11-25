@@ -85,7 +85,7 @@ C('Tiền đã trả thành tiền cọc', [o5.paid_net, o5.payment_status], [50
 const ls5 = await api.q('sales_order_lines', TH, [['order_id', 'eq', r5.id]]);
 const g5 = await api.call('deliver', { book_id: TH, request_id: rid(), order_id: r5.id, date: D(0), lines: ls5.map((l) => ({ order_line_id: l.id, qty: l.remaining_qty })), deposit_used: 500 });
 const inv5 = await api.q('order_invoices', TH, [['order_id', 'eq', r5.id]]);
-C('Giao tiếp được: hóa đơn HD mới, cọc ghi riêng không trừ vào hóa đơn', [g5.code.slice(0, 2), inv5[0].total, inv5[0].paid, inv5[0].debt], ['HD', 1600, 0, 1600]);
+C('Giao tiếp được: hóa đơn HD mới duy nhất của đơn trừ thẳng tiền cọc', [g5.code.slice(0, 2), inv5[0].total, inv5[0].paid, inv5[0].debt], ['HD', 1600, 500, 1100]);
 const d6 = await api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: A, kind: 'ban_san', order_date: D(0), lines: [{ product_id: P.LO, qty: 1, unit_price: 400 }] });
 const r6 = await api.call('make_order_from_invoices', { book_id: TH, request_id: rid(), invoice_ids: [d6.id] });
 C('Chỉ có phiếu tạm: đơn đặt hàng vẫn là phiếu tạm', (await api.one('sales_orders', TH, [['id', 'eq', r6.id]])).status, 'nhap');

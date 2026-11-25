@@ -24,6 +24,7 @@ import { OrderDocsPanel } from './OrderDocs.jsx';
 import { OrderDocMenu, OrderDocLauncher } from '../components/DocMenu.jsx';
 import { SaleDetail } from './OrderInvoice.jsx';
 import { PAY_TERMS, payTermLabel } from '../lib/pay-term.js';
+import { OrderLedger } from './OrderLedger.jsx';
 
 // ===================== DANH SÁCH ĐƠN BÁN =====================
 // Như KiotViet: Hóa đơn gồm hóa đơn bán ngay và các hóa đơn lập khi xử lý đơn đặt hàng (mỗi đợt giao một hóa đơn HD…);
@@ -489,7 +490,7 @@ export function OrderDetail({ id, onClose }) {
       )}
       <Tabs value={tab} onChange={setTab} tabs={[
         { value: 'info', label: 'Thông tin' },
-        { value: 'pay', label: `Lịch sử thanh toán${payRows?.length ? ` (${payRows.length})` : ''}` },
+        { value: 'pay', label: `Sổ công nợ${payRows?.length ? ` (${payRows.length})` : ''}` },
         { value: 'ship', label: `Lịch sử bán / trả hàng${(dels.data?.length || 0) + (rets.data?.length || 0) ? ` (${(dels.data?.length || 0) + (rets.data?.length || 0)})` : ''}` },
         ...(d.kind === 'dat_hang' && can('nhap_hang') && d.status !== 'huy' ? [{ value: 'prod', label: 'Sản xuất' }] : []),
         ...(d.status !== 'huy' ? [{ value: 'docs', label: 'Giấy tờ' }] : []),
@@ -501,8 +502,8 @@ export function OrderDetail({ id, onClose }) {
             <datalist id="od-staff-list">{[...new Set([...(employees.data || []).map((e) => e.name), ...(settings.staff_names || [])].filter(Boolean))].map((x) => <option key={x} value={x} />)}</datalist></> : <b>{d.staff || '—'}</b>}</label>
           <label><span>{isDat ? 'Ngày đặt' : 'Ngày bán'}</span>{editable ? <DateInput value={cur.order_date} onChange={(v) => v && setCur('order_date', v)} max={todayVN()} aria-label={isDat ? 'Ngày đặt' : 'Ngày bán'} /> : <b>{dmy(invoiceDate(d))}</b>}</label>
           {isDat && <label><span>Thanh toán</span>{editable
-            ? <span className="row gap-s"><Select value={cur.pay_term} onChange={(v) => setCur('pay_term', v || 'mac_dinh')} options={PAY_TERMS} aria-label="Hình thức thanh toán" />
-              {cur.pay_term === 'don_lon' && <NumInput money={false} suffix="%" min={1} max={100} value={cur.pay_ratio} onChange={(v) => setCur('pay_ratio', v)} style={{ width: 84 }} aria-label="Tỷ lệ trả mỗi đợt" />}</span>
+            ? <span className="row gap-s"><Select value={cur.pay_term} onChange={(v) => setCur('pay_term', v || 'mac_dinh')} options={PAY_TERMS} aria-label="Phương thức thanh toán" />
+              {cur.pay_term === 'don_lon' && <NumInput money={false} suffix="%" min={1} max={100} value={cur.pay_ratio} onChange={(v) => setCur('pay_ratio', v)} style={{ width: 84 }} aria-label="Tỷ lệ đến hạn mỗi chuyến" />}</span>
             : <b>{payTermLabel(d)}</b>}</label>}
           <label><span>Kênh bán</span>{editable ? <ChannelSelect value={cur.channel} onChange={(v) => setCur('channel', v || '')} extra={[d.channel]} placeholder="Chọn kênh bán" aria-label="Kênh bán" /> : <b>{d.channel || '—'}</b>}</label>
           <label><span>Bảng giá</span><b>{(priceBooks.data || []).find((b) => b.id === d.price_book_id)?.name || (d.price_level === 'cost' ? 'Giá vốn' : (settings.price_names || [])[(Number(d.price_level) || d.price_tier || 1) - 1] || 'Bảng giá chung')}</b></label>
@@ -549,18 +550,7 @@ export function OrderDetail({ id, onClose }) {
         <VatReminder orderId={d.delivery_count > 0 ? id : null} onShowRequest={() => open('doc', { kind: 'order', id, type: 'yeu_cau_vat' })} />
       </>}
       {tab === 'pay' && <>
-        <Section title="Thanh toán & đặt cọc">
-          {d.paid_net > 0 && (() => {
-            // Tiền thu cho đúng từng hóa đơn HD; phần còn lại là cọc / trả trước, ghi riêng, chỉ trừ vào tổng công nợ khách
-            const direct = (pays.data || []).filter((r) => r.delivery_id).reduce((t, r) => t + r.signed_amount, 0);
-            return <div className="totals"><span>Đã nhận</span><span className="r">{money(d.paid_net)}</span><span>Thu cho từng hóa đơn</span><span className="r">{money(direct)}</span><span className="strong">Cọc / trả trước (ghi riêng)</span><span className="r strong good">{money(Math.max(d.paid_net - direct, 0))}</span></div>;
-          })()}
-          <Table dense rows={payRows} rowKey="payment_id" empty="Chưa có khoản thu" onRow={(r) => open('pay-detail', { id: r.payment_id })} columns={[
-            { key: 'c', label: 'Phiếu thu', render: (r) => <><b>{r.code}</b><div className="cell-sub">{dmy(r.pay_date)} · {r.fund_name}{r.ref_no ? ' · ' + r.ref_no : ''}</div></> },
-            { key: 'k', label: 'Loại', render: (r) => (r.kind === 'hoan_khach' ? <Pill tone="warn">Hoàn tiền</Pill> : d.delivery_count === 0 || r.pay_date < (d.last_delivery_date || '9999') ? 'Cọc / trả trước' : 'Thu tiền') },
-            { key: 'a', label: 'Trả cho đơn này', align: 'right', render: (r) => <span className={r.signed_amount < 0 ? 'bad' : ''}>{money(r.signed_amount)}</span> },
-          ]} />
-        </Section>
+        <OrderLedger order={d} pays={pays.data} />
       {settings.bank && d.status !== 'huy' && d.remaining_to_pay > 0 && (
         <Section title="Chuyển khoản cho đơn này">
           <div className="row gap" style={{ alignItems: 'flex-start' }}>

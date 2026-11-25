@@ -269,8 +269,8 @@ create table if not exists sales_orders (
   confirmed_at text, cancelled_at text,
   vat_rate real not null default 0 check (vat_rate >= 0 and vat_rate <= 100),
   price_book_id text,
-  -- Hình thức thanh toán của đơn đặt hàng: 'mac_dinh' trừ cọc thẳng vào đợt giao; 'don_lon' mỗi đợt khách trả pay_ratio % giá trị đợt,
-  -- phần còn lại trừ cọc, cọc quyết toán ở các đợt giao cuối
+  -- Phương thức thanh toán của đơn: 'mac_dinh' thanh toán trên hóa đơn bán hàng (đơn giao một lần, cọc trừ thẳng trên hóa đơn);
+  -- 'don_lon' thanh toán theo tiến độ giao hàng: mỗi chuyến đến hạn pay_ratio % giá trị thực giao, cọc chỉ cấn trừ khi chủ sổ nhập
   pay_term text not null default 'mac_dinh' check (pay_term in ('mac_dinh','don_lon')),
   pay_ratio real not null default 70 check (pay_ratio > 0 and pay_ratio <= 100)
 );
@@ -552,10 +552,26 @@ create table if not exists payment_allocations (
   book_id text not null,
   doc_type text not null check (doc_type in ('don_ban','don_mua','chi_phi','no_dau_ky')),
   doc_id text not null,
-  amount real not null check (amount > 0)
+  amount real not null check (amount > 0),
+  delivery_id text,                -- hóa đơn HD (phiếu giao của đơn đặt hàng) mà khoản thu trừ vào
+  purpose text check (purpose in ('coc','thanh_toan'))  -- tiền của đơn: đặt cọc / khách chuyển thêm; trống = suy theo ngày (dữ liệu cũ)
 );
 create index if not exists payment_alloc_doc_idx on payment_allocations (doc_id);
 create index if not exists payment_alloc_pay_idx on payment_allocations (payment_id);
+
+-- Sổ công nợ đơn thanh toán theo tiến độ: cấn trừ tiền cọc (dùng tiền cọc đã nhận, không phải khoản thu mới)
+-- và quyết toán (đưa phần giá trị hàng đã giao chưa đến hạn vào số tiền đến hạn). Mỗi khoản chỉ tính một lần.
+create table if not exists order_adjustments (
+  id text primary key,
+  book_id text not null references books(id) on delete cascade,
+  order_id text not null references sales_orders(id) on delete cascade,
+  kind text not null check (kind in ('can_tru_coc','quyet_toan')),
+  adj_date text not null,
+  amount real not null check (amount > 0),
+  note text,
+  created_by text, created_at text not null
+);
+create index if not exists order_adjustments_order_idx on order_adjustments (order_id);
 
 create table if not exists expenses (
   id text primary key,

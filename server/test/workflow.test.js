@@ -55,13 +55,13 @@ C('Tải lại đúng tệp đính kèm', Buffer.from((await api.call('get_attac
 C('Hợp đồng đếm tệp', (await api.one('contracts', TH, [['id', 'eq', k.id]])).file_count, 1);
 await E('Tệp không gắn đúng chứng từ bị từ chối', () => api.call('upload_attachment', { book_id: TH, ref_type: 'contract', ref_id: 'x', name: 'a', base64: 'YQ==' }), /Không tìm thấy/);
 
-G('Tiền cọc ghi riêng, không trừ vào hóa đơn đợt giao');
+G('Đơn thanh toán trên hóa đơn: hóa đơn duy nhất của đơn trừ thẳng tiền cọc');
 await api.call('create_payment', { book_id: TH, kind: 'thu_khach', fund_id: fund, party_id: cust, amount: 30000000, allocations: [{ doc_type: 'don_ban', doc_id: o.id, amount: 30000000 }] });
 const line = (await api.q('sales_order_lines', TH, [['order_id', 'eq', o.id]]))[0];
 const d1 = await api.call('deliver', { order_id: o.id, date: d, shipping_fee: 0, deposit_used: 10000000, lines: [{ order_line_id: line.id, qty: 4000 }] });
 so = await api.one('sales_orders', TH, [['id', 'eq', o.id]]);
 C('Công nợ tính cả VAT phần đã giao, cọc gửi kèm bị bỏ qua', [so.delivered_value, so.deposit_used, so.receivable], [43200000, 0, 13200000]);
-C('Hóa đơn đợt giao còn nợ đủ giá trị (cọc chỉ trừ tổng công nợ)', (await api.one('order_invoices', TH, [['id', 'eq', d1.id]])).debt, 43200000);
+C('Hóa đơn còn phải thanh toán = giá trị hóa đơn − tiền cọc', (await api.one('order_invoices', TH, [['id', 'eq', d1.id]])).debt, 13200000);
 C('Công nợ khách khớp sổ', (await api.one('customers', TH, [['id', 'eq', cust]])).receivable, 13200000);
 const ov = await api.call('rpt_overview', { book_id: TH, from: d, to: d });
 C('Tổng phải thu cuối kỳ gồm VAT', ov.receivable, 13200000);

@@ -320,7 +320,7 @@ export function update_order_info(p) {
   requirePerm(o.book_id, 'ban_hang');
   if (o.status === 'huy') fail('Đơn đã hủy, không thể sửa');
   const next = { note: trimNz(p.note), staff: trimNz(p.staff), channel: trimNz(p.channel), ...payTermOf(p, o) };
-  const label = { note: 'Ghi chú', staff: 'Người bán', channel: 'Kênh bán', order_date: o.kind === 'dat_hang' ? 'Ngày đặt' : 'Ngày bán', pay_term: 'Hình thức thanh toán', pay_ratio: 'Tỷ lệ trả mỗi đợt (%)' };
+  const label = { note: 'Ghi chú', staff: 'Người bán', channel: 'Kênh bán', order_date: o.kind === 'dat_hang' ? 'Ngày đặt' : 'Ngày bán', pay_term: 'Phương thức thanh toán', pay_ratio: 'Tỷ lệ đến hạn mỗi chuyến (%)' };
   if (p.order_date !== undefined) next.order_date = asDate(p.order_date) || fail('Ngày không hợp lệ');
   const ch = Object.keys(next).filter((k) => (o[k] ?? null) !== next[k]);
   if (!ch.length) return { ok: true, changed: 0 };
@@ -333,7 +333,7 @@ export function update_order_info(p) {
     }
   }
   run(`update sales_orders set ${ch.map((k) => `${k} = ?`).join(', ')} where id = ?`, ...ch.map((k) => next[k]), o.id);
-  const fmt = (k, x) => (k === 'order_date' ? x.split('-').reverse().join('/') : k === 'pay_term' ? (x === 'don_lon' ? 'Đơn hàng lớn' : 'Mặc định') : x);
+  const fmt = (k, x) => (k === 'order_date' ? x.split('-').reverse().join('/') : k === 'pay_term' ? (x === 'don_lon' ? 'Theo tiến độ giao hàng' : 'Trên hóa đơn bán hàng') : x);
   logOrder(o.id, 'sua', 'Sửa thông tin hóa đơn', [...ch.map((k) => `${label[k]}: ${o[k] ? fmt(k, o[k]) : '—'} → ${next[k] ? fmt(k, next[k]) : '—'}`),
     ...(moved.length ? [`Đổi ngày giao ${moved.join(', ')} theo ngày bán`] : [])]);
   return { ok: true, changed: ch.length };
@@ -373,12 +373,13 @@ export function set_delivery_date(p) {
   return { ok: true, changed: 1 };
 }
 
-// Hình thức thanh toán gửi lên (không gửi thì giữ như cũ / mặc định): 'mac_dinh' trừ cọc thẳng, 'don_lon' mỗi đợt trả pay_ratio %
+// Phương thức thanh toán gửi lên (không gửi thì giữ như cũ / mặc định): 'mac_dinh' thanh toán trên hóa đơn bán hàng,
+// 'don_lon' thanh toán theo tiến độ giao hàng, mỗi chuyến đến hạn pay_ratio % giá trị thực giao
 function payTermOf(p, o = null) {
   const term = p.pay_term === undefined ? (o?.pay_term ?? 'mac_dinh') : p.pay_term;
-  if (!['mac_dinh', 'don_lon'].includes(term)) fail('Hình thức thanh toán không hợp lệ');
+  if (!['mac_dinh', 'don_lon'].includes(term)) fail('Phương thức thanh toán không hợp lệ');
   const ratio = p.pay_ratio === undefined || p.pay_ratio === null || p.pay_ratio === '' ? (o?.pay_ratio ?? 70) : num(p.pay_ratio);
-  if (!(ratio > 0 && ratio <= 100)) fail('Tỷ lệ thanh toán mỗi đợt phải từ 1 đến 100%');
+  if (!(ratio > 0 && ratio <= 100)) fail('Tỷ lệ đến hạn mỗi chuyến phải từ 1 đến 100%');
   return { pay_term: term, pay_ratio: ratio };
 }
 
