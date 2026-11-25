@@ -454,7 +454,7 @@ export function OrderPos({ id, copy_id, kind: kind0, customer_id: cust0, quote_i
                 {f.pay_term === 'don_lon' && <label className="row gap-s nowrap"><span className="small">Mỗi đợt trả</span>
                   <NumInput money={false} suffix="%" min={1} max={100} value={f.pay_ratio} onChange={(v) => set('pay_ratio', v)} style={{ width: 84 }} aria-label="Tỷ lệ trả mỗi đợt" /></label>}
               </div>
-              {f.pay_term === 'don_lon' && <span className="muted small">Mỗi đợt giao khách trả {Number(f.pay_ratio) || 70}% giá trị đợt, phần còn lại trừ vào cọc; cọc quyết toán ở các đợt giao cuối.</span>}
+              {f.pay_term === 'don_lon' && <span className="muted small">Khi xử lý đơn, gợi ý mỗi đợt khách trả {Number(f.pay_ratio) || 70}% giá trị đợt. Tiền cọc ghi riêng, không trừ vào hóa đơn.</span>}
             </div>
           )}
           {isDat && can('nhap_hang') && (

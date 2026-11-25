@@ -1,15 +1,15 @@
 // Hình thức thanh toán của đơn đặt hàng.
-// 'mac_dinh': tiền cọc trừ thẳng vào đợt giao (trừ hết cọc còn lại, đến giá trị đợt).
-// 'don_lon' (đơn hàng lớn): mỗi đợt khách trả `ratio` % giá trị đợt, phần còn lại trừ vào cọc; khi tiền cọc còn lại đã đủ cho phần hàng
-// chưa giao thì khách thôi trả, cọc được quyết toán ở các đợt giao cuối. Ví dụ đơn 1 tỷ, cọc 500 triệu, 5 đợt 200 triệu, 70%:
-// khách trả 140 – 140 – 140 – 80 – 0 triệu, cọc trừ 60 – 60 – 60 – 120 – 200 triệu.
+// Tiền cọc không trừ vào hóa đơn nào: cọc ghi riêng ở đơn, chỉ trừ vào tổng công nợ của khách.
+// 'mac_dinh': khách trả theo giá trị hóa đơn.
+// 'don_lon' (đơn hàng lớn): khi xử lý đơn, gợi ý mỗi đợt khách trả `ratio` % giá trị đợt; khi tiền cọc đã đủ cho phần hàng chưa giao thì
+// gợi ý trả 0. Ví dụ đơn 1 tỷ, cọc 500 triệu, 5 đợt 200 triệu, 70%: gợi ý trả 140 – 140 – 140 – 80 – 0 triệu.
 export const PAY_TERMS = [
-  { value: 'mac_dinh', label: 'Mặc định – trừ cọc thẳng vào đợt giao' },
-  { value: 'don_lon', label: 'Đơn hàng lớn – mỗi đợt trả theo %, cọc quyết toán đợt cuối' },
+  { value: 'mac_dinh', label: 'Mặc định – khách trả theo hóa đơn' },
+  { value: 'don_lon', label: 'Đơn hàng lớn – gợi ý mỗi đợt trả theo %' },
 ];
-export const payTermLabel = (o) => (o?.pay_term === 'don_lon' ? `Đơn hàng lớn – mỗi đợt trả ${Number(o.pay_ratio) || 70}%, cọc quyết toán đợt cuối` : 'Mặc định – trừ cọc thẳng');
+export const payTermLabel = (o) => (o?.pay_term === 'don_lon' ? `Đơn hàng lớn – gợi ý mỗi đợt trả ${Number(o.pay_ratio) || 70}%` : 'Mặc định – khách trả theo hóa đơn');
 
-// Tiền cọc khấu trừ vào một đợt giao.
+// Phần giá trị đợt giao có cọc bù (không phải trả ngay); khách trả đợt này = value − kết quả.
 // value: tiền đợt này (sau giảm giá, gồm VAT, phí vận chuyển); deposit: cọc còn dùng được; remaining: giá trị đơn chưa giao, gồm cả đợt này
 export function depositForDelivery({ term, ratio = 70, value, deposit, remaining }) {
   const v = Math.max(0, Math.round(Number(value) || 0)); const dep = Math.max(0, Math.round(Number(deposit) || 0));

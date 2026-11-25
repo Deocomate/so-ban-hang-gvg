@@ -43,11 +43,11 @@ fs.writeFileSync(kFile, JSON.stringify(K)); fs.writeFileSync(mFile, JSON.stringi
 const out = execFileSync(process.execPath, [path.join(here, '../scripts/kiotviet-add-docs.js'), 'TH', kFile, mFile],
   { env: { ...process.env, DB_PATH: dbFile, TZ: 'Asia/Ho_Chi_Minh' }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 
-G('1. Tiền cọc và phiếu thu của hóa đơn lập từ đơn đặt gắn như KiotViet');
+G('1. Phiếu thu của hóa đơn lập từ đơn đặt gắn như KiotViet, tiền cọc ghi riêng ở đơn');
 C('Công cụ ghi xong', /Đã ghi vào CSDL/.test(out), true);
 const inv = await api.one('order_invoices', TH, [['code', 'eq', 'HD000900']]);
-C('Hóa đơn HD000900: tổng 10 triệu, trừ cọc 5 triệu', [inv.total, inv.deposit_used], [10000000, 5000000]);
-C('Hóa đơn đã thu 8 triệu, còn nợ 2 triệu như KiotViet', [inv.paid, inv.debt], [8000000, 2000000]);
+C('Hóa đơn HD000900: tổng 10 triệu, cọc không trừ vào hóa đơn', [inv.total, inv.deposit_used], [10000000, 0]);
+C('Hóa đơn chỉ tính 3 triệu thu cho chính nó, còn nợ 7 triệu (cọc 5 triệu ghi riêng ở đơn)', [inv.paid, inv.debt], [3000000, 7000000]);
 const pay = async (code) => api.one('payments', TH, [['code', 'eq', code]]);
 C('Phiếu TTHD000900 gắn vào chính hóa đơn HD000900', (await pay('TTHD000900')).allocations.map((a) => a.doc_code), ['HD000900']);
 C('Phiếu cọc TTDH000900 gắn vào đơn đặt', (await pay('TTDH000900')).allocations.map((a) => a.doc_code), ['DH000900']);

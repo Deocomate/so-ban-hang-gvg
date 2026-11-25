@@ -551,10 +551,9 @@ export function OrderDetail({ id, onClose }) {
       {tab === 'pay' && <>
         <Section title="Thanh toán & đặt cọc">
           {d.paid_net > 0 && (() => {
-            // Đã trừ vào hóa đơn = cọc khấu trừ khi giao + phiếu thu trả thẳng cho từng hóa đơn HD; phần còn lại mới là cọc
+            // Tiền thu cho đúng từng hóa đơn HD; phần còn lại là cọc / trả trước, ghi riêng, chỉ trừ vào tổng công nợ khách
             const direct = (pays.data || []).filter((r) => r.delivery_id).reduce((t, r) => t + r.signed_amount, 0);
-            const used = d.deposit_used + direct;
-            return <div className="totals"><span>Đã nhận</span><span className="r">{money(d.paid_net)}</span><span>Đã trả / khấu trừ vào hóa đơn</span><span className="r">{money(used)}</span><span className="strong">Cọc còn lại</span><span className="r strong good">{money(Math.max(d.paid_net - used, 0))}</span></div>;
+            return <div className="totals"><span>Đã nhận</span><span className="r">{money(d.paid_net)}</span><span>Thu cho từng hóa đơn</span><span className="r">{money(direct)}</span><span className="strong">Cọc / trả trước (ghi riêng)</span><span className="r strong good">{money(Math.max(d.paid_net - direct, 0))}</span></div>;
           })()}
           <Table dense rows={payRows} rowKey="payment_id" empty="Chưa có khoản thu" onRow={(r) => open('pay-detail', { id: r.payment_id })} columns={[
             { key: 'c', label: 'Phiếu thu', render: (r) => <><b>{r.code}</b><div className="cell-sub">{dmy(r.pay_date)} · {r.fund_name}{r.ref_no ? ' · ' + r.ref_no : ''}</div></> },
@@ -686,8 +685,6 @@ export function DeliverDialog({ order, onClose }) {
   const [date, setDate] = useState(todayVN());
   const [ship, setShip] = useState(Math.max(0, order.shipping_fee - order.ship_billed));
   const [note, setNote] = useState('');
-  const [deposit, setDeposit] = useState(null);
-  const depositLeft = Math.max(order.paid_net - (order.deposit_used || 0), 0);
   const [collect, setCollect] = useState(false);
   const [fund, setFund] = useState('');
   const [viaSpx, setViaSpx] = useState(false); const [tracking, setTracking] = useState(''); const [cod, setCod] = useState(null); const [cr, setCr] = useState(lastCarrier()); const [driverId, setDriverId] = useState('');
@@ -696,7 +693,7 @@ export function DeliverDialog({ order, onClose }) {
   useEffect(() => { if (lines.data) setQtys(Object.fromEntries(lines.data.filter((l) => l.remaining_qty > 0).map((l) => [l.id, l.remaining_qty]))); }, [lines.data]);
   useEffect(() => { if (!fund && funds.data?.length) setFund(funds.data[0].id); }, [funds.data]);
   const submit = async () => {
-    const r = await run('deliver', { order_id: order.id, date, shipping_fee: ship, note, deposit_used: deposit || 0, lines: Object.entries(qtys).map(([k, v]) => ({ order_line_id: k, qty: Number(v) || 0 })) },
+    const r = await run('deliver', { order_id: order.id, date, shipping_fee: ship, note, lines: Object.entries(qtys).map(([k, v]) => ({ order_line_id: k, qty: Number(v) || 0 })) },
       (x) => `Đã giao – phiếu ${x.code}`);
     if (!r) return;
     let pay = null;
@@ -734,7 +731,6 @@ export function DeliverDialog({ order, onClose }) {
         <Field label="Ngày giao"><DateInput value={date} onChange={setDate} max={todayVN()} /></Field>
         <Field label="Phí vận chuyển tính khách" hint={`Đã tính ${money(order.ship_billed)} / ${money(order.shipping_fee)} theo đơn`}><NumInput value={ship} onChange={setShip} /></Field>
         <Field label="Ghi chú"><Input value={note} onChange={setNote} placeholder="vd. Giao đợt 1, xe anh Đức" /></Field>
-        {depositLeft > 0 && <Field label="Khấu trừ tiền cọc vào đợt này" hint={`Cọc còn lại ${money(depositLeft)} đ`}><NumInput min={0} max={depositLeft} value={deposit} onChange={setDeposit} /></Field>}
       </div>
       <div className="row gap"><Check checked={viaSpx} onChange={(v) => { setViaSpx(v); if (v) setCollect(false); }}>Gửi qua đơn vị vận chuyển</Check>
         {viaSpx && <Select value={cr} onChange={setCr} options={CARRIERS.map((c) => ({ value: c.code, label: c.name }))} style={{ maxWidth: 170 }} aria-label="Đơn vị vận chuyển" />}

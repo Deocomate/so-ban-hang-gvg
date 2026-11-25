@@ -434,7 +434,8 @@ export function deliver(p) {
   const o = one(`select * from sales_orders where id = ?`, p.order_id);
   if (!o) fail('Không tìm thấy đơn hàng');
   requirePerm(o.book_id, 'ban_hang');
-  return once(p, o.book_id, 'deliver', () => doDeliver(o.id, asDate(p.date) || today(), p.lines || [], num(p.shipping_fee), p.note ?? null, bool(p.override) ?? false, p.deposit_used));
+  // Tiền cọc ghi riêng ở đơn, chỉ trừ vào tổng công nợ khách: lập hóa đơn không khấu trừ cọc (bỏ qua deposit_used gửi lên)
+  return once(p, o.book_id, 'deliver', () => doDeliver(o.id, asDate(p.date) || today(), p.lines || [], num(p.shipping_fee), p.note ?? null, bool(p.override) ?? false, 0));
 }
 
 // Hủy một đợt giao (giao nhầm): hàng nhập lại kho đúng giá vốn đã xuất, số đã giao của đơn giảm theo, doanh thu đợt đó bỏ đi.

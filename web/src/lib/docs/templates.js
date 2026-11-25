@@ -200,7 +200,8 @@ const BUILDERS = {
       + P(`Khách hàng: ${B('{Ben_Nhan_Hang}')}`, s) + P(`Ngày đóng hàng: ${B('{Ngay_Chung_Tu}')}`, `${s}; margin-bottom:10pt`)
       + table([36, '*', 70, 46, 150], [
         head(['STT', 'Tên hàng hoá', 'Số lượng', 'ĐVT', 'Quy cách đóng gói']),
-        [C('{STT}'), L(`{Ten_Hang}<br>${I('{Quy_Cach_Ghi_Chu}')}`), C('{So_Luong}'), C('{Don_Vi_Tinh_Thuong}'), C('{Quy_Cach}')],
+        // Quy cách đã có cột riêng: dưới tên hàng chỉ ghi chú của dòng hàng (không lặp quy cách)
+        [C('{STT}'), L(`{Ten_Hang}<br>${I('{Ghi_Chu_Hang}')}`), C('{So_Luong}'), C('{Don_Vi_Tinh_Thuong}'), C('{Quy_Cach}')],
         ['', { h: '', span: 3 }, C(B('Tổng cộng: {Tong_So_Hop} {Don_Vi_Dong_Goi}'))],
       ], { size: 11.5 });
   },

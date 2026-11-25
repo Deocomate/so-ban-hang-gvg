@@ -93,15 +93,16 @@ export function OrderProcess({ id, onClose }) {
   const shipAmt = Number(ship) || 0;
   const total = goods + vat + shipAmt;
   const qtySum = rows.reduce((t, r) => t + (Number(r.qty) || 0), 0);
-  const prepaid = Math.max(0, d.paid_net - d.delivered_value); // khách đã trả trước (cọc) chưa trừ vào hóa đơn nào
-  // Cọc khấu trừ đợt này theo hình thức thanh toán của đơn (mặc định trừ thẳng; đơn hàng lớn chỉ trừ phần ngoài % khách trả mỗi đợt)
-  const depositLeft = Math.max(0, Math.min(prepaid, d.paid_net - (d.deposit_used || 0)));
-  const used = depositForDelivery({ term: d.pay_term, ratio: d.pay_ratio, value: total, deposit: depositLeft, remaining: (d.order_total || 0) - (d.delivered_value || 0) });
-  const due = Math.max(0, total - used);
+  // Tiền cọc ghi riêng ở đơn, chỉ trừ vào tổng công nợ khách, không khấu trừ vào hóa đơn: khách cần trả đủ giá trị hóa đơn.
+  const deposit = Math.max(0, d.paid_net - d.delivered_value); // khách đã trả trước (cọc) vượt giá trị hàng đã giao
+  // Đơn hàng lớn: gợi ý số khách trả đợt này theo tỷ lệ (phần còn lại đã có cọc bù vào tổng công nợ)
+  const suggest = d.pay_term === 'don_lon'
+    ? total - depositForDelivery({ term: d.pay_term, ratio: d.pay_ratio, value: total, deposit, remaining: (d.order_total || 0) - (d.delivered_value || 0) }) : null;
+  const due = total;
   const payAmt = Number(pay.amount) || 0;
   const debt = due - payAmt;
   const takes = rows.filter((r) => (Number(r.qty) || 0) > 0);
-  const chips = [...new Set([due, Math.ceil(due / 100000) * 100000, Math.ceil(due / 1000000) * 1000000].filter((x) => x > 0))];
+  const chips = [...new Set([suggest, due, Math.ceil(due / 100000) * 100000, Math.ceil(due / 1000000) * 1000000].filter((x) => x > 0))];
 
   // Ghi thay đổi vào đơn đặt hàng (giữ nguyên các dòng đã giao đủ, khách, kênh bán, giảm giá, phí vận chuyển của đơn)
   const saveOrder = async (confirm) => {
@@ -146,7 +147,7 @@ export function OrderProcess({ id, onClose }) {
         if (!(await run('confirm_sales_order', { id }, null))) return;
       }
       const lines = takes.map((r) => ({ order_line_id: ids ? ids.get(r.key) : r.id, qty: (Number(r.qty) || 0) * r.conv }));
-      const r = await run('deliver', { order_id: id, date, shipping_fee: shipAmt, note: note.trim() || null, deposit_used: used, lines },
+      const r = await run('deliver', { order_id: id, date, shipping_fee: shipAmt, note: note.trim() || null, lines },
         (x) => `Đã tạo hóa đơn ${x.code} cho đơn ${d.code}`);
       if (!r) { if (dirty) { toast('Đã lưu thay đổi vào đơn nhưng chưa tạo được hóa đơn', 'err'); onClose(); } return; }
       const amt = Math.min(payAmt, due);
@@ -253,10 +254,9 @@ export function OrderProcess({ id, onClose }) {
             <span>Giảm giá</span><b className="r">{money(discount)}</b>
             {vat > 0 && <><span>VAT {fq(d.vat_rate)}%</span><b className="r">{money(vat)}</b></>}
             <span>Thu khác (vận chuyển)</span><NumInput suffix={false} min={0} value={ship} onChange={setShip} className="pos-uline" aria-label="Phí vận chuyển" />
-            {d.pay_term === 'don_lon'
-              ? <><span title={payTermLabel(d)}>Trừ tiền cọc<div className="cell-sub">Đơn hàng lớn · trả {fq(d.pay_ratio)}% mỗi đợt · cọc còn {money(depositLeft - used)}</div></span><b className="r">{money(used)}</b></>
-              : <><span>Khách đã trả</span><b className="r">{money(used)}</b></>}
             <b>Khách cần trả</b><b className="r pos-due-amt">{money(due)}</b>
+            {deposit > 0 && <><span className="muted small">Tiền cọc của đơn (ghi riêng, không trừ vào hóa đơn)</span><span className="r muted small">{money(deposit)}</span></>}
+            {suggest !== null && <><span className="small" title={payTermLabel(d)}>Đơn hàng lớn · gợi ý trả {fq(d.pay_ratio)}%</span><b className="r">{money(suggest)}</b></>}
           </div>
           {canPay && (
             <div className="pos-pay">

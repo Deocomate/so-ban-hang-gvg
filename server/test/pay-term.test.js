@@ -31,28 +31,28 @@ await api.call('save_sales_order', { book_id: TH, request_id: rid(), id: o.id, c
 od = await order(o.id);
 C('Lưu lại đơn không mất hình thức thanh toán', [od.pay_term, od.pay_ratio], ['don_lon', 70]);
 
-G('2. Đơn 1 tỷ, cọc 500 triệu, 5 đợt 200 triệu: mỗi đợt trả 70%, cọc quyết toán ở các đợt cuối');
+G('2. Đơn 1 tỷ, cọc 500 triệu, 5 đợt 200 triệu: gợi ý mỗi đợt trả 70%, cọc bù vào tổng công nợ ở các đợt cuối');
 await api.call('create_payment', { book_id: TH, request_id: rid(), kind: 'thu_khach', date: D(19), fund_id: TM, party_id: A, amount: 500 * M,
   allocations: [{ doc_type: 'don_ban', doc_id: o.id, amount: 500 * M }] });
 const pays = []; const deps = [];
 for (let i = 0; i < 5; i++) {
   od = await order(o.id);
-  const left = Math.max(0, Math.min(od.paid_net - od.delivered_value, od.paid_net - od.deposit_used));
+  const left = Math.max(0, od.paid_net - od.delivered_value);
   const used = depositForDelivery({ term: od.pay_term, ratio: od.pay_ratio, value: 200 * M, deposit: left, remaining: od.order_total - od.delivered_value });
-  const g = await api.call('deliver', { book_id: TH, request_id: rid(), order_id: o.id, date: D(15 - i), deposit_used: used, lines: [{ order_line_id: line.id, qty: 200000 }] });
+  const g = await api.call('deliver', { book_id: TH, request_id: rid(), order_id: o.id, date: D(15 - i), lines: [{ order_line_id: line.id, qty: 200000 }] });
   deps.push(used / M); pays.push((200 * M - used) / M);
   // Khách trả đúng phần phải trả của đợt
   if (200 * M - used > 0) await api.call('create_payment', { book_id: TH, request_id: rid(), kind: 'thu_khach', date: D(15 - i), fund_id: TM, party_id: A, amount: 200 * M - used,
     allocations: [{ doc_type: 'hoa_don', doc_id: g.id, amount: 200 * M - used }] });
 }
-C('Cọc trừ từng đợt (triệu)', deps, [60, 60, 60, 120, 200]);
-C('Khách trả từng đợt (triệu)', pays, [140, 140, 140, 80, 0]);
+C('Phần cọc bù từng đợt (triệu)', deps, [60, 60, 60, 120, 200]);
+C('Gợi ý khách trả từng đợt (triệu)', pays, [140, 140, 140, 80, 0]);
 od = await order(o.id);
-C('Giao đủ, thu đủ, hết cọc', [od.remaining_qty, od.receivable, od.prepaid, od.paid_net], [0, 0, 0, 1000 * M]);
+C('Giao đủ, tổng công nợ đơn hết, hết cọc', [od.remaining_qty, od.receivable, od.prepaid, od.paid_net], [0, 0, 0, 1000 * M]);
 const inv = await api.q('order_invoices', TH, [['order_id', 'eq', o.id]], 'delivery_date');
-C('Mỗi hóa đơn hết nợ', inv.map((x) => x.debt), [0, 0, 0, 0, 0]);
+C('Cọc không trừ vào hóa đơn: mỗi hóa đơn còn đúng phần cọc bù', inv.map((x) => [x.deposit_used, x.debt / M]), [[0, 60], [0, 60], [0, 60], [0, 120], [0, 200]]);
 
-G('3. Mặc định: trừ cọc thẳng vào đợt giao');
+G('3. Phần cọc bù của đợt theo hình thức thanh toán');
 C('Đợt 1 trừ hết phần cọc đủ cho đợt', depositForDelivery({ term: 'mac_dinh', value: 200, deposit: 500, remaining: 1000 }), 200);
 C('Cọc ít hơn đợt: trừ hết cọc', depositForDelivery({ term: 'mac_dinh', value: 200, deposit: 50, remaining: 1000 }), 50);
 C('Đơn hàng lớn, cọc ít: chỉ trừ phần ngoài 70%', depositForDelivery({ term: 'don_lon', ratio: 70, value: 200, deposit: 50, remaining: 1000 }), 50);

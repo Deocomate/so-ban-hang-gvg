@@ -287,8 +287,8 @@ left join customers c on c.id = o.customer_id
 left join (select delivery_id, sum(revenue) as revenue, sum(cogs) as cogs from delivery_lines group by delivery_id) x on x.delivery_id = d.id;
 
 -- Hóa đơn HD lập từ đơn đặt hàng (mỗi phiếu giao một hóa đơn, như KiotViet), mỗi hóa đơn có số đã thu / còn nợ riêng.
--- Tiền cọc trừ khi giao và phiếu thu gắn thẳng vào hóa đơn (payment_allocations.delivery_id) tính cho đúng hóa đơn đó;
--- phần đã thu còn lại của đơn (phiếu thu gắn vào đơn trước khi có hóa đơn, cọc chưa trừ) trả dần hóa đơn cũ trước.
+-- Đã thu của hóa đơn chỉ gồm tiền thu cho đúng hóa đơn đó (payment_allocations.delivery_id, vd. khách trả lúc lập hóa đơn).
+-- Tiền cọc của đơn và phiếu thu của khách ghi riêng, chỉ trừ vào tổng công nợ khách, không tự trừ vào hóa đơn nào.
 -- Giá trị hóa đơn đã trừ hàng khách trả; phần chênh do làm tròn VAT theo cả đơn dồn vào hóa đơn mới nhất.
 create view v_order_invoices as
 with dv as (
@@ -303,25 +303,17 @@ with dv as (
     row_number() over (partition by dv.order_id order by dv.delivery_date desc, dv.created_at desc, dv.id desc) as rn_last
   from dv join sales_orders o on o.id = dv.order_id
 ), t2 as (
-  select t.*, so.delivered_value, so.paid_net as order_paid, so.pay_term, t.deposit_used + t.paid_direct as direct,
+  select t.*, t.paid_direct as paid,
     t.raw_total + case when t.rn_last = 1 then so.delivered_value - sum(t.raw_total) over (partition by t.order_id) else 0 end as total
   from t join v_sales_orders so on so.id = t.order_id
-), t3 as (
-  -- Đơn hàng lớn: tiền khách trả theo đơn là tiền cọc, chỉ vào hóa đơn khi được khấu trừ ở từng đợt (không tự rải vào các hóa đơn)
-  select t2.*, case when t2.pay_term = 'don_lon' then 0 else t2.order_paid - sum(t2.direct) over (partition by t2.order_id) end as pool,
-    coalesce(sum(max(t2.total - t2.direct, 0)) over (partition by t2.order_id order by t2.delivery_date, t2.created_at, t2.id
-      rows between unbounded preceding and 1 preceding), 0) as need_before
-  from t2
-), t4 as (
-  select t3.*, t3.direct + min(max(t3.total - t3.direct, 0), max(t3.pool - t3.need_before, 0)) as paid from t3
 )
-select t4.id, t4.book_id, t4.code, t4.order_id, so.code as order_code, so.status as order_status, so.customer_id, so.customer_code, so.customer_name,
-  so.customer_phone, so.staff, so.channel, so.vat_rate, t4.delivery_date, t4.created_at, t4.note, t4.shipping_fee, t4.deposit_used,
-  t4.total, t4.paid, max(t4.total - t4.paid, 0) as debt, t4.rn_last = 1 as is_last,
-  case when t4.total - t4.paid > 0 then date(t4.delivery_date, '+' || coalesce(c.credit_days, 0) || ' days') end as due_date,
-  case when t4.total - t4.paid > 0 and date(t4.delivery_date, '+' || coalesce(c.credit_days, 0) || ' days') < today()
-       then days(today(), date(t4.delivery_date, '+' || coalesce(c.credit_days, 0) || ' days')) else 0 end as overdue_days
-from t4 join v_sales_orders so on so.id = t4.order_id left join customers c on c.id = so.customer_id;
+select t2.id, t2.book_id, t2.code, t2.order_id, so.code as order_code, so.status as order_status, so.customer_id, so.customer_code, so.customer_name,
+  so.customer_phone, so.staff, so.channel, so.vat_rate, t2.delivery_date, t2.created_at, t2.note, t2.shipping_fee, t2.deposit_used,
+  t2.total, t2.paid, max(t2.total - t2.paid, 0) as debt, t2.rn_last = 1 as is_last,
+  case when t2.total - t2.paid > 0 then date(t2.delivery_date, '+' || coalesce(c.credit_days, 0) || ' days') end as due_date,
+  case when t2.total - t2.paid > 0 and date(t2.delivery_date, '+' || coalesce(c.credit_days, 0) || ' days') < today()
+       then days(today(), date(t2.delivery_date, '+' || coalesce(c.credit_days, 0) || ' days')) else 0 end as overdue_days
+from t2 join v_sales_orders so on so.id = t2.order_id left join customers c on c.id = so.customer_id;
 
 create view v_delivery_lines as
 select x.id, x.book_id, x.delivery_id, d.code as delivery_code, d.delivery_date, d.order_id, x.order_line_id,

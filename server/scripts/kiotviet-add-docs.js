@@ -291,8 +291,8 @@ function voidMissingPayments() {
 }
 
 // Gắn tiền như KiotViet, sau khi đã lập / hủy mọi chứng từ:
-// - phiếu thu vào đúng chứng từ KiotViet ghi cho nó (payHome): hóa đơn bán thẳng, từng hóa đơn HD lập từ đơn đặt, hoặc tiền cọc của đơn đặt;
-// - tiền cọc chuyển sang hóa đơn lập từ đơn đặt theo cặp phiếu TTTU… trên hóa đơn (ghi vào tiền cọc đã trừ của phiếu giao đó).
+// - phiếu thu vào đúng chứng từ KiotViet ghi cho nó (payHome): hóa đơn bán thẳng, từng hóa đơn HD lập từ đơn đặt, hoặc tiền cọc của đơn đặt.
+// Tiền cọc KiotViet chuyển sang hóa đơn (phiếu TTTU…) không trừ vào hóa đơn trên sổ: cọc ghi riêng ở đơn, chỉ trừ tổng công nợ khách.
 // Chỉ dùng phần tiền phiếu còn chưa gắn, nên chạy lại không gắn trùng.
 const deliveryByCode = (code) => get(`select id, order_id, deposit_used from deliveries where book_id = ? and code = ?`, B, code);
 function linkPayments() {
@@ -310,21 +310,10 @@ function linkPayments() {
       p.id, B, o ? o.id : dl.order_id, m, dl ? dl.id : null);
     done.push(`${code} trừ ${vnd(m)} vào ${doc}`);
   }
-  for (const { i } of viaOrder) {
-    const t = (i.Payments || []).filter((x) => /^TTTU/.test(x.Code) && x.Amount > 0).reduce((s, x) => s + x.Amount, 0);
-    const dl = deliveryByCode(i.Code);
-    if (!dl || t <= dl.deposit_used) continue;
-    const paid = get(`select paid_net from v_sales_orders where id = ?`, dl.order_id).paid_net;
-    const usedAll = get(`select coalesce(sum(deposit_used), 0) s from deliveries where order_id = ?`, dl.order_id).s;
-    const m = Math.min(t - dl.deposit_used, Math.max(paid - usedAll, 0));
-    if (m < 0.5) continue;
-    sql(`update deliveries set deposit_used = deposit_used + ? where id = ?`, m, dl.id);
-    done.push(`${i.OrderCode}: trừ cọc ${vnd(m)} vào ${i.Code}`);
-  }
 }
 
 // Mỗi hóa đơn KiotViet còn hiệu lực trong tệp phải còn nợ đúng như KiotViet (tổng − đã thu). Tiền thu bằng phiếu lập trên sổ mới
-// (mã không phải "TT…") KiotViet không có, nên cộng lại trước khi so.
+// (mã không phải "TT…") KiotViet không có, nên cộng lại trước khi so; tiền cọc KiotViet trừ vào hóa đơn (TTTU…) sổ không trừ, nên bỏ ra.
 function checkInvoices() {
   const bad = [];
   const own = (where, id) => get(`select coalesce(sum(a.amount), 0) s from payment_allocations a join payments p on p.id = a.payment_id
@@ -334,7 +323,8 @@ function checkInvoices() {
     const o = orderByCode(i.Code); const dl = o ? null : deliveryByCode(i.Code);
     const left = o ? get(`select remaining_total as v from v_open_docs where book_id = ? and doc_type = 'don_ban' and doc_id = ?`, B, o.id)?.v + own('a.doc_id', o.id)
       : dl ? get(`select debt as v from v_order_invoices where id = ?`, dl.id)?.v + own('a.delivery_id', dl.id) : null;
-    const kv = i.Total - (i.TotalPayment || 0);
+    const tu = dl ? (i.Payments || []).filter((x) => /^TTTU/.test(x.Code) && x.Amount > 0).reduce((s, x) => s + x.Amount, 0) : 0;
+    const kv = i.Total - (i.TotalPayment || 0) + tu;
     if (left == null || Number.isNaN(left) || Math.abs(left - kv) >= 1) bad.push(`${i.Code}: còn nợ trong sổ ${left ?? 'không có'}, KiotViet ${kv}`);
   }
   if (bad.length) throw new Error('Hóa đơn chưa khớp KiotViet: ' + bad.join('; '));
