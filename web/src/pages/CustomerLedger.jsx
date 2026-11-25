@@ -132,12 +132,20 @@ function LedgerTab({ id }) {
       <Table rows={rows} rowKey="key" empty={filtered ? 'Không có giao dịch nào trong thời gian này' : 'Khách chưa có giao dịch nào'}
         rowClass={(r) => (r.mark ? 'row-strong' : '')}
         expand={(r, close) => (r.payment_id ? <PaymentDetail id={r.payment_id} onClose={close} /> : r.order_id ? <SaleDetail orderId={r.order_id} deliveryId={r.delivery_id} onClose={close} /> : null)}
-        foot={L && L.rows.length ? { c: `${L.rows.length} giao dịch`, v: money(sum('debt') - sum('paid')), b: <Balance v={L.closing} /> } : null}
+        foot={L && L.rows.length ? { c: `${L.rows.length} giao dịch`, no: money(sum('debt')), tr: money(sum('paid')), b: <Balance v={L.closing} /> } : null}
         columns={[
           { key: 'c', label: 'Mã phiếu', render: (r) => (r.mark ? <b>{r.mark}</b> : <b className={r.payment_id ? 'accent' : ''}>{r.code}</b>) },
           { key: 'd', label: 'Thời gian', className: 'nowrap', render: (r) => (r.date ? dmy(r.date) : '') },
-          { key: 'k', label: 'Loại', className: 'col-clip', render: (r) => (r.mark ? '' : <span title={[r.title, r.note].filter(Boolean).join(' · ')}>{r.title || (r.payment_id ? 'Thanh toán' : 'Bán hàng')}{r.method ? ` · ${r.method}` : ''}</span>) },
-          { key: 'v', label: 'Giá trị', align: 'right', render: (r) => { if (r.mark) return ''; const v = (r.debt || 0) - (r.paid || 0); return <span className={v < 0 ? 'good' : ''}>{money(v)}</span>; } },
+          { key: 'k', label: 'Loại', className: 'col-clip', render: (r) => {
+            if (r.mark) return '';
+            // Phiếu thu: ghi rõ trả cho hóa đơn / đơn nào
+            const forDocs = r.allocs?.length ? ` · trả cho ${r.allocs.map((a) => a.code).join(', ')}` : '';
+            const text = `${r.title || (r.payment_id ? 'Thanh toán' : 'Bán hàng')}${r.method ? ` · ${r.method}` : ''}${forDocs}`;
+            return <span title={[text, r.note].filter(Boolean).join(' · ')}>{text}</span>;
+          } },
+          // Hai cột riêng thay cho một cột có dấu: bán hàng làm nợ tăng, khách trả / điều chỉnh làm nợ giảm
+          { key: 'no', label: 'Phát sinh nợ', align: 'right', render: (r) => (r.mark || !r.debt ? '' : <span className={r.debt < 0 ? 'good' : ''}>{money(r.debt)}</span>) },
+          { key: 'tr', label: 'Khách đã trả', align: 'right', render: (r) => (r.mark || !r.paid ? '' : <span className={r.paid > 0 ? 'good' : ''}>{money(r.paid)}</span>) },
           { key: 'b', label: 'Dư nợ khách hàng', align: 'right', render: (r) => <Balance v={r.balance} /> },
         ]} />
     </div>
