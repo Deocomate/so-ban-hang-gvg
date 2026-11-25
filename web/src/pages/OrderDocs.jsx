@@ -89,6 +89,61 @@ export function DocsBoardMini({ params, showCustomer }) {
   );
 }
 
+// Màu tổng của một giấy tờ: xấu nhất trong hai bên (thiếu > có bản giấy > đã lập > đã tải lên)
+function slotTone(slot) {
+  if (slot.skip) return 'mute';
+  const st = Object.values(slot.sides).map((s) => s.state);
+  if (st.includes('thieu')) return 'bad';
+  if (st.includes('ban_giay')) return 'warn';
+  if (st.includes('da_lap')) return 'info';
+  return 'good';
+}
+
+// Thẻ Giấy tờ trong hồ sơ khách: bên trái danh sách đơn của khách (lọc, tìm, thấy ngay đơn nào còn thiếu giấy tờ gì),
+// bên phải là giấy tờ của đơn đang chọn để xem, tải lên, đánh dấu bản giấy ngay tại chỗ.
+export function CustomerDocsWorkspace({ customerId }) {
+  const b = useRpcData('order_docs_board', { track: 'all', customer_id: customerId });
+  const [st0, setSt] = useState(null); const [search, setSearch] = useState(''); const [pick, setPick] = useState(null);
+  const all = b.data || [];
+  const needs = (r) => r.track.on && r.missing > 0;
+  const st = st0 || (all.some(needs) ? 'need' : 'all'); // chưa chọn lọc: có đơn thiếu thì hiện đơn thiếu, không thì hiện tất cả
+  const rows = all.filter((r) => (st === 'all' || (st === 'need' ? needs(r) : st === 'done' ? r.track.on && !r.missing : !r.track.on)) && match(`${r.code} ${r.contract_code || ''}`, search));
+  const cur = rows.find((r) => r.id === pick) || rows[0] || null;
+  const cnt = { need: all.filter(needs).length, done: all.filter((r) => r.track.on && !r.missing).length, off: all.filter((r) => !r.track.on).length };
+  if (b.loading && !b.data) return <Loading />;
+  return (
+    <div className="cdocs">
+      <ErrorBox error={b.error} />
+      <div className="cdocs-list">
+        <div className="seg" role="group" aria-label="Lọc đơn theo giấy tờ">
+          <button type="button" className={st === 'need' ? 'on' : ''} onClick={() => setSt('need')}>Còn thiếu ({cnt.need})</button>
+          <button type="button" className={st === 'done' ? 'on' : ''} onClick={() => setSt('done')}>Đủ ({cnt.done})</button>
+          <button type="button" className={st === 'off' ? 'on' : ''} onClick={() => setSt('off')}>Không theo dõi ({cnt.off})</button>
+          <button type="button" className={st === 'all' ? 'on' : ''} onClick={() => setSt('all')}>Tất cả ({all.length})</button>
+        </div>
+        <Search value={search} onChange={setSearch} placeholder="Tìm mã đơn, số hợp đồng…" />
+        <div className="cdocs-items">
+          {rows.length === 0 && <div className="muted small cdocs-empty">{all.length ? 'Không có đơn nào trong mục này' : 'Khách chưa có đơn hàng'}</div>}
+          {rows.map((r) => (
+            <button type="button" key={r.id} className={`cdocs-item${cur?.id === r.id ? ' on' : ''}`} onClick={() => setPick(r.id)}>
+              <span className="cdocs-top"><b>{r.code}</b><span className="grow" />
+                {!r.track.on ? <Pill tone="mute">Không theo dõi</Pill> : r.missing ? <Pill tone="bad">Thiếu {r.missing}/{r.total}</Pill> : <Pill tone="good">Đủ</Pill>}</span>
+              <span className="cell-sub">{dmy(r.order_date)} · {money(r.order_total)}</span>
+              <span className="row gap-xs wrap">{DOC_KEYS.map((k) => <span key={k} className={`dslot ds-${slotTone(r.slots[k])}`} title={`${DOC_LABEL[k]}${r.slots[k].skip ? ': không cần' : ''}`}>{DOC_SHORT[k]}</span>)}</span>
+            </button>))}
+        </div>
+        <Legend />
+      </div>
+      <div className="cdocs-detail">
+        {cur ? <>
+          <div className="cdocs-title"><b>Đơn {cur.code}</b><span className="small muted">{dmy(cur.order_date)} · {money(cur.order_total)}</span></div>
+          <OrderDocsPanel key={cur.id} orderId={cur.id} order={{ customer_name: cur.customer_name }} />
+        </> : <div className="muted cdocs-empty">Chọn một đơn ở bên trái để xem giấy tờ.</div>}
+      </div>
+    </div>
+  );
+}
+
 export function OrderDocsPage() {
   const { rpc, toast, refresh } = useApp();
   const [track, setTrack] = useState('on'); const [st, setSt] = useState('thieu'); const [seg, setSeg] = useState(''); const [search, setSearch] = useState('');

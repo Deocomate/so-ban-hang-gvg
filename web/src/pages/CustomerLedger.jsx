@@ -5,7 +5,7 @@ import { money, dmy, dayTime, todayVN } from '../lib/format.js';
 import { useFunds } from '../lib/lookups.js';
 import { TIME_PRESETS, presetRange } from '../components/DocFilters.jsx';
 import { CustomerFiles } from './CustomerFiles.jsx';
-import { DocsBoardMini } from './OrderDocs.jsx';
+import { CustomerDocsWorkspace } from './OrderDocs.jsx';
 import { PaymentDetail } from './Cash.jsx';
 import { SaleDetail } from './OrderInvoice.jsx';
 import { Btn, Pill, StatusPill, DELIVERY, Field, Input, Select, DateInput, NumInput, Check, Tabs, Loading, ErrorBox, Note, Table, Modal } from '../components/ui.jsx';
@@ -208,15 +208,15 @@ function OrdersTab({ id }) {
 // Hai phần: lập bảng đối chiếu công nợ / số lượng gộp nhiều hóa đơn, và bảng theo dõi giấy tờ của từng đơn (nhớ phần xem lần trước).
 const DOCS_VIEW_KEY = 'gomsu.cust_docs_view';
 function CustomerDocsTab({ id }) {
-  const [view, setView0] = useState(() => { try { return localStorage.getItem(DOCS_VIEW_KEY) === 'track' ? 'track' : 'reconcile'; } catch (e) { return 'reconcile'; } });
+  const [view, setView0] = useState(() => { try { return localStorage.getItem(DOCS_VIEW_KEY) === 'reconcile' ? 'reconcile' : 'track'; } catch (e) { return 'track'; } });
   const setView = (v) => { setView0(v); try { localStorage.setItem(DOCS_VIEW_KEY, v); } catch (e) { /* bỏ qua */ } };
   return (
     <div className="stack">
       <div className="seg" role="group" aria-label="Giấy tờ đơn hàng">
-        <button type="button" className={view === 'reconcile' ? 'on' : ''} onClick={() => setView('reconcile')}>Đối chiếu nhiều hóa đơn</button>
         <button type="button" className={view === 'track' ? 'on' : ''} onClick={() => setView('track')}>Theo dõi giấy tờ từng đơn</button>
+        <button type="button" className={view === 'reconcile' ? 'on' : ''} onClick={() => setView('reconcile')}>Đối chiếu nhiều hóa đơn</button>
       </div>
-      {view === 'reconcile' ? <ReconcilePicker id={id} /> : <DocsBoardMini params={{ customer_id: id }} showCustomer={false} />}
+      {view === 'reconcile' ? <ReconcilePicker id={id} /> : <CustomerDocsWorkspace customerId={id} />}
     </div>
   );
 }

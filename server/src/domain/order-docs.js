@@ -133,10 +133,10 @@ export function order_docs_board(p) {
   if (p.customer_id) { where.push('o.customer_id = ?'); args.push(String(p.customer_id)); }
   if (p.group != null) { where.push(`coalesce(c.kind, '') = ?`); args.push(String(p.group)); }
   const rows = orderRows(b, where, args);
-  const want = p.track === 'off' ? false : true;
+  const want = p.track === 'off' ? false : p.track === 'all' ? null : true;
   const gt = groupTrackOf(b);
   const out = [];
-  const keep = rows.filter((r) => { r.infoObj = json(r.info); r.track = trackOf(r.company, r.cust_track, gt(r.cust_group), r.infoObj); return r.track.on === want; });
+  const keep = rows.filter((r) => { r.infoObj = json(r.info); r.track = trackOf(r.company, r.cust_track, gt(r.cust_group), r.infoObj); return want === null || r.track.on === want; });
   const files = filesOf(keep.map((r) => r.id), keep.map((r) => r.contract_id));
   for (const r of keep) {
     const s = summarize(r, files.filter((f) => f.order_id === r.id), r.infoObj);
