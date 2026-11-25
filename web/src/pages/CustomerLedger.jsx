@@ -88,7 +88,7 @@ export function CustomerDetail({ id, onClose }) {
         </div>
         <ErrorBox error={led.error} />
       </>}
-      {tab === 'orders' && <OrdersTab id={id} usablePrepaid={L?.usable_prepaid || 0} />}
+      {tab === 'orders' && <OrdersTab id={id} />}
       {tab === 'ledger' && <LedgerTab id={id} />}
       {tab === 'docs' && <CustomerDocsTab id={id} />}
       {tab === 'files' && <CustomerFiles customerId={id} customerName={c.name} />}
@@ -160,9 +160,7 @@ function useCustomerInvoices(id) {
   return { all, error: q.error || dq.error };
 }
 
-function OrdersTab({ id, usablePrepaid }) {
-  const { can } = useApp();
-  const { run, busy } = useAction();
+function OrdersTab({ id }) {
   const [only, setOnly] = useState('');
   const iq = useCustomerInvoices(id);
   const rq = useQ('sales_returns', [['customer_id', 'eq', id]], 'return_date desc', 2000);
@@ -182,9 +180,6 @@ function OrdersTab({ id, usablePrepaid }) {
           <button type="button" className={only === 'debt' ? 'on' : ''} onClick={() => setOnly('debt')}>Còn nợ ({owing.length})</button>
         </div>
         <span className="grow" />
-        {can('thu_chi') && usablePrepaid > 0 && owing.length > 0 && (
-          <Btn kind="soft" busy={busy} onClick={() => run('apply_prepaid', { customer_id: id }, (r) => `Đã trừ ${money(r.used)} đ tiền khách trả trước vào ${r.docs.join(', ')}`)}>
-            Trừ {money(usablePrepaid)} đ khách trả trước vào đơn còn nợ</Btn>)}
       </div>
       <ErrorBox error={iq.error || rq.error} />
       <Table rows={rows} rowKey="key" expand={(o, close) => <SaleDetail orderId={o.order_id} deliveryId={o.delivery_id} onClose={close} />}
@@ -284,8 +279,9 @@ function ReconcilePicker({ id }) {
 }
 
 // ---------- Ghi phiếu thu theo đợt ----------
+// Phiếu thu của khách: chỉ ghi số tiền theo ngày và trừ vào tổng công nợ của khách, không tự chia vào các đơn / hóa đơn
+// (chia tự động khó theo dõi). Muốn trả cho một hóa đơn cụ thể thì bấm "Thu tiền" ngay ở hóa đơn đó.
 export function ReceiptForm({ customer_id, round = 1, onClose }) {
-  const { rpc } = useApp();
   const funds = useFunds();
   const cq = useQ('customers', [['id', 'eq', customer_id]]);
   const { run, busy } = useAction();
@@ -295,9 +291,6 @@ export function ReceiptForm({ customer_id, round = 1, onClose }) {
   const [fund, setFund] = useState('');
   const [refNo, setRefNo] = useState('');
   const [note, setNote] = useState(`Thanh toán công nợ đợt ${round}`);
-  const [mode, setMode] = useState('auto');
-  const [manual, setManual] = useState({});
-  const [plan, setPlan] = useState(null); const [planErr, setPlanErr] = useState(null);
   const c = cq.data?.[0];
   // Quỹ theo hình thức thu: tiền mặt vào quỹ tiền mặt, còn lại vào tài khoản ngân hàng
   useEffect(() => {
@@ -305,27 +298,14 @@ export function ReceiptForm({ customer_id, round = 1, onClose }) {
     const cash = list.find((x) => /mặt/i.test(x.name)); const bank = list.find((x) => !/mặt/i.test(x.name));
     setFund(((method === 'Tiền mặt' ? cash : bank) || list[0]).id);
   }, [funds.data, method]);
-  const manualList = Object.entries(manual).filter(([, v]) => Number(v) > 0).map(([doc_id, v]) => ({ doc_id, amount: Number(v) }));
-  const planKey = JSON.stringify([amount, mode, manualList]);
-  useEffect(() => {
-    let alive = true;
-    const h = setTimeout(() => rpc('preview_receipt', { customer_id, amount: amount || 0, mode, allocations: manualList })
-      .then((r) => { if (alive) { setPlan(r); setPlanErr(null); } }).catch((e) => alive && setPlanErr(e.message)), 200);
-    return () => { alive = false; clearTimeout(h); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [planKey]);
-  const docs = plan?.docs || [];
-  const shown = mode === 'auto' ? docs.filter((d) => d.amount > 0) : docs;
-  const prepaidUsed = (plan?.prepaid_use || []).reduce((s, u) => s + u.amount, 0);
-  const err = planErr || plan?.error;
+  const after = c ? (c.balance || 0) - (Number(amount) || 0) : 0;
   const submit = async () => {
-    const r = await run('record_receipt', { customer_id, date, amount, fund_id: fund, method, ref_no: refNo, note, mode,
-      allocations: mode === 'manual' ? manualList : [], expect: plan?.allocations }, (x) => `Đã ghi phiếu thu ${x.code}`);
+    const r = await run('record_receipt', { customer_id, date, amount, fund_id: fund, method, ref_no: refNo, note }, (x) => `Đã ghi phiếu thu ${x.code}`);
     if (r) onClose();
   };
   return (
-    <Modal title="Ghi phiếu thu" subtitle={c ? `${c.name} · ${c.code} · đang nợ ${money(c.receivable)} đ${c.prepaid > 0 ? ` · trả trước ${money(c.prepaid)} đ` : ''}` : ''} onClose={onClose} size="lg"
-      footer={<><Btn onClick={onClose}>Hủy</Btn><Btn kind="primary" icon="in" busy={busy} disabled={!!err || !(amount > 0) || !plan} onClick={submit}>Lưu phiếu thu</Btn></>}>
+    <Modal title="Ghi phiếu thu" subtitle={c ? `${c.name} · ${c.code} · đang nợ ${money(c.receivable)} đ${c.prepaid > 0 ? ` · trả trước ${money(c.prepaid)} đ` : ''}` : ''} onClose={onClose}
+      footer={<><Btn onClick={onClose}>Hủy</Btn><Btn kind="primary" icon="in" busy={busy} disabled={!(amount > 0) || !c} onClick={submit}>Lưu phiếu thu</Btn></>}>
       <div className="grid">
         <Field label="Ngày nhận tiền" required><DateInput value={date} onChange={(v) => setDate(v || todayVN())} max={todayVN()} /></Field>
         <Field label="Số tiền" required><NumInput value={amount} onChange={setAmount} placeholder="0" /></Field>
@@ -334,35 +314,16 @@ export function ReceiptForm({ customer_id, round = 1, onClose }) {
         <Field label="Mã giao dịch" hint="Mã trên sao kê ngân hàng, nếu có"><Input value={refNo} onChange={setRefNo} /></Field>
         <Field label="Nội dung"><Input value={note} onChange={setNote} /></Field>
       </div>
-      <div className="row gap">
-        <div className="seg" role="group" aria-label="Cách trừ nợ">
-          <button type="button" className={mode === 'auto' ? 'on' : ''} onClick={() => setMode('auto')}>Trừ đơn cũ trước</button>
-          <button type="button" className={mode === 'manual' ? 'on' : ''} onClick={() => setMode('manual')}>Tự chọn đơn</button>
-        </div>
-        <span className="muted small">{mode === 'auto' ? 'Trả hết đơn cũ nhất rồi mới sang đơn tiếp theo.' : 'Nhập số tiền trả cho từng đơn theo ý khách.'}</span>
-      </div>
-      {!plan ? <Loading /> : docs.length === 0 ? <Note>Khách không còn đơn nào đang nợ.{amount > 0 ? ' Số tiền này sẽ ghi là khách trả trước và được trừ vào các đơn sau.' : ''}</Note> : (
-        <Table dense rows={shown} rowKey="doc_id" empty="Nhập số tiền để xem tiền được trừ vào những đơn nào" columns={[
-          { key: 'c', label: 'Đơn', render: (d) => <><b>{d.code}</b><div className="cell-sub">{dmy(d.debt_date)}{d.due_date ? ' · hạn ' + dmy(d.due_date) : ''}</div></> },
-          { key: 'b', label: 'Đang nợ', align: 'right', render: (d) => money(d.before) },
-          { key: 'a', label: 'Trả lần này', align: 'right', render: (d) => (mode === 'manual'
-            ? <div className="row gap-s" style={{ justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
-                <NumInput value={manual[d.doc_id] ?? null} onChange={(v) => setManual((s) => ({ ...s, [d.doc_id]: v }))} style={{ maxWidth: 130 }} aria-label={`Số tiền trả cho ${d.code}`} />
-                <button type="button" className="link-btn small" onClick={() => setManual((s) => ({ ...s, [d.doc_id]: d.before }))}>Trả hết</button></div>
-            : <b>{money(d.amount)}</b>) },
-          { key: 'r', label: 'Còn nợ', align: 'right', render: (d) => (d.after > 0 ? money(d.after) : <Pill tone="good">Đã thu đủ</Pill>) },
-        ]} />
-      )}
-      {plan && (
+      <Note>Phiếu ghi theo ngày nhận tiền và trừ vào tổng công nợ của khách, không chia vào hóa đơn nào. Muốn trả cho một hóa đơn cụ thể thì bấm <b>Thu tiền</b> ngay ở hóa đơn đó.</Note>
+      {c && (
         <div className="card"><div className="totals">
-          {prepaidUsed > 0 && <><span>Trừ tiền khách trả trước còn dư<div className="cell-sub">vào {[...new Set(plan.prepaid_use.map((u) => u.code))].join(', ')}</div></span><span className="r">{money(prepaidUsed)}</span></>}
-          <span>Trừ vào đơn</span><span className="r">{money(plan.allocated)}</span>
-          {plan.excess > 0 && <><span>Tiền thừa, ghi là khách trả trước</span><span className="r good strong">{money(plan.excess)}</span></>}
-          <span className="strong">Khách còn nợ sau phiếu này</span><span className={`r strong ${plan.debt_after > 0 ? 'bad' : ''}`}>{money(plan.debt_after)}</span>
-          {plan.prepaid_after > 0 && <><span>Khách trả trước sau phiếu này</span><span className="r good">{money(plan.prepaid_after)}</span></>}
+          <span>Khách đang nợ</span><span className="r">{money(c.receivable)}</span>
+          {c.prepaid > 0 && <><span>Khách đang trả trước</span><span className="r good">{money(c.prepaid)}</span></>}
+          <span>Nhận lần này</span><span className="r">{money(Number(amount) || 0)}</span>
+          <span className="strong">Khách còn nợ sau phiếu này</span><span className={`r strong ${after > 0 ? 'bad' : ''}`}>{money(Math.max(after, 0))}</span>
+          {after < 0 && <><span>Khách trả trước sau phiếu này</span><span className="r good">{money(-after)}</span></>}
         </div></div>
       )}
-      {err && <Note tone="warn">{err}</Note>}
     </Modal>
   );
 }

@@ -240,7 +240,7 @@ Cách phần mềm xử lý từng khoản tiền về:
 - **Nội dung có mã sổ + mã đơn**: tự lập phiếu thu, gạch nợ đúng đơn. Phần trả dư tính là khách trả trước. Tiền cọc của đơn chưa giao **không** tính vào doanh thu.
 - **Không có mã đơn**: vào mục "Chờ xử lý" và gửi thông báo. Anh chọn một trong bốn cách:
   - ghi vào một đơn;
-  - ghi vào công nợ của khách (trừ các khoản nợ cũ nhất trước);
+  - ghi vào công nợ của khách (ghi theo ngày, không chia vào đơn nào);
   - đối soát COD SPX;
   - bỏ qua, có ghi lý do.
 - **SePay gửi lại cùng giao dịch**: không ghi lần hai.
@@ -425,7 +425,7 @@ Bấm **Tạo đơn bán** thì màn hình tạo đơn mở toàn màn hình. Kh
   - Tab **Sổ công nợ** ghi lần lượt từng hóa đơn, đợt giao, phiếu trả hàng, phiếu thu và hoàn tiền, kèm dư nợ sau mỗi lần. Bấm vào phiếu thu để xem phiếu đó trả cho những đơn nào. Chọn khoảng thời gian để có dư nợ đầu kỳ và cuối kỳ khi đối chiếu với khách.
   - Tab **Chi tiết đơn** cho biết từng đơn đã giao tới đâu, đã thu bao nhiêu và còn nợ bao nhiêu. Bấm **Còn nợ** để chỉ xem các đơn chưa thu đủ.
   - **Thu nợ nhanh trên Báo cáo → Công nợ:** rê chuột (hoặc chạm, trên điện thoại) vào ô **Còn nợ** hoặc **Tuổi nợ** của một dòng để mở khung thu nợ ngay tại chỗ. Khung cho biết số ngày quá hạn, đã giao, đã thu, còn nợ. Chọn **Thu hết** hoặc **Thu một phần** (gõ số tiền hoặc bấm 30% / 50% / 70%), chọn ngày thu, hình thức **Tiền mặt** (vào quỹ tiền mặt) hoặc **Chuyển khoản** (vào tài khoản ngân hàng; sổ có nhiều tài khoản thì chọn thêm tài khoản), ghi chú rồi bấm **Thu … và lưu** (hoặc nhấn Enter). Phiếu thu được gắn vào đúng chứng từ đó, bảng và các ô tổng quá hạn cập nhật ngay. Tick **Mở phiếu để in** nếu cần in phiếu sau khi lưu. Bên tab **Mình nợ nhà cung cấp**, khung tương tự để trả tiền nhà cung cấp. Cần quyền thu chi.
-  - **Ghi phiếu thu:** mỗi lần khách chuyển tiền chỉ cần ghi một phiếu. Phần mềm tự trả hết đơn cũ nhất rồi mới sang đơn tiếp theo; nếu khách muốn trả cho đơn cụ thể thì chọn **Tự chọn đơn**. Tiền thừa được ghi là khách trả trước và trừ dần vào các đơn sau.
+  - **Ghi phiếu thu:** mỗi lần khách chuyển tiền chỉ cần ghi một phiếu. Phiếu ghi theo ngày nhận tiền và trừ vào tổng công nợ của khách, **không tự chia vào các đơn / hóa đơn**. Muốn trả cho một hóa đơn cụ thể thì bấm **Thu tiền** ngay ở hóa đơn đó (phiếu chỉ trả cho đúng hóa đơn đó, phần dư là khách trả trước). Phiếu thu ở Sổ quỹ cũng không tự chia.
 - **Trên điện thoại:** menu nằm ở thanh dưới cùng (Tổng quan, Đơn hàng, Tạo, Thu chi, Thêm). Bộ lọc thành các nút trượt ngang; bấm "Bộ lọc khác" để hiện thêm bộ lọc.
 
 ## 13. Quy trình báo giá, hợp đồng, hóa đơn

@@ -114,9 +114,9 @@ export function assign_bank_txn(p) {
     if (nz(p.order_id)) return postBankToOrder(t.id, b, p.order_id, false);
     if (!nz(p.customer_id)) fail('Chọn đơn hàng hoặc khách hàng');
     const pay = doPayment(b, { kind: 'thu_khach', party_id: p.customer_id, fund_id: bankFund(b), date: txnDate(t), amount: t.amount, method: 'Chuyển khoản',
-      auto_allocate: true, note: 'Ghi từ tiền về TK · ND: ' + String(t.content ?? '').slice(0, 120) });
+      note: 'Ghi từ tiền về TK · ND: ' + String(t.content ?? '').slice(0, 120) });
     run(`update bank_txns set status = 'da_ghi', book_id = ?, payment_ids = ?, handled_by = ?, handled_at = ?, match_note = ? where id = ?`,
-      b, [pay.id], ctx.uid, nowIso(), 'Ghi tay vào công nợ khách (tự trừ các khoản nợ cũ nhất trước)', t.id);
+      b, [pay.id], ctx.uid, nowIso(), 'Ghi tay vào công nợ khách (ghi theo ngày, không chia vào đơn)', t.id);
     return { payment_code: pay.code };
   });
 }

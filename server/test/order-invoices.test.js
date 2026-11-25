@@ -42,20 +42,20 @@ const pv = await api.one('payments', TH, [['id', 'eq', p2.id]]);
 C('Phiếu thu ghi mã hóa đơn HD', pv.allocations.map((a) => a.doc_code), [inv[1].code]);
 await E('Không thu quá số còn nợ của hóa đơn', () => pay([{ doc_type: 'hoa_don', doc_id: g1.id, amount: 1500 }], 1500), /vượt số còn phải trả/);
 
-G('3. Phiếu thu theo đợt trừ hóa đơn cũ trước, danh sách nợ chỉ có mã HD');
+G('3. Phiếu thu của khách chỉ ghi theo ngày, không chia vào các hóa đơn HD');
 const plan = await api.call('preview_receipt', { book_id: TH, customer_id: A, amount: 2000, mode: 'auto' });
 C('Danh sách nợ là các hóa đơn HD', plan.docs.map((d) => d.code), inv.map((x) => x.code));
-C('Trừ hết 1.000 hóa đơn đợt 1 rồi 1.000 đợt 2', plan.docs.map((d) => d.amount), [1000, 1000]);
-await api.call('record_receipt', { book_id: TH, request_id: rid(), customer_id: A, date: D(0), amount: 2000, fund_id: TM, mode: 'auto', expect: plan.allocations });
+C('Không chia vào hóa đơn nào', plan.docs.map((d) => d.amount), [0, 0]);
+await api.call('record_receipt', { book_id: TH, request_id: rid(), customer_id: A, date: D(0), amount: 2000, fund_id: TM });
 inv = await invoices(o);
-C('Sau phiếu thu: đợt 1 hết nợ, đợt 2 còn 2.500', inv.map((x) => x.debt), [0, 2500]);
-C('Nợ đơn khớp', (await order(o)).receivable, 2500);
+C('Sau phiếu thu: các hóa đơn giữ nguyên số còn nợ', inv.map((x) => x.debt), [1000, 3500]);
+C('Tổng công nợ khách giảm 2.000', (await api.call('customer_ledger', { book_id: TH, customer_id: A })).receivable, 2500);
 
 G('4. Hủy hóa đơn đợt 2: tiền đã thu cho nó quay về đơn đặt');
 await api.call('cancel_delivery', { book_id: TH, request_id: rid(), id: g2.id });
 inv = await invoices(o);
 C('Còn một hóa đơn, đã thu đủ', inv.map((x) => [x.total, x.debt]), [[4000, 0]]);
-C('Tiền thu dư thành tiền trả trước của đơn đặt', (await order(o)).prepaid, 3500);
+C('Tiền đã thu cho hóa đơn hủy thành tiền trả trước của đơn đặt', (await order(o)).prepaid, 1500);
 
 G('5. Hóa đơn bán ngay chỉ có một mã HD: phiếu giao mang luôn mã hóa đơn, không sinh mã GH');
 const hd = await api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: A, kind: 'ban_san', order_date: D(0), deliver_now: true, lines: [{ product_id: P, qty: 1, unit_price: 1000 }] });

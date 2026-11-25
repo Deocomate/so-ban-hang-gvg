@@ -28,7 +28,7 @@ const receipt = (c, amount, extra = {}) => api.call('record_receipt', { book_id:
   method: 'Chuyển khoản', mode: 'auto', note: 'Thanh toán công nợ đợt 1', ...extra });
 
 // ---------- Tình huống nghiệm thu ----------
-G('1. Khách nợ 31.930.000, chuyển 15.000.000, cấn đơn cũ trước');
+G('1. Khách nợ 31.930.000, chuyển 15.000.000: phiếu ghi theo ngày, không chia vào đơn');
 const A = await cust('A Cường Quảng Ninh');
 const o296 = await sell(A, 30, 12800000, 1500000, 'HD000296');
 const o300 = await sell(A, 29, 3220000, 200000, 'HD000300');
@@ -39,8 +39,7 @@ let L = await ledger(A);
 C('Tổng nợ trước khi thu', L.receivable, 31930000);
 C('Mỗi hóa đơn một dòng dù đơn và hóa đơn cùng mã', L.rows.map((r) => r.code), ['HD000296', 'HD000300', 'HD000305', 'HD000308.01', 'HD000943']);
 const pv = await api.call('preview_receipt', { book_id: TH, customer_id: A, amount: 15000000, mode: 'auto' });
-C('Xem trước: cấn 2 đơn cũ nhất', pv.allocations.map((a) => [a.doc_id, a.amount]), [[o296, 14300000], [o300, 700000]]);
-C('Xem trước: HD000300 còn nợ sau cấn', pv.docs.find((d) => d.doc_id === o300).after, 2720000);
+C('Xem trước: không chia vào đơn nào', pv.allocations, []);
 C('Xem trước: tổng khách còn nợ sau khi thu', pv.debt_after, 16930000);
 const REQ = rid();
 const r1 = await receipt(A, 15000000, { request_id: REQ, ref_no: 'FT2611120001', expect: pv.allocations });
@@ -50,11 +49,10 @@ C('Chỉ có một phiếu thu', (await api.q('payments', TH, [['party_id', 'eq'
 L = await ledger(A);
 const pr = L.rows.filter((r) => r.type === 'thu');
 C('Sổ công nợ có một dòng phiếu thu 15.000.000', pr.map((r) => r.paid), [15000000]);
-C('Dòng phiếu thu kèm phần trừ vào từng đơn', pr[0].allocs.map((a) => [a.code, a.amount]), [['HD000296', 14300000], ['HD000300', 700000]]);
+C('Dòng phiếu thu không gắn đơn nào', (pr[0].allocs || []).length, 0);
 C('Số dư sau phiếu thu', pr[0].balance, 16930000);
 C('Sổ khớp số dư khách', L.ledger_end, L.balance);
-C('HD000296 đã thu đủ', [(await order(o296)).paid_net, (await order(o296)).receivable], [14300000, 0]);
-C('HD000300 thu một phần, còn nợ 2.720.000', [(await order(o300)).paid_net, (await order(o300)).receivable], [700000, 2720000]);
+C('Các hóa đơn giữ nguyên, phiếu chỉ trừ vào tổng công nợ khách', [(await order(o296)).paid_net, (await order(o300)).paid_net, L.receivable], [0, 0, 16930000]);
 const pay = await api.one('payments', TH, [['id', 'eq', r1.id]]);
 C('Phiếu lưu mã giao dịch và người ghi', [pay.ref_no, !!pay.created_by_name], ['FT2611120001', true]);
 C('Tổng phải thu / đã thu', [L.total_billed, L.total_paid], [31930000, 15000000]);
@@ -65,31 +63,26 @@ C('Dòng trong kỳ', P2.rows.map((r) => r.code), ['HD000305', 'HD000308.01']);
 C('Số dư đầu kỳ', P2.opening, 17720000);
 C('Số dư cuối kỳ', P2.closing, 22130000);
 
-G('3. Chọn đơn thủ công');
-await E('Cấn vượt số còn nợ của đơn bị chặn', () => receipt(A, 3000000, { mode: 'manual', allocations: [{ doc_id: o300, amount: 3000000 }] }), 'chỉ còn nợ');
-await E('Còn tiền chưa cấn khi khách vẫn nợ bị chặn', () => receipt(A, 3000000, { mode: 'manual', allocations: [{ doc_id: o305, amount: 2330000 }] }), 'chưa trừ vào đơn');
+G('3. Gửi kèm danh sách đơn cũng không chia (phiếu thu khách chỉ ghi theo ngày)');
 const B = await cust('Khách khác');
 const oB = await sell(B, 10, 1000000);
-await E('Cấn sang đơn của khách khác bị chặn', () => receipt(A, 1000000, { mode: 'manual', allocations: [{ doc_id: oB, amount: 1000000 }] }), 'không phải của khách');
-await E('Công nợ đổi sau khi xem trước bị chặn', () => receipt(A, 1000000, { expect: [{ doc_id: o305, amount: 1000000 }] }), 'vừa thay đổi');
 const r3 = await receipt(A, 2330000, { mode: 'manual', allocations: [{ doc_id: o305, amount: 2330000 }] });
-C('Thủ công: HD000305 đã thu đủ, HD000300 không đổi', [(await order(o305)).receivable, (await order(o300)).receivable], [0, 2720000]);
-C('Thủ công: phiếu cấn đúng một đơn', r3.allocations.length, 1);
+C('Không gắn đơn nào, HD000305 không đổi', [r3.allocations.length, (await order(o305)).receivable], [0, 2330000]);
+C('Tổng công nợ khách giảm đúng số tiền', (await ledger(A)).receivable, 16930000 - 2330000);
 
 G('4. Thu vượt tổng nợ → tiền khách trả trước, dùng cho đơn sau');
 const pvB = await api.call('preview_receipt', { book_id: TH, customer_id: B, amount: 1500000, mode: 'auto' });
-C('Xem trước: phần vượt là trả trước', [pvB.excess, pvB.prepaid_after, pvB.debt_after], [500000, 500000, 0]);
+C('Xem trước: phần vượt tổng nợ là trả trước', [pvB.allocated, pvB.prepaid_after, pvB.debt_after], [0, 500000, 0]);
 await receipt(B, 1500000);
 C('Khách B trả trước 500.000', (await api.one('customers', TH, [['id', 'eq', B]])).prepaid, 500000);
 const oB2 = await sell(B, 0, 400000);
 C('Đơn mới chưa cấn', (await order(oB2)).receivable, 400000);
-const ap = await api.call('apply_prepaid', { book_id: TH, request_id: rid(), customer_id: B });
-C('Cấn tiền trả trước vào đơn mới', [ap.used, (await order(oB2)).receivable], [400000, 0]);
 const LB = await ledger(B);
 C('Khách B: sổ khớp số dư, còn trả trước 100.000', [LB.ledger_end, LB.prepaid], [-100000, 100000]);
 const oB3 = await sell(B, 0, 300000);
 const rB = await receipt(B, 200000);
-C('Phiếu thu tự dùng tiền trả trước còn lại trước', [rB.prepaid_used, (await order(oB3)).receivable], [100000, 0]);
+C('Phiếu thu không tự dùng tiền trả trước cho đơn', [rB.prepaid_used, (await order(oB3)).receivable], [0, 300000]);
+C('Khách B hết nợ theo tổng công nợ', (await ledger(B)).ledger_end, 0);
 
 G('5. Khách có khoản thu cũ (luồng thu theo đơn) và giao từng phần');
 const K = await cust('Khách thu cũ');
@@ -104,7 +97,7 @@ C('Giao 2 đợt = 2 dòng phát sinh nợ, khoản thu cũ = 1 dòng đã thu',
 C('Dòng giao từng đợt ghi rõ đợt', LK.rows.filter((r) => r.type === 'ban_hang').map((r) => r.title.split(' của')[0]), ['Giao đợt 1', 'Giao đợt 2']);
 C('Khoản thu cũ tính một lần, sổ khớp số dư', [LK.ledger_end, LK.receivable], [700000, 700000]);
 await receipt(K, 700000);
-C('Đơn thu đủ sau phiếu đợt mới', (await order(oK.id)).receivable, 0);
+C('Khách hết nợ sau phiếu đợt mới (phiếu không gắn đơn)', (await ledger(K)).ledger_end, 0);
 
 G('6. Đơn hủy đã nhận tiền');
 const H = await cust('Khách hủy đơn');
@@ -116,7 +109,7 @@ const oH2 = await sell(H, 1, 300000);
 const LH = await ledger(H);
 C('Giữ lịch sử phiếu thu của đơn hủy', LH.rows.map((r) => r.type), ['thu', 'ban_hang']);
 const pvH = await api.call('preview_receipt', { book_id: TH, customer_id: H, amount: 300000, mode: 'auto' });
-C('Không cấn vào đơn đã hủy', pvH.allocations.map((a) => a.doc_id), [oH2]);
+C('Không chia vào đơn nào', pvH.allocations.length, 0);
 
 G('7. Quyền');
 api.as(staff);

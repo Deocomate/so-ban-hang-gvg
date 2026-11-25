@@ -71,7 +71,11 @@ export function PaymentForm({ id: editId, kind: kind0 = 'thu_khach', party_id: p
   const docTypes = kind === 'thu_khach' || kind === 'hoan_khach' ? ['don_ban', 'no_dau_ky', ...(edit ? ['hoa_don'] : [])] : kind === 'tra_ncc' || kind === 'ncc_hoan' ? ['don_mua', 'no_dau_ky', 'chi_phi'] : kind === 'chi_phi' ? ['chi_phi'] : [];
   const docsQ = useQ('open_docs', kind === 'chi_phi' ? [['doc_type', 'eq', 'chi_phi'], ['party_id', 'is_null']] : [['party_id', 'eq', party || '00000000-0000-0000-0000-000000000000']], 'doc_date', 500, docTypes.length > 0 && (!!party || kind === 'chi_phi'));
   const refund = kind === 'hoan_khach' || kind === 'ncc_hoan';
-  const docs = useMemo(() => (docsQ.data || []).filter((d) => docTypes.includes(d.doc_type) && (d.doc_type !== 'hoa_don' || orig[d.doc_id] != null)).map((d) => {
+  // Thu tiền khách: không tự chia vào các đơn / hóa đơn. Phiếu mở từ một chứng từ chỉ trả cho đúng chứng từ đó, phần dư là khách trả trước;
+  // phiếu lập ở Sổ quỹ chỉ ghi theo ngày (sửa phiếu cũ vẫn thấy và sửa được phần đã gắn)
+  const noSplit = kind === 'thu_khach';
+  const docs = useMemo(() => (docsQ.data || []).filter((d) => docTypes.includes(d.doc_type) && (d.doc_type !== 'hoa_don' || orig[d.doc_id] != null)
+    && (!noSplit || edit || d.doc_id === alloc?.doc_id || al[d.doc_id])).map((d) => {
     const mine = orig[d.doc_id] || 0;   // phần phiếu đang sửa đã trả cho chứng từ này
     return { ...d, remaining_due: d.remaining_due + mine, limit: (refund ? (d.doc_type === 'no_dau_ky' ? -d.remaining_total : d.paid_net - d.due_now) : d.remaining_total) + mine };
   }).filter((d) => d.limit > 0 && (refund || d.status !== 'huy') || al[d.doc_id]), [docsQ.data, kind, al, edit]);
@@ -80,6 +84,12 @@ export function PaymentForm({ id: editId, kind: kind0 = 'thu_khach', party_id: p
   const allocated = Object.values(al).reduce((s, v) => s + (Number(v) || 0), 0);
   // Chia số tiền cho các chứng từ: chứng từ đang mở (nếu mở phiếu từ một đơn) trước, rồi chứng từ cũ trước; phần dư là trả trước
   const distribute = (total) => {
+    if (noSplit) {
+      if (!alloc) return {};
+      const d = docs.find((x) => x.doc_id === alloc.doc_id);
+      const v = Math.min(Number(total) || 0, d ? d.limit : Infinity);
+      return v > 0 ? { [alloc.doc_id]: v } : {};
+    }
     let left = Number(total) || 0; const next = {};
     const order = [...docs].sort((a, b) => (a.doc_id === alloc?.doc_id ? -1 : b.doc_id === alloc?.doc_id ? 1 : a.doc_date < b.doc_date ? -1 : 1));
     if (alloc && !order.some((d) => d.doc_id === alloc.doc_id)) order.unshift({ doc_id: alloc.doc_id, limit: Infinity, remaining_due: Infinity });
@@ -160,9 +170,14 @@ export function PaymentForm({ id: editId, kind: kind0 = 'thu_khach', party_id: p
         <Field label="Nội dung" wide><Input value={note} onChange={setNote} placeholder="vd. Đại lý chuyển khoản đợt 2" /></Field>
         {edit && <Field label="Lý do sửa" wide hint="Ghi vào lịch sử phiếu"><Input value={reason} onChange={setReason} placeholder="vd. Ghi nhầm số tiền" /></Field>}
       </div>
-      {docTypes.length > 0 && (party || kind === 'chi_phi') && (
-        <Section title={refund ? 'Hoàn theo chứng từ' : 'Trả cho chứng từ nào'} actions={<Btn small onClick={autoFill}>{refund ? 'Tự chia' : 'Trả chứng từ cũ trước'}</Btn>}>
-          {!docsQ.data ? <Loading /> : docs.length === 0 ? <div className="muted small">Không có chứng từ nào đang mở{refund ? ' có tiền trả dư' : ''}. {kind === 'thu_khach' ? 'Toàn bộ số tiền sẽ ghi là khách trả trước.' : ''}</div> : (
+      {noSplit && !edit && !alloc && party && <Note>Phiếu thu ghi theo ngày và trừ vào tổng công nợ của khách, không chia vào hóa đơn nào. Muốn trả cho một hóa đơn cụ thể thì bấm <b>Thu tiền</b> ngay ở hóa đơn đó.</Note>}
+      {docTypes.length > 0 && (party || kind === 'chi_phi') && (!noSplit || edit || alloc) && (
+        <Section title={refund ? 'Hoàn theo chứng từ' : 'Trả cho chứng từ nào'} actions={!noSplit && <Btn small onClick={autoFill}>{refund ? 'Tự chia' : 'Trả chứng từ cũ trước'}</Btn>}>
+          {noSplit && alloc && !docs.some((d) => d.doc_id === alloc.doc_id) ? (
+            // Thu cho một hóa đơn HD của đơn đặt hàng (không nằm trong danh sách đơn còn mở): trả đúng hóa đơn đó, phần dư là khách trả trước
+            <div className="row gap"><span>Trả cho hóa đơn <b>{alloc.code}</b></span><span className="grow" />
+              <NumInput value={al[alloc.doc_id]} onChange={(v) => changeLine(alloc.doc_id, v)} style={{ maxWidth: 160 }} aria-label={`Số tiền trả cho ${alloc.code}`} /></div>
+          ) : !docsQ.data ? <Loading /> : docs.length === 0 ? <div className="muted small">Không có chứng từ nào đang mở{refund ? ' có tiền trả dư' : ''}. {kind === 'thu_khach' ? 'Toàn bộ số tiền sẽ ghi là khách trả trước.' : ''}</div> : (
             <Table dense rows={docs} rowKey="doc_id" columns={[
               { key: 'c', label: 'Chứng từ', render: (d) => <><b>{d.code}</b><div className="cell-sub">{DOC_LABEL[d.doc_type]} · {dmy(d.doc_date)}{d.due_date ? ' · hạn ' + dmy(d.due_date) : ''}</div></> },
               { key: 't', label: 'Tổng', align: 'right', render: (d) => money(d.total) },

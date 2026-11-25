@@ -102,8 +102,9 @@ function openDebts(book, cid) {
     order by debt_date, doc_date, code`, book, cid).map((d) => ({ ...d, left: Math.round(d.remaining_due) }));
 }
 
-// Cách trừ nợ: 'auto' dùng tiền trả trước còn dư rồi tới tiền nhận lần này, đơn cũ nhất trước; 'manual' theo số nhân viên nhập
-export function planReceipt(book, cid, amount0, mode = 'auto', manual = []) {
+// Cách trừ nợ: 'none' (phiếu thu của khách) chỉ ghi tiền theo ngày, không gắn vào đơn nào; 'auto' dùng tiền trả trước còn dư rồi tới
+// tiền nhận lần này, đơn cũ nhất trước; 'manual' theo số nhân viên nhập
+export function planReceipt(book, cid, amount0, mode = 'none', manual = []) {
   const c = customerOf(book, cid);
   const amount = rnd(num(amount0)) ?? 0;
   if (amount < 0) fail('Số tiền không được âm');
@@ -142,7 +143,7 @@ export function planReceipt(book, cid, amount0, mode = 'auto', manual = []) {
       if (a > d.left) fail(`Đơn ${d.code} chỉ còn nợ ${vnd(d.left)} đ, không thể trừ ${vnd(a)} đ`);
       allocations.push({ doc_type: d.doc_type, doc_id: d.doc_id, amount: a }); d.left -= a;
     }
-  } else fail('Cách trừ nợ không hợp lệ');
+  } else if (mode !== 'none') fail('Cách trừ nợ không hợp lệ');
   const allocated = allocations.reduce((s, a) => s + a.amount, 0);
   if (allocated > amount) error = `Tổng tiền trừ vào các đơn (${vnd(allocated)} đ) lớn hơn số tiền nhận (${vnd(amount)} đ)`;
   const stillOwed = docs.reduce((s, d) => s + d.left, 0);
@@ -162,7 +163,7 @@ export function planReceipt(book, cid, amount0, mode = 'auto', manual = []) {
 
 export function preview_receipt(p) {
   requirePerm(p.book_id, 'thu_chi');
-  return planReceipt(p.book_id, p.customer_id, p.amount, p.mode, p.allocations);
+  return planReceipt(p.book_id, p.customer_id, p.amount, 'none');
 }
 
 const sameAlloc = (a, b) => JSON.stringify((a || []).map((x) => [x.doc_id, Math.round(x.amount)]).sort())
@@ -172,12 +173,13 @@ function applyPrepaid(book, uses) {
   for (const u of uses) insertAlloc(book, u.payment_id, u.doc_type, u.doc_id, u.amount);
 }
 
-// Ghi 1 phiếu thu cho khách và phần trừ vào từng đơn trong cùng một giao dịch; lúc lưu tính lại từ đầu
+// Ghi 1 phiếu thu cho khách. Phiếu chỉ ghi số tiền theo ngày, trừ vào tổng công nợ của khách, không tự chia vào các đơn / hóa đơn
+// (chia tự động khó theo dõi); muốn trả cho một hóa đơn cụ thể thì thu tiền ngay từ hóa đơn đó.
 export function record_receipt(p) {
   const b = p.book_id;
   requirePerm(b, 'thu_chi');
   return once(p, b, 'record_receipt', () => {
-    const plan = planReceipt(b, p.customer_id, p.amount, p.mode, p.allocations);
+    const plan = planReceipt(b, p.customer_id, p.amount, 'none');
     if (!(plan.amount > 0)) fail('Số tiền nhận phải lớn hơn 0');
     if (plan.error) fail(plan.error);
     if (p.expect && !sameAlloc(plan.allocations, p.expect)) fail('Công nợ của khách vừa thay đổi. Hãy xem lại các đơn được trừ rồi lưu lại.');

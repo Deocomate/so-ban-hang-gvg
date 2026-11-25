@@ -38,9 +38,12 @@ G('1. Sửa số tiền và phần trả cho đơn');
 const A = await cust('Khách A'); const a1 = await sell(A, 20, 1000000); const a2 = await sell(A, 19, 2000000);
 const B = await cust('Khách B'); const b1 = await sell(B, 20, 1000000); const b2 = await sell(B, 19, 2000000);
 const nh0 = await fund(NH); const tm0 = await fund(TM);
-const ra = await api.call('record_receipt', { book_id: TH, request_id: rid(), customer_id: A, date: D(2), fund_id: NH, amount: 1500000, mode: 'auto', note: 'Đợt 1' });
-const rb = await api.call('record_receipt', { book_id: TH, request_id: rid(), customer_id: B, date: D(2), fund_id: NH, amount: 1500000, mode: 'auto', note: 'Đợt 1' });
-C('Phiếu gốc trừ đơn cũ trước', await state(A, a1, a2), [1500000, 0, 1000000, 0, 500000, 1500000]);
+// Phiếu gốc ghi rõ phần trả cho từng đơn (phiếu thu ở trang khách không tự chia nữa)
+const split = (c, o1, o2) => api.call('create_payment', { book_id: TH, request_id: rid(), kind: 'thu_khach', party_id: c, date: D(2), fund_id: NH, amount: 1500000, note: 'Đợt 1',
+  allocations: [{ doc_type: 'don_ban', doc_id: o1, amount: 1000000 }, { doc_type: 'don_ban', doc_id: o2, amount: 500000 }] });
+const ra = await split(A, a1, a2);
+const rb = await split(B, b1, b2);
+C('Phiếu gốc trả đơn 1 đủ, đơn 2 một phần', await state(A, a1, a2), [1500000, 0, 1000000, 0, 500000, 1500000]);
 const res = await edit(ra.id, { date: D(1), fund_id: TM, amount: 2500000, method: 'Tiền mặt', note: 'Đợt 1 (sửa)', party_id: A,
   allocations: [{ doc_type: 'don_ban', doc_id: a2, amount: 2000000 }] });
 // Khách B: hủy phiếu rồi lập phiếu mới cùng nội dung
@@ -113,7 +116,8 @@ const hl = (await api.q('sales_order_lines', TH, [['order_id', 'eq', ho]]))[0].i
 await api.call('deliver', { book_id: TH, request_id: rid(), order_id: ho, date: D(4), lines: [{ order_line_id: hl, qty: 1000 }] });
 await api.call('deliver', { book_id: TH, request_id: rid(), order_id: ho, date: D(3), lines: [{ order_line_id: hl, qty: 2000 }] });
 const [g1, g2] = (await api.q('deliveries', TH, [['order_id', 'eq', ho]])).sort((x, y) => x.delivery_date.localeCompare(y.delivery_date));
-const hr = await api.call('record_receipt', { book_id: TH, request_id: rid(), customer_id: H, date: D(1), fund_id: NH, amount: 3000000, mode: 'auto' });
+const hr = await api.call('create_payment', { book_id: TH, request_id: rid(), kind: 'thu_khach', party_id: H, date: D(1), fund_id: NH, amount: 3000000,
+  allocations: [{ doc_type: 'hoa_don', doc_id: g1.id, amount: 1000000 }, { doc_type: 'hoa_don', doc_id: g2.id, amount: 2000000 }] });
 const hp = await payment(hr.id);
 C('Phiếu gốc trả cho hai hóa đơn HD', hp.allocations.map((x) => [x.delivery_id, x.amount]).sort(), [[g1.id, 1000000], [g2.id, 2000000]].sort());
 await edit(hr.id, { date: D(1), fund_id: NH, amount: 2500000, party_id: H, allocations: [{ doc_type: 'hoa_don', doc_id: g1.id, amount: 1000000 }, { doc_type: 'hoa_don', doc_id: g2.id, amount: 1500000 }] });
