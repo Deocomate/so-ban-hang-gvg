@@ -83,12 +83,17 @@ export function CustomerDetail({ id, onClose }) {
           {c.prepaid > 0 && <span>Trả trước <b className="good">{money(c.prepaid)}</b></span>}
           <span>Tổng bán <b>{money(c.total_bought || 0)}</b></span>
           {L && <span>Tổng đã thu <b>{money(L.total_paid)}</b></span>}
+          {L && L.total_adjust > 0 && <span>Điều chỉnh giảm nợ <b>{money(L.total_adjust)}</b></span>}
           {settings.points_on && <span>Điểm <PointsCell c={c} /></span>}
           {c.supplier_id && <span>Đồng thời là nhà cung cấp · <DualDebt c={c} /></span>}
         </div>
+        {L && (L.total_old_debt || L.total_adjust > 0) ? <div className="small muted">
+          Cách tính dư nợ: {L.total_old_debt ? `nợ cũ ${money(L.total_old_debt)} + ` : ''}đã bán {money(L.total_sold)} − đã thu {money(L.total_paid)}
+          {L.total_adjust > 0 ? ` − điều chỉnh giảm nợ ${money(L.total_adjust)} (phiếu CB chuyển từ KiotViet, không gắn vào hóa đơn nào nên từng hóa đơn vẫn hiện còn nợ)` : ''} = {money(L.ledger_end)}
+        </div> : null}
         <ErrorBox error={led.error} />
       </>}
-      {tab === 'orders' && <OrdersTab id={id} />}
+      {tab === 'orders' && <OrdersTab id={id} L={L} c={c} />}
       {tab === 'ledger' && <LedgerTab id={id} />}
       {tab === 'docs' && <CustomerDocsTab id={id} />}
       {tab === 'files' && <CustomerFiles customerId={id} customerName={c.name} />}
@@ -160,12 +165,17 @@ function useCustomerInvoices(id) {
   return { all, error: q.error || dq.error };
 }
 
-function OrdersTab({ id }) {
+function OrdersTab({ id, L, c }) {
   const [only, setOnly] = useState('');
   const iq = useCustomerInvoices(id);
   const rq = useQ('sales_returns', [['customer_id', 'eq', id]], 'return_date desc', 2000);
   const all = iq.all || [];
   const owing = all.filter((o) => o.receivable > 0);
+  const sumOwing = owing.reduce((s, o) => s + o.receivable, 0);
+  // Còn nợ theo hóa đơn khác Nợ hiện tại khi có nợ cũ / điều chỉnh giảm nợ / tiền trả trước chưa gắn hóa đơn: nói rõ chênh do đâu
+  const why = L ? [L.total_old_debt ? `nợ cũ ${money(L.total_old_debt)}` : '',
+    L.total_adjust > 0 ? `điều chỉnh giảm nợ ${money(L.total_adjust)} (phiếu CB chuyển từ KiotViet, không gắn vào hóa đơn nào)` : '',
+    L.usable_prepaid > 0 ? `tiền khách trả trước chưa trừ vào hóa đơn ${money(L.usable_prepaid)}` : ''].filter(Boolean) : [];
   const rows = useMemo(() => {
     if (!iq.all || !rq.data) return null;
     const rets = only === 'debt' ? [] : rq.data.map((r) => ({ key: r.id, type: 'tra', code: r.code, day: r.return_date, at: r.created_at, order_id: r.order_id, order_code: r.invoice_code || r.order_code, revenue: r.revenue, status: 'xac_nhan' }));
@@ -200,6 +210,9 @@ function OrdersTab({ id }) {
             return <span className="row gap-s"><StatusPill map={DELIVERY} value={o.delivery_status} />{pay && <Pill tone={pay[1]}>{pay[0]}</Pill>}</span>;
           } },
         ]} />
+      {L && iq.all && Math.abs(sumOwing - c.receivable) >= 1 && <Note>
+        Còn nợ theo hóa đơn {money(sumOwing)}, nhưng nợ hiện tại của khách là {money(c.receivable)}. Chênh lệch do {why.length ? why.join(', ') : 'tiền thu chưa gắn vào hóa đơn'}.
+      </Note>}
     </div>
   );
 }

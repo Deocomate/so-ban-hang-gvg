@@ -510,7 +510,7 @@ with od as (
     sum(order_total) filter (where status = 'xac_nhan' and remaining_qty > 0) as open_value,
     count(*) filter (where status = 'xac_nhan' and remaining_qty > 0) as open_orders,
     sum(receivable) filter (where overdue_days > 0) as overdue, max(overdue_days) as max_overdue,
-    sum(order_total) filter (where status <> 'huy') as total_bought, max(order_date) as last_order_date
+    sum(delivered_value) filter (where status <> 'huy') as total_bought, max(order_date) as last_order_date
   from v_sales_orders group by customer_id
 ), pay as (
   select party_id, sum(debt_amount) as paid from v_pay_signed where party_type = 'kh' group by party_id

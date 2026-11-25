@@ -20,8 +20,9 @@ function ledgerEvents(book, cid) {
   const ev = [];
   for (const d of all(`select id, code, debt_date, amount, note, created_at from opening_debts where book_id = ? and party_type = 'kh' and party_id = ?`, book, cid)) {
     const owe = d.amount >= 0;
-    ev.push({ key: 'od:' + d.id, type: 'no_cu', title: owe ? 'Nợ cũ' : 'Trả trước từ sổ cũ', date: d.debt_date, at: d.created_at, code: d.code,
-      note: d.note || (owe ? 'Nợ chuyển từ sổ cũ' : 'Tiền khách trả trước chuyển từ sổ cũ'), col: owe ? 'no' : 'thu', amount: d.amount });
+    // Khoản âm (phiếu CB "Điều chỉnh công nợ" của KiotViet, số dư âm chuyển sang) là điều chỉnh giảm nợ, không phải tiền đã thu
+    ev.push({ key: 'od:' + d.id, type: owe ? 'no_cu' : 'dieu_chinh', title: owe ? 'Nợ cũ' : 'Điều chỉnh giảm nợ', date: d.debt_date, at: d.created_at, code: d.code,
+      note: d.note || (owe ? 'Nợ chuyển từ sổ cũ' : 'Điều chỉnh giảm nợ chuyển từ sổ cũ'), col: owe ? 'no' : 'thu', amount: d.amount });
   }
   const dels = all(`select d.id, d.code, d.delivery_date, d.created_at, d.shipping_fee, o.id as order_id, o.code as order_code, o.vat_rate, o.kind,
       coalesce((select sum(x.revenue) from delivery_lines x where x.delivery_id = d.id), 0) as revenue,
@@ -64,6 +65,8 @@ function ledgerEvents(book, cid) {
   return ev.map((e) => { bal += e.amount; return { ...e, debt: e.col === 'no' ? e.amount : 0, paid: e.col === 'thu' ? -e.amount : 0, balance: bal }; });
 }
 
+const sumType = (rows, types, k) => rows.reduce((s, r) => s + (types.includes(r.type) ? r[k] : 0), 0);
+
 export function customer_ledger(p) {
   const b = p.book_id;
   requirePerm(b, 'xem_thu_chi');
@@ -76,7 +79,10 @@ export function customer_ledger(p) {
   const closing = inRange.length ? inRange[inRange.length - 1].balance : opening;
   return {
     customer: { id: c.id, code: c.code, name: c.name, phone: c.phone, address: c.address, credit_days: c.credit_days },
-    total_billed: rows.reduce((s, r) => s + r.debt, 0), total_paid: rows.reduce((s, r) => s + r.paid, 0),
+    total_billed: rows.reduce((s, r) => s + r.debt, 0),
+    // Tách để giải thích được Nợ hiện tại = nợ cũ + đã giao (trừ trả hàng) − đã thu − điều chỉnh giảm nợ
+    total_old_debt: sumType(rows, ['no_cu'], 'debt'), total_sold: sumType(rows, ['ban_hang', 'tra_hang'], 'debt'),
+    total_paid: sumType(rows, ['thu', 'hoan'], 'paid'), total_adjust: sumType(rows, ['dieu_chinh'], 'paid'),
     balance: c.balance, receivable: c.receivable, prepaid: c.prepaid,
     usable_prepaid: usablePrepaid(b, c.id), opening, closing, rows: inRange,
     ledger_end: rows.length ? rows[rows.length - 1].balance : 0,
