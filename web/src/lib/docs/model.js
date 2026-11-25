@@ -200,8 +200,11 @@ export async function loadDocData(q, rpc, src) {
     [d] = await q('deliveries', [['id', 'eq', src.id]]);
     if (!d) throw new Error('Không tìm thấy phiếu giao');
     orderId = d.order_id;
-    // Tiền của đơn: hóa đơn bán hàng ghi tiền cọc đã nhận và các đợt thanh toán
-    [dlines, pays] = await Promise.all([q('delivery_lines', [['delivery_id', 'eq', src.id]]), q('doc_payments', [['doc_id', 'eq', orderId]], 'pay_date', 2000)]);
+    // Tiền của đơn: hóa đơn bán hàng ghi tiền cọc đã nhận và các đợt thanh toán. inv: số liệu hóa đơn trong sổ (giá trị, hàng trả lại)
+    let inv;
+    [dlines, pays, [inv]] = await Promise.all([q('delivery_lines', [['delivery_id', 'eq', src.id]]), q('doc_payments', [['doc_id', 'eq', orderId]], 'pay_date', 2000),
+      q('order_invoices', [['id', 'eq', src.id]])]);
+    if (inv) d = { ...d, inv };
   }
   const [o] = await q('sales_orders', [['id', 'eq', orderId]]);
   if (!o) throw new Error('Không tìm thấy đơn hàng');
@@ -405,7 +408,7 @@ export function defaults(type, data, ds) {
   // Nợ cũ = công nợ hiện tại của khách trừ phần nợ của chính chứng từ này. Hóa đơn một chuyến chỉ trừ chuyến đó (giá trị − tiền tính trên
   // hóa đơn), không trừ cả đơn: trừ cả đơn thì các chuyến khác và tiền cọc của đơn bị bỏ ra, nợ cũ ra số âm sai.
   const whole = !useDel || (o.pay_term !== 'don_lon' && Number(o.delivery_count) === 1);
-  const own = useDel ? Number(data.d.total || 0) - invoiceMoney(data.pays, { whole, deliveryId: data.d.id }).total
+  const own = useDel ? invoiceTotal(data) - invoiceMoney(data.pays, { whole, deliveryId: data.d.id }).total
     : Number(o.delivered_value || 0) - Number(o.paid_net || 0);
   const oldDebt = c.balance !== undefined && c.balance !== null ? Number(c.balance) - own : 0;
   // Phiếu đóng hàng của cả đơn: đóng hàng hôm nay (trước khi giao); theo đợt giao thì là ngày giao
@@ -428,6 +431,20 @@ export function defaults(type, data, ds) {
     handover_phone: prof.phone || '', transit_from: docDate, transit_days: '04', freight_collect: 'THU VẬN CHUYỂN KHÁCH HÀNG',
   };
 }
+
+// Hàng khách trả lại của hóa đơn một chuyến (giá trị gồm VAT, sau phí trả hàng): lấy đúng số trong sổ (v_order_invoices);
+// không có (hóa đơn bán ngay giao nhiều lần) thì tính theo tỷ lệ số lượng trả
+export function invoiceReturned(data) {
+  if (data.d?.inv) return Number(data.d.inv.returned_value) || 0;
+  const back = (data.dlines || []).reduce((s, l) => s + (Number(l.qty) ? (Number(l.returned_qty) * Number(l.revenue)) / Number(l.qty) : 0), 0);
+  const rate = Number(data.o?.vat_rate) || 0;
+  return Math.round(back) + Math.round((back * rate) / 100);
+}
+
+// Giá trị hóa đơn một chuyến: đúng giá trị trong sổ (đã trừ hàng trả, gồm phần chênh làm tròn VAT của đơn)
+export const invoiceTotal = (data) => (data.d?.inv ? Number(data.d.inv.total) || 0 : Number(data.d?.total || 0) - invoiceReturned(data));
+// VAT của hóa đơn một chuyến khớp giá trị trong sổ: giá trị hóa đơn − tiền hàng − cước + hàng trả
+export const invoiceVat = (data, goods) => (data.d?.inv ? invoiceTotal(data) - goods - Number(data.d.shipping_fee || 0) + invoiceReturned(data) : Number(data.d?.vat || 0));
 
 // Dòng hàng của chứng từ
 export function goodsLines(type, data) {
@@ -509,10 +526,10 @@ export function buildDoc(type, data, ds, info) {
     const goods = g.reduce((s, l) => s + l.total, 0);
     // Hóa đơn của 1 đợt giao chỉ tính hàng đợt đó, phần cọc trừ theo số đã khấu trừ; cả đơn thì tính theo đơn
     const perDel = isInv && !!data.d;
-    const vat = perDel ? Number(data.d.vat || 0) : Number(o.vat_total || 0);
+    const vat = perDel ? invoiceVat(data, goods) : Number(o.vat_total || 0);
     const ship = perDel ? Number(data.d.shipping_fee || 0) : Math.max(0, Number(o.order_total || 0) - Number(o.goods_total || 0) - vat);
     const disc = perDel ? 0 : Math.max(0, goods - Number(o.goods_total || 0));
-    const ret = perDel ? 0 : Number(o.returned_value || 0);
+    const ret = perDel ? invoiceReturned(data) : Number(o.returned_value || 0);
     const paid = perDel ? Number(data.d.deposit_used || 0) : Number(o.paid_net || 0);
     const sumRow = (label, v, bold) => [{ text: '' }, { text: label, colSpan: 4, align: 'right', b: bold }, {}, {}, {}, { text: N(v), align: 'right', b: bold }];
     const rows = [...body];

@@ -313,6 +313,7 @@ with dv as (
 select t2.id, t2.book_id, t2.code, t2.order_id, so.code as order_code, so.status as order_status, so.customer_id, so.customer_code, so.customer_name,
   so.customer_phone, so.staff, so.channel, so.vat_rate, t2.delivery_date, t2.created_at, t2.note, t2.shipping_fee, t2.deposit_used,
   t2.total, t2.paid, max(t2.total - t2.paid, 0) as debt, t2.rn_last = 1 as is_last,
+  t2.goods_back + round(t2.goods_back * so.vat_rate / 100.0) as returned_value,
   case when t2.total - t2.paid > 0 then date(t2.delivery_date, '+' || coalesce(c.credit_days, 0) || ' days') end as due_date,
   case when t2.total - t2.paid > 0 and date(t2.delivery_date, '+' || coalesce(c.credit_days, 0) || ' days') < today()
        then days(today(), date(t2.delivery_date, '+' || coalesce(c.credit_days, 0) || ' days')) else 0 end as overdue_days

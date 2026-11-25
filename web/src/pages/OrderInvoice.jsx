@@ -20,8 +20,9 @@ export function OrderInvoiceDetail({ id, onClose }) {
   const live = inv.order_status !== 'huy';
   const canSell = can('ban_hang') && live;
   const goods = lines.reduce((s, l) => s + (l.revenue || 0), 0);
-  const back = lines.reduce((s, l) => s + (l.qty ? (l.returned_qty * l.revenue) / l.qty : 0), 0);
-  const vat = Math.max(0, inv.total - goods - inv.shipping_fee + Math.round(back) + Math.round((back * (inv.vat_rate || 0)) / 100));
+  // Hàng trả lại (gồm VAT, sau phí trả hàng) lấy đúng số trong sổ; VAT = giá trị hóa đơn − tiền hàng − cước + hàng trả
+  const back = Number(inv.returned_value) || 0;
+  const vat = Math.max(0, inv.total - goods - inv.shipping_fee + back);
   const openOrder = () => { onClose(); open('order', { id: inv.order_id }); };
   // Tiền cọc đã nhận và các đợt thanh toán trên hóa đơn: hóa đơn duy nhất của đơn thanh toán trên hóa đơn tính mọi khoản của đơn
   const o = oq.data?.[0];
@@ -63,7 +64,7 @@ export function OrderInvoiceDetail({ id, onClose }) {
           <span>Tổng tiền hàng ({lines.length})</span><span className="r">{money(goods)}</span>
           {inv.shipping_fee > 0 && <><span>Phí vận chuyển</span><span className="r">{money(inv.shipping_fee)}</span></>}
           {inv.vat_rate > 0 && <><span>VAT {fq(inv.vat_rate)}%</span><span className="r">{money(vat)}</span></>}
-          {back > 0 && <><span>Khách trả lại hàng</span><span className="r">{money(Math.round(back))}</span></>}
+          {back > 0 && <><span>Khách trả lại hàng</span><span className="r">{money(back)}</span></>}
           <span>Tổng giá trị hóa đơn</span><span className="r strong">{money(inv.total)}</span>
           {m.deposit !== 0 && <><span>Tiền cọc đã nhận</span><span className="r">{money(m.deposit)}</span></>}
           {m.payments.map((p, i) => <React.Fragment key={p.payment_id}><span>{m.payments.length > 1 ? `Thanh toán đợt ${i + 1}` : 'Thanh toán'} ({dmy(p.date)} · {p.code})</span><span className="r">{money(p.amount)}</span></React.Fragment>)}

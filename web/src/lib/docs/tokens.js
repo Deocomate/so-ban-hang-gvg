@@ -4,7 +4,7 @@
 // { h, block: true } là khối lớn (bảng) — đặt riêng một dòng trong mẫu thì thay luôn cả dòng đó.
 import { specText, addDays } from '../format.js';
 import { invoiceMoney, progressStatement } from '../pay-term.js';
-import { fmtNum, phoneFmt, dateLine, moneyWords, profileFor, goodsLines, packLabel, totalKg, fmtKg, weightPerUnit, DEFAULT_TEXTS, runsOf, PER_DELIVERY, RECONCILE, qtyFigures } from './model.js';
+import { fmtNum, phoneFmt, dateLine, moneyWords, profileFor, goodsLines, packLabel, totalKg, fmtKg, weightPerUnit, DEFAULT_TEXTS, runsOf, PER_DELIVERY, RECONCILE, qtyFigures, invoiceReturned, invoiceVat } from './model.js';
 
 const T = (k, label, desc) => ({ k, label, desc: desc || label });
 
@@ -250,10 +250,10 @@ export function tokenValues(type, data, ds, info, sep = ',') {
   const goods = g.reduce((s, l) => s + l.total, 0);
   if (type === 'yeu_cau_vat') return { v: vatRequest(v, items, data, info, N, goods), items };
   const isInv = type === 'hoa_don'; const perDel = PER_DELIVERY.includes(type) && !!data.d;
-  const vat = perDel ? Number(data.d.vat || 0) : Number(o.vat_total || 0);
+  const vat = perDel ? invoiceVat(data, goods) : Number(o.vat_total || 0);
   const ship = perDel ? Number(data.d.shipping_fee || 0) : Math.max(0, Number(o.order_total || 0) - Number(o.goods_total || 0) - vat);
   const disc = perDel ? 0 : Math.max(0, goods - Number(o.goods_total || 0));
-  const ret = perDel ? 0 : Number(o.returned_value || 0);
+  const ret = perDel ? invoiceReturned(data) : Number(o.returned_value || 0);
   // Hóa đơn bán hàng: tiền cọc đã nhận và từng đợt thanh toán bổ sung. Hóa đơn của cả đơn, hoặc hóa đơn duy nhất của đơn thanh toán
   // trên hóa đơn (giao một lần): mọi khoản của đơn; hóa đơn một chuyến của đơn giao nhiều chuyến: chỉ tiền trả cho đúng hóa đơn đó.
   const whole = !perDel || (o.pay_term !== 'don_lon' && Number(o.delivery_count) === 1);
