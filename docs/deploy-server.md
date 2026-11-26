@@ -59,7 +59,7 @@ Chứng từ khách lập thêm trên KiotViet sau khi đã nạp (khách dùng 
 
 Mỗi hóa đơn trong tệp phải còn nợ đúng như KiotViet (đã cộng lại tiền thu bằng phiếu lập trên sổ mới), không thì lệnh dừng mà không ghi gì. Gặp loại khác thì lệnh dừng mà không ghi gì; nếu công nợ khách không khớp KiotViet (`expectedDebts`, hoặc `customers[].Debt` khi tệp có `ledgers`, đã trừ phiếu thu lập trên sổ mới) thì cũng không ghi. Đặt hàng KiotViet đã hủy mà trên sổ mới đã giao thì lệnh không hủy, chỉ báo xung đột. Mẫu tệp có sổ công nợ: `du-lieu-kiotviet/goc/kiotviet-thceramics-phat-sinh-20261120.json`.
 
-`app.env` cần có `APP_URL=https://so-ban-hang-thceramics.admirable.site`, `SMTP_USER`, `SMTP_PASS` (Gmail + mật khẩu ứng dụng) để gửi thư mời, quên mật khẩu, xác thực email. `ALLOW_SIGNUP` không còn tác dụng.
+`app.env` cần có `APP_URL=https://kiot.gomsuxaydung.vn` (đổi từ tên miền admirable.site ngày 26/11/2026; bản cũ `app.env.truoc-doi-app-url`), `SMTP_USER`, `SMTP_PASS` (Gmail + mật khẩu ứng dụng) để gửi thư mời, quên mật khẩu, xác thực email. `ALLOW_SIGNUP` không còn tác dụng.
 
 ## Tài khoản quản trị và dev
 
