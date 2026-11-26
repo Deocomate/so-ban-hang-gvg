@@ -1,6 +1,6 @@
 # Deploy lên máy chủ (không dùng Docker)
 
-Bản chạy thật: https://so-ban-hang-thceramics.admirable.site
+Bản chạy thật: https://so-ban-hang-thceramics.admirable.site, và cùng bản đó ở https://kiot.gomsuxaydung.vn (từ 26/11/2026).
 
 ## Máy chủ
 
@@ -18,6 +18,7 @@ Bản chạy thật: https://so-ban-hang-thceramics.admirable.site
 | Dịch vụ | systemd `so-ban-hang-gom` (user `sobanhang`, cổng nội bộ 3010) |
 | Nginx | `/etc/nginx/conf.d/so-ban-hang-thceramics.admirable.site.conf` |
 | Chứng chỉ SSL | `/etc/nginx/ssl/so-ban-hang-thceramics.admirable.site.{crt,key}`, acme.sh tự gia hạn (`/root/.acme.sh`) |
+| Tên miền thứ hai | `kiot.gomsuxaydung.vn`: bản ghi DNS ở Cloudflare (bật proxy) do quản trị gomsuxaydung.vn thêm; nginx `/etc/nginx/conf.d/kiot.gomsuxaydung.vn.conf` trỏ cùng cổng 3010, dùng chứng chỉ Cloudflare Origin `*.gomsuxaydung.vn` (`/etc/nginx/ssl/gomsuxaydung.{crt,key}`, chung với gomsuxaydung.vn), không qua acme.sh |
 
 ## Cập nhật bản mới
 
