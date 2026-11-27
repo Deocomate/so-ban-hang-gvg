@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useApp } from '../lib/store.jsx';
+import { useApp, useAction } from '../lib/store.jsx';
+import { useOpenReceipts } from '../lib/lookups.js';
 import { packView } from '../lib/book-profile.js';
-import { dmy } from '../lib/format.js';
+import { dmy, money } from '../lib/format.js';
 import { saveFile } from '../lib/excel.js';
 import { Btn, Loading, ErrorBox, Note, Modal, Field, Input, TextArea, Select, DateInput, NumInput, Check, Section, Tabs, ConfirmBtn } from '../components/ui.jsx';
 import { DOC_TYPES, DEFAULT_TEXTS, docSettings, loadDocData, defaults, currentInfo, editableFields, infoRef, profileFor, profileFromBook, PER_DELIVERY, RECONCILE, isCompany, HEADER_FIELDS, headerKey, BASE_SIZES, DEFAULT_BASE } from '../lib/docs/model.js';
@@ -382,6 +383,38 @@ function HeaderEditor({ type, prof, info, setEdit }) {
 }
 
 // Một nhóm thu gọn được ở cột tùy chọn bên trái của hộp thoại in
+// Biên bản đối chiếu của một đơn: phiếu thu của khách còn phần chưa phân bổ (phiếu chỉ gắn với khách) đến hết ngày chốt.
+// Chọn phiếu và số tiền để phân bổ vào đơn — lưu vào chính phiếu thu đó; biên bản chỉ tính phần đã phân bổ cho đơn này.
+function ReceiptAlloc({ order, cutoff, canPay, onDone }) {
+  const open = useOpenReceipts(order.customer_id, canPay);
+  const list = open.filter((p) => !cutoff || p.pay_date <= cutoff);
+  const later = open.length - list.length;
+  const { run, busy } = useAction();
+  const [amt, setAmt] = useState({});
+  if (!canPay || !open.length) return null;
+  const give = async (p) => {
+    const amount = amt[p.id] ?? p.unallocated;
+    const r = await run('allocate_receipt', { order_id: order.id, payment_id: p.id, amount }, `Đã phân bổ ${money(amount)} đ của phiếu ${p.code} vào đơn ${order.code}`);
+    if (r) { setAmt((s) => { const n = { ...s }; delete n[p.id]; return n; }); onDone(); }
+  };
+  return (
+    <SideGroup title="Phiếu thu chưa phân bổ vào đơn" open badge={list.length ? String(list.length) : null}>
+      <div className="muted small">Phiếu thu của {order.customer_name} chưa gắn với đơn nào. Biên bản chỉ tính phần đã phân bổ cho đơn {order.code}.</div>
+      {list.map((p) => (
+        <div key={p.id} className="stack-s" style={{ borderTop: '1px solid var(--line)', paddingTop: 6 }}>
+          <div className="small"><b>{p.code}</b> · {dmy(p.pay_date)} · phiếu {money(p.amount)} đ{p.note ? ` · ${p.note}` : ''}</div>
+          <div className="row gap-s">
+            <NumInput value={amt[p.id] ?? p.unallocated} onChange={(v) => setAmt((s) => ({ ...s, [p.id]: v }))} min={0} max={p.unallocated} aria-label={`Số tiền phân bổ từ phiếu ${p.code}`} />
+            <Btn small kind="primary" busy={busy} disabled={!(Number(amt[p.id] ?? p.unallocated) > 0) || Number(amt[p.id] ?? p.unallocated) > p.unallocated} onClick={() => give(p)}>Phân bổ vào đơn</Btn>
+          </div>
+        </div>
+      ))}
+      {!list.length && <div className="small">Không có phiếu nào đến ngày chốt.</div>}
+      {later > 0 && <div className="muted small">{later} phiếu nhận sau ngày chốt không tính vào biên bản này.</div>}
+    </SideGroup>
+  );
+}
+
 function SideGroup({ title, badge, open = false, children }) {
   return (
     <details className="doc-group" open={open}>
@@ -584,6 +617,8 @@ export function DocDialog({ kind, id, keys, type: type0, pay, page, onClose }) {
               {type === 'yeu_cau_vat' && <div className="muted small">Thông tin bên mua lấy từ thẻ "Thông tin xuất hóa đơn" của khách. Đơn giá là giá trước thuế; cước vận chuyển và chiết khấu của đơn được thêm thành dòng riêng.</div>}
               {type === 'hoa_don' && <div className="muted small">Nợ cũ tự tính = công nợ hiện tại của khách trừ phần của đơn này. Tổng số hộp tự tính từ quy cách đóng gói của sản phẩm (hộp lẻ tính 1 hộp).</div>}
             </SideGroup>}
+            {ready && type === 'doi_chieu_tt' && data.payBase && data.o && <ReceiptAlloc order={data.o} cutoff={String(info.date_doi_chieu_tt || '').slice(0, 10)}
+              canPay={can('thu_chi')} onDone={() => setReload((x) => x + 1)} />}
             {ready && <SideGroup title="Mẫu in & khổ giấy" badge={opts.orient || opts.scale !== 1 ? 'đã chỉnh' : null}>
               {(tpls.length > 1 || can('owner')) && (
                 <Field label="Mẫu in">

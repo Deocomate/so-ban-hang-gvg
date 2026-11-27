@@ -9,6 +9,7 @@ const { openDb } = await import(R + 'server/src/db/index.js');
 const { makeApi } = await import(R + 'server/test/harness.js');
 const { loadDocData, docSettings, defaults, currentInfo } = await import(R + 'web/src/lib/docs/model.js');
 const { tokenValues } = await import(R + 'web/src/lib/docs/tokens.js');
+const { progressAt } = await import(R + 'server/src/domain/order-progress.js');
 const SRC = process.argv[2]; if (!SRC) { console.error('Thiếu đường dẫn bản chụp CSDL'); process.exit(1); }
 const WORK = SRC + '.audit.db';
 fs.copyFileSync(SRC, WORK);
@@ -76,6 +77,18 @@ for (const b of db.prepare(`select b.id, b.short_name, b.name, b.settings, (sele
             if (m1 && Math.abs(num(m1[1]) - o.delivered_value) >= 1) report('Đối chiếu công nợ: tổng thanh toán khác giá trị đã giao', tag(`${o.code} in ${num(m1[1])} sổ ${o.delivered_value}`));
           }
           if (!due2) report('Đối chiếu công nợ: thiếu dòng bằng chữ', tag(o.code));
+          // Biên bản theo tiến độ giao hàng (chọn ở hộp in hoặc trên đơn): còn phải thanh toán khớp cách tính của máy chủ
+          const pinfo = { ...r.info, pay_term: 'don_lon' };
+          const ph = tokenValues('doi_chieu_tt', r.data, ds, pinfo).v.Bang_Doi_Chieu_Cong_No.h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+          const pm = ph.match(/(CÒN PHẢI THANH TOÁN = \(1\) − \(2\)(?: − \(3\))?|KHÁCH ĐÃ THANH TOÁN DƯ) ([\d,.]+)/);
+          const at = progressAt(o.id, String(pinfo.date_doi_chieu_tt).slice(0, 10));
+          if (!pm) report('Rà không đọc được số trên đối chiếu theo tiến độ', tag(o.code));
+          else {
+            seen.progress = (seen.progress || 0) + 1;
+            const gotP = (pm[1].startsWith('KHÁCH') ? -1 : 1) * num(pm[2]);
+            if (Math.abs(gotP - at.remaining) >= 1) report('Đối chiếu theo tiến độ: còn phải thanh toán khác máy chủ', tag(`${o.code} in ${gotP} máy chủ ${at.remaining}`));
+            if (/chưa sử dụng|chưa đến hạn/i.test(ph)) report('Đối chiếu theo tiến độ: in số chỉ dùng nội bộ', tag(o.code));
+          }
         }
       }
     } catch (e) { report('Lỗi dựng chứng từ đơn', tag(`${o.code}: ${e.message}`)); }

@@ -4,7 +4,7 @@
 // - LƯU: chỉ ghi các thay đổi vào đơn đặt hàng, chưa tạo hóa đơn;
 // - TẠO HÓA ĐƠN / IN: ghi thay đổi (nếu có), tạo hóa đơn HD… (trừ kho, ghi doanh thu), khấu trừ tiền khách đã trả trước
 //   và lập phiếu thu phần khách thanh toán. Đơn còn hàng chưa lấy thì lần sau xử lý tiếp.
-import { tripDue, isProgress, payRatio, payTermLabel } from '../lib/pay-term.js';
+import { tripFigures, isProgress, payRatio, payTermLabel } from '../lib/pay-term.js';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useAction, useQ } from '../lib/store.jsx';
 import { money, qty as fq, todayVN } from '../lib/format.js';
@@ -97,8 +97,8 @@ export function OrderProcess({ id, onClose }) {
   // Còn lại tiền của đơn ghi riêng, không trừ vào hóa đơn này: khách cần trả đủ giá trị hóa đơn.
   const single = !isProgress(d) && !d.delivery_count && rows.every((r) => r.isNew || (Number(r.qty) || 0) >= r.rem - 1e-9);
   const prepaid = single ? Math.max(0, d.paid_net || 0) : Math.max(0, d.paid_net - d.delivered_value);
-  // Theo tiến độ giao hàng: chuyến này đến hạn tỷ lệ % giá trị thực giao (tiền cọc chỉ dùng khi chủ sổ cấn trừ)
-  const suggest = isProgress(d) ? tripDue(total, payRatio(d)) : null;
+  // Theo tiến độ giao hàng: chuyến này đến hạn tỷ lệ % giá trị hàng thực giao + tiền vận chuyển (tiền cọc chỉ dùng khi chủ sổ cấn trừ)
+  const suggest = isProgress(d) ? tripFigures(total, shipAmt, payRatio(d)).due : null;
   const due = single ? Math.max(0, total - prepaid) : total;
   const payAmt = Number(pay.amount) || 0;
   const debt = due - payAmt;

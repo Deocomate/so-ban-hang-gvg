@@ -136,4 +136,61 @@ C('Nợ cũ của hóa đơn chuyến 2 = công nợ khách − nợ của chín
 const v2 = tokenValues('hoa_don', dd, ds, info2).v;
 C('Còn phải thanh toán trên hóa đơn = công nợ hiện tại của khách', v2.Con_Thanh_Toan, '300,000,000');
 
+G('7. Theo tiến độ: tiền khách trả và tiền cọc cấn trừ cùng đợt, phiếu thu đã có, tiền vận chuyển riêng');
+const K = (await api.call('save_party', { book_id: TH, type: 'kh', name: 'Khách hai đơn' })).id;
+const pk = await api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: K, kind: 'dat_hang', status: 'xac_nhan', order_date: D(30),
+  pay_term: 'don_lon', pay_ratio: 70, lines: [{ product_id: P, qty: 2000000, unit_price: 1000 }] });
+const other = await api.call('save_sales_order', { book_id: TH, request_id: rid(), customer_id: K, kind: 'dat_hang', status: 'xac_nhan', order_date: D(30),
+  lines: [{ product_id: P, qty: 100000, unit_price: 1000 }] });
+const kl = (await api.q('sales_order_lines', TH, [['order_id', 'eq', pk.id]]))[0];
+await pay(pk.id, 'coc', 500 * M, D(28));
+await api.call('deliver', { book_id: TH, request_id: rid(), order_id: pk.id, date: D(25), lines: [{ order_line_id: kl.id, qty: 600000 }], shipping_fee: 2 * M });
+await api.call('deliver', { book_id: TH, request_id: rid(), order_id: pk.id, date: D(22), lines: [{ order_line_id: kl.id, qty: 400000 }] });
+st = await ledger(pk.id, D(0));
+C('Đến hạn = 70% giá trị hàng + tiền vận chuyển: chuyến 1 = 420 + 2 (triệu)', st.trips.map((t) => [t.goods / M, t.ship / M, t.due / M]), [[600, 2, 422], [400, 0, 280]]);
+C('Tổng giá trị hàng đã giao 1.000, vận chuyển 2, đến hạn 702 (triệu)', [st.goods, st.ship, st.due].map((x) => x / M), [1000, 2, 702]);
+// Phiếu thu chỉ gắn với khách (không gắn đơn): biên bản chưa tính; phân bổ một phần vào đơn đang đối chiếu
+const loose = await api.call('create_payment', { book_id: TH, request_id: rid(), kind: 'thu_khach', date: D(20), fund_id: TM, party_id: K, amount: 350 * M });
+C('Phiếu thu chưa phân bổ chưa vào sổ công nợ của đơn', (await ledger(pk.id, D(0))).paid, 0);
+await E('Không phân bổ quá phần chưa phân bổ của phiếu', () => api.call('allocate_receipt', { book_id: TH, request_id: rid(), order_id: pk.id, payment_id: loose.id, amount: 351 * M }), /chưa phân bổ/);
+await E('Phiếu của khách khác không phân bổ được', () => api.call('allocate_receipt', { book_id: TH, request_id: rid(), order_id: big.id, payment_id: loose.id, amount: M }), /không phải của khách/);
+await api.call('allocate_receipt', { book_id: TH, request_id: rid(), order_id: pk.id, payment_id: loose.id, amount: 300 * M });
+await api.call('allocate_receipt', { book_id: TH, request_id: rid(), order_id: other.id, payment_id: loose.id, amount: 50 * M });
+st = await ledger(pk.id, D(0));
+C('Khách nhiều đơn: chỉ phần phân bổ cho đơn này (300 triệu) được tính, phiếu không tách thành phiếu mới',
+  [st.paid / M, st.payments.map((p) => p.code), (await api.one('payments', TH, [['id', 'eq', loose.id]])).unallocated], [300, [loose.code], 0]);
+C('Tiền cọc 500 triệu chưa cấn trừ: không trừ vào số còn phải thanh toán (702 − 300 = 402)', st.remaining / M, 402);
+C('Phân bổ ghi vào lịch sử sửa phiếu', /Phân bổ vào đơn/.test(JSON.stringify((await api.one('payments', TH, [['id', 'eq', loose.id]])).edit_log)), true);
+await E('Cấn cọc cùng đợt không vượt số còn phải thu sau khoản khách trả', () => pay(pk.id, 'thanh_toan', 300 * M, D(10), { offset: 103 * M }), /còn phải thu/);
+C('Lỗi cấn trừ không để lại khoản thu', (await ledger(pk.id, D(0))).paid / M, 300);
+await E('Đơn thanh toán trên hóa đơn không cấn cọc cùng đợt', () => pay(other.id, 'thanh_toan', M, D(10), { offset: M }), /tiến độ/);
+await E('Để trống cả hai ô thì không ghi', () => pay(pk.id, 'thanh_toan', 0, D(10)), /Nhập số tiền/);
+const both = await pay(pk.id, 'thanh_toan', 300 * M, D(10), { offset: 100 * M });
+st = await ledger(pk.id, D(0));
+C('Khách trả 300 + cấn cọc 100: công nợ giảm 400, chỉ 300 là khoản thu mới', [st.paid / M, st.offset / M, st.remaining / M, both.amount / M, both.offset / M], [600, 100, 2, 300, 100]);
+C('Khoản cấn trừ cùng ngày với khoản thu', st.offsets.map((x) => x.date), [D(10)]);
+await E('Cấn cọc không vượt số dư cọc', () => adjust(pk.id, 'can_tru_coc', 401 * M, D(0)), /Số dư tiền cọc|còn phải thu/);
+C('Tiền đã nhận của đơn = cọc 500 + 300 + 300 (cấn trừ không tạo khoản thu)', (await order(pk.id)).paid_net / M, 1100);
+const pkData = async (offsetLess) => { const odk = await order(pk.id); const pays = await api.q('doc_payments', TH, [['doc_id', 'eq', pk.id]]);
+  return { kind: 'order', o: odk, lines: [], prods: {}, cust: {}, allDl: await api.q('delivery_lines', TH, [['order_id', 'eq', pk.id]]), pays,
+    payBase: { term: 'don_lon', ratio: 70, total: odk.order_total, order_code: odk.code, invoices: await api.q('order_invoices', TH, [['order_id', 'eq', pk.id]]), pays,
+      adjustments: offsetLess ? [] : await api.q('order_adjustments', TH, [['order_id', 'eq', pk.id]]) } }; };
+const recK = tokenValues('doi_chieu_tt', await pkData(false), ds, { date_doi_chieu_tt: D(0) }).v.Bang_Doi_Chieu_Cong_No.h;
+const plainText = recK.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+C('Biên bản: bảng hàng theo hóa đơn có tên hàng và giá trị hàng từng chuyến', [plainText.includes('Ngói'), plainText.includes('600,000,000'), plainText.includes('400,000,000')], [true, true, true]);
+C('Biên bản: tổng giá trị hàng đã giao, tiền vận chuyển và tổng số tiền đến hạn là các dòng riêng',
+  [/TỔNG GIÁ TRỊ HÀNG ĐÃ GIAO 1,000,000,000/.test(plainText), /TIỀN VẬN CHUYỂN 2,000,000/.test(plainText), /TỔNG SỐ TIỀN ĐẾN HẠN \(1\) 702,000,000/.test(plainText)], [true, true, true]);
+C('Biên bản: từng khoản khách trả theo ngày nhận, mã phiếu thu, số tiền; tổng (2) = 600 triệu',
+  [plainText.includes(`${D(20).split('-').reverse().join('/')} ${loose.code} 300,000,000`), /TỔNG TIỀN KHÁCH ĐÃ THANH TOÁN \(2\) 600,000,000/.test(plainText)], [true, true]);
+C('Biên bản: tiền cọc cấn trừ 100 triệu, còn phải thanh toán 2 triệu; không in tiền cọc 500 triệu',
+  [/TIỀN CỌC CẤN TRỪ \(3\) 100,000,000/.test(plainText), /CÒN PHẢI THANH TOÁN = \(1\) − \(2\) − \(3\) 2,000,000/.test(plainText), plainText.includes('500,000,000')], [true, true, false]);
+const recNo = tokenValues('doi_chieu_tt', await pkData(true), ds, { date_doi_chieu_tt: D(0) }).v.Bang_Doi_Chieu_Cong_No.h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+C('Chưa cấn trừ: không có dòng tiền cọc cấn trừ, còn = đến hạn − khách trả (702 − 600 = 102)', [/CẤN TRỪ/.test(recNo), /CÒN PHẢI THANH TOÁN = \(1\) − \(2\) 102,000,000/.test(recNo)], [false, true]);
+// Phiếu thu đã có lấy qua "Thêm đợt thanh toán" (số tiền và ngày theo phiếu), kèm cấn cọc cùng đợt
+const loose2 = await api.call('create_payment', { book_id: TH, request_id: rid(), kind: 'thu_khach', date: D(5), fund_id: TM, party_id: K, amount: 1 * M });
+const viaForm = await pay(pk.id, 'thanh_toan', undefined, undefined, { payment_id: loose2.id, offset: 1 * M });
+st = await ledger(pk.id, D(0));
+C('Chọn phiếu đã có: lấy đủ số tiền, ngày nhận theo phiếu, cấn cọc cùng ngày; không tạo phiếu mới',
+  [viaForm.code, viaForm.date, st.paid / M, st.offset / M, st.remaining], [loose2.code, D(5), 601, 101, 0]);
+
 finish('Phương thức thanh toán của đơn hàng');

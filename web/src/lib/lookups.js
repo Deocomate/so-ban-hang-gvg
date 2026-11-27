@@ -69,3 +69,9 @@ export const groupNames = (settings, customers) => [...new Set([...(settings?.cu
 export const booksFor = (books, cust, uid) => (books || []).filter((b) => (!b.cust_groups || b.cust_groups.includes(cust?.kind)) && (!b.user_ids || b.user_ids.includes(uid)));
 // Bảng giá tự chọn khi đổi khách: bảng dành riêng cho nhóm của khách (bảng áp dụng cho mọi nhóm thì để người bán tự chọn)
 export const autoBookFor = (books, cust) => (cust?.kind ? (books || []).find((b) => b.cust_groups?.includes(cust.kind)) || null : null);
+
+// Phiếu thu tiền khách còn phần chưa phân bổ vào đơn nào (phiếu chỉ gắn với khách) — chọn để phân bổ vào đơn, không tạo phiếu thu trùng
+export function useOpenReceipts(customerId, enabled = true) {
+  const q = useQ('payments', [['party_id', 'eq', customerId], ['kind', 'eq', 'thu_khach'], ['voided', 'eq', 'false']], 'pay_date', 1000, enabled && !!customerId);
+  return useMemo(() => (q.data || []).filter((p) => Number(p.unallocated) >= 1), [q.data]);
+}

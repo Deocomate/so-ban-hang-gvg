@@ -43,22 +43,30 @@ export function invoiceMoney(pays, { whole, deliveryId = null }) {
   return { deposits, payments, deposit, paid, total: deposit + paid };
 }
 
+// Tiền vận chuyển của chuyến (ghi riêng trên phiếu giao, cùng cách tính của đơn) đến hạn đủ; tỷ lệ % chỉ áp vào giá trị hàng của chuyến
+// (gồm VAT, đã trừ hàng trả lại). Server dùng cùng quy tắc ở order-progress.js progressAt().
+export function tripFigures(total, ship, ratio = 70) {
+  const value = Number(total) || 0; const fee = Number(ship) || 0; const goods = value - fee;
+  return { value, ship: fee, goods, due: tripDue(goods, ratio) + fee };
+}
+
 // Sổ công nợ của đơn thanh toán theo tiến độ, lũy kế đến hết ngày cutoff (yyyy-mm-dd).
-// invoices: hóa đơn HD (chuyến giao) của đơn — { id, code, delivery_date, total }; pays: dòng v_doc_payments của đơn;
-// adjustments: dòng v_order_adjustments (cấn trừ cọc / quyết toán).
+// invoices: hóa đơn HD (chuyến giao) của đơn — { id, code, delivery_date, total, shipping_fee }; pays: dòng v_doc_payments của đơn
+// (mọi khoản gắn với đơn, kể cả khoản gắn một chuyến; mỗi phiếu thu một dòng); adjustments: dòng v_order_adjustments (cấn trừ cọc / quyết toán).
 export function progressStatement({ ratio = 70, invoices = [], pays = [], adjustments = [], cutoff = '9999-12-31' }) {
   const upTo = (d) => day(d) <= cutoff;
-  const trips = invoices.filter((x) => upTo(x.delivery_date)).map((x) => ({ id: x.id, code: x.code, date: day(x.delivery_date), value: Number(x.total) || 0 }))
-    .sort(byDate).map((x, i) => ({ ...x, no: i + 1, due: tripDue(x.value, ratio) }));
+  const trips = invoices.filter((x) => upTo(x.delivery_date)).map((x) => ({ id: x.id, code: x.code, date: day(x.delivery_date), ...tripFigures(x.total, x.shipping_fee, ratio) }))
+    .sort(byDate).map((x, i) => ({ ...x, no: i + 1 }));
   const adj = (kind) => adjustments.filter((a) => a.kind === kind && upTo(a.adj_date))
     .map((a) => ({ id: a.id, date: day(a.adj_date), amount: Number(a.amount) || 0, note: a.note || '' })).sort(byDate);
   const settlements = adj('quyet_toan'); const offsets = adj('can_tru_coc');
   const inRange = (pays || []).filter((p) => upTo(p.pay_date));
   const payments = receipts(inRange, 'thanh_toan'); const deposits = receipts(inRange, 'coc');
   const delivered = sum(trips, 'value'); const dueTrips = sum(trips, 'due');
+  const goods = sum(trips, 'goods'); const ship = sum(trips, 'ship');
   const settled = sum(settlements, 'amount'); const offset = sum(offsets, 'amount');
   const paid = sum(payments, 'amount'); const deposit = sum(deposits, 'amount');
   const due = dueTrips + settled;
-  return { ratio, cutoff, trips, delivered, dueTrips, settlements, settled, due, payments, paid, offsets, offset, deposits, deposit,
+  return { ratio, cutoff, trips, delivered, goods, ship, dueTrips, settlements, settled, due, payments, paid, offsets, offset, deposits, deposit,
     remaining: due - paid - offset, depositLeft: deposit - offset, notDue: delivered - dueTrips - settled };
 }

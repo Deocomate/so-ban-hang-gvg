@@ -4,12 +4,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp, useQ, useAction } from '../lib/store.jsx';
 import { money, dmy, todayVN } from '../lib/format.js';
-import { useFunds } from '../lib/lookups.js';
+import { useFunds, useOpenReceipts } from '../lib/lookups.js';
 import { Btn, Pill, Field, Input, Select, DateInput, NumInput, Note, Table, Section, ConfirmBtn } from '../components/ui.jsx';
 import { isProgress, payRatio, payTermLabel, invoiceMoney, progressStatement, receipts } from '../lib/pay-term.js';
 import { QUICK_FUND_KEY, readFund } from './Sales.jsx';
 
-const PURPOSES = [{ value: 'coc', label: 'Tiền đặt cọc' }, { value: 'thanh_toan', label: 'Khách chuyển thêm (thanh toán)' }];
+const PURPOSES = [{ value: 'coc', label: 'Tiền đặt cọc' }, { value: 'thanh_toan', label: 'Khách trả thêm (thanh toán)' }];
 
 export function OrderLedger({ order: d, pays }) {
   const { open, can } = useApp();
@@ -23,6 +23,9 @@ export function OrderLedger({ order: d, pays }) {
   const rows = useMemo(() => receipts(pays).map((r) => ({ ...r, key: `${r.payment_id}|${r.purpose}` })), [pays]);
   const st = useMemo(() => (progress ? progressStatement({ ratio: payRatio(d), invoices: invs.data || [], pays: pays || [], adjustments: adjs.data || [], cutoff }) : null),
     [progress, d.pay_ratio, invs.data, pays, adjs.data, cutoff]);
+  // Số dư cọc hiện tại (không theo ngày đang xem) để gợi ý khi cấn trừ cùng đợt thanh toán
+  const stNow = useMemo(() => (progress ? progressStatement({ ratio: payRatio(d), invoices: invs.data || [], pays: pays || [], adjustments: adjs.data || [] }) : null),
+    [progress, d.pay_ratio, invs.data, pays, adjs.data]);
   const single = !progress && (d.kind !== 'dat_hang' || d.delivery_count === 1);
   const m = invoiceMoney(pays, { whole: true });
   // Đơn giao một lần: giá trị hóa đơn (đã trừ hàng trả) − tiền cọc − các đợt thanh toán
@@ -38,18 +41,19 @@ export function OrderLedger({ order: d, pays }) {
         {progress && <Btn small onClick={() => setForm('quyet_toan')}>Lập đợt quyết toán</Btn>}
       </div>}>
         <div className="small muted">{payTermLabel(d)}</div>
-        {form === 'pay' && <PaymentForm order={d} invoices={invs.data || []} onDone={() => setForm(null)} />}
+        {form === 'pay' && <PaymentForm order={d} invoices={invs.data || []} depositLeft={stNow?.depositLeft} onDone={() => setForm(null)} />}
         {(form === 'can_tru_coc' || form === 'quyet_toan') && st && <AdjustForm order={d} kind={form} onDone={() => setForm(null)} />}
         {progress && st ? (
           <>
             <div className="row gap-s"><span className="small">Lũy kế đến hết ngày</span><DateInput value={cutoff} onChange={(v) => v && setCutoff(v)} aria-label="Ngày chốt" /></div>
             <div className="totals">
               <span>Tổng giá trị đơn hàng</span><span className="r">{money(d.order_total)}</span>
-              <span>Giá trị hàng đã giao ({st.trips.length} chuyến)</span><span className="r">{money(st.delivered)}</span>
-              <span>Đến hạn theo các chuyến ({st.ratio}%)</span><span className="r">{money(st.dueTrips)}</span>
+              <span>Tổng giá trị hàng đã giao ({st.trips.length} chuyến)</span><span className="r">{money(st.goods)}</span>
+              {st.ship > 0 && <><span>Tiền vận chuyển</span><span className="r">{money(st.ship)}</span></>}
+              <span>Đến hạn theo các chuyến ({st.ratio}% giá trị hàng{st.ship > 0 ? ' + tiền vận chuyển' : ''})</span><span className="r">{money(st.dueTrips)}</span>
               {st.settled > 0 && <><span>Đến hạn bổ sung khi quyết toán</span><span className="r">{money(st.settled)}</span></>}
               <span className="strong">Tổng số tiền đã đến hạn (1)</span><span className="r strong">{money(st.due)}</span>
-              <span>Khách chuyển thêm sau đặt cọc (2)</span><span className="r">{money(st.paid)}</span>
+              <span>Khách thực trả sau đặt cọc (2)</span><span className="r">{money(st.paid)}</span>
               <span>Tiền cọc đã cấn trừ (3)</span><span className="r">{money(st.offset)}</span>
               {st.remaining >= 0
                 ? <><span className="strong bad">Còn phải thanh toán (1) − (2) − (3)</span><span className="r strong bad">{money(st.remaining)}</span></>
@@ -61,7 +65,7 @@ export function OrderLedger({ order: d, pays }) {
             </Note>
             <Table dense rows={st.trips} empty="Chưa giao chuyến nào đến ngày này" columns={[
               { key: 'n', label: 'Chuyến', render: (t) => <><b>Chuyến {t.no}</b><div className="cell-sub">{t.code} · {dmy(t.date)}</div></> },
-              { key: 'v', label: 'Giá trị thực giao', align: 'right', render: (t) => money(t.value) },
+              { key: 'v', label: 'Giá trị hàng thực giao', align: 'right', render: (t) => <>{money(t.goods)}{t.ship > 0 && <div className="cell-sub">+ vận chuyển {money(t.ship)}</div>}</> },
               { key: 'd', label: `Đến hạn (${st.ratio}%)`, align: 'right', render: (t) => <b>{money(t.due)}</b> },
               { key: 'k', label: 'Chưa đến hạn', align: 'right', render: (t) => <span className="muted">{money(t.value - t.due)}</span> },
             ]} />
@@ -93,34 +97,51 @@ export function OrderLedger({ order: d, pays }) {
   );
 }
 
-// Thêm đợt thanh toán: loại tiền, ngày nhận, số tiền, mã giao dịch, ghi chú, quỹ nhận; chuyến giao tùy chọn (một lần chuyển có thể trả nhiều chuyến)
-function PaymentForm({ order: d, invoices, onDone }) {
+// Thêm đợt thanh toán: loại tiền; khoản thu mới (ngày, số tiền khách trả, mã giao dịch, quỹ) hoặc phiếu thu đã có trong sổ (lấy số tiền và
+// ngày nhận theo phiếu); đơn theo tiến độ có thêm "Tiền cọc cấn trừ đợt này" (trống = 0); chuyến giao tùy chọn (một lần trả có thể cho nhiều chuyến)
+function PaymentForm({ order: d, invoices, depositLeft, onDone }) {
   const funds = useFunds();
   const { run, busy } = useAction();
-  const [f, setF] = useState({ purpose: d.delivery_count === 0 && !(d.paid_net > 0) ? 'coc' : 'thanh_toan', date: todayVN(), amount: null, ref_no: '', note: '', delivery_id: '', fund_id: readFund() });
+  const progress = isProgress(d);
+  const open = useOpenReceipts(d.customer_id);
+  const [f, setF] = useState({ purpose: d.delivery_count === 0 && !(d.paid_net > 0) ? 'coc' : 'thanh_toan', payment_id: '', date: todayVN(), amount: null, offset: null,
+    ref_no: '', note: '', delivery_id: '', fund_id: readFund() });
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
   useEffect(() => { if (funds.data?.length && !funds.data.some((x) => x.id === f.fund_id)) set('fund_id', funds.data[0].id); }, [funds.data]);
+  const pick = open.find((p) => p.id === f.payment_id);
+  const choose = (id) => { const p = open.find((x) => x.id === id); setF((x) => ({ ...x, payment_id: id || '', ...(p ? { amount: p.unallocated, date: p.pay_date } : { date: todayVN() }) })); };
+  const withOffset = progress && f.purpose === 'thanh_toan';
+  const amount = Number(f.amount) || 0; const offset = withOffset ? Number(f.offset) || 0 : 0;
   const save = async () => {
-    try { localStorage.setItem(QUICK_FUND_KEY, f.fund_id); } catch (e) { /* bỏ qua */ }
-    const r = await run('add_order_payment', { order_id: d.id, ...f, delivery_id: f.delivery_id || null },
-      (x) => `Đã ghi ${f.purpose === 'coc' ? 'tiền đặt cọc' : 'đợt thanh toán'} ${money(f.amount)} đ – phiếu ${x.code}`);
+    if (!pick) try { localStorage.setItem(QUICK_FUND_KEY, f.fund_id); } catch (e) { /* bỏ qua */ }
+    const body = { order_id: d.id, purpose: f.purpose, delivery_id: f.delivery_id || null, note: f.note, offset: offset || null,
+      ...(pick ? { payment_id: pick.id, amount } : { date: f.date, amount, ref_no: f.ref_no, fund_id: f.fund_id }) };
+    const r = await run('add_order_payment', body, (x) => [amount ? `Đã ghi ${f.purpose === 'coc' ? 'tiền đặt cọc' : 'khoản khách trả'} ${money(amount)} đ – phiếu ${x.code}` : '',
+      offset ? `cấn trừ cọc ${money(offset)} đ` : ''].filter(Boolean).join(', '));
     if (r) onDone();
   };
+  const ok = pick ? amount > 0 && amount <= pick.unallocated : (amount > 0 || offset > 0) && (!amount || f.fund_id);
   return (
     <div className="card stack-s">
       <b>Thêm đợt thanh toán</b>
       <div className="grid">
         <Field label="Loại tiền"><Select value={f.purpose} onChange={(v) => set('purpose', v || 'thanh_toan')} options={PURPOSES} aria-label="Loại tiền" /></Field>
-        <Field label="Ngày nhận tiền"><DateInput value={f.date} max={todayVN()} onChange={(v) => v && set('date', v)} aria-label="Ngày nhận tiền" /></Field>
-        <Field label="Số tiền" required><NumInput value={f.amount} onChange={(v) => set('amount', v)} min={0} aria-label="Số tiền" autoFocus /></Field>
-        <Field label="Mã giao dịch" hint="Mỗi giao dịch chỉ ghi nhận một lần"><Input value={f.ref_no} onChange={(v) => set('ref_no', v)} placeholder="Mã giao dịch ngân hàng (nếu có)" aria-label="Mã giao dịch" /></Field>
-        <Field label="Thu vào quỹ"><Select value={f.fund_id} onChange={(v) => set('fund_id', v)} options={(funds.data || []).map((x) => ({ value: x.id, label: x.name }))} aria-label="Thu vào quỹ" /></Field>
+        {open.length > 0 && <Field label="Lấy từ phiếu thu đã có" hint="Phiếu chỉ gắn với khách, chưa phân bổ vào đơn nào"><Select value={f.payment_id} onChange={choose} aria-label="Phiếu thu đã có"
+          options={[{ value: '', label: 'Khoản thu mới' }, ...open.map((p) => ({ value: p.id, label: `${p.code} · ${dmy(p.pay_date)} · còn ${money(p.unallocated)} đ` }))]} /></Field>}
+        <Field label="Ngày nhận tiền"><DateInput value={f.date} max={todayVN()} disabled={!!pick} onChange={(v) => v && set('date', v)} aria-label="Ngày nhận tiền" /></Field>
+        <Field label="Số tiền khách trả" required={!withOffset} hint={pick ? `Tối đa ${money(pick.unallocated)} đ chưa phân bổ của phiếu ${pick.code}` : 'Tiền thực nhận thêm trong đợt'}>
+          <NumInput value={f.amount} onChange={(v) => set('amount', v)} min={0} max={pick ? pick.unallocated : undefined} aria-label="Số tiền khách trả" autoFocus /></Field>
+        {withOffset && <Field label="Tiền cọc cấn trừ đợt này" hint={`Để trống = 0. Số dư cọc ${money(Math.max(depositLeft || 0, 0))} đ`}>
+          <NumInput value={f.offset} onChange={(v) => set('offset', v)} min={0} placeholder="0" aria-label="Tiền cọc cấn trừ đợt này" /></Field>}
+        {!pick && <Field label="Mã giao dịch" hint="Mỗi giao dịch chỉ ghi nhận một lần"><Input value={f.ref_no} onChange={(v) => set('ref_no', v)} placeholder="Mã giao dịch ngân hàng (nếu có)" aria-label="Mã giao dịch" /></Field>}
+        {!pick && <Field label="Thu vào quỹ"><Select value={f.fund_id} onChange={(v) => set('fund_id', v)} options={(funds.data || []).map((x) => ({ value: x.id, label: x.name }))} aria-label="Thu vào quỹ" /></Field>}
         {invoices.length > 0 && <Field label="Chuyến giao (tùy chọn)"><Select value={f.delivery_id} onChange={(v) => set('delivery_id', v || '')}
           options={[{ value: '', label: 'Theo đơn hàng – không gắn chuyến' }, ...invoices.map((x, i) => ({ value: x.id, label: `Chuyến ${i + 1} · ${x.code} · ${dmy(x.delivery_date)}` }))]} aria-label="Chuyến giao" /></Field>}
         <Field label="Ghi chú" wide><Input value={f.note} onChange={(v) => set('note', v)} placeholder="Ghi chú (nếu có)" aria-label="Ghi chú" /></Field>
       </div>
+      {offset > 0 && <div className="small">Công nợ giảm <b>{money(amount + offset)} đ</b> = khách trả {money(amount)} đ + tiền cọc cấn trừ {money(offset)} đ. Chỉ {money(amount)} đ là khoản thu mới.</div>}
       <div className="row gap-s">
-        <Btn kind="primary" busy={busy} disabled={!(Number(f.amount) > 0) || !f.fund_id} onClick={save}>Lưu đợt thanh toán</Btn>
+        <Btn kind="primary" busy={busy} disabled={!ok} onClick={save}>{pick ? 'Phân bổ phiếu vào đơn' : 'Lưu đợt thanh toán'}</Btn>
         <Btn onClick={onDone}>Thôi</Btn>
       </div>
     </div>

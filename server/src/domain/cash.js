@@ -163,7 +163,7 @@ export function create_payment(p) {
 // Quỹ, công nợ, tiền trả trước tính lại như khi hủy phiếu rồi lập phiếu mới (cùng kiểm tra), lịch sử sửa lưu vào phiếu.
 const PAY_FIELDS = [['pay_date', 'Ngày'], ['amount', 'Số tiền', vnd], ['fee', 'Phí sàn', vnd], ['fund_id', 'Quỹ'], ['to_fund_id', 'Sang quỹ'], ['party_id', 'Đối tượng'],
   ['method', 'Hình thức'], ['note', 'Nội dung'], ['ref_no', 'Mã giao dịch']];
-function paySnapshot(id) {
+export function paySnapshot(id) {
   const x = one(`select p.*, f.name as fund_name, tf.name as to_fund_name, coalesce(c.name, s.name) as party_name from payments p join funds f on f.id = p.fund_id
     left join funds tf on tf.id = p.to_fund_id left join customers c on p.party_type = 'kh' and c.id = p.party_id
     left join suppliers s on p.party_type = 'ncc' and s.id = p.party_id where p.id = ?`, id);
@@ -198,15 +198,20 @@ export function update_payment(p) {
   }
   const before = paySnapshot(pay.id);
   doPayment(b, { ...p, kind: pay.kind, date: d, fund_id: p.fund_id ?? pay.fund_id }, pay);
-  const after = paySnapshot(pay.id);
-  const changes = payChanges(before, after);
+  const changes = logPayEdit(pay, before, p.reason);
+  return { id: pay.id, code: pay.code, changes };
+}
+
+// Ghi lịch sử sửa phiếu: so ảnh chụp trước khi sửa (paySnapshot) với hiện tại
+export function logPayEdit(pay, before, reason) {
+  const changes = payChanges(before, paySnapshot(pay.id));
   if (changes.length) {
-    const log = json(pay.edit_log, []);
-    const by = one(`select coalesce(m.display_name, u.name, u.email) as n from users u left join book_members m on m.user_id = u.id and m.book_id = ? where u.id = ?`, b, ctx.uid)?.n;
-    log.push({ at: nowIso(), by: ctx.uid, by_name: by || null, changes, reason: trimNz(p.reason) });
+    const log = json(one(`select edit_log from payments where id = ?`, pay.id)?.edit_log, []);
+    const by = one(`select coalesce(m.display_name, u.name, u.email) as n from users u left join book_members m on m.user_id = u.id and m.book_id = ? where u.id = ?`, pay.book_id, ctx.uid)?.n;
+    log.push({ at: nowIso(), by: ctx.uid, by_name: by || null, changes, reason: trimNz(reason) });
     run(`update payments set edit_log = ? where id = ?`, JSON.stringify(log), pay.id);
   }
-  return { id: pay.id, code: pay.code, changes };
+  return changes;
 }
 
 export function void_payment(p) {

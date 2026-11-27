@@ -403,38 +403,51 @@ function payTable(data, N, info = {}) {
 }
 
 // Biên bản đối chiếu công nợ của đơn thanh toán theo tiến độ giao hàng, lũy kế đến hết ngày chốt (ngày trên biên bản):
-// từng chuyến đã giao với giá trị thực giao và số tiền đến hạn (tỷ lệ % của chuyến), khoản đến hạn bổ sung khi quyết toán,
-// các đợt khách đã thanh toán, tiền cọc cấn trừ, còn phải thanh toán = (1) − (2) − (3) hoặc số khách đã thanh toán dư.
-// Số dư tiền cọc chưa sử dụng và giá trị hàng đã giao chưa đến hạn chỉ xem trong sổ nội bộ, không bao giờ in ra đây.
+// bảng chi tiết hàng giao theo từng hóa đơn (chuyến), rồi phần tổng hợp: tổng giá trị hàng đã giao, tiền vận chuyển (dòng riêng), số tiền đến hạn
+// (tỷ lệ % giá trị hàng từng chuyến + tiền vận chuyển), khoản đến hạn bổ sung khi quyết toán, từng khoản khách thực trả (ngày nhận, mã phiếu thu,
+// số tiền), tiền cọc cấn trừ (chỉ khi đã nhập), còn phải thanh toán = (1) − (2) − (3) hoặc số khách đã thanh toán dư.
+// Tiền cọc đã nhận chỉ vào phép trừ qua khoản cấn trừ. Số dư cọc chưa sử dụng và giá trị hàng đã giao chưa đến hạn chỉ xem trong sổ nội bộ,
+// không bao giờ in ra đây.
 function progressTable(data, N, info = {}) {
   const base = data.payBase;
   const ratio = Number(info.pay_ratio) > 0 && Number(info.pay_ratio) <= 100 ? Number(info.pay_ratio) : base.ratio;
   const cutoff = String(info.date_doi_chieu_tt || '').slice(0, 10) || '9999-12-31';
   const st = progressStatement({ ratio, invoices: base.invoices, pays: base.pays, adjustments: base.adjustments, cutoff });
-  const span = (text, o = {}) => [{ text, colSpan: 5, b: true, ...o }, null, null, null, null];
-  const sumRow = (label, val, o = {}) => [{ text: label, colSpan: 4, b: true, align: 'right', ...o }, null, null, null, { text: N(val), align: 'right', b: true }];
-  const body = [span(`I. HÀNG ĐÃ GIAO VÀ SỐ TIỀN ĐẾN HẠN (${fmtNum(ratio)}% GIÁ TRỊ THỰC GIAO CỦA TỪNG CHUYẾN)`)];
-  for (const t of st.trips) body.push([{ text: String(t.no), align: 'center' }, { text: dmy(t.date), align: 'center' }, { text: `Chuyến ${t.no}`, sub: t.code },
-    { text: N(t.value), align: 'right' }, { text: N(t.due), align: 'right' }]);
+  const W = 8;
+  const span = (text, o = {}) => [{ text, colSpan: W, b: true, ...o }, ...Array(W - 1).fill(null)];
+  const sumRow = (label, val, o = {}) => [{ text: '', colSpan: 3 }, null, null, { text: label, colSpan: 4, b: true, ...o }, null, null, null, { text: N(val), align: 'right', b: true }];
+  const payRow = (left, label, val) => [{ text: '', colSpan: 2 }, null, { text: left, align: 'center' }, { text: label, colSpan: 4 }, null, null, null, { text: N(val), align: 'right' }];
+  const body = [];
+  for (const t of st.trips) {
+    const ls = (data.allDl || []).filter((l) => l.delivery_id === t.id);
+    const first = { no: { text: String(t.no), align: 'center' }, day: { text: dmy(t.date), sub: `Chuyến ${t.no} · ${t.code}`, align: 'center' },
+      sum: { text: N(t.goods), sub: t.ship ? `+ vận chuyển ${N(t.ship)}` : undefined, align: 'right', b: true } };
+    if (!ls.length) body.push([first.no, first.day, { text: '' }, { text: '' }, { text: '' }, { text: '' }, { text: '' }, first.sum]);
+    ls.forEach((l, j) => body.push([j ? { text: '' } : first.no, j ? { text: '' } : first.day,
+      { text: l.product_name }, { text: N(l.qty), align: 'center' }, { text: l.unit, align: 'center' }, { text: N(l.unit_price_net), align: 'right' }, { text: N(l.revenue), align: 'right' },
+      j ? { text: '' } : first.sum]));
+  }
   if (!st.trips.length) body.push(span('Chưa giao chuyến nào đến ngày chốt', { b: false, i: true, align: 'center' }));
-  body.push([{ text: 'Tổng giá trị hàng đã giao / tổng số tiền đến hạn', colSpan: 3, b: true, align: 'right' }, null, null,
-    { text: N(st.delivered), align: 'right', b: true }, { text: N(st.dueTrips), align: 'right', b: true }]);
-  for (const x of st.settlements) body.push([{ text: '' }, { text: dmy(x.date), align: 'center' }, { text: 'Khoản đến hạn bổ sung khi quyết toán', sub: x.note || undefined }, { text: '' },
-    { text: N(x.amount), align: 'right' }]);
-  body.push(sumRow('TỔNG SỐ TIỀN ĐÃ ĐẾN HẠN (1)', st.due));
-  body.push(span('II. CÁC ĐỢT KHÁCH ĐÃ THANH TOÁN'));
-  st.payments.forEach((p, i) => body.push([{ text: String(i + 1), align: 'center' }, { text: dmy(p.date), align: 'center' },
-    { text: p.amount < 0 ? 'Hoàn tiền' : 'Thanh toán', sub: [p.code, p.ref_no && `Mã giao dịch ${p.ref_no}`].filter(Boolean).join(' · ') || undefined }, { text: '' },
-    { text: N(p.amount), align: 'right' }]));
-  if (!st.payments.length) body.push(span('Chưa có đợt thanh toán nào đến ngày chốt', { b: false, i: true, align: 'center' }));
-  body.push(sumRow('TỔNG ĐÃ THANH TOÁN (2)', st.paid));
-  if (st.offset) body.push(sumRow('TIỀN CỌC CẤN TRỪ (3)', st.offset));
+  const vat = Number(data.o?.vat_rate) > 0;
+  body.push(sumRow(`TỔNG GIÁ TRỊ HÀNG ĐÃ GIAO${vat ? ' (GỒM VAT)' : ''}`, st.goods));
+  if (st.ship) body.push(sumRow('TIỀN VẬN CHUYỂN', st.ship));
+  body.push(sumRow(`SỐ TIỀN ĐẾN HẠN THEO TIẾN ĐỘ (${fmtNum(ratio)}% GIÁ TRỊ HÀNG${st.ship ? ' + TIỀN VẬN CHUYỂN' : ''})`, st.dueTrips));
+  for (const x of st.settlements) body.push(payRow(dmy(x.date), `Khoản đến hạn bổ sung khi quyết toán${x.note ? ` – ${x.note}` : ''}`, x.amount));
+  body.push(sumRow('TỔNG SỐ TIỀN ĐẾN HẠN (1)', st.due));
+  body.push(sumRow('TỔNG TIỀN KHÁCH ĐÃ THANH TOÁN (2)', st.paid));
+  for (const p of st.payments) body.push(payRow(dmy(p.date), [p.amount < 0 ? `Hoàn tiền ${p.code}` : p.code, p.ref_no && `mã giao dịch ${p.ref_no}`].filter(Boolean).join(' · '), p.amount));
+  if (!st.payments.length) body.push(payRow('', 'Chưa có khoản khách thanh toán đến ngày chốt', 0));
+  if (st.offset) {
+    body.push(sumRow('TIỀN CỌC CẤN TRỪ (3)', st.offset));
+    if (st.offsets.length > 1) for (const x of st.offsets) body.push(payRow(dmy(x.date), `Tiền cọc cấn trừ${x.note ? ` – ${x.note}` : ''}`, x.amount));
+  }
   const over = st.remaining < 0; const amount = Math.abs(st.remaining);
   body.push(sumRow(over ? 'KHÁCH ĐÃ THANH TOÁN DƯ' : `CÒN PHẢI THANH TOÁN = (1) − (2)${st.offset ? ' − (3)' : ''}`, amount));
-  body.push([{ text: `Bằng chữ: ${moneyWords(amount, false)}.`, colSpan: 5, align: 'center', b: true, i: true }, null, null, null, null]);
+  body.push(span(`Bằng chữ: ${moneyWords(amount, false)}.`, { align: 'center', i: true }));
   const headInfo = `<p style="font-size:11pt; margin-bottom:4pt">Mã đơn hàng: <strong>${esc(base.order_code)}</strong> · Tổng giá trị đơn hàng: <strong>${N(base.total)} đồng</strong>`
     + ` · Ngày chốt: <strong>${cutoff === '9999-12-31' ? '' : dmy(cutoff)}</strong></p>`;
-  return { html: headInfo + htmlTable(['STT', 'NGÀY', 'NỘI DUNG', 'GIÁ TRỊ THỰC GIAO', 'SỐ TIỀN'], body, [34, 72, '*', 100, 100], 10, { headBg: '#d9d9d9' }), due: over ? 0 : amount };
+  const head = ['STT', 'NGÀY / HÓA ĐƠN', 'TÊN HÀNG', 'SỐ LƯỢNG', 'ĐVT', 'ĐƠN GIÁ', 'SỐ TIỀN', 'GIÁ TRỊ HÀNG THEO HÓA ĐƠN'];
+  return { html: headInfo + htmlTable(head, body, [34, 72, '*', 58, 38, 50, 80, 84], 10, { headBg: '#d9d9d9' }), due: over ? 0 : amount };
 }
 function quoteTable(q, N) {
   const b = q.body || { groups: [] }; const mosaic = q.template === 'mosaic'; const showNorm = !mosaic && b.show_norm;
