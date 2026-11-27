@@ -352,41 +352,43 @@ export const groupLabel = (settings, name) => (isCompanyGroup(settings, name) &&
 export const isCompany = (c, settings) => isCompanyGroup(settings, c?.kind) || !!String(custExtra(c).tax_code || '').trim();
 
 // Các ô sửa được cho từng loại chứng từ
+// Ghi chú của đơn hàng: in trên mọi chứng từ của đơn, trừ phiếu đóng hàng (phiếu cho kho)
+const NOTE = { key: 'note', label: 'Ghi chú', wide: true };
 export function editableFields(type, data) {
   const dateKey = type === 'phieu_thu' ? 'doc_date' : `date_${type}`;
   const D = { key: dateKey, label: 'Ngày trên chứng từ', kind: 'date' };
   if (type === 'hoa_don') return [D, { key: 'recv_phone', label: 'SĐT nhận hàng' }, { key: 'recv_address', label: 'Địa chỉ nhận hàng', wide: true },
-    { key: 'box_total', label: 'Tổng số hộp', kind: 'num' }, { key: 'old_debt', label: 'Nợ cũ', kind: 'money' }];
+    { key: 'box_total', label: 'Tổng số hộp', kind: 'num' }, { key: 'old_debt', label: 'Nợ cũ', kind: 'money' }, NOTE];
   if (type === 'hd_van_chuyen') return [D, { key: 'handover_rep', label: 'Đại diện bên giao' }, { key: 'handover_phone', label: 'SĐT đại diện bên giao' },
     { key: 'carrier_party', label: 'Bên B (đơn vị / chủ xe)' }, { key: 'carrier_address', label: 'Địa chỉ bên B', wide: true }, { key: 'carrier_phone', label: 'SĐT bên B' },
     { key: 'driver_name', label: 'Lái xe', kind: 'driver' }, { key: 'driver_phone', label: 'SĐT lái xe' }, { key: 'id_no', label: 'CMT / CCCD lái xe' }, { key: 'vehicle', label: 'Biển số xe' },
     { key: 'recv_address', label: 'Địa chỉ giao hàng', wide: true }, { key: 'recv_name', label: 'Người nhận' }, { key: 'recv_phone', label: 'SĐT nhận hàng' },
     { key: 'box_total', label: 'Tổng số hộp', kind: 'num' }, { key: 'freight_collect', label: 'Dòng ghi dưới bảng hàng (thu cước)', wide: true },
     { key: 'transit_from', label: 'Vận chuyển từ ngày', kind: 'date' }, { key: 'transit_to', label: 'Đến ngày (ngày giao hàng; trống = cộng số ngày tối đa)', kind: 'date' },
-    { key: 'transit_days', label: 'Số ngày vận chuyển tối đa' }, { key: 'freight_note', label: 'Cân nặng và giá cước', wide: true }, { key: 'pay_at', label: 'Thanh toán cước phí tại' }];
+    { key: 'transit_days', label: 'Số ngày vận chuyển tối đa' }, { key: 'freight_note', label: 'Cân nặng và giá cước', wide: true }, { key: 'pay_at', label: 'Thanh toán cước phí tại' }, NOTE];
   // Bảng đối chiếu công nợ của đơn đặt hàng: chọn hình thức thanh toán ngay trên hộp in (trống = theo đơn hàng)
   if (type === 'doi_chieu_tt' && data.payBase) {
     const own = data.payBase.term === 'don_lon' ? `theo tiến độ ${data.payBase.ratio}%` : 'trên hóa đơn';
     return [{ ...D, label: 'Ngày chốt (lũy kế đến hết ngày này)' }, { key: 'pay_term', label: 'Phương thức thanh toán', kind: 'select', options: [{ value: '', label: `Theo đơn hàng (${own})` },
       { value: 'mac_dinh', label: 'Thanh toán trên hóa đơn – bảng tổng hợp' }, { value: 'don_lon', label: 'Thanh toán theo tiến độ giao hàng' }] },
-      { key: 'pay_ratio', label: 'Theo tiến độ: mỗi chuyến đến hạn (%)', kind: 'num', placeholder: String(data.payBase.ratio) }];
+      { key: 'pay_ratio', label: 'Theo tiến độ: mỗi chuyến đến hạn (%)', kind: 'num', placeholder: String(data.payBase.ratio) }, NOTE];
   }
-  if (data.kind === 'contract' || type === 'bao_gia' || RECONCILE.includes(type)) return type === 'bao_gia' ? [] : [D];
-  if (type === 'don_dat_hang') return [D, { key: 'recv_phone', label: 'SĐT nhận hàng' }, { key: 'recv_address', label: 'Địa chỉ nhận hàng', wide: true }, { key: 'note', label: 'Ghi chú', wide: true }];
+  if (data.kind === 'contract' || type === 'bao_gia' || RECONCILE.includes(type)) return type === 'bao_gia' ? [] : data.o ? [D, NOTE] : [D];
+  if (type === 'don_dat_hang') return [D, { key: 'recv_phone', label: 'SĐT nhận hàng' }, { key: 'recv_address', label: 'Địa chỉ nhận hàng', wide: true }, NOTE];
   if (type === 'bien_ban') return [D, { key: 'place', label: 'Nơi lập biên bản', wide: true }, { key: 'handover_rep', label: 'Đại diện bên giao' },
     { key: 'driver_name', label: 'Bên vận chuyển / lái xe', kind: 'driver' }, { key: 'driver_phone', label: 'SĐT lái xe' }, { key: 'recv_party', label: 'Bên nhận hàng', wide: true },
     { key: 'recv_address', label: 'Địa chỉ giao hàng', wide: true }, { key: 'recv_phone', label: 'SĐT nhận hàng' }, { key: 'recv_name', label: 'Người nhận hàng' },
-    { key: 'goods_condition', label: 'Tình trạng hàng hóa', wide: true }, { key: 'box_total', label: 'Tổng số hộp', kind: 'num' }];
+    { key: 'goods_condition', label: 'Tình trạng hàng hóa', wide: true }, { key: 'box_total', label: 'Tổng số hộp', kind: 'num' }, NOTE];
   if (type === 'yeu_cau_vat') return [D, { key: 'vat_unit', label: 'Tên đơn vị mua hàng', wide: true }, { key: 'vat_tax_code', label: 'Mã số thuế' },
     { key: 'vat_buyer', label: 'Họ tên người mua hàng' }, { key: 'vat_address', label: 'Địa chỉ xuất hóa đơn', wide: true }, { key: 'vat_email', label: 'Email nhận hóa đơn' },
     { key: 'vat_pay_method', label: 'Hình thức thanh toán' }, { key: 'vat_bank', label: 'Số tài khoản bên mua' }, { key: 'vat_rate', label: 'Thuế suất GTGT (%)', kind: 'num' },
-    { key: 'vat_note', label: 'Ghi chú cho kế toán', wide: true }];
+    { ...NOTE, label: 'Ghi chú đơn hàng' }, { key: 'vat_note', label: 'Ghi chú cho kế toán', wide: true }];
   if (type === 'cn_xuat_xuong') return [D, { key: 'cert_buyer', label: 'Đơn vị mua hàng', wide: true }, { key: 'cert_address', label: 'Địa chỉ đơn vị mua', wide: true },
-    { key: 'cert_project', label: 'Dự án', wide: true }, { key: 'cert_site', label: 'Địa điểm', wide: true }, { key: 'cert_result', label: 'Kết luận', wide: true }];
+    { key: 'cert_project', label: 'Dự án', wide: true }, { key: 'cert_site', label: 'Địa điểm', wide: true }, { key: 'cert_result', label: 'Kết luận', wide: true }, NOTE];
   // Phiếu đóng hàng: cho kho soạn và đóng hàng trước khi giao
   if (type === 'phieu_dong_hang') return [{ ...D, label: 'Ngày đóng hàng' }, { key: 'recv_party', label: 'Khách hàng', wide: true }, { key: 'box_total', label: 'Tổng số hộp', kind: 'num' }];
   if (type === 'phieu_xuat_kho') return [D, { key: 'recv_name', label: 'Người nhận hàng' }, { key: 'recv_address', label: 'Địa chỉ (bộ phận)', wide: true },
-    { key: 'place', label: 'Xuất tại kho (ngăn lô)' }, { key: 'attach', label: 'Số chứng từ gốc kèm theo' }];
+    { key: 'place', label: 'Xuất tại kho (ngăn lô)' }, { key: 'attach', label: 'Số chứng từ gốc kèm theo' }, NOTE];
   return [D, { key: 'payer_name', label: data.p?.direction === 'chi' ? 'Người nhận tiền' : 'Người nộp tiền' }, { key: 'payer_address', label: 'Địa chỉ', wide: true },
     { key: 'reason', label: data.p?.direction === 'chi' ? 'Lý do chi' : 'Lý do nộp', wide: true }, { key: 'attach', label: 'Kèm theo (chứng từ gốc)' }];
 }
@@ -395,7 +397,8 @@ export function editableFields(type, data) {
 export function defaults(type, data, ds) {
   const prof = profileFor(ds, type);
   if (data.kind === 'quote') return { profile_bao_gia: data.q.profile_id || undefined };
-  if (data.kind === 'contract' || RECONCILE.includes(type)) return { [`date_${type}`]: new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10), [`profile_${type}`]: data.k?.profile_id || undefined };
+  if (data.kind === 'contract' || RECONCILE.includes(type)) return { [`date_${type}`]: new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10), [`profile_${type}`]: data.k?.profile_id || undefined,
+    ...(data.o ? { note: data.o.note || '' } : {}) };
   if (data.kind === 'payment') {
     const p = data.p; const pa = data.party || {};
     const allocs = (p.allocations || []).map((a) => a.doc_code).filter(Boolean);

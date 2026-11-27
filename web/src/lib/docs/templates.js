@@ -128,6 +128,7 @@ const BUILDERS = {
         [C('{STT}'), L('{Ten_Hang}'), C('{Don_Vi_Tinh}'), C('{So_Luong}'), L('{Ghi_Chu_Hang}')],
       ], { size: 11.5 })
       + P(B('II. Kết luận:'), `${s}; margin-top:10pt`) + P('{Ket_Luan_Xuat_Xuong}', `${s}; margin-left:14pt`)
+      + P(`${B('Ghi chú:')} {Ghi_Chu}`, `${s}; margin-top:6pt`)
       + sign([{ title: 'Bộ phận quản lý chất lượng' }, { title: 'Giám đốc', name: '{Nguoi_Dai_Dien}' }], { size: 12, space: 4, mt: 14 });
   },
   hoa_don(ds) {
@@ -150,6 +151,7 @@ const BUILDERS = {
         sumRow('Tiền vận chuyển', '{Phi_Van_Chuyen}'), sumRow('Hàng trả lại', '{Hang_Tra_Lai}'), sumRow('Tổng giá trị hóa đơn', '{Tong_Thanh_Toan}'),
         sumRow('Tiền cọc đã nhận', '{Tien_Coc_Da_Nhan}'), sumRow('{Nhan_Dot_Thanh_Toan}', '{Tien_Dot_Thanh_Toan}'), sumRow('Còn phải thanh toán', '{Con_Thanh_Toan}', true),
         [{ h: `${B(I('Bằng chữ:'))}&nbsp; ${I('{Con_Thanh_Toan_Bang_Chu}')}`, span: 6 }],
+        [{ h: B(I('Ghi chú: {Ghi_Chu}')), span: 6 }],
       ], { size: 9.5 })
       + noteHtml + sign([{ title: 'Người mua hàng' }, { title: 'Người bán hàng' }], { size: 9.5, space: 2, mt: 10 });
   },
@@ -190,6 +192,7 @@ const BUILDERS = {
       + P(B('Địa chỉ giao hàng: {Dia_Chi_Nhan_Hang}'), 'font-size:11pt; margin-top:6pt')
       + P(B('SĐT nhận hàng: {SDT_Kem_Nguoi_Nhan}'), 'font-size:11pt; margin-top:4pt')
       + P('Tình trạng hàng hóa: {Tinh_Trang_Hang}', 'font-size:11pt; margin-top:4pt')
+      + P(`${B('Ghi chú:')} {Ghi_Chu}`, 'font-size:11pt; margin-top:4pt')
       + lines(String(textOf(ds, 'bien_ban', 'handover_closing') || '').split('\n').filter(Boolean).join('\n'), 'font-size:11pt; margin-top:4pt; line-height:1.35')
       + sign([{ title: 'ĐẠI DIỆN BÊN GIAO', name: '{Dai_Dien_Ben_Giao}' }, { title: 'LÁI XE', name: '{Lai_Xe}' }, { title: 'ĐẠI DIỆN BÊN NHẬN' }], { size: 11, space: 4, mt: 24 });
   },
@@ -227,6 +230,7 @@ const BUILDERS = {
         sumRow('Tổng tiền thanh toán:', '{Tong_Tien_Thanh_Toan_VAT}', true),
         [{ h: `Số tiền viết bằng chữ: ${B(I('{Tong_Tien_VAT_Bang_Chu}'))}`, span: 6 }],
       ], { size: 10 })
+      + P(`${B('Ghi chú đơn hàng:')} {Ghi_Chu}`, 'font-size:10.5pt; margin-top:6pt')
       + P(`${B('Ghi chú:')} {Ghi_Chu_Xuat_HD}`, 'font-size:10.5pt; margin-top:6pt')
       + sign([{ title: 'NGƯỜI ĐỀ NGHỊ', note: '(Ký, ghi rõ họ tên)' }, { title: 'KẾ TOÁN', note: '(Ký, ghi rõ họ tên)' }], { size: 10.5, space: 4, mt: 14 })
       + P(I('Phần kế toán ghi sau khi xuất: Hóa đơn số .................... Ký hiệu .................... Ngày ...../...../.........'), 'font-size:10pt; margin-top:14pt');
@@ -252,6 +256,7 @@ const BUILDERS = {
       + (showPrice ? P('- Tổng số tiền (viết bằng chữ): {Tong_Tien_Hang_Bang_Chu}', 'font-size:11pt; margin-top:8pt') : '')
       + P('- Tổng trọng lượng: {Tong_Trong_Luong}{Ghi_Chu_Trong_Luong}', `font-size:11pt; margin-top:${showPrice ? 3 : 8}pt`)
       + P('- Số chứng từ gốc kèm theo: {Chung_Tu_Kem_Theo}', 'font-size:11pt; margin-top:3pt')
+      + P('- Ghi chú: {Ghi_Chu}', 'font-size:11pt; margin-top:3pt')
       + P(I('{Ngay_Thang_Nam}'), `${right}; font-size:11pt; margin-top:10pt`)
       + sign([{ title: 'NGƯỜI LẬP BIỂU', note: '(Ký, họ tên)' }, { title: 'NGƯỜI NHẬN HÀNG', note: '(Ký, họ tên)' }, { title: 'THỦ KHO', note: '(Ký, họ tên)' },
         { title: '{Chuc_Danh_Dai_Dien_In_Hoa}', note: '(Ký, họ tên, đóng dấu)', name: '{Nguoi_Dai_Dien}' }], { size: 9.5, space: 4, mt: 6 });
@@ -298,6 +303,7 @@ const BUILDERS = {
       + P('{Dieu_Khoan_Van_Chuyen}')
       + P('Cân nặng và giá cước: {Can_Nang_Gia_Cuoc}', 'font-size:10.5pt; margin-top:3pt; line-height:1.35')
       + P('Thanh toán cước phí tại: {Thanh_Toan_Cuoc_Tai}', 'font-size:10.5pt; margin-top:3pt; line-height:1.35')
+      + P(`${B('Ghi chú:')} {Ghi_Chu}`, 'font-size:10.5pt; margin-top:3pt; line-height:1.35')
       + P('{Dieu_Khoan_Cuoi_Van_Chuyen}')
       + sign([{ title: 'ĐẠI DIỆN BÊN A', name: '{Dai_Dien_Ben_Giao}' }, { title: 'LÁI XE', name: '{Lai_Xe}' }, { title: 'ĐẠI DIỆN BÊN B' }], { size: 11, space: 4, mt: 6 });
   },
@@ -342,7 +348,7 @@ function reconcileTpl(title, tableTok, after, { titleSize = 15, underline = fals
     + P(`<span style="font-size:${titleSize}pt">${B(title)}</span>`, `${center}; margin-top:16pt`)
     + P(B('{Can_Cu_Doi_Chieu}'), `${center}; font-size:11pt; margin-top:2pt; margin-bottom:10pt`)
     + P(B('KHÁCH HÀNG: {Khach_Hang_In_Hoa}'), s) + P('Địa chỉ: {Dia_Chi_Khach_Hang}', s) + P('Số điện thoại: {So_Dien_Thoai}', `${s}; margin-bottom:10pt`)
-    + P(tableTok) + after
+    + P(tableTok) + P(`${B('Ghi chú:')} {Ghi_Chu}`, 'font-size:11pt; margin-top:6pt') + after
     + P(B('Hà Nội, {Ngay_Thang_Nam_Thuong}'), `${center}; font-size:11pt; margin-top:8pt`)
     + sign([{ title: 'Đại diện bên mua' }, { title: 'Đại diện bên bán' }], { size: 11, space: 5, mt: 4 });
 }
@@ -361,7 +367,7 @@ export const SUGGESTED = {
       + '<hr>'
       + table(['*', 70], [sum('Tổng tiền hàng', '{Tong_Tien_Hang}', true), sum('Chiết khấu', '{Chiet_Khau}'), sum('{Ten_VAT}', '{Tien_VAT}'), sum('Phí vận chuyển', '{Phi_Van_Chuyen}'),
         sum('Hàng trả lại', '{Hang_Tra_Lai}'), sum('Nợ cũ', '{No_Cu}'), sum('Tổng giá trị hóa đơn', '{Tong_Thanh_Toan}', true), sum('Tiền cọc đã nhận', '{Tien_Coc_Da_Nhan}'), sum('{Nhan_Dot_Thanh_Toan}', '{Tien_Dot_Thanh_Toan}'), sum('Còn phải thanh toán', '{Con_Thanh_Toan}', true)], { border: false, size: 8.5 })
-      + P(I('({Con_Thanh_Toan_Bang_Chu})'), `${s}; margin-top:2pt`) + P('STK: {So_Tai_Khoan_Don_Vi}', `${s}; margin-top:4pt`) + P(I('Cảm ơn quý khách!'), `${center}; ${s}; margin-top:6pt`);
+      + P(I('({Con_Thanh_Toan_Bang_Chu})'), `${s}; margin-top:2pt`) + P('Ghi chú: {Ghi_Chu}', `${s}; margin-top:2pt`) + P('STK: {So_Tai_Khoan_Don_Vi}', `${s}; margin-top:4pt`) + P(I('Cảm ơn quý khách!'), `${center}; ${s}; margin-top:6pt`);
   } }],
   phieu_thu: [{ id: 'k80', name: 'Phiếu thu giấy cuộn K80', paper: 'K80', orient: 'portrait', margin: ROLL, html: () => {
     const s = 'font-size:8.5pt';
