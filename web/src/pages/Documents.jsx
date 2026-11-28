@@ -5,7 +5,7 @@ import { packView } from '../lib/book-profile.js';
 import { dmy, money } from '../lib/format.js';
 import { saveFile } from '../lib/excel.js';
 import { Btn, Loading, ErrorBox, Note, Modal, Field, Input, TextArea, Select, DateInput, NumInput, Check, Section, Tabs, ConfirmBtn } from '../components/ui.jsx';
-import { DOC_TYPES, DEFAULT_TEXTS, docSettings, loadDocData, defaults, currentInfo, editableFields, infoRef, profileFor, profileFromBook, PER_DELIVERY, RECONCILE, isCompany, HEADER_FIELDS, headerKey, BASE_SIZES, DEFAULT_BASE } from '../lib/docs/model.js';
+import { DOC_TYPES, DEFAULT_TEXTS, docSettings, loadDocData, defaults, currentInfo, editableFields, infoRef, profileFor, profileFromBook, PER_DELIVERY, RECONCILE, isCompany, OFFSET_KEY, pendingOffset, offsetDate, HEADER_FIELDS, headerKey, BASE_SIZES, DEFAULT_BASE } from '../lib/docs/model.js';
 import { VatReminder, VatReminderPopup } from '../components/VatReminder.jsx';
 import { buildPrintDoc, templatesFor, PAPERS, applyExportOpts, EXPORT_SCALES, pageSize } from '../lib/docs/templates.js';
 import { openTemplateEditor } from '../lib/docs/editor-link.js';
@@ -483,9 +483,9 @@ export function DocDialog({ kind, id, keys, type: type0, pay, page, onClose }) {
   // Chỉ dựng khi dữ liệu đã nạp khớp với thẻ đang chọn (đổi thẻ Phiếu thu ↔ Biên bản phải chờ nạp lại)
   const ready = data && data.srcKey === srcKey && (type === 'phieu_thu') === (data.kind === 'payment')
     && (STANDALONE.includes(data.kind) || !(perDelivery ? false : src.kind === 'delivery'));
-  const fields = ready ? editableFields(type, data) : [];
   const saved = ready ? currentInfo(type, data) || {} : {};
   const info = ready ? { ...defaults(type, data, ds), ...saved, ...edit } : null;
+  const fields = ready ? editableFields(type, data, info) : [];
   // Chữ ký đặt trên chứng từ (signs_<loại>): không đưa vào phần dựng nội dung để dời chữ ký không phải dựng lại bản xem trước
   const signKey = `signs_${type}`;
   const docInfo = info && Object.fromEntries(Object.entries(info).filter(([k]) => !k.startsWith('signs_')));
@@ -518,16 +518,29 @@ export function DocDialog({ kind, id, keys, type: type0, pay, page, onClose }) {
   const tpls = templatesFor(ds, type);
   // Bảng gộp nhiều hóa đơn: ngày đối chiếu chỉ dùng cho lần xuất này (mặc định hôm nay), không lưu vào hồ sơ khách
   const localOnly = (k) => data?.kind === 'invoices' && k.startsWith('date_');
-  const dirty = Object.keys(edit).some((k) => !localOnly(k));
+  // Tiền cọc cấn trừ không lưu vào thông tin chứng từ: chỉ bấm "Lưu thông tin" mới ghi thành khoản cấn trừ của đơn
+  const offsetNow = type === 'doi_chieu_tt' && data?.payBase && fields.some((f) => f.key === OFFSET_KEY) ? pendingOffset(edit) : 0;
+  const stored = (k) => !localOnly(k) && k !== OFFSET_KEY;
+  const dirty = offsetNow > 0 || Object.keys(edit).some(stored);
   const canSave = data?.kind === 'payment' ? can('thu_chi') : can('ban_hang');
   const subtitle = !data ? null : data.kind === 'payment' ? `Phiếu ${data.p.code}` : data.kind === 'quote' ? `Báo giá ${data.q.code} · ${data.q.customer_name}` : data.kind === 'contract' ? `Hợp đồng ${data.k.code} · ${data.o.customer_name}` : data.kind === 'invoices' ? `${data.cust.name} · ${data.invs.length} hóa đơn` : null;
 
-  const save = async () => {
+  // record: bấm "Lưu thông tin" → ghi cả tiền cọc cấn trừ đã nhập; In / Tải PDF tự lưu nhưng không ghi cấn trừ
+  const save = async (record = false) => {
     if (!dirty || !canSave) return true;
     const ref = infoRef(type, data);
+    const keep = (k) => !stored(k) && !(record && k === OFFSET_KEY);
     try {
-      await rpc('save_doc_info', { ...ref, data: Object.fromEntries(Object.entries(edit).filter(([k]) => !localOnly(k)).map(([k, v]) => [k, v === null || v === undefined ? '' : String(v)])) });
-      setEdit((s) => Object.fromEntries(Object.entries(s).filter(([k]) => localOnly(k)))); setReload((x) => x + 1); return true;
+      const rows = Object.entries(edit).filter(([k]) => stored(k));
+      if (rows.length) {
+        await rpc('save_doc_info', { ...ref, data: Object.fromEntries(rows.map(([k, v]) => [k, v === null || v === undefined ? '' : String(v)])) });
+        setEdit((s) => Object.fromEntries(Object.entries(s).filter(([k]) => !stored(k)))); setReload((x) => x + 1);
+      }
+      if (record && offsetNow > 0) {
+        await rpc('add_order_adjustment', { order_id: data.o.id, kind: 'can_tru_coc', date: offsetDate(info), amount: offsetNow, note: 'Cấn trừ trên bảng đối chiếu công nợ' });
+        setEdit((s) => Object.fromEntries(Object.entries(s).filter(([k]) => keep(k)))); setReload((x) => x + 1);
+      }
+      return true;
     } catch (e) { toast(e.message, 'err'); return false; }
   };
   const download = async () => {
@@ -564,9 +577,9 @@ export function DocDialog({ kind, id, keys, type: type0, pay, page, onClose }) {
   const title = withPay ? 'Phiếu thu & chứng từ giao hàng' : 'In / xuất chứng từ';
   const sub = subtitle ?? (data?.o ? `Đơn ${data.o.code} · ${data.o.customer_name || ''}` : '');
   const footer = <>
-    <span className="muted small grow">{dirty ? 'Có thay đổi chưa lưu — bấm In / Tải PDF sẽ tự lưu.' : `${PAPERS[doc?.paper]?.label || 'Khổ A4'}${PAPERS[doc?.paper]?.roll ? '' : doc?.orient === 'landscape' ? ' ngang' : ' dọc'}${opts.scale !== 1 ? ` · chữ ${Math.round(opts.scale * 100)}%` : ''} · chữ trong PDF chọn và sao chép được.`}</span>
+    <span className="muted small grow">{offsetNow > 0 ? `Tiền cọc cấn trừ ${money(offsetNow)} đ chỉ được ghi khi bấm Lưu thông tin.` : dirty ? 'Có thay đổi chưa lưu — bấm In / Tải PDF sẽ tự lưu.' : `${PAPERS[doc?.paper]?.label || 'Khổ A4'}${PAPERS[doc?.paper]?.roll ? '' : doc?.orient === 'landscape' ? ' ngang' : ' dọc'}${opts.scale !== 1 ? ` · chữ ${Math.round(opts.scale * 100)}%` : ''} · chữ trong PDF chọn và sao chép được.`}</span>
     <Btn onClick={onClose}>Đóng</Btn>
-    {canSave && <Btn disabled={!dirty} onClick={async () => { if (await save()) toast('Đã lưu thông tin chứng từ'); }}>Lưu thông tin</Btn>}
+    {canSave && <Btn disabled={!dirty} onClick={async () => { if (await save(true)) toast(offsetNow > 0 ? `Đã lưu và ghi cấn trừ tiền cọc ${money(offsetNow)} đ` : 'Đã lưu thông tin chứng từ'); }}>Lưu thông tin</Btn>}
     {can('owner') && <Btn icon="dl" busy={busy} disabled={!doc || !!doc?.error} onClick={downloadImage}>Tải ảnh</Btn>}
     <Btn icon="print" busy={busy} disabled={!doc || !!doc?.error} onClick={printNow}>In</Btn>
     <Btn kind="primary" icon="dl" busy={busy} disabled={!doc || !!doc?.error} onClick={download}>Tải PDF</Btn>
@@ -606,7 +619,7 @@ export function DocDialog({ kind, id, keys, type: type0, pay, page, onClose }) {
                   <Field key={f.key} label={f.label}>
                     {f.kind === 'driver' ? <DriverPick value={v || ''} drivers={drivers} onPick={(d) => setEdit((s) => ({ ...s, driver_name: d.name, driver_phone: d.phone || '', vehicle: d.plate || '', id_no: d.id_no || '' }))} onText={set} />
                       : f.kind === 'date' ? <DateInput value={v || ''} onChange={set} />
-                      : f.kind === 'money' ? <NumInput value={v === '' || v === undefined ? null : Number(v)} onChange={(x) => set(x === null ? '0' : String(x))} />
+                      : f.kind === 'money' ? <NumInput value={v === '' || v === undefined ? null : Number(v)} onChange={(x) => set(x === null ? (f.blank ? '' : '0') : String(x))} />
                       : f.kind === 'select' ? <Select value={v || ''} onChange={(x) => set(x || '')} options={f.options} aria-label={f.label} />
                       : f.kind === 'num' ? <Input value={v} onChange={(x) => set(x.replace(/[^\d]/g, ''))} inputMode="numeric" placeholder={f.placeholder} />
                       : <Input value={v} onChange={set} maxLength={500} />}

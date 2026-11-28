@@ -4,7 +4,7 @@
 // { h, block: true } là khối lớn (bảng) — đặt riêng một dòng trong mẫu thì thay luôn cả dòng đó.
 import { specText, addDays } from '../format.js';
 import { invoiceMoney, progressStatement } from '../pay-term.js';
-import { fmtNum, phoneFmt, dateLine, moneyWords, profileFor, goodsLines, packLabel, totalKg, fmtKg, weightPerUnit, DEFAULT_TEXTS, runsOf, PER_DELIVERY, RECONCILE, qtyFigures, invoiceReturned, invoiceVat } from './model.js';
+import { fmtNum, phoneFmt, dateLine, moneyWords, profileFor, goodsLines, packLabel, totalKg, fmtKg, weightPerUnit, DEFAULT_TEXTS, runsOf, PER_DELIVERY, RECONCILE, qtyFigures, invoiceReturned, invoiceVat, pendingOffset, offsetDate } from './model.js';
 
 const T = (k, label, desc) => ({ k, label, desc: desc || label });
 
@@ -412,7 +412,9 @@ function progressTable(data, N, info = {}) {
   const base = data.payBase;
   const ratio = Number(info.pay_ratio) > 0 && Number(info.pay_ratio) <= 100 ? Number(info.pay_ratio) : base.ratio;
   const cutoff = String(info.date_doi_chieu_tt || '').slice(0, 10) || '9999-12-31';
-  const st = progressStatement({ ratio, invoices: base.invoices, pays: base.pays, adjustments: base.adjustments, cutoff });
+  const pending = pendingOffset(info);
+  const adjustments = pending ? [...base.adjustments, { id: 'pending', kind: 'can_tru_coc', adj_date: offsetDate(info), amount: pending, note: 'đợt này' }] : base.adjustments;
+  const st = progressStatement({ ratio, invoices: base.invoices, pays: base.pays, adjustments, cutoff });
   const W = 8;
   const span = (text, o = {}) => [{ text, colSpan: W, b: true, ...o }, ...Array(W - 1).fill(null)];
   const sumRow = (label, val, o = {}) => [{ text: '', colSpan: 3 }, null, null, { text: label, colSpan: 4, b: true, ...o }, null, null, null, { text: N(val), align: 'right', b: true }];

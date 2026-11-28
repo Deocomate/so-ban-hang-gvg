@@ -354,7 +354,16 @@ export const isCompany = (c, settings) => isCompanyGroup(settings, c?.kind) || !
 // Các ô sửa được cho từng loại chứng từ
 // Ghi chú của đơn hàng: in trên mọi chứng từ của đơn, trừ phiếu đóng hàng (phiếu cho kho)
 const NOTE = { key: 'note', label: 'Ghi chú', wide: true };
-export function editableFields(type, data) {
+// Tiền cọc cấn trừ nhập ở bảng đối chiếu công nợ (theo tiến độ): chỉ xem trước cho tới khi bấm "Lưu thông tin",
+// (chỉ hiện khi chính đơn thanh toán theo tiến độ, vì chỉ đơn đó mới ghi được cấn trừ), lúc đó ghi thành một khoản cấn trừ cọc của đơn vào ngày chốt (ngày chốt ở tương lai thì lấy hôm nay) rồi ô trở về trống.
+export const OFFSET_KEY = 'deposit_offset';
+export const pendingOffset = (info) => Math.max(Math.round(Number(info?.[OFFSET_KEY]) || 0), 0);
+export function offsetDate(info) {
+  const today = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);
+  const d = String(info?.date_doi_chieu_tt || '').slice(0, 10);
+  return d && d < today ? d : today;
+}
+export function editableFields(type, data, info) {
   const dateKey = type === 'phieu_thu' ? 'doc_date' : `date_${type}`;
   const D = { key: dateKey, label: 'Ngày trên chứng từ', kind: 'date' };
   if (type === 'hoa_don') return [D, { key: 'recv_phone', label: 'SĐT nhận hàng' }, { key: 'recv_address', label: 'Địa chỉ nhận hàng', wide: true },
@@ -371,7 +380,8 @@ export function editableFields(type, data) {
     const own = data.payBase.term === 'don_lon' ? `theo tiến độ ${data.payBase.ratio}%` : 'trên hóa đơn';
     return [{ ...D, label: 'Ngày chốt (lũy kế đến hết ngày này)' }, { key: 'pay_term', label: 'Phương thức thanh toán', kind: 'select', options: [{ value: '', label: `Theo đơn hàng (${own})` },
       { value: 'mac_dinh', label: 'Thanh toán trên hóa đơn – bảng tổng hợp' }, { value: 'don_lon', label: 'Thanh toán theo tiến độ giao hàng' }] },
-      { key: 'pay_ratio', label: 'Theo tiến độ: mỗi chuyến đến hạn (%)', kind: 'num', placeholder: String(data.payBase.ratio) }, NOTE];
+      { key: 'pay_ratio', label: 'Theo tiến độ: mỗi chuyến đến hạn (%)', kind: 'num', placeholder: String(data.payBase.ratio) },
+      ...(data.payBase.term === 'don_lon' && (info?.pay_term || 'don_lon') === 'don_lon' ? [{ key: OFFSET_KEY, label: 'Tiền cọc cấn trừ đợt này (đ)', kind: 'money', blank: true }] : []), NOTE];
   }
   if (data.kind === 'contract' || type === 'bao_gia' || RECONCILE.includes(type)) return type === 'bao_gia' ? [] : data.o ? [D, NOTE] : [D];
   if (type === 'don_dat_hang') return [D, { key: 'recv_phone', label: 'SĐT nhận hàng' }, { key: 'recv_address', label: 'Địa chỉ nhận hàng', wide: true }, NOTE];
